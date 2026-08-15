@@ -1,0 +1,27 @@
+/* Tailwind CSS v4 doit être importé avant HeroUI (ordre imposé par HeroUI v3). */
+@import "tailwindcss";
+@import "@heroui/styles";
+
+/* La détection automatique de contenu de Tailwind v4 n'atteint pas de façon fiable
+   packages/ui/src depuis les apps consommatrices dans ce monorepo (constaté en construisant le
+   module images, docs/specs/04-gestion-images.md : des classes utilisées uniquement dans un
+   composant packages/ui fraîchement ajouté — ex. h-80 — n'apparaissaient pas dans le CSS compilé
+   tant qu'aucune classe identique n'était déjà utilisée ailleurs, même après redémarrage complet
+   des serveurs dev). @source force le scan explicite, indépendant de cette détection auto. */
+@source "../**/*.{ts,tsx}";
+
+/*
+ * Deux thèmes nommés sur le même design system HeroUI (aucun composant dupliqué, seules les
+ * valeurs de tokens changent) : "vitrine" (apps/web, orienté conversion, valeurs par défaut de
+ * HeroUI conservées) et "admin" (apps/admin, plus dense, back-office).
+ *
+ * Pas de palette de marque Hifago définie à ce stade — seuls le radius et l'accent du registre
+ * admin sont ajustés pour la densité ; une vraie identité de marque reste une décision de design
+ * séparée, pas inventée ici.
+ */
+@layer base {
+  [data-theme="admin"] {
+    --radius: 0.375rem;
+    --accent: oklch(0.5 0.04 260);
+  }
+}

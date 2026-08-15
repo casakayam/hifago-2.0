@@ -1,0 +1,127 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { createClient } from "@hifago/supabase/server";
+import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
+import { buttonVariants } from "@hifago/ui";
+import { CapabilitiesSection } from "./CapabilitiesSection";
+import { EstablishmentsSection } from "./EstablishmentsSection";
+import { CodesSection } from "./CodesSection";
+
+export default async function AdminPartnerDetailPage({
+  params,
+}: PageProps<"/admin/partners/[id]">) {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const { data: partner } = await supabase
+    .from("partners")
+    .select("id, display_name, status")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!partner) {
+    notFound();
+  }
+
+  // role_agreements : déjà lisible par l'admin depuis la Tranche 1 (role_agreements_select),
+  // aucune nouvelle policy nécessaire — cf. plan feature 23.
+  // allEstablishments : tous les établissements du registre (pas seulement ceux "libres" —
+  // establishments.partner_id est not null, aucun établissement n'est jamais réellement libre) :
+  // transfer_establishment n'a qu'un seul chemin, premier rattachement et transfert depuis un
+  // autre partenaire confondus.
+  const [
+    { data: capabilities },
+    { data: agreements },
+    { data: ownEstablishments },
+    { data: allEstablishments },
+    { data: codes },
+  ] = await Promise.all([
+    supabase
+      .from("partner_capabilities")
+      .select("id, role, status, establishment:establishments(id, name)")
+      .eq("partner_id", id)
+      .order("role"),
+    supabase
+      .from("role_agreements")
+      .select("role, explicit_consent, accepted_at")
+      .eq("partner_id", id)
+      .order("accepted_at", { ascending: false }),
+    supabase
+      .from("establishments")
+      .select("id, name, status")
+      .eq("partner_id", id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("establishments")
+      .select("id, name, partner:partners(display_name)")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("partner_codes")
+      .select("code, active")
+      .eq("partner_id", id)
+      .order("code"),
+  ]);
+
+  // Dernier accord par rôle (accepted_at desc ci-dessus, donc le premier trouvé par rôle est le
+  // plus récent) — un partenaire peut avoir plusieurs accords au fil des versions de document.
+  const latestAgreementByRole = new Map<string, boolean>();
+  for (const agreement of agreements ?? []) {
+    if (!latestAgreementByRole.has(agreement.role)) {
+      latestAgreementByRole.set(agreement.role, agreement.explicit_consent);
+    }
+  }
+
+  const ownEstablishmentOptions = (ownEstablishments ?? []).map((establishment) => ({
+    id: establishment.id,
+    name: resolveLocalizedField(asLocalizedField(establishment.name), "es") ?? establishment.id,
+  }));
+
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">{partner.display_name}</h1>
+          <p className="text-sm text-muted">Estado: {partner.status}</p>
+        </div>
+        <Link
+          href={`/admin/partners/${partner.id}/offboarding`}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+          data-testid="offboarding-link"
+        >
+          Offboarding
+        </Link>
+      </div>
+
+      <CapabilitiesSection
+        partnerId={partner.id}
+        capabilities={(capabilities ?? []).map((capability) => ({
+          id: capability.id,
+          role: capability.role,
+          status: capability.status,
+          establishmentName: capability.establishment
+            ? (resolveLocalizedField(asLocalizedField(capability.establishment.name), "es") ??
+              capability.establishment.id)
+            : null,
+          agreementAccepted: latestAgreementByRole.get(capability.role) ?? null,
+        }))}
+        ownEstablishments={ownEstablishmentOptions}
+      />
+
+      <EstablishmentsSection
+        partnerId={partner.id}
+        ownEstablishments={(ownEstablishments ?? []).map((establishment) => ({
+          id: establishment.id,
+          name: resolveLocalizedField(asLocalizedField(establishment.name), "es") ?? establishment.id,
+          status: establishment.status,
+        }))}
+        allEstablishments={(allEstablishments ?? []).map((establishment) => ({
+          id: establishment.id,
+          name: resolveLocalizedField(asLocalizedField(establishment.name), "es") ?? establishment.id,
+          ownerName: establishment.partner?.display_name ?? "—",
+        }))}
+      />
+
+      <CodesSection codes={codes ?? []} />
+    </div>
+  );
+}

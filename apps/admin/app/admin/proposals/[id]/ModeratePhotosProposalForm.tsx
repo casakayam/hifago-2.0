@@ -1,0 +1,163 @@
+"use client";
+
+import { useState } from "react";
+import { createClient } from "@hifago/supabase/client";
+import { Button, Label, TextArea } from "@hifago/ui";
+
+const MODERATE_ERRORS: Record<string, string> = {
+  proposal_not_found: "No se encontró la propuesta.",
+  version_conflict: "Esta propuesta fue modificada por otra persona. Recarga la página.",
+};
+
+type ModerateResult = { ok: boolean; reason?: string; status?: string; reviewed_by_email?: string };
+
+// Aperçu isolé (décision explicite avec Jérôme, 2026-08-14, docs/specs/04-gestion-images.md §3) —
+// pas une vraie page client en mode preview : ce composant rejoue juste les photos proposées,
+// confiné à apps/admin. L'approbation n'ajoute QUE les images (branche kind='photos' de
+// moderate_product_proposal, 20260815110000_gestion_images.sql) — jamais un champ de contenu,
+// même si l'admin retire une photo de la sélection avant d'approuver.
+export function ModeratePhotosProposalForm({
+  proposalId,
+  expectedVersion,
+  proposedPhotoPaths,
+}: {
+  proposalId: string;
+  expectedVersion: number;
+  proposedPhotoPaths: string[];
+}) {
+  const supabase = createClient();
+  const [selectedPaths, setSelectedPaths] = useState(proposedPhotoPaths);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [success, setSuccess] = useState<"approved" | "rejected" | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  function removeFromSelection(path: string) {
+    setSelectedPaths((prev) => prev.filter((p) => p !== path));
+  }
+
+  async function handleDecision(decision: "approve" | "reject") {
+    setError(null);
+    setNotice(null);
+
+    if (decision === "approve" && selectedPaths.length === 0) {
+      setError("Selecciona al menos una foto, o rechaza la propuesta.");
+      return;
+    }
+    if (decision === "reject" && !rejectionReason.trim()) {
+      setError("El motivo es obligatorio para rechazar.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    const { data, error: rpcError } = await supabase.rpc("moderate_product_proposal", {
+      p_proposal_id: proposalId,
+      p_decision: decision,
+      p_expected_version: expectedVersion,
+      p_corrected_payload:
+        decision === "approve" ? { photos: selectedPaths.map((storage_path) => ({ storage_path })) } : null,
+      p_rejection_reason: decision === "reject" ? rejectionReason.trim() : undefined,
+    });
+    setIsSubmitting(false);
+
+    const result = data as ModerateResult | null;
+    if (rpcError || !result?.ok) {
+      if (result?.reason === "already_handled") {
+        setNotice(
+          `Esta propuesta ya fue procesada${result.reviewed_by_email ? ` por ${result.reviewed_by_email}` : ""} (estado: ${result.status}).`
+        );
+        return;
+      }
+      setError(MODERATE_ERRORS[result?.reason ?? ""] ?? "No se pudo procesar la propuesta. Inténtalo de nuevo.");
+      return;
+    }
+
+    setSuccess(decision === "approve" ? "approved" : "rejected");
+  }
+
+  if (success) {
+    return (
+      <p role="status" data-testid="moderation-success" className="text-sm font-medium">
+        {success === "approved" ? "Fotos aprobadas — ya están en la galería publicada." : "Propuesta rechazada."}
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <p className="mb-2 text-sm font-medium">Fotos propuestas — quita las que no quieras publicar</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" data-testid="proposed-photos">
+          {proposedPhotoPaths.map((path) => {
+            const { data: publicUrl } = supabase.storage.from("catalog-media").getPublicUrl(path);
+            const isSelected = selectedPaths.includes(path);
+            return (
+              <div key={path} className="relative" data-testid="proposed-photo-item">
+                {/* eslint-disable-next-line @next/next/no-img-element -- aperçu isolé admin, cf. commentaire de tête */}
+                <img
+                  src={publicUrl.publicUrl}
+                  alt=""
+                  className={`aspect-square w-full rounded-md object-cover ${isSelected ? "" : "opacity-30"}`}
+                />
+                {isSelected ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="absolute right-1 top-1"
+                    onPress={() => removeFromSelection(path)}
+                    aria-label="Quitar de la selección"
+                    data-testid="proposed-photo-remove"
+                  >
+                    ✕
+                  </Button>
+                ) : (
+                  <span className="absolute right-1 top-1 rounded bg-default px-1.5 py-0.5 text-xs">
+                    Excluida
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex max-w-md flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="rejection-reason">Motivo de rechazo — obligatorio para rechazar</Label>
+          <TextArea
+            id="rejection-reason"
+            value={rejectionReason}
+            onChange={(event) => setRejectionReason(event.target.value)}
+          />
+        </div>
+
+        {notice ? (
+          <p role="status" data-testid="moderation-notice" className="text-sm text-muted">
+            {notice}
+          </p>
+        ) : null}
+        {error ? (
+          <p role="alert" data-testid="moderation-error" className="text-sm text-danger">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="flex gap-2">
+          <Button type="button" isDisabled={isSubmitting} onPress={() => handleDecision("approve")} data-testid="approve-button">
+            {isSubmitting ? "Procesando…" : "Aprobar"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            isDisabled={isSubmitting}
+            onPress={() => handleDecision("reject")}
+            data-testid="reject-button"
+          >
+            {isSubmitting ? "Procesando…" : "Rechazar"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

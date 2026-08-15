@@ -1,0 +1,16 @@
+-- Feature 2 (Admin : créer une activité rattachée à un établissement) — products.establishment_id.
+-- Jouable telle quelle en dev : `db reset` recrée `products` vide à chaque fois dans la même
+-- passe (migrations avant seed), donc pas de backfill réel à gérer localement.
+--
+-- products.partner_id (Tranche 2) reste inchangé, pas supprimé : plutôt que de le retirer (ce qui
+-- casserait rétroactivement les tests pgTAP de la Tranche 2 pour un gain incertain), il devient un
+-- champ dérivé en pratique — le formulaire de création choisit un établissement et déduit
+-- partner_id automatiquement (jamais saisi indépendamment), donc les deux ne peuvent pas diverger
+-- par ce seul chemin d'écriture. Risque résiduel noté, pas traité maintenant : un futur script
+-- d'import en écriture directe pourrait les désynchroniser — à durcir (contrainte ou trigger)
+-- seulement si un second chemin d'écriture apparaît un jour.
+--
+-- RLS/RPC-only inchangé : toujours RLS directe (aucun critère RPC-only nouveau) — les policies
+-- products_select_public/products_write_admin (Tranche 2) ne référencent ni partner_id ni
+-- establishment_id, rien à modifier là.
+alter table products add column establishment_id uuid not null references establishments(id);

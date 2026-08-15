@@ -1,0 +1,16 @@
+{
+  "name": "@hifago/e2e-support",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@supabase/ssr": "^0.12.4",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/pg": "^8.21.0",
+    "typescript": "^5"
+  }
+}

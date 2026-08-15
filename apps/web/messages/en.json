@@ -1,0 +1,76 @@
+{
+  "LocaleLayout": {
+    "title": "Hifago"
+  },
+  "HomePage": {
+    "title": "Hifago",
+    "description": "Activities and experiences in Guatapé."
+  },
+  "Login": {
+    "title": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "error": "Incorrect email or password."
+  },
+  "Common": {
+    "cancellationPolicy": "A cancellation or a no-show on your part is never refunded."
+  },
+  "ProductPage": {
+    "backToCatalog": "← Back to catalog",
+    "perPerson": "per person",
+    "availabilityTitle": "Availability",
+    "spotsLeft": "{count, plural, one {# spot left} other {# spots left}}",
+    "lastSpot": "Last spot!",
+    "full": "Full",
+    "selectDate": "Pick a date on the calendar to reserve.",
+    "quantityLabel": "Quantity",
+    "addToCart": "Add to cart",
+    "addedToCart": "Added to cart.",
+    "goToCheckout": "Go to checkout",
+    "reserveExternal": "Book now",
+    "occurrence": {
+      "recurringUntilDate": "Every {days} days, until {date}.",
+      "recurringForCount": "Every {days} days, for {count} occurrences.",
+      "recurringOngoing": "Every {days} days, ongoing."
+    }
+  },
+  "CheckoutPage": {
+    "title": "Checkout",
+    "emptyCart": "Your cart is empty.",
+    "lineQty": "Quantity: {count}",
+    "total": "Total",
+    "removeLine": "Remove",
+    "holderName": "Full name",
+    "holderPhone": "WhatsApp",
+    "holderEmail": "Email (optional)",
+    "marketingConsent": "I want to receive promotions and news by WhatsApp or email.",
+    "submit": "Confirm order",
+    "submitting": "Processing…",
+    "orderSuccess": "Order confirmed!",
+    "loginLink": "Sign in to find your reservations",
+    "viewOrdersLink": "View my reservations",
+    "errors": {
+      "empty_cart": "Your cart is empty.",
+      "product_not_found": "One of the products in your cart no longer exists.",
+      "not_sellable": "This product is no longer available for sale.",
+      "date_closed": "This date is not available for this product.",
+      "slot_not_found": "This date is not available for this product.",
+      "full": "This date is already full.",
+      "resource_unavailable": "There is no shared establishment availability left for these camp dates.",
+      "lodging_cap_exceeded": "You can book at most 4 lodgings (12 units total) per order.",
+      "prestation_cap_exceeded": "You can add at most 20 services per order.",
+      "qty_cap_exceeded": "The maximum quantity per service is 20.",
+      "unknown": "The order could not be completed. Please try again."
+    }
+  },
+  "AccountOrdersPage": {
+    "title": "My reservations",
+    "empty": "You don't have any reservations yet.",
+    "linesSummary": "{active} of {total} active lines",
+    "cancel": "Cancel reservation",
+    "cancelling": "Cancelling…",
+    "cancelError": "Could not cancel the reservation. Please try again."
+  }
+}

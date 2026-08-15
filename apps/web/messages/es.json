@@ -1,0 +1,76 @@
+{
+  "LocaleLayout": {
+    "title": "Hifago"
+  },
+  "HomePage": {
+    "title": "Hifago",
+    "description": "Actividades y experiencias en Guatapé."
+  },
+  "Login": {
+    "title": "Iniciar sesión",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "submit": "Iniciar sesión",
+    "submitting": "Conectando…",
+    "error": "Correo o contraseña incorrectos."
+  },
+  "Common": {
+    "cancellationPolicy": "Una cancelación o una ausencia de tu parte nunca es reembolsada."
+  },
+  "ProductPage": {
+    "backToCatalog": "← Volver al catálogo",
+    "perPerson": "por persona",
+    "availabilityTitle": "Disponibilidad",
+    "spotsLeft": "{count, plural, one {# cupo disponible} other {# cupos disponibles}}",
+    "lastSpot": "¡Última plaza!",
+    "full": "Completo",
+    "selectDate": "Elige una fecha en el calendario para reservar.",
+    "quantityLabel": "Cantidad",
+    "addToCart": "Añadir al carrito",
+    "addedToCart": "Añadido al carrito.",
+    "goToCheckout": "Ir a finalizar compra",
+    "reserveExternal": "Reservar",
+    "occurrence": {
+      "recurringUntilDate": "Cada {days} días, hasta el {date}.",
+      "recurringForCount": "Cada {days} días, durante {count} repeticiones.",
+      "recurringOngoing": "Cada {days} días, de forma indefinida."
+    }
+  },
+  "CheckoutPage": {
+    "title": "Finalizar compra",
+    "emptyCart": "Tu carrito está vacío.",
+    "lineQty": "Cantidad: {count}",
+    "total": "Total",
+    "removeLine": "Quitar",
+    "holderName": "Nombre completo",
+    "holderPhone": "WhatsApp",
+    "holderEmail": "Correo electrónico (opcional)",
+    "marketingConsent": "Quiero recibir promociones y novedades por WhatsApp o correo.",
+    "submit": "Validar pedido",
+    "submitting": "Procesando…",
+    "orderSuccess": "¡Pedido confirmado!",
+    "loginLink": "Inicia sesión para encontrar tus reservas",
+    "viewOrdersLink": "Ver mis reservas",
+    "errors": {
+      "empty_cart": "Tu carrito está vacío.",
+      "product_not_found": "Uno de los productos de tu carrito ya no existe.",
+      "not_sellable": "Este producto ya no está disponible para la venta.",
+      "date_closed": "Esta fecha no está disponible para este producto.",
+      "slot_not_found": "Esta fecha no está disponible para este producto.",
+      "full": "Esta fecha ya está completa.",
+      "resource_unavailable": "Ya no hay disponibilidad compartida del establecimiento para estas fechas de campamento.",
+      "lodging_cap_exceeded": "Puedes reservar como máximo 4 alojamientos (12 unidades en total) por pedido.",
+      "prestation_cap_exceeded": "Puedes añadir como máximo 20 servicios por pedido.",
+      "qty_cap_exceeded": "La cantidad máxima por servicio es 20.",
+      "unknown": "No se pudo completar el pedido. Inténtalo de nuevo."
+    }
+  },
+  "AccountOrdersPage": {
+    "title": "Mis reservas",
+    "empty": "Aún no tienes reservas.",
+    "linesSummary": "{active} de {total} líneas activas",
+    "cancel": "Anular reserva",
+    "cancelling": "Anulando…",
+    "cancelError": "No se pudo anular la reserva. Inténtalo de nuevo."
+  }
+}
