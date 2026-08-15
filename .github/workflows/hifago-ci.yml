@@ -1,0 +1,80 @@
+name: hifago-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint --workspaces --if-present
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck --workspaces --if-present
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test --workspaces --if-present
+
+  integration:
+    needs: [lint, typecheck, unit]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      # Stack Supabase locale du runner (jamais un projet cloud partagé, cf.
+      # CLAUDE.md § 6). Applique les migrations versionnées ; les futurs
+      # tests RPC/RLS et le test de concurrence anti-survente (barrière de
+      # synchronisation, cf. hifago-rpc-critique/hifago-test) s'exécutent ici.
+      - run: supabase db reset
+
+  build:
+    needs: [integration]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspaces --if-present
+
+  # Étapes volontairement absentes tant que les ressources cloud n'existent pas
+  # (cf. CLAUDE.md § 8 et le skill /hifago-init) : déploiement preview
+  # Vercel → E2E Playwright contre le vrai déploiement preview (déclenché par
+  # l'événement `deployment_status`, en-têtes de contournement de Deployment
+  # Protection) → déploiement `staging` + smoke test → promotion manuelle vers
+  # la prod via GitHub Environments avec approbateurs requis. À brancher une
+  # fois `hifago-provision-cloud` exécuté.
