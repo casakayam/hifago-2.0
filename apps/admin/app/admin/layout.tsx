@@ -36,7 +36,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   return (
     <div className="flex min-h-screen w-full">
       <AdminSidebar />
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-8">{children}</div>
+      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-8">{children}</div>
     </div>
   );
 }

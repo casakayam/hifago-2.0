@@ -1,11 +1,15 @@
 ---
 id: refonte-cdc-socio
 titre: "Cahier des charges — portail socio (aujourd'hui /partner)"
+theme: cadrage
 statut: brouillon
 maj: 2026-08-13
 resume: >
   Comportement métier cible du portail partenaire (référent/prestataire), dérivé du comportement
   réel actuel et challengé section par section avec Jérôme avant reprise dans la refonte.
+mots_cles: [cahier des charges, socio, partenaire, referent, prestador, portail socio]
+repond_a:
+  - "Que doit faire le portail socio (apps/admin partie partner) dans la refonte ?"
 ---
 
 # Cahier des charges — portail socio

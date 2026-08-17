@@ -1151,6 +1151,112 @@ export type Database = {
           },
         ]
       }
+      product_room_types: {
+        Row: {
+          capacity: number
+          created_at: string
+          description: Json | null
+          id: string
+          kind: string
+          lobby_category_id: number | null
+          lobby_product_id: number | null
+          max_qty: number | null
+          min_qty: number | null
+          name: Json
+          price_cop: number
+          price_tiers: Json | null
+          product_id: string
+          quantity: number | null
+          sort: number
+          stay_rates: Json | null
+        }
+        Insert: {
+          capacity: number
+          created_at?: string
+          description?: Json | null
+          id?: string
+          kind: string
+          lobby_category_id?: number | null
+          lobby_product_id?: number | null
+          max_qty?: number | null
+          min_qty?: number | null
+          name: Json
+          price_cop: number
+          price_tiers?: Json | null
+          product_id: string
+          quantity?: number | null
+          sort?: number
+          stay_rates?: Json | null
+        }
+        Update: {
+          capacity?: number
+          created_at?: string
+          description?: Json | null
+          id?: string
+          kind?: string
+          lobby_category_id?: number | null
+          lobby_product_id?: number | null
+          max_qty?: number | null
+          min_qty?: number | null
+          name?: Json
+          price_cop?: number
+          price_tiers?: Json | null
+          product_id?: string
+          quantity?: number | null
+          sort?: number
+          stay_rates?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_room_types_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_slot_rules: {
+        Row: {
+          capacity: number
+          created_at: string
+          end_time: string
+          id: string
+          product_id: string
+          slot_duration_minutes: number
+          start_time: string
+          weekdays: number[]
+        }
+        Insert: {
+          capacity: number
+          created_at?: string
+          end_time: string
+          id?: string
+          product_id: string
+          slot_duration_minutes: number
+          start_time: string
+          weekdays: number[]
+        }
+        Update: {
+          capacity?: number
+          created_at?: string
+          end_time?: string
+          id?: string
+          product_id?: string
+          slot_duration_minutes?: number
+          start_time?: string
+          weekdays?: number[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_slot_rules_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_tag_assignments: {
         Row: {
           created_at: string
@@ -1187,8 +1293,12 @@ export type Database = {
       products: {
         Row: {
           acompte_pct: number
+          address: string | null
           calendar_default_open: boolean
+          capacity: number | null
           category: string | null
+          check_in_time: string | null
+          check_out_time: string | null
           created_at: string
           description: Json | null
           duration_days: number | null
@@ -1196,8 +1306,10 @@ export type Database = {
           establishment_id: string
           external_booking_url: string | null
           id: string
+          lat: number | null
           lobby_category_id: number | null
           lobby_product_id: number | null
+          lon: number | null
           max_qty: number | null
           max_units: number | null
           min_qty: number | null
@@ -1225,8 +1337,12 @@ export type Database = {
         }
         Insert: {
           acompte_pct?: number
+          address?: string | null
           calendar_default_open?: boolean
+          capacity?: number | null
           category?: string | null
+          check_in_time?: string | null
+          check_out_time?: string | null
           created_at?: string
           description?: Json | null
           duration_days?: number | null
@@ -1234,8 +1350,10 @@ export type Database = {
           establishment_id: string
           external_booking_url?: string | null
           id?: string
+          lat?: number | null
           lobby_category_id?: number | null
           lobby_product_id?: number | null
+          lon?: number | null
           max_qty?: number | null
           max_units?: number | null
           min_qty?: number | null
@@ -1263,8 +1381,12 @@ export type Database = {
         }
         Update: {
           acompte_pct?: number
+          address?: string | null
           calendar_default_open?: boolean
+          capacity?: number | null
           category?: string | null
+          check_in_time?: string | null
+          check_out_time?: string | null
           created_at?: string
           description?: Json | null
           duration_days?: number | null
@@ -1272,8 +1394,10 @@ export type Database = {
           establishment_id?: string
           external_booking_url?: string | null
           id?: string
+          lat?: number | null
           lobby_category_id?: number | null
           lobby_product_id?: number | null
+          lon?: number | null
           max_qty?: number | null
           max_units?: number | null
           min_qty?: number | null
@@ -1404,6 +1528,38 @@ export type Database = {
             columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_media: {
+        Row: {
+          created_at: string
+          id: string
+          room_type_id: string
+          sort: number
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          room_type_id: string
+          sort?: number
+          storage_path: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          room_type_id?: string
+          sort?: number
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_media_room_type_id_fkey"
+            columns: ["room_type_id"]
+            isOneToOne: false
+            referencedRelation: "product_room_types"
             referencedColumns: ["id"]
           },
         ]

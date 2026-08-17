@@ -5,6 +5,10 @@ import { createClient } from "@hifago/supabase/server";
 // products/layout.tsx : la vraie barrière reste la RLS (establishments_select) et les garde-fous
 // internes aux RPC submit_establishment_*_proposal (ownership, capacité), cette garde évite
 // seulement d'afficher un écran vide à un visiteur non authentifié.
+//
+// docs/specs/10-listes-standardisees-admin-socio.md §5.5 — le wrapper de largeur retiré ici était
+// déjà mort (max-w-4xl imbriqué dans le max-w-3xl du layout parent, sans effet réel) : la largeur
+// et le padding viennent désormais uniquement du layout parent (partner/(app)/layout.tsx).
 export default async function PartnerEstablishmentLayout({
   children,
 }: LayoutProps<"/partner/establishment">) {
@@ -18,5 +22,5 @@ export default async function PartnerEstablishmentLayout({
     redirect("/login?next=/partner/establishment");
   }
 
-  return <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 p-8">{children}</div>;
+  return children;
 }

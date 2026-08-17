@@ -46,7 +46,7 @@ function EntryCard({
   return (
     <div
       data-testid="reconciliation-entry"
-      className="flex flex-col gap-2 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+      className="flex flex-col gap-2 rounded-lg border bg-surface p-4 sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="flex flex-col gap-1">
         <Link href={`/admin/orders/${entry.orderId}`} className="font-medium hover:underline">

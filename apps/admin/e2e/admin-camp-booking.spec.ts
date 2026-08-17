@@ -64,6 +64,11 @@ test("admin crée un camp, configure la ressource partagée et la capacité prop
   // 2. Camp de 5 jours, rattaché à cet établissement ------------------------------------------
   await establishmentRow.getByRole("link", { name: "+ Actividad" }).click();
   await expect(page).toHaveURL(/\/admin\/products\/new\?establishment=/);
+  // Spec 11 — ProductForm est nettement plus lourd à hydrater que l'ancien NewProductForm
+  // (galerie/crop, éditeur de créneaux, autocomplete d'adresse) : sans cette attente, la toute
+  // première interaction sur la page peut atteindre le DOM avant que React n'ait attaché ses
+  // gestionnaires (valeur/submit perdus silencieusement, jamais reçus par le state React).
+  await page.waitForLoadState("networkidle");
 
   const campName = `Campamento E2E ${stamp}`;
   await page.locator('input[name="nombre"]').fill(campName);

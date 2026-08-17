@@ -1,6 +1,7 @@
 ---
 id: refonte-architecture-cible
 titre: "Choix de stack et architecture cible"
+theme: cadrage
 statut: "✅ validé par Jérôme le 2026-08-12 — complété le 2026-08-13"
 maj: 2026-08-13
 resume: >
@@ -8,6 +9,10 @@ resume: >
   réels révélés par les 3 cahiers des charges et l'audit de données — pas une confirmation de
   l'intuition de départ (Next.js + Supabase + Vercel), mais une comparaison challengée point par
   point contre des alternatives réelles, puis soumise à une revue adversariale avant validation.
+mots_cles: [architecture, stack, next.js, supabase, vercel, heroui, monorepo, decisions tranchees]
+repond_a:
+  - "Quelle stack technique et quelle architecture pour hifago, et pourquoi ?"
+  - "Quelles décisions sont déjà tranchées et ne doivent pas être rouvertes ?"
 ---
 
 # Choix de stack et architecture cible — refonte Casa Kayam / Hifago

@@ -90,13 +90,16 @@ Une comparaison exhaustive avec l'app legacy en production (`src/services/catalo
   (`order_lines`), quel que soit le statut de la commande.
 
 **Out, explicitement renvoyé ailleurs** :
-- Événements (`evento`), camps (`camp`), hébergement (`lodging`), et tout ce qui touche le parcours
-  de réservation lui-même au-delà des deux bornes ci-dessus — périmètre "activité uniquement",
-  cadré par Jérôme dès le départ.
+- Événements (`evento`), camps (`camp`), ~~hébergement (`lodging`)~~ — activé le 2026-08-16,
+  [`12-admin-alojamiento-house.md`](12-admin-alojamiento-house.md) —, et tout ce qui touche le
+  parcours de réservation lui-même au-delà des deux bornes ci-dessus — périmètre "activité
+  uniquement", cadré par Jérôme dès le départ.
 - Horaires d'ouverture/fermeture, créneaux réels, durée d'une activité — demandés par Jérôme en
   cours de session, mais reconnus structurellement équivalents à une nouvelle dimension de
   capacité dans la RPC anti-survente (comme les camps/evento, chacun déjà leur propre spec) :
-  renvoyés à la **spec 09** (numérotée après coup, `08` étant consommé par celle-ci).
+  renvoyés à une future spec dédiée (numéro non encore attribué — `09` a finalement été pris par
+  la spec de design system admin, `10` par celle de standardisation des listes admin/socio, toutes
+  deux écrites avant celle-ci).
 - Commission (`acompte_pct`/`referral_pct`), coordonnées géographiques, ordre d'affichage (`sort`)
   — jamais construits ici, cf. §10.
 - Tags côté établissement — `catalog_tags` est nommée de façon générique pour ne pas fermer cette
@@ -128,7 +131,8 @@ Une comparaison exhaustive avec l'app legacy en production (`src/services/catalo
   remplace le plafond générique `qty > 20` codé en dur, avec repli sur le comportement historique
   (1..20) si non défini sur le produit. Extension bornée : aucun changement au schéma de
   verrouillage (`product_availability` reste keyé `(product_id, date)`), c'est précisément ce qui
-  distingue cette extension des créneaux horaires (spec 09, nouvelle dimension de capacité).
+  distingue cette extension des créneaux horaires (future spec dédiée, nouvelle dimension de
+  capacité — voir §10).
 - **RLS directe pour `catalog_tags`/`product_tag_assignments`/`price_tiers`/`min_qty`/`max_qty`**
   — aucun des 4 critères RPC-only (`hifago/CLAUDE.md` §3) ne s'applique : pas de compteur de
   capacité, pas de verrou optimiste multi-admin, pas de lecture cross-identité, pas plus "audité"
@@ -273,9 +277,11 @@ même ordre de verrous Phase 2/2b). Pas de RPC pour `catalog_tags`/`product_tag_
   ceux proposés par un prestataire" sans décrire de flux technique ; resté informel (hors système)
   pour l'instant. Si un vrai flux est attendu à court terme, c'est un chantier socio séparé.
 - **Horaires d'ouverture/fermeture + créneaux + durée réelle** — explicitement renvoyés à une
-  **spec 09** future (numéro à reconfirmer au moment de l'écrire) : structurellement une nouvelle
-  dimension de capacité dans `create_order`/`product_availability`, avec sa propre suite de tests
-  de concurrence dédiée — pas un champ de formulaire, cf. §2.
+  future spec dédiée (numéro non encore attribué — `09` a finalement été pris par la spec de
+  design system admin, `10` par celle de standardisation des listes admin/socio, toutes deux
+  écrites avant celle-ci) : structurellement une nouvelle dimension de capacité dans
+  `create_order`/`product_availability`, avec sa propre suite de tests de concurrence dédiée — pas
+  un champ de formulaire, cf. §2.
 - **Nettoyage storage à la suppression d'une activité** — assumé absent, aligné sur le gap déjà
   présent dans la suppression de photo individuelle (spec 04) ; à documenter comme dette plutôt
   que corriger ici.
@@ -342,5 +348,8 @@ de cette spec effectuée une fois ce blocage levé (cf. entrée `hifago/CLAUDE.m
   résout sans 404" (§8 du test `admin-home-navigation.spec.ts`).
 - `hifago/docs/05-reference-technique.md` — squelette RPC anti-survente réutilisé pour
   `create_order`, barème de non-régression (5 runs propres).
-- **Spec à venir** : "horaires et créneaux" (numéro à confirmer, probablement `09`) — remplacera le
-  champ `schedule='slot'` jamais câblé par un vrai mécanisme de créneaux horaires.
+- **Spec à venir** : ~~"horaires et créneaux" (numéro à confirmer, probablement `09`)~~ — écrite le
+  2026-08-16, [`11-admin-activite-parcours-unifie-creneaux.md`](11-admin-activite-parcours-unifie-creneaux.md).
+  Ne remplace **pas** `schedule='slot'` (jamais câblé, toujours en place) : le nouveau module
+  (`product_slot_rules`) reste indépendant, signalé par sa seule présence — la coexistence ou le
+  remplacement du champ `slot` legacy est un point encore ouvert (cf. spec 11 §10).

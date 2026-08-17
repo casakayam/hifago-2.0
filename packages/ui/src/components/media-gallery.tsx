@@ -1,9 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { Button } from "@heroui/react";
+import { Modal } from "@heroui/react";
 import { ImageCrop } from "./image-crop";
 import { cn } from "../lib/utils";
+
+// Contrôles flottant sur la vignette elle-même (déplacer/supprimer) : jamais le Button HeroUI
+// "outline" du thème admin (--border-width: 0, il devient invisible posé sur une photo dont le
+// contenu est imprévisible) — un scrim sombre fixe reste lisible quelle que soit la photo
+// derrière, à l'inverse d'un contour qui dépend du contraste avec les jetons de couleur ambiants.
+const overlayButtonClass =
+  "flex h-7 w-7 items-center justify-center bg-black/55 text-sm leading-none text-white transition-colors hover:bg-black/70 disabled:pointer-events-none disabled:opacity-40";
 
 export type MediaGalleryPhoto = {
   id: string;
@@ -111,41 +118,39 @@ export function MediaGallery({
                 Portada
               </span>
             ) : null}
-            <div className="absolute inset-x-1 bottom-1 flex items-center justify-between gap-1">
-              <div className="flex gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  isDisabled={isBusy || index === 0}
-                  onPress={() => move(index, -1)}
-                  aria-label="Mover a la izquierda"
-                  data-testid="media-gallery-move-left"
-                >
-                  ‹
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  isDisabled={isBusy || index === photos.length - 1}
-                  onPress={() => move(index, 1)}
-                  aria-label="Mover a la derecha"
-                  data-testid="media-gallery-move-right"
-                >
-                  ›
-                </Button>
-              </div>
-              {onDelete ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  isDisabled={isBusy}
-                  onPress={() => handleDelete(photo.id)}
-                  aria-label="Eliminar foto"
-                  data-testid="media-gallery-delete"
-                >
-                  ✕
-                </Button>
-              ) : null}
+            {onDelete ? (
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => handleDelete(photo.id)}
+                aria-label="Eliminar foto"
+                data-testid="media-gallery-delete"
+                className={cn(overlayButtonClass, "absolute right-1 top-1")}
+              >
+                ✕
+              </button>
+            ) : null}
+            <div className="absolute bottom-1 left-1 flex gap-1">
+              <button
+                type="button"
+                disabled={isBusy || index === 0}
+                onClick={() => move(index, -1)}
+                aria-label="Mover a la izquierda"
+                data-testid="media-gallery-move-left"
+                className={overlayButtonClass}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                disabled={isBusy || index === photos.length - 1}
+                onClick={() => move(index, 1)}
+                aria-label="Mover a la derecha"
+                data-testid="media-gallery-move-right"
+                className={overlayButtonClass}
+              >
+                ›
+              </button>
             </div>
           </div>
         ))}
@@ -179,11 +184,27 @@ export function MediaGallery({
         </p>
       ) : null}
 
-      {pendingImage ? (
-        <div className="rounded-md border border-default p-3" data-testid="media-gallery-crop-panel">
-          <ImageCrop imageSrc={pendingImage} onCancel={handleCropCancel} onConfirm={handleCropConfirm} />
-        </div>
-      ) : null}
+      <Modal>
+        <Modal.Backdrop
+          isOpen={pendingImage !== null}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) handleCropCancel();
+          }}
+        >
+          <Modal.Container>
+            <Modal.Dialog data-testid="media-gallery-crop-panel">
+              <Modal.Header>
+                <Modal.Heading>Recortar foto</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                {pendingImage ? (
+                  <ImageCrop imageSrc={pendingImage} onCancel={handleCropCancel} onConfirm={handleCropConfirm} />
+                ) : null}
+              </Modal.Body>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
     </div>
   );
 }

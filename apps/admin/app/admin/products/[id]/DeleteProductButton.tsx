@@ -9,7 +9,9 @@ import { Button, Modal } from "@hifago/ui";
 // Mirroir de apps/admin/app/admin/invitations/RevokeInvitationButton.tsx — pattern déjà utilisé
 // dans le projet pour une confirmation destructive. Branché sur rpcError.code (pas le texte du
 // message) : delete_product distingue "produit introuvable" (P0001) de "déjà commandée" (23503,
-// cf. supabase/migrations/20260815220000_delete_product_rpc.sql).
+// cf. supabase/migrations/20260815220000_delete_product_rpc.sql). Reste exclusivement sur la
+// fiche détail (décision Jérôme, docs/specs/10-...md) — jamais remonté comme action de ligne sur
+// /admin/products, un seul exemplaire par page.
 export function DeleteProductButton({ productId }: { productId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);

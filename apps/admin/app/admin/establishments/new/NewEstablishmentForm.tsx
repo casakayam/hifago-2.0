@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Checkbox, ImageCrop, Input, Label, TextArea, TextField, cn } from "@hifago/ui";
+import { Button, Checkbox, ImageCrop, Input, Label, Modal, TextArea, TextField, cn } from "@hifago/ui";
 import Link from "next/link";
 import { SearchableCombobox } from "@/components/searchable-combobox";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
@@ -21,6 +21,12 @@ type DescriptionLang = "es" | "en";
 // WebP/strip EXIF, le même pipeline que la fiche produit (ProductPhotosBlock) — plus l'upload
 // direct basique posé par la spec 03 en attendant que ce pipeline existe.
 const MAX_PHOTOS = 6; // plafond uniforme décidé (spec 04 §3), déjà appliqué côté RPC
+
+// Même constante que packages/ui/src/components/media-gallery.tsx (bouton flottant sur une
+// vignette photo) — un scrim sombre fixe reste lisible quelle que soit la photo derrière, à
+// l'inverse d'un contour qui dépend du contraste avec les jetons de couleur ambiants.
+const overlayButtonClass =
+  "flex h-7 w-7 items-center justify-center bg-black/55 text-sm leading-none text-white transition-colors hover:bg-black/70 disabled:pointer-events-none disabled:opacity-40";
 
 export function NewEstablishmentForm({
   partners,
@@ -295,19 +301,26 @@ export function NewEstablishmentForm({
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="photos">Fotos — máximo {MAX_PHOTOS}</Label>
-          <input
-            id="photos"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={handleFileSelected}
-            disabled={photos.length >= MAX_PHOTOS || isUploadingPhotos}
-            data-testid="photos-input"
-          />
-          {pendingImage ? (
-            <div className="rounded-md border border-default p-3" data-testid="establishment-photo-crop-panel">
-              <ImageCrop imageSrc={pendingImage} onCancel={handleCropCancel} onConfirm={handleCropConfirm} />
-            </div>
-          ) : null}
+          <label
+            className={cn(
+              "flex w-fit cursor-pointer items-center gap-2 border border-dashed border-default px-4 py-2 text-sm text-muted",
+              (photos.length >= MAX_PHOTOS || isUploadingPhotos) && "pointer-events-none opacity-50"
+            )}
+          >
+            <input
+              id="photos"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleFileSelected}
+              disabled={photos.length >= MAX_PHOTOS || isUploadingPhotos}
+              data-testid="photos-input"
+              className="hidden"
+            />
+            <span>Añadir foto</span>
+            <span className="text-xs">
+              {photos.length}/{MAX_PHOTOS}
+            </span>
+          </label>
           {isUploadingPhotos ? <p className="text-xs text-muted">Subiendo…</p> : null}
           {photoError ? (
             <p role="alert" className="text-sm text-danger">
@@ -317,23 +330,45 @@ export function NewEstablishmentForm({
           {photos.length > 0 ? (
             <ul className="flex flex-wrap gap-2" data-testid="photos-list">
               {photos.map((photo) => (
-                <li key={photo.path} className="relative">
+                <li key={photo.path} className="relative overflow-hidden rounded-md border border-default">
                   {/* eslint-disable-next-line @next/next/no-img-element -- aperçu local d'un Blob
                       pas encore rattaché à un establishment_id ; next/image exigerait une URL
                       Storage réelle, pas un object URL éphémère. */}
-                  <img src={photo.url} alt="" className="h-16 w-16 rounded object-cover" />
+                  <img src={photo.url} alt="" className="h-24 w-24 object-cover" />
                   <button
                     type="button"
                     onClick={() => removePhoto(photo.path)}
                     aria-label="Quitar foto"
-                    className="absolute -right-1 -top-1 rounded-full bg-danger px-1 text-xs text-white"
+                    className={cn(overlayButtonClass, "absolute right-1 top-1 h-6 w-6")}
                   >
-                    ×
+                    ✕
                   </button>
                 </li>
               ))}
             </ul>
           ) : null}
+
+          <Modal>
+            <Modal.Backdrop
+              isOpen={pendingImage !== null}
+              onOpenChange={(isOpen) => {
+                if (!isOpen) handleCropCancel();
+              }}
+            >
+              <Modal.Container>
+                <Modal.Dialog data-testid="establishment-photo-crop-panel">
+                  <Modal.Header>
+                    <Modal.Heading>Recortar foto</Modal.Heading>
+                  </Modal.Header>
+                  <Modal.Body>
+                    {pendingImage ? (
+                      <ImageCrop imageSrc={pendingImage} onCancel={handleCropCancel} onConfirm={handleCropConfirm} />
+                    ) : null}
+                  </Modal.Body>
+                </Modal.Dialog>
+              </Modal.Container>
+            </Modal.Backdrop>
+          </Modal>
         </div>
       </fieldset>
 

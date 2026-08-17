@@ -42,7 +42,7 @@ export function AdminSidebar() {
     <nav
       aria-label="Navegación admin"
       data-testid="admin-sidebar"
-      className="flex w-56 shrink-0 flex-col gap-6 border-r border-border p-4"
+      className="sticky top-0 flex h-screen w-56 shrink-0 flex-col gap-6 overflow-y-auto border-r-[1px] border-default bg-background p-4"
     >
       <div className="flex flex-col gap-1">
         {NAV_ITEMS.map((item) => (
@@ -53,7 +53,7 @@ export function AdminSidebar() {
             aria-current={isActive(pathname, item.href) ? "page" : undefined}
             className={cn(
               "rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-surface-secondary",
-              isActive(pathname, item.href) ? "bg-surface-secondary text-foreground" : "text-muted"
+              isActive(pathname, item.href) ? "bg-accent text-accent-foreground" : "text-muted"
             )}
           >
             {item.label}
@@ -61,7 +61,7 @@ export function AdminSidebar() {
         ))}
       </div>
 
-      <div className="flex flex-col gap-1 border-t border-border pt-4">
+      <div className="flex flex-col gap-1 border-t-[length:var(--border-width)] border-border pt-4">
         <span className="px-3 text-xs font-medium uppercase tracking-wide text-muted">Crear</span>
         {CREATE_ITEMS.map((item) => (
           <Link

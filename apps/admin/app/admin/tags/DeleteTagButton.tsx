@@ -37,6 +37,11 @@ export function DeleteTagButton({
     }
 
     setOpen(false);
+    // docs/specs/10-listes-standardisees-admin-socio.md — Eliminar vit désormais uniquement sur
+    // la fiche /admin/tags/[id] (jamais sur la liste) : router.push nécessaire pour ne pas rester
+    // sur une route dont la donnée vient de disparaître (router.refresh() seul y afficherait un
+    // 404). Sans effet sur un éventuel appel resté sur la liste elle-même (même route).
+    router.push("/admin/tags");
     router.refresh();
   }
 

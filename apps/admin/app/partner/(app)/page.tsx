@@ -73,7 +73,7 @@ export default async function PartnerHomePage() {
               <div
                 key={capability.id}
                 data-testid={`partner-role-${capability.role}`}
-                className="flex flex-col gap-1 rounded-md border border-border p-3"
+                className="flex flex-col gap-1 rounded-md border border-border bg-surface p-3"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">

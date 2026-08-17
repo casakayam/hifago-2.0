@@ -1,7 +1,8 @@
-import { asLocalizedField, resolveLocalizedField, resolvePageParams } from "@hifago/domain";
+import { asLocalizedField, resolveLocalizedField, resolveListParams } from "@hifago/domain";
 import { createClient } from "@hifago/supabase/server";
 import { OrdersTable, type OrderLineRow } from "./OrdersTable";
-import { STATUS_LABELS } from "./statusLabels";
+import { ORDERS_FILTER_DEFINITIONS } from "@/lib/lists/filters";
+import { ORDERS_DEFAULT_SORT, ORDERS_SORT_WHITELIST } from "@/lib/lists/sortable-columns";
 
 type OrderLineQueryRow = {
   id: string;
@@ -10,6 +11,7 @@ type OrderLineQueryRow = {
   qty: number;
   status: string;
   total_cop: number;
+  created_at: string;
   product: { name: unknown; establishment: { name: unknown } | null } | null;
   order: {
     holder_name: string;
@@ -22,10 +24,14 @@ export default async function AdminOrdersPage({
   searchParams,
 }: PageProps<"/admin/orders">) {
   const resolvedSearchParams = await searchParams;
-  const { page, pageSize, from, to } = resolvePageParams(resolvedSearchParams);
-  const statusParam = resolvedSearchParams?.status;
-  const statusFilter =
-    typeof statusParam === "string" && statusParam in STATUS_LABELS ? statusParam : null;
+  const { page, pageSize, from, to, sort, filters, extraParams } = resolveListParams(
+    resolvedSearchParams,
+    {
+      sortWhitelist: ORDERS_SORT_WHITELIST,
+      defaultSort: ORDERS_DEFAULT_SORT,
+      filters: ORDERS_FILTER_DEFINITIONS,
+    }
+  );
 
   const supabase = await createClient();
 
@@ -33,24 +39,33 @@ export default async function AdminOrdersPage({
   // date/le produit/la quantité à préparer (cahier des charges admin §2). referrer_partner_id
   // (feature 7) affiché pour la première fois ici, jusqu'ici prouvé seulement par pgTAP.
   //
-  // Retrofit pagination serveur (G15, spec 02 §10) : le filtre statut passe désormais côté
-  // serveur (.eq + .range), plutôt que de charger toute la table pour filtrer/paginer côté
-  // client comme jusqu'ici. Le TRI reste côté client sur la page courante (repli explicitement
-  // documenté dans la spec — trier côté serveur exigerait de reconstruire toute la configuration
-  // TanStack en manualSorting, disproportionné pour ce lot).
+  // docs/specs/10-listes-standardisees-admin-socio.md — pagination ET tri désormais tous les deux
+  // côté serveur (manualSorting sur DataList, plus de repli client), écran pilote de la spec.
+  // `order:orders!inner(...)` (pas un simple `orders(...)`) : nécessaire pour que le filtre `q`
+  // sur `order.holder_name` fonctionne (PostgREST exige `!inner` pour filtrer une ressource
+  // embarquée) — sans incidence sur les lignes retournées hors filtre `q`, order_id est NOT NULL.
   let query = supabase
     .from("order_lines")
     .select(
-      `id, order_id, date, qty, status, total_cop,
+      `id, order_id, date, qty, status, total_cop, created_at,
        product:products(name, establishment:establishments(name)),
-       order:orders(holder_name, holder_phone, referrer:partners(display_name))`,
+       order:orders!inner(holder_name, holder_phone, referrer:partners(display_name))`,
       { count: "exact" }
     )
-    .order("date", { ascending: true })
+    .order(sort.column, { ascending: sort.direction === "asc" })
     .range(from, to);
 
-  if (statusFilter) {
-    query = query.eq("status", statusFilter);
+  if (filters.status) {
+    query = query.eq("status", filters.status);
+  }
+  if (filters.date_from) {
+    query = query.gte("date", filters.date_from);
+  }
+  if (filters.date_to) {
+    query = query.lte("date", filters.date_to);
+  }
+  if (filters.q) {
+    query = query.ilike("order.holder_name", `%${filters.q}%`);
   }
 
   const { data: lines, count } = await query.returns<OrderLineQueryRow[]>();
@@ -83,7 +98,9 @@ export default async function AdminOrdersPage({
         page={page}
         pageSize={pageSize}
         totalCount={count ?? 0}
-        statusFilter={statusFilter}
+        sort={sort}
+        filterValues={filters}
+        extraParams={extraParams}
       />
     </div>
   );

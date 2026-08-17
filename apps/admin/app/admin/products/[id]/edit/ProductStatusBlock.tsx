@@ -40,7 +40,7 @@ export function ProductStatusBlock({
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border p-4">
+    <div className="flex items-center gap-3 rounded-lg border bg-surface p-4">
       <span className="text-sm font-medium" data-testid="product-status-badge">
         {sellable ? "Vendible" : "No vendible"}
       </span>

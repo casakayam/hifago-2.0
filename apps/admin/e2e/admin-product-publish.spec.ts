@@ -23,6 +23,11 @@ test("admin publie puis dépublie une activité, visible/invisible côté public
   const row = page.locator("tr", { hasText: establishmentName });
   await row.getByRole("link", { name: "+ Actividad" }).click();
   await expect(page).toHaveURL(/\/admin\/products\/new\?establishment=/);
+  // Spec 11 — ProductForm est nettement plus lourd à hydrater que l'ancien NewProductForm
+  // (galerie/crop, éditeur de créneaux, autocomplete d'adresse) : sans cette attente, la toute
+  // première interaction sur la page peut atteindre le DOM avant que React n'ait attaché ses
+  // gestionnaires (valeur/submit perdus silencieusement, jamais reçus par le state React).
+  await page.waitForLoadState("networkidle");
 
   const productName = `Actividad E2E Publish ${Date.now()}`;
   await page.locator('input[name="nombre"]').fill(productName);
@@ -31,6 +36,10 @@ test("admin publie puis dépublie une activité, visible/invisible côté public
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
   await row.getByRole("link", { name: /actividades/ }).click();
+  // Attente identique à celle du formulaire produit (ci-dessus) : cliquer un <Link> Next.js
+  // avant que la page ne soit hydratée peut laisser l'URL inchangée (la transition client-side
+  // n'a rien à intercepter tant que React n'a pas attaché le routeur).
+  await page.waitForLoadState("networkidle");
   await page.getByRole("link", { name: productName }).click();
   await expect(page).toHaveURL(/\/admin\/products\/.+\/edit$/);
   const editUrl = page.url();

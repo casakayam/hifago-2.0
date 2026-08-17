@@ -83,7 +83,7 @@ export function ProductPhotosSocioBlock({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border p-4">
+    <div className="flex flex-col gap-3 rounded-lg border bg-surface p-4">
       <h2 className="text-sm font-medium">Fotos</h2>
       <p className="text-xs text-muted">
         Puedes quitar o reordenar tus fotos publicadas cuando quieras. Añadir una foto nueva envía una

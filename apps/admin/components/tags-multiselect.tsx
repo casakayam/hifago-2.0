@@ -106,6 +106,7 @@ export function TagsMultiSelect({
     <div className="flex flex-col gap-2">
       <ComboBox
         selectedKey={null}
+        allowsEmptyCollection
         onSelectionChange={(key) => {
           if (!key) return;
           if (key === CREATE_TAG_KEY) {

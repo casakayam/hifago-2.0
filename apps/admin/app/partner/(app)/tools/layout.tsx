@@ -6,6 +6,10 @@ import { createClient } from "@hifago/supabase/server";
 // barrière est partner_codes_select_public (déjà `using (true)`, lecture publique) filtrée par
 // partenaire côté requête (page.tsx) ; cette garde évite seulement d'afficher un écran vide à un
 // visiteur non authentifié.
+//
+// docs/specs/10-listes-standardisees-admin-socio.md §5.5 — le wrapper de largeur retiré ici était
+// déjà redondant (même max-w-3xl que le layout parent) : la largeur et le padding viennent
+// désormais uniquement du layout parent (partner/(app)/layout.tsx).
 export default async function PartnerToolsLayout({ children }: LayoutProps<"/partner/tools">) {
   const supabase = await createClient();
 
@@ -17,5 +21,5 @@ export default async function PartnerToolsLayout({ children }: LayoutProps<"/par
     redirect("/login?next=/partner/tools");
   }
 
-  return <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-8">{children}</div>;
+  return children;
 }

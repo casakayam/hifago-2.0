@@ -110,7 +110,7 @@ export function OffboardingChecklist({
         </p>
       ) : null}
 
-      <section className="flex flex-col gap-2 rounded-lg border p-4">
+      <section className="flex flex-col gap-2 rounded-lg border bg-surface p-4">
         <h2 className="font-medium">1. Despublicar la oferta</h2>
         <p className="text-sm text-muted">
           Todas las actividades vendibles de este partner dejan de estar disponibles a la venta.
@@ -132,7 +132,7 @@ export function OffboardingChecklist({
       </section>
 
       <section
-        className="flex flex-col gap-2 rounded-lg border p-4 data-disabled:opacity-50"
+        className="flex flex-col gap-2 rounded-lg border bg-surface p-4 data-disabled:opacity-50"
         data-disabled={unpublishedAt === null}
       >
         <h2 className="font-medium">2. Honrar las reservas ya realizadas</h2>
@@ -143,7 +143,7 @@ export function OffboardingChecklist({
       </section>
 
       <section
-        className="flex flex-col gap-2 rounded-lg border p-4 data-disabled:opacity-50"
+        className="flex flex-col gap-2 rounded-lg border bg-surface p-4 data-disabled:opacity-50"
         data-disabled={unpublishedAt === null}
       >
         <h2 className="font-medium">3. Atestiguar el pago de lo adeudado</h2>
@@ -175,7 +175,7 @@ export function OffboardingChecklist({
       </section>
 
       <section
-        className="flex flex-col gap-2 rounded-lg border p-4 data-disabled:opacity-50"
+        className="flex flex-col gap-2 rounded-lg border bg-surface p-4 data-disabled:opacity-50"
         data-disabled={paymentsSettledAt === null}
       >
         <h2 className="font-medium">4. Retirar la capacidad</h2>

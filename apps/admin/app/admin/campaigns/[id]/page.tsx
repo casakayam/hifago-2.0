@@ -79,7 +79,7 @@ export default async function CampaignDetailPage({
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5" data-testid="target-counts">
         {TARGET_STATUS_ORDER.map((status) => (
-          <div key={status} className="rounded-lg border p-4">
+          <div key={status} className="rounded-lg border bg-surface p-4">
             <p className="text-sm text-muted">{TARGET_STATUS_LABELS[status]}</p>
             <p className="text-lg font-semibold" data-testid={`count-${status}`}>
               {counts[status]}

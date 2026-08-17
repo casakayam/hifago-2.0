@@ -1,57 +1,65 @@
 "use client";
 
-import Link from "next/link";
-import { buttonVariants, Table } from "@hifago/ui";
+import { DataList, type DataListAction, type DataListColumn, type DataListSort, viewAction } from "@hifago/ui";
+import { PARTNERS_FILTERS } from "@/lib/lists/filters";
 
-type PartnerRow = {
+export type PartnerRow = {
   id: string;
-  display_name: string;
+  displayName: string;
   status: string;
   activeRoles: string;
-  establishments: { count: number }[] | null;
+  establishmentsCount: number;
 };
 
-// Composant client dédié : Table.Body/Table.Content de HeroUI attendent des enfants sous forme de
-// fonction (render prop) — non sérialisable à travers la frontière Server→Client Component. La
-// page (Server Component) ne passe ici que des données déjà sérialisées (rows).
-export function PartnersTable({ rows }: { rows: PartnerRow[] }) {
+export type PartnersTableProps = {
+  rows: PartnerRow[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  sort: DataListSort;
+  filterValues: Record<string, string>;
+  extraParams: Record<string, string>;
+};
+
+// docs/specs/10-listes-standardisees-admin-socio.md §5.3 — pas d'Editar (aucune RPC
+// update_partner) ; l'offboarding reste réservé à la fiche détail (/admin/partners/[id]),
+// jamais remonté comme action de ligne — même principe que l'absence d'Eliminar sur les listes.
+export function PartnersTable({
+  rows,
+  page,
+  pageSize,
+  totalCount,
+  sort,
+  filterValues,
+  extraParams,
+}: PartnersTableProps) {
+  const columns: DataListColumn<PartnerRow>[] = [
+    { id: "display_name", header: "Nombre", sortable: true, cell: (row) => row.displayName },
+    { id: "status", header: "Estado", sortable: true },
+    { id: "activeRoles", header: "Capacidades activas", cell: (row) => row.activeRoles || "—" },
+    { id: "establishmentsCount", header: "Establecimientos" },
+  ];
+
+  const actions: DataListAction<PartnerRow>[] = [viewAction("/admin/partners", "partner")];
+
   return (
-    <Table>
-      <Table.ScrollContainer>
-        <Table.Content aria-label="Partners">
-          <Table.Header>
-            <Table.Column isRowHeader>Nombre</Table.Column>
-            <Table.Column>Estado</Table.Column>
-            <Table.Column>Capacidades activas</Table.Column>
-            <Table.Column>Establecimientos</Table.Column>
-            <Table.Column></Table.Column>
-          </Table.Header>
-          <Table.Body
-            items={rows}
-            renderEmptyState={() => (
-              <p className="p-4 text-center text-sm text-muted">Ningún partner todavía.</p>
-            )}
-          >
-            {(partner) => (
-              <Table.Row id={partner.id} data-testid={`partner-row-${partner.id}`}>
-                <Table.Cell>{partner.display_name}</Table.Cell>
-                <Table.Cell>{partner.status}</Table.Cell>
-                <Table.Cell>{partner.activeRoles || "—"}</Table.Cell>
-                <Table.Cell>{partner.establishments?.[0]?.count ?? 0}</Table.Cell>
-                <Table.Cell>
-                  <Link
-                    href={`/admin/partners/${partner.id}`}
-                    className={buttonVariants({ variant: "outline", size: "sm" })}
-                    data-testid={`partner-detail-link-${partner.id}`}
-                  >
-                    Ver
-                  </Link>
-                </Table.Cell>
-              </Table.Row>
-            )}
-          </Table.Body>
-        </Table.Content>
-      </Table.ScrollContainer>
-    </Table>
+    <DataList
+      rows={rows}
+      getRowId={(row) => row.id}
+      columns={columns}
+      actions={actions}
+      basePath="/admin/partners"
+      page={page}
+      pageSize={pageSize}
+      totalCount={totalCount}
+      sort={sort}
+      filters={PARTNERS_FILTERS}
+      filterValues={filterValues}
+      extraParams={extraParams}
+      ariaLabel="Partners"
+      rowTestIdPrefix="partner"
+      emptyMessage="Ningún partner todavía."
+      emptyTestId="no-partners"
+    />
   );
 }

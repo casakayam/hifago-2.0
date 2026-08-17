@@ -140,7 +140,7 @@ export function ModerateEstablishmentProposalForm({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-4 rounded-lg border border-border p-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 rounded-lg border border-border bg-surface p-4 sm:grid-cols-2">
         <div data-testid="current-values">
           <p className="text-sm font-medium">Valor actual</p>
           {kind === "create" ? (

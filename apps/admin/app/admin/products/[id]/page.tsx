@@ -63,7 +63,7 @@ export default async function AdminProductDetailPage({
         </div>
       </div>
 
-      <dl className="grid grid-cols-2 gap-4 rounded-lg border border-border p-4 text-sm sm:w-fit">
+      <dl className="grid grid-cols-2 gap-4 rounded-lg border border-border bg-surface p-4 text-sm sm:w-fit">
         <dt className="text-muted">Precio</dt>
         <dd>{formatCop(product.price_cop ?? 0)}</dd>
         {product.establishments ? (

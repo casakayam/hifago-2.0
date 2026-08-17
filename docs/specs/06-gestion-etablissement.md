@@ -38,20 +38,79 @@ repond_a:
 
 | # | Section | Statut |
 |---|---|---|
+| 0 | **Contrat compact** (API/RPC, modèle de données, invariants, cas limites — pour coder) | implémenté |
 | 1 | Contexte et problème | implémenté |
 | 2 | Portée | implémenté |
 | 3 | Décisions retenues | implémenté |
 | 4 | Parcours cible | implémenté |
 | 5 | Écran(s) | implémenté |
-| 6 | Modèle de données | implémenté |
-| 7 | Contrat API/RPC | implémenté |
-| 8 | Règles et invariants | implémenté |
-| 9 | Cas limites | implémenté |
+| 6-9 | *(fusionnées dans 0 — Modèle de données, Contrat API/RPC, Règles et invariants, Cas limites)* | implémenté |
 | 10 | Décisions tranchées / points ouverts | implémenté |
 | 11 | Annexe — traçabilité code→règle | implémenté |
 | 12 | Documents liés | implémenté |
 
 ---
+
+## 0. Contrat compact (pour coder — lire seul, sans le reste)
+
+> Rétrofit du 2026-08-15 : cette section 0 a été ajoutée après coup (spec déjà implémentée) pour
+> valider le format du nouveau gabarit `_modele.md`. Copie sèche des faits déjà établis en
+> §6-9 ci-dessous — aucun contenu nouveau, aucune reformulation du raisonnement.
+
+### Endpoints / RPC
+
+Squelette de sécurité : `hifago/docs/05-reference-technique.md`. Pas de squelette anti-survente
+(`hifago/CLAUDE.md` §4) — aucun compteur de capacité limitée touché ici.
+
+| RPC | Rôle | Sécurité | Signature |
+|---|---|---|---|
+| `update_establishment` | admin | `security invoker` | `(p_establishment_id uuid, p_name jsonb, p_description jsonb=null, p_address text=null, p_lat float8=null, p_lon float8=null, p_operated_directly bool=false, p_note text=null) → jsonb` |
+| `submit_establishment_creation_proposal` | socio | `security definer`, `search_path=''` | `(p_payload jsonb) → jsonb` — payload `{name jsonb, description? jsonb, address? text, lat? float8, lon? float8}` |
+| `submit_establishment_edit_proposal` | socio | `security definer` | `(p_establishment_id uuid, p_payload jsonb) → jsonb` |
+| `withdraw_establishment_proposal` | socio | `security definer` | `(p_proposal_id uuid) → jsonb` |
+| `moderate_establishment_proposal` | admin | `security definer` | `(p_proposal_id uuid, p_decision text, p_expected_version int, p_corrected_payload jsonb=null, p_rejection_reason text=null) → jsonb` — `select...for update` + verrou optimiste `version` |
+
+### Modèle de données (delta)
+
+| Table/colonne | Statut |
+|---|---|
+| `establishments` (`name`, `description`, `address`, `lat`, `lon`, `operated_directly`) | Déjà existantes, réutilisées telles quelles — seule l'éditabilité post-création manquait. |
+| `establishments.status` | Existante, non touchée — hors périmètre. |
+| `establishment_proposals` *(nouvelle, RPC-only)* | Miroir `product_proposals` : `id`, `establishment_id` (nullable pour `kind='create'` non approuvée), `partner_id`, `submitted_by`, `kind` (`create`\|`edit`), `status` (`pending`\|`approved`\|`rejected`\|`withdrawn`), `payload jsonb` (jamais `operated_directly`), `rejection_reason`, `version int` (verrou optimiste), `reviewed_by`, `reviewed_at`, `created_at`, `updated_at`. RLS : `select_own` (par `partner_id`), `select_admin`. Index `(partner_id,status)`, `(establishment_id,status)`. |
+
+Migration : `hifago/supabase/migrations/20260815170000_gestion_etablissement.sql`.
+
+### Invariants
+
+- Créer un établissement : admin en écriture directe (`create_establishment`, inchangée) ; socio propose seulement (`submit_establishment_creation_proposal`), jamais de publication directe.
+- Éditer un établissement : admin en écriture directe (`update_establishment`, nouvelle) ; socio propose seulement (`submit_establishment_edit_proposal`), uniquement sur son propre établissement avec capacité `operator` active.
+- `operated_directly` jamais dans le payload proposable par le socio — filtré côté RPC, forcé à `false` à la création, relu depuis la ligne existante et repassé tel quel à l'édition (sinon une approbation écraserait silencieusement ce champ).
+- `moderate_establishment_proposal` est le seul chemin qui publie une proposition socio ; appelle en interne `create_establishment`/`update_establishment`, jamais de logique dupliquée.
+- Toute écriture admin est auditée nominativement (`log_admin_action`).
+- Rattachement établissement↔partenaire reste exclusivement via `create_establishment`/`transfer_establishment` (spec 03) — aucun second chemin d'écriture sur `establishments.partner_id` ici.
+- Un seul mécanisme de proposition socio pour « premier établissement » et « établissement supplémentaire » — `create_establishment` gère déjà les deux cas identiquement.
+- Garde-fou de capacité différent create/edit : `submit_establishment_creation_proposal` ne vérifie aucune capacité `operator` préexistante ; `submit_establishment_edit_proposal` exige `has_capability(auth.uid(), 'operator', p_establishment_id)` active.
+
+### Cas limites
+
+- Proposition d'édition sur un établissement déjà transféré → `has_capability` échoue → `capability_suspended` (déjà correct sans code supplémentaire).
+- Le gap `transfer_establishment` × `partner_capabilities` (l'ancien partenaire garde sa ligne `operator`, le nouveau n'en a aucune) empêche le nouveau propriétaire de proposer une édition tant que non corrigé — documenté, **hors périmètre** de cette spec (§9/§10).
+- Double proposition `kind='edit'` en attente sur le même établissement → autorisé, plafonné seulement par le compteur global (10).
+- Rejet puis re-proposition → aucune restriction (le plafond ne compte que `status='pending'`).
+- `kind='create'` en modération → l'UI affiche un espace réservé explicite, jamais un tableau vide silencieux.
+- Admin édite pendant qu'une proposition `edit` est en attente → dernière écriture gagne côté `establishments` ; à l'approbation, le payload corrigé par l'admin au moment de la modération prime toujours.
+
+### Fichiers touchés
+
+- `hifago/supabase/migrations/20260815170000_gestion_etablissement.sql` (migration : table, RLS, 5 RPC)
+- `hifago/packages/supabase/src/database.types.ts` (types régénérés)
+- `hifago/apps/admin/app/admin/establishments/[id]/EstablishmentEditBlock.tsx` (nouveau) + `.../page.tsx` (modifié)
+- `hifago/apps/admin/app/partner/(app)/establishment/{layout.tsx,page.tsx,PendingCreationBanner.tsx,new/{page.tsx,NewEstablishmentProposalForm.tsx},[id]/edit/{page.tsx,EditEstablishmentProposalForm.tsx}}` (nouveau sous-arbre)
+- `hifago/apps/admin/app/partner/(app)/PartnerNav.tsx`, `.../page.tsx` (modifiés)
+- `hifago/apps/admin/app/admin/proposals/{page.tsx,ProposalsTable.tsx,[id]/page.tsx}` (modifiés), `[id]/ModerateEstablishmentProposalForm.tsx` (nouveau)
+- `hifago/apps/admin/e2e/admin-establishment-edit.spec.ts`, `partner-establishment-proposals.spec.ts` (tests)
+
+Détail complet, justification de chaque décision et traçabilité code→règle : §1-12 ci-dessous.
 
 ## 1. Contexte et problème
 

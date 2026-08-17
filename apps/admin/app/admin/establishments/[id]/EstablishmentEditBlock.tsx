@@ -111,7 +111,7 @@ export function EstablishmentEditBlock({
   }
 
   return (
-    <div className="rounded-lg border p-4" data-testid="establishment-edit-block">
+    <div className="rounded-lg border bg-surface p-4" data-testid="establishment-edit-block">
       <h2 className="mb-4 text-sm font-medium">Editar establecimiento</h2>
 
       {pendingEditProposalId ? (

@@ -1,11 +1,15 @@
 ---
 id: refonte-cdc-admin
 titre: "Cahier des charges — back-office admin (aujourd'hui /admin)"
+theme: cadrage
 statut: brouillon
 maj: 2026-08-13
 resume: >
   Comportement métier cible du back-office de pilotage, dérivé du comportement réel actuel et
   challengé section par section avec Jérôme avant reprise dans la refonte.
+mots_cles: [cahier des charges, admin, back-office, pilotage, 2fa, catalogue]
+repond_a:
+  - "Que doit faire le back-office admin (apps/admin) dans la refonte ?"
 ---
 
 # Cahier des charges — back-office admin

@@ -36,6 +36,9 @@ couvrir l'app legacy.
 
 ## Convention
 
+- **Avant de copier le gabarit** : suivre la checklist de clarification
+  [`avant-la-spec.md`](avant-la-spec.md) — comment poser les bonnes questions à Jérôme pour que
+  l'ambiguïté soit tranchée avant l'écriture, pas découverte en codant.
 - **Nommage** : `NN-slug-kebab.md`, `NN` = ordre de création — jamais réordonné, jamais réutilisé
   même si une spec est un jour archivée.
 - **Gabarit** : copier [`_modele.md`](_modele.md).
@@ -58,3 +61,9 @@ couvrir l'app legacy.
 | [06 · Gestion d'un établissement](06-gestion-etablissement.md) | Admin édite un établissement après création (gap décision §3c) ; partenaire propose la création (premier ou établissement supplémentaire) et l'édition du sien, toujours via modération admin | Hifago | Implémenté |
 | [07 · Connexion/inscription complète](07-connexion-inscription-complete.md) | Google OAuth, inscription email/mot de passe avec vérification par email, mot de passe oublié/réinitialisation, 2FA TOTP obligatoire pour le rôle admin — back-end générique, front `apps/admin` | Hifago | Implémenté |
 | [08 · Admin gère une activité](08-admin-gestion-activite.md) | Tags multi-valeurs remplaçant la catégorie fixe, prix par palier de quantité/personnes, bornes min/max par réservation appliquées dans `create_order`, suppression réelle avec garde-fou anti-commande — activité uniquement | Hifago | Implémenté |
+| [09 · Design system admin](09-design-system-admin.md) | Tokens du thème `admin` HeroUI v3 : fond beige (piste « Argile », réf. Muji), coins carrés à 0 partout, accent terracotta remplaçant le bleu-violet froid | Hifago | Brouillon |
+| [10 · Listes admin/socio standardisées](10-listes-standardisees-admin-socio.md) | Composant `DataList` réutilisable pour les 13 listes admin+socio : pagination et tri pilotés par l'URL, filtres déclaratifs, clic-vers-détail, boutons d'action selon ce qui est possible, pleine largeur | Hifago | Brouillon |
+| [11 · Activité : parcours unifié + créneaux](11-admin-activite-parcours-unifie-creneaux.md) | Fusion création/édition d'une activité en un seul parcours, i18n nom/description, lieu optionnel, photos dès la création, module de définition de créneaux horaires récurrents (réservation cliente renvoyée à une Tranche 2) | Hifago | Implémenté |
+| [12 · Alojamiento (« house »)](12-admin-alojamiento-house.md) | Active `type='lodging'` dans le parcours ProductForm unifié : check-in/check-out, capacité, réutilise price_tiers/tags/photos de l'activité, réactive la colonne dormante `stay_rates` pour saison/week-end/dépôt/inclusiones (définition seulement, consommation au checkout renvoyée à une Tranche 2) | Hifago | Implémenté |
+| [13 · Hôtel et habitaciones](13-admin-hotel-habitaciones.md) | Active `type='hotel'` : le prix vit sur ses chambres (nouvelle table `product_room_types`, même mécanisme prix/tramos que l'alojamiento), check-in/check-out réutilisés de la spec 12, alignement partiel sur la forme des données LobbyPMS (`quantity`/`description`/colonnes dormantes) en anticipation d'une Tranche 2 | Hifago | Implémenté |
+| [14 · Transporte](14-admin-transporte.md) | Active `type='transport'` dans le même ProductForm unifié : lieu (point de départ) optionnel + tags comme l'activité/alojamiento/hôtel, prix par tramos + bornes de quantité pour « hasta 4/7 pers. » (un produit à deux tramos plutôt que deux produits séparés comme en V1), pas de check-in/checkout ni de capacité produit (`schedule='date'` en V1, le transporteur dispatche son propre parc) | Hifago | Implémenté |

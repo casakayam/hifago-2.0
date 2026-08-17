@@ -3,7 +3,11 @@
 import { Cell, Legend, Pie, PieChart, Tooltip } from "recharts";
 import { ChartCard } from "@hifago/ui";
 
-const COLORS = ["var(--accent)", "#f59e0b", "#6366f1", "#ef4444"];
+// Ordre = catalogHealth dans page.tsx : [Publicado, Borrador, En revisión, Rechazado].
+// --accent réservé aux actions/CTA (pas une couleur de donnée parmi d'autres) — retiré d'ici.
+// #6366f1 (indigo) supprimé : seule couleur froide de tout le thème admin, aucun rapport avec
+// la palette chaude par ailleurs.
+const COLORS = ["var(--success)", "var(--default)", "var(--warning)", "var(--danger)"];
 
 export function CatalogHealthChart({ data }: { data: Array<{ name: string; value: number }> }) {
   return (

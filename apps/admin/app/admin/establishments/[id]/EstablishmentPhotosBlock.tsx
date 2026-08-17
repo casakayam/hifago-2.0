@@ -72,7 +72,7 @@ export function EstablishmentPhotosBlock({
   }
 
   return (
-    <div className="rounded-lg border p-4">
+    <div className="rounded-lg border bg-surface p-4">
       <h2 className="mb-3 text-sm font-medium">Fotos del establecimiento</h2>
       <MediaGallery
         photos={photos}

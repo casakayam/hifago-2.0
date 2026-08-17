@@ -2,12 +2,20 @@
 
 import { useState } from "react";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Label, TextArea } from "@hifago/ui";
+import { Button, Label, TextArea, cn } from "@hifago/ui";
 
 const MODERATE_ERRORS: Record<string, string> = {
   proposal_not_found: "No se encontró la propuesta.",
   version_conflict: "Esta propuesta fue modificada por otra persona. Recarga la página.",
 };
+
+// Contrôle flottant posé sur la vignette elle-même : jamais le Button HeroUI "outline" du thème
+// admin (--border-width: 0, il devient invisible posé sur une photo dont le contenu est
+// imprévisible — photo proposée par un partenaire, non maîtrisée) — un scrim sombre fixe reste
+// lisible quelle que soit la photo derrière. Même constante que packages/ui/src/components/
+// media-gallery.tsx.
+const overlayButtonClass =
+  "flex h-7 w-7 items-center justify-center bg-black/55 text-sm leading-none text-white transition-colors hover:bg-black/70 disabled:pointer-events-none disabled:opacity-40";
 
 type ModerateResult = { ok: boolean; reason?: string; status?: string; reviewed_by_email?: string };
 
@@ -101,16 +109,15 @@ export function ModeratePhotosProposalForm({
                   className={`aspect-square w-full rounded-md object-cover ${isSelected ? "" : "opacity-30"}`}
                 />
                 {isSelected ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="absolute right-1 top-1"
-                    onPress={() => removeFromSelection(path)}
+                  <button
+                    type="button"
+                    onClick={() => removeFromSelection(path)}
                     aria-label="Quitar de la selección"
                     data-testid="proposed-photo-remove"
+                    className={cn(overlayButtonClass, "absolute right-1 top-1")}
                   >
                     ✕
-                  </Button>
+                  </button>
                 ) : (
                   <span className="absolute right-1 top-1 rounded bg-default px-1.5 py-0.5 text-xs">
                     Excluida

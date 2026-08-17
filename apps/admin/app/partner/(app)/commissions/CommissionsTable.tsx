@@ -130,19 +130,19 @@ export function CommissionsTable({ rows }: { rows: CommissionRow[] }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-3 gap-4" data-testid="commission-totals">
-        <div className="rounded-lg border p-4">
+        <div className="rounded-lg border bg-surface p-4">
           <p className="text-sm text-muted">Estimado</p>
           <p className="text-lg font-semibold" data-testid="total-estimated">
             {formatCop(totals.estimated)}
           </p>
         </div>
-        <div className="rounded-lg border p-4">
+        <div className="rounded-lg border bg-surface p-4">
           <p className="text-sm text-muted">Ganado, por pagar</p>
           <p className="text-lg font-semibold" data-testid="total-earned">
             {formatCop(totals.earned)}
           </p>
         </div>
-        <div className="rounded-lg border p-4">
+        <div className="rounded-lg border bg-surface p-4">
           <p className="text-sm text-muted">Reasignado</p>
           <p className="text-lg font-semibold" data-testid="total-redistributed">
             {formatCop(totals.redistributed)}

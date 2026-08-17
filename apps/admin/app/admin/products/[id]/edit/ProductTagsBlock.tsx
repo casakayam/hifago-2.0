@@ -49,7 +49,7 @@ export function ProductTagsBlock({
   }
 
   return (
-    <div className="rounded-lg border border-border p-4">
+    <div className="rounded-lg border border-border bg-surface p-4">
       <TagsMultiSelect
         availableTags={allTags}
         selectedTagIds={selectedTagIds}

@@ -1,40 +1,29 @@
 import Link from "next/link";
 import { createClient } from "@hifago/supabase/server";
-import { resolvePageParams } from "@hifago/domain";
-import { buttonVariants, Chip, Input, Label, ServerPagination, Table } from "@hifago/ui";
+import { buttonVariants } from "@hifago/ui";
+import { resolveListParams } from "@hifago/domain";
+import { CampaignsList, type CampaignRow } from "./CampaignsList";
+import { CAMPAIGNS_FILTER_DEFINITIONS } from "@/lib/lists/filters";
+import { CAMPAIGNS_DEFAULT_SORT, CAMPAIGNS_SORT_WHITELIST } from "@/lib/lists/sortable-columns";
 
 // docs/specs/02-admin-accueil-et-navigation.md §5.4 — même patron que /admin/proposals ou
 // /admin/reconciliation, lien vers campaigns/new et campaigns/[id]. `comm_campaigns`
 // (20260814230000_campaign_engine.sql) ne porte aucune colonne nom/libellé — seulement
 // audience/channel/message_template/status — donc la recherche locale (`?q=`) porte sur
 // `message_template`, seul champ texte libre de la campagne, en l'absence d'un vrai titre.
-const AUDIENCE_LABELS: Record<string, string> = {
-  clients: "Clientes",
-  referrers: "Referentes",
-  providers: "Prestadores",
-  partners: "Socios (referentes y prestadores)",
-  all: "Todos",
-};
-const CHANNEL_LABELS: Record<string, string> = { whatsapp: "WhatsApp", email: "Correo electrónico" };
-const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
-  draft: "Borrador",
-  sending: "Enviando",
-  completed: "Completada",
-};
-const CAMPAIGN_STATUS_CHIP_COLOR: Record<string, "default" | "accent" | "success"> = {
-  draft: "default",
-  sending: "accent",
-  completed: "success",
-};
-
+// docs/specs/10-listes-standardisees-admin-socio.md (lot 4) — DataList, tri/filtres serveur.
 export default async function AdminCampaignsPage({
   searchParams,
 }: PageProps<"/admin/campaigns">) {
   const resolvedSearchParams = await searchParams;
-  const searchParam = resolvedSearchParams?.q;
-  const search = typeof searchParam === "string" && searchParam.trim() ? searchParam.trim() : null;
-
-  const { page, pageSize, from, to } = resolvePageParams(resolvedSearchParams);
+  const { page, pageSize, from, to, sort, filters, extraParams } = resolveListParams(
+    resolvedSearchParams,
+    {
+      sortWhitelist: CAMPAIGNS_SORT_WHITELIST,
+      defaultSort: CAMPAIGNS_DEFAULT_SORT,
+      filters: CAMPAIGNS_FILTER_DEFINITIONS,
+    }
+  );
 
   const supabase = await createClient();
 
@@ -43,10 +32,19 @@ export default async function AdminCampaignsPage({
   let query = supabase
     .from("comm_campaigns")
     .select("id, audience, channel, status, message_template, created_at", { count: "exact" })
-    .order("created_at", { ascending: false })
+    .order(sort.column, { ascending: sort.direction === "asc" })
     .range(from, to);
-  if (search) {
-    query = query.ilike("message_template", `%${search}%`);
+  if (filters.q) {
+    query = query.ilike("message_template", `%${filters.q}%`);
+  }
+  if (filters.status) {
+    query = query.eq("status", filters.status);
+  }
+  if (filters.audience) {
+    query = query.eq("audience", filters.audience);
+  }
+  if (filters.channel) {
+    query = query.eq("channel", filters.channel);
   }
   const { data: campaigns, count } = await query;
 
@@ -70,6 +68,17 @@ export default async function AdminCampaignsPage({
     }
   }
 
+  const rows: CampaignRow[] = (campaigns ?? []).map((campaign) => ({
+    id: campaign.id,
+    audience: campaign.audience,
+    channel: campaign.channel,
+    status: campaign.status,
+    progress: targetCounts[campaign.id]
+      ? `${targetCounts[campaign.id].sent}/${targetCounts[campaign.id].total}`
+      : "—",
+    createdAt: campaign.created_at,
+  }));
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -78,77 +87,14 @@ export default async function AdminCampaignsPage({
           Nueva campaña
         </Link>
       </div>
-
-      <form method="GET" className="flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="q">Buscar por mensaje</Label>
-          <Input id="q" name="q" defaultValue={search ?? ""} data-testid="campaigns-search-input" />
-        </div>
-        <button
-          type="submit"
-          className="rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-surface-secondary"
-          data-testid="campaigns-search-submit"
-        >
-          Buscar
-        </button>
-      </form>
-
-      <Table>
-        <Table.ScrollContainer>
-          <Table.Content aria-label="Campañas">
-            <Table.Header>
-              <Table.Column isRowHeader>Audiencia</Table.Column>
-              <Table.Column>Canal</Table.Column>
-              <Table.Column>Estado</Table.Column>
-              <Table.Column>Progreso</Table.Column>
-              <Table.Column>Creada</Table.Column>
-              <Table.Column></Table.Column>
-            </Table.Header>
-            <Table.Body>
-              {campaigns && campaigns.length > 0 ? (
-                campaigns.map((campaign) => {
-                  const counts = targetCounts[campaign.id];
-                  return (
-                    <Table.Row key={campaign.id} data-testid={`campaign-row-${campaign.id}`}>
-                      <Table.Cell>{AUDIENCE_LABELS[campaign.audience] ?? campaign.audience}</Table.Cell>
-                      <Table.Cell>{CHANNEL_LABELS[campaign.channel] ?? campaign.channel}</Table.Cell>
-                      <Table.Cell>
-                        <Chip variant="soft" color={CAMPAIGN_STATUS_CHIP_COLOR[campaign.status] ?? "default"}>
-                          {CAMPAIGN_STATUS_LABELS[campaign.status] ?? campaign.status}
-                        </Chip>
-                      </Table.Cell>
-                      <Table.Cell>{counts ? `${counts.sent}/${counts.total}` : "—"}</Table.Cell>
-                      <Table.Cell>{new Date(campaign.created_at).toLocaleDateString("es")}</Table.Cell>
-                      <Table.Cell>
-                        <Link
-                          href={`/admin/campaigns/${campaign.id}`}
-                          className={buttonVariants({ variant: "outline", size: "sm" })}
-                          data-testid={`campaign-detail-link-${campaign.id}`}
-                        >
-                          Ver
-                        </Link>
-                      </Table.Cell>
-                    </Table.Row>
-                  );
-                })
-              ) : (
-                <Table.Row>
-                  <Table.Cell colSpan={6} className="text-center text-muted">
-                    Ninguna campaña encontrada.
-                  </Table.Cell>
-                </Table.Row>
-              )}
-            </Table.Body>
-          </Table.Content>
-        </Table.ScrollContainer>
-      </Table>
-
-      <ServerPagination
+      <CampaignsList
+        rows={rows}
         page={page}
         pageSize={pageSize}
         totalCount={count ?? 0}
-        basePath="/admin/campaigns"
-        extraParams={search ? { q: search } : undefined}
+        sort={sort}
+        filterValues={filters}
+        extraParams={extraParams}
       />
     </div>
   );

@@ -1,12 +1,16 @@
 ---
 id: refonte-modele-donnees
 titre: "Audit du modèle de données cible — entités partagées"
+theme: cadrage
 statut: brouillon
 maj: 2026-08-13
 resume: >
   Audit champ par champ des entités centrales (établissement, chambre, produit, compte,
   code partenaire), croisé avec le code actuel et les décisions déjà prises côté client/socio.
   Référence commune aux 3 cahiers des charges — pas de duplication des champs ici.
+mots_cles: [modele de donnees, entites, etablissement, chambre, produit, compte, code partenaire]
+repond_a:
+  - "Quels champs porte chaque entité centrale du nouveau modèle de données ?"
 ---
 
 # Audit du modèle de données cible
@@ -163,15 +167,21 @@ catégorie côté PMS** (pas un identifiant interne indépendant).
 | Champ | Statut |
 |---|---|
 | Nom, capacité, unité de vente, plafond | ✅ |
-| **Identifiant interne indépendant du PMS** | ❌ absent — aujourd'hui l'id EST l'id PMS. Un établissement sans PMS a besoin d'un identifiant propre au système, pas emprunté à un connecteur externe (corollaire direct du gap critique §1). |
-| **Prix propre** | ❌ absent hors PMS (corollaire du même gap) |
-| **Calendrier de disponibilité propre** | ❌ absent hors PMS (corollaire du même gap) |
-| Photos par chambre | ✅ (probable, via la galerie produit générale) — à confirmer au chiffrage |
-| Description par chambre | ⚠️ à confirmer — pas explicitement vu dans le code audité — 🌐 multilingue si ajoutée |
+| **Identifiant interne indépendant du PMS** | ✅ **livré hors PMS (2026-08-16, spec 13)** — `product_room_types.id` (uuid propre au système), pour un hôtel géré via le nouveau `type='hotel'`. Le gap reste entier pour le mode `rooms` legacy adossé à LobbyPMS (hors périmètre spec 13, cf. §1 gap critique) — deux mécanismes distincts, pas une continuité de celui-ci. |
+| **Prix propre** | ✅ **livré hors PMS (2026-08-16, spec 13)** — `product_room_types.price_cop`/`price_tiers`, même mécanisme que `products.price_tiers` (spec 08/12) posé par chambre. |
+| **Calendrier de disponibilité propre** | ❌ toujours absent hors PMS — spec 13 est définitionnelle seulement (prix/capacité déclarés, jamais consommés par une réservation réelle), calendrier renvoyé à une Tranche 2 |
+| Photos par chambre | ✅ **livré (2026-08-16, spec 13)** — nouvelle table `room_media` (miroir de `product_media`/`establishment_media`), `add_catalog_media`/`reorder_gallery` étendus à `p_entity_type='room_type'` — même chokepoint d'abord signalé, puis étendu le jour même à la demande de Jérôme. Aligné sur `photos[]` de `GET /rooms` LobbyPMS |
+| Prix par période (chambre) | ✅ **livré, définitionnel seulement (2026-08-16, spec 13)** — `product_room_types.stay_rates`, réutilise tel quel le mécanisme `stay_rates`/`StayRatesEditor` de l'alojamiento (spec 12). Jamais consommé par `create_order`, cf. §1 |
+| Description par chambre | ✅ **livré (2026-08-16, spec 13)** — `product_room_types.description` (jsonb `{es, en?}`), miroir de `descriptions[]` LobbyPMS — 🌐 multilingue |
 | **Équipements propres à la chambre** (salle de bain privée, climatisation…) | ❌ absent — aucun champ structuré, seulement le nom de la chambre porte l'information de façon informelle aujourd'hui |
-| Nom de la chambre | 🌐 multilingue (cf. section transverse) |
+| Nom de la chambre | ✅ **livré (2026-08-16, spec 13)** — `product_room_types.name` (jsonb `{es, en?}`) — 🌐 multilingue |
+| **Quantité de chambres du même type** | ✅ **livré (2026-08-16, spec 13)** — `product_room_types.quantity`, absent de tout audit précédent, ajouté par alignement volontaire sur `quantity` de `GET /rooms` LobbyPMS (distinct de `capacity`, jamais demandé avant) |
 
-## 3. Produit vendable classique (activité, transport, autres prestations hors hébergement)
+## 3. Produit vendable classique (activité, transport, alojamiento loué en entier — hors hôtel à
+chambres, cf. §2)
+
+Inclut désormais l'alojamiento loué en entier (`type='lodging'`, activé par la spec 12) — les deux
+partagent aujourd'hui l'essentiel de leurs champs (cf. tableau ci-dessous).
 
 **Champs actuels** (registre SQLite `products`, cf. `05-data-model.md`) : identifiant, type,
 prix, vendable, planification (`schedule`), unité de quantité, capacité par défaut, calendrier
@@ -182,12 +192,15 @@ PMS optionnel, photos.
 |---|---|
 | Prix, planification, capacité, photos, description | ✅ |
 | **Tags de catégorisation** | ✅ **livré (2026-08-15, spec 08)** — `catalog_tags`/`product_tag_assignments`, multi-valeurs, remplace la catégorie fixe (`products.category`) à l'écran admin direct. Colonne `category` conservée en base, toujours utilisée par le flux socio (`product_proposals`) — migration complète non tranchée, cf. spec 08 §10. |
-| **Prix par palier de quantité/personnes** | ⚠️ **livré sous une forme différente (2026-08-15, spec 08)** — `products.price_tiers` (tranches de quantité avec un prix absolu par tranche, résolu côté `create_order`), pas le modèle "seuil + pourcentage de remise sur un prix de base" décrit ci-dessus au moment de l'audit — jamais construit tel quel. **Activité uniquement**, toujours hors périmètre pour les chambres/logements entiers. |
+| **Prix par palier de quantité/personnes** | ⚠️ **livré sous une forme différente (2026-08-15, spec 08 ; étendu 2026-08-16, spec 12)** — `products.price_tiers` (tranches de quantité avec un prix absolu par tranche, résolu côté `create_order`), pas le modèle "seuil + pourcentage de remise sur un prix de base" décrit ci-dessus au moment de l'audit — jamais construit tel quel. Activité **et alojamiento** (`type='lodging'`, spec 12 — `qty` = nombre de personnes, mécanisme réutilisé tel quel plutôt que dupliqué). Toujours hors périmètre pour un hôtel à chambres sans PMS (§2). |
 | **Bornes min/max de quantité par réservation** | ✅ **livré (2026-08-15, spec 08)** — `products.min_qty`/`max_qty`, appliquées réellement dans `create_order` (remplace le plafond générique codé en dur `qty > 20`). N'existait dans aucun audit précédent — demandé par Jérôme en cours de session, absent aussi côté legacy pour une activité (`max_units` y est un vestige lodging sans UI). |
 | **Suppression réelle d'une activité** | ✅ **livré (2026-08-15, spec 08)** — RPC `delete_product`, garde-fou anti-commande (`order_lines`) fidèle au comportement déjà en place côté legacy (`catalogService.deleteProduct`) — la seule des quatre demandes de la spec 08 qui soit une reprise, pas une extension. |
-| **Coordonnées géographiques propres** | ❌ absent en base — même géocodage à réutiliser qu'en §1 ; une activité a son propre lieu, pas forcément celui de l'hébergement associé (recherche par rayon, client §2) |
+| **Coordonnées géographiques propres** | ✅ **livré (2026-08-16, spec 11 ; étendu specs 12/13/14)** — `products.address`/`lat`/`lon` (mirror `establishments`), nullable, exposé au formulaire pour `activity`/`lodging`/`hotel`/`transport` |
+| **Créneaux horaires récurrents** | ✅ **livré, définition seulement (2026-08-16, spec 11)** — nouvelle table `product_slot_rules` (jours de semaine + plage horaire + durée de créneau + capacité par règle). Aucune génération de créneaux réels ni décrément de capacité live : la réservation anti-survente d'un créneau précis reste une Tranche 2 future, cf. spec 11 §2/§10 |
+| **Alojamiento en tant que produit** (`type='lodging'`) | ✅ **activé, définition seulement (2026-08-16, spec 12)** — `type='lodging'` et `products.stay_rates` (jsonb) existaient déjà en base depuis le tout premier schéma catalogue (copiés de la V1), jamais branchés à un écran avant cette spec. Check-in/check-out (`check_in_time`/`check_out_time`, nouvelles colonnes `time`) et capacité de couchage (`capacity`, nouvelle colonne) ; `stay_rates` réactivée pour les extras (saison mensuelle + majoration week-end **nouvelle, absente de la V1** + inclusiones + dépôt + note). Paliers de prix = réutilisation de `price_tiers` (ligne ci-dessus). **Purement définitionnel** : `create_order` ne lit pas `stay_rates`, aucun calendrier de nuitées ni affichage public — Tranche 2 future, cf. spec 12 §2/§10. |
+| **Transporte en tant que produit** (`type='transport'`) | ✅ **activé (2026-08-16, spec 14)** — `type='transport'` accepté par le CHECK depuis le tout premier schéma catalogue, jamais exposé à un écran avant cette spec. Aucune nouvelle colonne : réutilise tel quel lieu/tags/`price_tiers`/`min_qty`/`max_qty` déjà posés pour activité/alojamiento. Contrairement à la V1 (une ligne de produit par tarif « hasta N pers. »), les paliers de capacité de véhicule deviennent des tramos de `price_tiers` d'un même produit. Pas de check-in/checkout ni de capacité produit (`schedule='date'`/`capacity_default=NULL` en V1). Aucun changement côté `apps/web` (portail déjà générique) ; pas de reconstruction de la carte transport multi-transporteurs groupée de la V1 — décision explicite, cf. spec 14 §2/§10. |
 | **Politique d'annulation** | ✅ plus un champ par produit (2026-08-12) — règle fixe et universelle, cf. §1 ci-dessus |
-| **Inclusions/exclusions** (ce qui est compris dans le prix) | ❌ absent pour les produits classiques — existe seulement en texte libre pour un logement entier (`stay_seed.includes[]`) ; utile aussi pour une activité (ex. « casque inclus ») — *à considérer, pas encore décidé* |
+| **Inclusions/exclusions** (ce qui est compris dans le prix) | ⚠️ **livré pour l'alojamiento (2026-08-16, spec 12)** — `products.stay_rates.includes[]` (texte libre, réactive le champ V1 `stay_seed.includes[]`). Toujours absent pour une activité classique (ex. « casque inclus ») — *à considérer, pas encore décidé*. |
 | **Restrictions** (âge minimum, niveau requis, contre-indications) | ❌ absent — pertinent pour des activités type nautique/adrénaline, mais **pas décidé** : à challenger avec Jérôme avant d'ajouter (risque de sur-ingénierie si peu de produits en ont réellement besoin) |
 | Nom, description, inclusions en texte libre | 🌐 multilingues (cf. section transverse) |
 

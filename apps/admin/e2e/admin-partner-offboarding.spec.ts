@@ -60,6 +60,11 @@ test("admin déroule les 4 étapes d'offboarding d'un partenaire, ses activités
   const establishmentRow = page.locator("tr", { hasText: establishmentName });
   await establishmentRow.getByRole("link", { name: "+ Actividad" }).click();
   await expect(page).toHaveURL(/\/admin\/products\/new\?establishment=/);
+  // Spec 11 — ProductForm est nettement plus lourd à hydrater que l'ancien NewProductForm
+  // (galerie/crop, éditeur de créneaux, autocomplete d'adresse) : sans cette attente, la toute
+  // première interaction sur la page peut atteindre le DOM avant que React n'ait attaché ses
+  // gestionnaires (valeur/submit perdus silencieusement, jamais reçus par le state React).
+  await page.waitForLoadState("networkidle");
 
   const productName = `Actividad Offboarding E2E ${stamp}`;
   await page.locator('input[name="nombre"]').fill(productName);
@@ -68,6 +73,8 @@ test("admin déroule les 4 étapes d'offboarding d'un partenaire, ses activités
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
   await establishmentRow.getByRole("link", { name: /actividades/ }).click();
+  // Cliquer un <Link> Next.js avant hydratation de la page cible peut laisser l'URL inchangée.
+  await page.waitForLoadState("networkidle");
   await page.getByRole("link", { name: productName }).click();
   await expect(page).toHaveURL(/\/admin\/products\/.+\/edit$/);
   await page.getByTestId("toggle-sellable-button").click();

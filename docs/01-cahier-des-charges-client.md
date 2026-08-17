@@ -1,11 +1,15 @@
 ---
 id: refonte-cdc-client
 titre: "Cahier des charges — portail client (marketplace global, Guatapé = première localisation)"
+theme: cadrage
 statut: brouillon
 maj: 2026-08-13
 resume: >
   Comportement métier cible du portail de réservation client, dérivé du comportement réel actuel
   et challengé section par section avec Jérôme avant reprise dans la refonte.
+mots_cles: [cahier des charges, client, portail client, reservation, marketplace, guatape]
+repond_a:
+  - "Que doit faire le portail client (apps/web) dans la refonte ?"
 ---
 
 # Cahier des charges — portail client

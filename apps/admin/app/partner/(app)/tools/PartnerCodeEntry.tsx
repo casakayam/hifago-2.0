@@ -118,7 +118,7 @@ export function PartnerCodeEntry({ code, link }: { code: string; link: string })
 
         <div className="flex flex-col items-start gap-3">
           <Label>Código QR</Label>
-          <canvas ref={canvasRef} className="rounded-lg border" />
+          <canvas ref={canvasRef} className="rounded-lg border bg-surface" />
           <div className="flex gap-2">
             <Button
               type="button"

@@ -1,19 +1,47 @@
 import { createClient } from "@hifago/supabase/server";
-import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
-import { Table } from "@hifago/ui";
+import { asLocalizedField, resolveLocalizedField, resolveListParams } from "@hifago/domain";
 import { NewTagForm } from "./NewTagForm";
-import { DeleteTagButton } from "./DeleteTagButton";
-import { RenameTagButton } from "./RenameTagButton";
+import { TagsList, type TagRow } from "./TagsList";
+import { TAGS_FILTER_DEFINITIONS } from "@/lib/lists/filters";
+import { TAGS_DEFAULT_SORT, TAGS_SORT_WHITELIST } from "@/lib/lists/sortable-columns";
 
 // docs/specs/08-admin-gestion-activite.md §5 — catalogue de tags, remplace la catégorie fixe
-// (products.category) côté écran admin direct. Volume attendu en dizaines : pas de
-// ServerPagination ici, contrairement à /admin/products.
-export default async function AdminTagsPage() {
+// (products.category) côté écran admin direct.
+// docs/specs/10-listes-standardisees-admin-socio.md (lot 4) — DataList, pagination activée malgré
+// le volume attendu en dizaines (uniformité demandée, impact nul si le volume reste petit —
+// "Página 1 de 1"). Nouvelle fiche détail /admin/tags/[id] : Eliminar y est désormais réservé
+// (décision Jérôme — jamais une action de ligne sur la liste), Editar (renommer) reste en ligne
+// via modal, non destructif.
+export default async function AdminTagsPage({ searchParams }: PageProps<"/admin/tags">) {
+  const resolvedSearchParams = await searchParams;
+  const { page, pageSize, from, to, sort, filters, extraParams } = resolveListParams(
+    resolvedSearchParams,
+    {
+      sortWhitelist: TAGS_SORT_WHITELIST,
+      defaultSort: TAGS_DEFAULT_SORT,
+      filters: TAGS_FILTER_DEFINITIONS,
+    }
+  );
+
   const supabase = await createClient();
-  const { data: tags } = await supabase
+  let query = supabase
     .from("catalog_tags")
-    .select("id, label, slug, product_tag_assignments(count)")
-    .order("slug", { ascending: true });
+    .select("id, label, slug, created_at, product_tag_assignments(count)", { count: "exact" })
+    .order(sort.column, { ascending: sort.direction === "asc" })
+    .range(from, to);
+
+  if (filters.q) {
+    query = query.or(`label->>es.ilike.%${filters.q}%,slug.ilike.%${filters.q}%`);
+  }
+
+  const { data: tags, count } = await query;
+
+  const rows: TagRow[] = (tags ?? []).map((tag) => ({
+    id: tag.id,
+    label: resolveLocalizedField(asLocalizedField(tag.label), "es") ?? tag.slug,
+    usageCount: tag.product_tag_assignments[0]?.count ?? 0,
+    createdAt: tag.created_at,
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -21,43 +49,15 @@ export default async function AdminTagsPage() {
 
       <NewTagForm />
 
-      <Table>
-        <Table.ScrollContainer>
-          <Table.Content aria-label="Etiquetas">
-            <Table.Header>
-              <Table.Column isRowHeader>Etiqueta</Table.Column>
-              <Table.Column>Actividades</Table.Column>
-              <Table.Column></Table.Column>
-            </Table.Header>
-            <Table.Body>
-              {tags && tags.length > 0 ? (
-                tags.map((tag) => {
-                  const label = resolveLocalizedField(asLocalizedField(tag.label), "es") ?? tag.slug;
-                  const usageCount = tag.product_tag_assignments[0]?.count ?? 0;
-                  return (
-                    <Table.Row key={tag.id} data-testid={`tag-row-${tag.id}`}>
-                      <Table.Cell>{label}</Table.Cell>
-                      <Table.Cell>{usageCount}</Table.Cell>
-                      <Table.Cell>
-                        <div className="flex gap-4">
-                          <RenameTagButton tagId={tag.id} currentLabel={label} />
-                          <DeleteTagButton tagId={tag.id} label={label} usageCount={usageCount} />
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  );
-                })
-              ) : (
-                <Table.Row>
-                  <Table.Cell colSpan={3} className="text-center text-muted">
-                    Ninguna etiqueta todavía.
-                  </Table.Cell>
-                </Table.Row>
-              )}
-            </Table.Body>
-          </Table.Content>
-        </Table.ScrollContainer>
-      </Table>
+      <TagsList
+        rows={rows}
+        page={page}
+        pageSize={pageSize}
+        totalCount={count ?? 0}
+        sort={sort}
+        filterValues={filters}
+        extraParams={extraParams}
+      />
     </div>
   );
 }

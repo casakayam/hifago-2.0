@@ -20,7 +20,7 @@ export function CommissionsChart({
         <Tooltip formatter={(value) => formatCop(Number(value))} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Bar dataKey="referente" stackId="commission" fill="var(--accent)" name="Referente" />
-        <Bar dataKey="app" stackId="commission" fill="#f59e0b" name="App" />
+        <Bar dataKey="app" stackId="commission" fill="var(--warning)" name="App" />
       </BarChart>
     </ChartCard>
   );

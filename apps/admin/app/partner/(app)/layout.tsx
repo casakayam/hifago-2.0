@@ -26,7 +26,7 @@ export default async function PartnerAppLayout({ children }: LayoutProps<"/partn
   return (
     <div className="flex min-h-screen w-full">
       <PartnerNav />
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-8">{children}</div>
+      <div className="mx-auto flex w-full flex-1 flex-col gap-6 p-8">{children}</div>
     </div>
   );
 }

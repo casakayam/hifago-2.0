@@ -57,3 +57,15 @@ export function toPriceTiersColumn(tiers: PriceTier[]): ParsedPriceTier[] {
 export function lowestTierPrice(tiers: PriceTier[]): number {
   return Math.min(...tiers.map((tier) => Number(tier.priceCop)));
 }
+
+// Sens inverse de toPriceTiersColumn (colonne → brouillon), pour hydrater un formulaire d'édition —
+// partagé entre le prix d'un produit (ProductForm) et le prix d'une chambre (spec 13, par chambre)
+// plutôt que réimplémenté à chaque consommateur.
+export function tiersFromColumn(value: unknown): PriceTier[] {
+  if (!Array.isArray(value) || value.length === 0) return [emptyTier()];
+  return (value as ParsedPriceTier[]).map((tier) => ({
+    minQty: String(tier.min_qty),
+    maxQty: String(tier.max_qty),
+    priceCop: String(tier.price_cop),
+  }));
+}

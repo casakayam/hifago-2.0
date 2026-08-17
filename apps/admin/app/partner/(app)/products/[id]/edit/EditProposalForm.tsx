@@ -141,7 +141,7 @@ export function EditProposalForm({
     <div className="flex max-w-md flex-col gap-6">
       {proposal ? (
         <div
-          className="flex flex-col gap-2 rounded-lg border border-border p-4"
+          className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4"
           data-testid="pending-proposal"
         >
           <p className="text-sm font-medium">Propuesta pendiente de revisión</p>

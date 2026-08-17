@@ -1,6 +1,7 @@
 ---
 id: refonte-reference-technique
 titre: "Référence technique — patterns validés et extensions requises"
+theme: cadrage
 statut: "patterns de base validés 2026-08-12 ; extension calendrier partagé à valider"
 maj: 2026-08-13
 resume: >
@@ -8,6 +9,9 @@ resume: >
   l'extension métier 2026-08-13 pour les calendriers prestataire partagés et les camps multi-jours.
   Les patterns déjà spikés restent copiables ; l'extension multi-jours doit être validée par un
   nouveau test de concurrence avant d'être considérée comme acquise.
+mots_cles: [squelette rpc, anti-survente, test de concurrence, recherche geo, jsonb, pattern valide]
+repond_a:
+  - "Quel squelette de code copier pour une RPC anti-survente et son test de concurrence ?"
 ---
 
 # Référence technique — patterns validés + extension calendrier partagé

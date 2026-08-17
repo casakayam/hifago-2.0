@@ -30,6 +30,11 @@ test("admin crée une actividad avec paliers de prix et bornes de quantité ; cr
 
   await loginAs(context, SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
   await page.goto("/admin/products/new");
+  // Spec 11 — ProductForm est nettement plus lourd à hydrater que l'ancien NewProductForm
+  // (galerie/crop, éditeur de créneaux, autocomplete d'adresse) : sans cette attente, la toute
+  // première interaction sur la page peut atteindre le DOM avant que React n'ait attaché ses
+  // gestionnaires (valeur/submit perdus silencieusement, jamais reçus par le state React).
+  await page.waitForLoadState("networkidle");
 
   await page.locator('input[name="nombre"]').fill(productName);
   await page.getByTestId("establishment-select").click();

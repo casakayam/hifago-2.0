@@ -15,13 +15,123 @@
  * valeurs de tokens changent) : "vitrine" (apps/web, orienté conversion, valeurs par défaut de
  * HeroUI conservées) et "admin" (apps/admin, plus dense, back-office).
  *
- * Pas de palette de marque Hifago définie à ce stade — seuls le radius et l'accent du registre
- * admin sont ajustés pour la densité ; une vraie identité de marque reste une décision de design
- * séparée, pas inventée ici.
+ * Palette de marque admin — piste "Argile" (fond beige, aplats de teinte sans bordure, accent
+ * terracotta), tranchée par Jérôme le 2026-08-15 après comparaison visuelle de 3 pistes. Détail et
+ * justification de chaque jeton : docs/specs/09-design-system-admin.md.
  */
 @layer base {
   [data-theme="admin"] {
-    --radius: 0.375rem;
-    --accent: oklch(0.5 0.04 260);
+    color-scheme: light;
+
+    --radius: 0rem;
+    --field-radius: 0rem;
+    --border-width: 0px;
+    /* Champs de formulaire : seule exception à "pas de bordure" (voir --field-background
+       ci-dessous — constaté en usage réel le 2026-08-15, corrige docs/specs/09-design-system-admin.md
+       §0 Cas limites, qui anticipait le risque sans encore le trancher). Un champ interactif doit
+       rester repérable quel que soit son conteneur, pas seulement posé sur une --surface. */
+    --field-border-width: 1px;
+
+    /* Valeurs identiques, chiffre pour chiffre, à la piste "Argile" comparée et retenue le
+       2026-08-15 (docs/specs/09-design-system-admin.md, artifact de comparaison des 3 pistes) —
+       PAS une réinterprétation. Un essai de chroma remontée (2026-08-15, même journée) a été fait
+       puis explicitement rejeté par Jérôme : à ne pas reproduire sans qu'il le redemande. */
+    --background: oklch(92.2% 0.005 34.3); /* taupe-200 */
+    --foreground: oklch(21.4% 0.009 43.1); /* taupe-900 */
+
+    --surface: oklch(98.6% 0.002 67.8); /* taupe-50 */
+    --surface-foreground: oklch(21.4% 0.009 43.1);
+
+    /* Absents de la maquette (statique, sans HeroUI) — nécessaires ici car le Table compound HeroUI
+       les consomme pour son cadre (voir plus bas). Dérivés de --surface/--surface-foreground avec
+       le même mécanisme color-mix que HeroUI utilise pour ses jetons -secondary/-tertiary déjà
+       corrects (--background-secondary, --border-secondary), avec un ratio assez large pour rester
+       nettement sous --background (92.2%) — jamais recoller dessus par coïncidence de calcul. */
+    --surface-secondary: color-mix(in oklab, var(--surface) 80%, var(--surface-foreground) 20%);
+    --surface-secondary-foreground: var(--surface-foreground);
+    --surface-tertiary: color-mix(in oklab, var(--surface) 65%, var(--surface-foreground) 35%);
+    --surface-tertiary-foreground: var(--surface-foreground);
+
+    --overlay: oklch(99.2% 0.001 67.8); /* absent de la maquette — palier le plus clair, cohérent avec --surface */
+    --overlay-foreground: oklch(21.4% 0.009 43.1);
+
+    --muted: oklch(54.7% 0.021 43.1);
+
+    --default: oklch(86.8% 0.007 39.5);
+    --default-foreground: oklch(21.4% 0.009 43.1);
+
+    --accent: oklch(52% 0.13 38); /* terracotta */
+    --accent-foreground: oklch(98% 0.004 67.8);
+
+    /* --overlay (le palier le plus clair) plutôt que --background : un champ doit rester visible
+       posé directement sur la page, pas seulement "creusé" dans une carte --surface (constaté cassé
+       en usage réel le 2026-08-15 — seule déviation volontaire de la maquette, fonctionnelle, pas
+       esthétique). */
+    --field-background: var(--overlay);
+    --field-foreground: oklch(21.4% 0.009 43.1);
+    --field-placeholder: oklch(54.7% 0.021 43.1); /* = --muted */
+    --field-border: oklch(86.8% 0.007 39.5); /* = --default, seule couleur de la maquette assez visible pour un champ à 1px */
+
+    --success: oklch(0.55 0.09 140);
+    --success-foreground: oklch(98% 0 0);
+    --warning: oklch(0.74 0.13 80);
+    --warning-foreground: oklch(20% 0 0);
+    --danger: oklch(0.52 0.16 25);
+    --danger-foreground: oklch(98% 0 0);
+
+    --border: oklch(94% 0.004 45); /* "quasi invisible", tel quel dans la maquette */
+    --separator: oklch(95% 0.003 50);
+    --focus: var(--accent);
+    --link: var(--accent);
+
+    --surface-shadow: none;
+    --field-shadow: none;
+  }
+
+  /* --border-width: 0 supprime le filet entre lignes de SimpleTable — sans lui, une liste dense
+     (réservations, calendrier) redevient illisible. Le zébrage prend le relais, scopé au thème
+     admin uniquement (le thème vitrine garde ses filets 1px, pas besoin de zébrage là-bas). */
+  [data-theme="admin"] [data-slot="table-body"] [data-slot="table-row"]:nth-child(even) {
+    background-color: color-mix(in oklch, var(--surface) 96%, var(--foreground) 4%);
+  }
+
+  /* google.maps.places.PlaceAutocompleteElement (apps/admin/components/address-autocomplete.ts) :
+     aucune custom property documentée par Google pour son fond/texte interne (Shadow DOM fermé) —
+     seul color-scheme est un levier documenté (référence Maps JS API), par défaut "light dark"
+     donc suit le mode sombre du système, d'où le rendu noir constaté. Le fixer en light DIRECTEMENT
+     sur l'élément (pas seulement sur un ancêtre : le composant redéclare son propre color-scheme en
+     interne, l'héritage seul depuis [data-theme="admin"] ne suffit pas à le battre). border-radius/
+     border-color restent, eux, du CSS de boîte normal, stylables depuis l'extérieur. */
+  [data-theme="admin"] gmp-place-autocomplete {
+    color-scheme: light;
+    border-radius: var(--field-radius);
+    border-color: var(--field-border);
+  }
+
+  /* Tailwind : les utilitaires "bruts" (.border, .border-t/b/l/r/x/y, .rounded) figent une
+     largeur/un radius en dur (1px / .25rem) — seules les variantes graduées (.border-b-2,
+     .rounded-md/lg/…) sont recalculées depuis --border-width/--radius par HeroUI. La grande
+     majorité des cartes/panneaux d'apps/admin utilisent la forme brute (ex. "rounded-lg border" —
+     des dizaines d'occurrences) : plutôt que de retoucher chaque fichier, un seul recalage ici,
+     scopé au thème admin, aligne tout l'existant sur les jetons sans toucher un composant. */
+  [data-theme="admin"] .border,
+  [data-theme="admin"] .border-t,
+  [data-theme="admin"] .border-b,
+  [data-theme="admin"] .border-l,
+  [data-theme="admin"] .border-r,
+  [data-theme="admin"] .border-x,
+  [data-theme="admin"] .border-y {
+    border-width: var(--border-width);
+  }
+  [data-theme="admin"] .rounded {
+    border-radius: var(--radius);
+  }
+
+  /* Exception au recalage ci-dessus : une bordure en pointillés n'est jamais décorative dans ce
+     projet, toujours l'affordance d'une zone de dépôt/action (ex. "Añadir foto" de MediaGallery) —
+     la mettre à 0 la rend invisible et le contrôle semble avoir disparu. Après la règle .border
+     ci-dessus pour gagner sur la même propriété (spécificité égale, l'ordre décide). */
+  [data-theme="admin"] .border-dashed {
+    border-width: 1px;
   }
 }

@@ -14,8 +14,11 @@
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
+    "test:db": "supabase test db",
     "test:e2e": "npm run test:e2e --workspaces --if-present",
-    "test:concurrency": "for f in tests/concurrency/*.concurrency.mjs; do node \"$f\" || exit 1; done"
+    "test:concurrency": "for f in tests/concurrency/*.concurrency.mjs; do node \"$f\" || exit 1; done",
+    "docs:index": "node scripts/docs_index.js --build",
+    "docs:check": "node scripts/docs_index.js --check"
   },
   "devDependencies": {
     "concurrently": "^10.0.4"
