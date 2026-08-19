@@ -7,6 +7,7 @@ import {
   getEstablishmentName,
   countOrdersByPhone,
   getOrderLinesForPhone,
+  mockMercadoPagoCheckout,
 } from "@hifago/e2e-support";
 
 // Feature 6 : "Client : composer un panier à plusieurs lignes sur une même commande
@@ -75,9 +76,15 @@ test("panier avec une ligne par établissement → une seule commande, 2 lignes"
   const phone = "+57 300 444 5555";
   await page.locator('input[name="holder-name"]').fill("Cliente E2E Multi Establecimiento");
   await page.locator('input[name="holder-phone"]').fill(phone);
+  await page.locator('input[name="holder-email"]').fill("cliente.multi.establecimiento@example.com");
+  // Spec 19 §0 Tranche 1 : create_order réussi enchaîne désormais automatiquement le paiement
+  // Mercado Pago (redirection réelle, seul l'appel SDK externe est mocké). order-success n'est
+  // qu'un état transitoire — la redirection peut déjà l'avoir remplacé avant que Playwright ne
+  // l'observe (race constatée en testant) : attendre l'URL finale est le seul checkpoint fiable.
+  const { redirectUrl } = await mockMercadoPagoCheckout(page);
   await page.getByTestId("submit-order-button").click();
 
-  await expect(page.getByTestId("order-success")).toBeVisible();
+  await page.waitForURL(redirectUrl);
 
   // Une seule commande, avec exactement les 2 lignes attendues (même order_id) — pas 2 commandes
   // séparées.
@@ -126,6 +133,7 @@ test("une ligne dépasse la capacité restante de sa ressource → erreur ciblé
   const phone = "+57 300 666 7777";
   await page.locator('input[name="holder-name"]').fill("Cliente E2E Multi Full");
   await page.locator('input[name="holder-phone"]').fill(phone);
+  await page.locator('input[name="holder-email"]').fill("cliente.multi.full@example.com");
   await page.getByTestId("submit-order-button").click();
 
   await expect(page.getByTestId("checkout-error")).toBeVisible();

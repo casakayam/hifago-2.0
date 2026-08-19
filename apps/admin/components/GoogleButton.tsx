@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@hifago/supabase/client";
-import { Button } from "@hifago/ui";
+import { Button, toast } from "@hifago/ui";
 
 // Flux redirect (pas popup) — bonne pratique Supabase Auth (docs/specs/
 // 07-connexion-inscription-complete.md §3) : Google redirige vers l'URL de callback Supabase
@@ -24,6 +24,7 @@ export function GoogleButton({ next = "/" }: { next?: string }) {
     });
 
     if (error) {
+      toast.danger("No se pudo iniciar sesión con Google. Inténtalo de nuevo.");
       setIsRedirecting(false);
     }
     // Pas de redirection manuelle en cas de succès : signInWithOAuth navigue déjà le navigateur
@@ -59,5 +60,21 @@ export function GoogleButton({ next = "/" }: { next?: string }) {
       </svg>
       {isRedirecting ? "Redirigiendo…" : "Continuar con Google"}
     </Button>
+  );
+}
+
+// Bloc OAuth complet (bouton Google + séparateur "o") — identique sur les 3 écrans qui proposent
+// une entrée Google en plus d'un formulaire email/mot de passe (login, signup, partner/join).
+// Un seul point de vérité pour ce markup répété, plutôt que chaque écran retape le séparateur.
+export function OAuthSection({ next = "/" }: { next?: string }) {
+  return (
+    <>
+      <GoogleButton next={next} />
+      <div className="flex items-center gap-3 text-xs text-muted" role="separator">
+        <div className="h-px flex-1 bg-border" />
+        o
+        <div className="h-px flex-1 bg-border" />
+      </div>
+    </>
   );
 }

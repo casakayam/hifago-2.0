@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@hifago/supabase/client";
+import { toast } from "@hifago/ui";
 import { TagsMultiSelect, type TagOption } from "@/components/tags-multiselect";
 
 // Bloc séparé du formulaire d'édition — même patron que ProductStatusBlock.tsx/
@@ -17,10 +18,8 @@ export function ProductTagsBlock({
   initialTagIds: string[];
 }) {
   const [selectedTagIds, setSelectedTagIds] = useState(initialTagIds);
-  const [error, setError] = useState<string | null>(null);
 
   async function handleChange(nextIds: string[]) {
-    setError(null);
     const supabase = createClient();
     const added = nextIds.filter((id) => !selectedTagIds.includes(id));
     const removed = selectedTagIds.filter((id) => !nextIds.includes(id));
@@ -30,9 +29,10 @@ export function ProductTagsBlock({
         .from("product_tag_assignments")
         .insert(added.map((tagId) => ({ product_id: productId, tag_id: tagId })));
       if (insertError) {
-        setError("No se pudo añadir el tag.");
+        toast.danger("No se pudo añadir el tag.");
         return;
       }
+      toast.success("Tag añadido.");
     }
     if (removed.length > 0) {
       const { error: deleteError } = await supabase
@@ -41,9 +41,10 @@ export function ProductTagsBlock({
         .eq("product_id", productId)
         .in("tag_id", removed);
       if (deleteError) {
-        setError("No se pudo quitar el tag.");
+        toast.danger("No se pudo quitar el tag.");
         return;
       }
+      toast.success("Tag quitado.");
     }
     setSelectedTagIds(nextIds);
   }
@@ -56,11 +57,6 @@ export function ProductTagsBlock({
         onChange={handleChange}
         testId="tags-multiselect"
       />
-      {error ? (
-        <p role="alert" className="mt-2 text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
     </div>
   );
 }

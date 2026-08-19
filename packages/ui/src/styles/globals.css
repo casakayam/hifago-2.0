@@ -134,4 +134,15 @@
   [data-theme="admin"] .border-dashed {
     border-width: 1px;
   }
+
+  /* Aucun env(safe-area-inset-*) n'existe encore ailleurs dans le projet — le toast (Toast.Provider,
+     placement="bottom", apps/admin/app/layout.tsx) est le premier élément réellement ancré en bas
+     d'écran. On décale l'offset fixe (pas de padding sur .toast-region : sa hauteur est calculée
+     dynamiquement par HeroUI pour l'empilement des toasts, y ajouter un padding la perturberait)
+     pour rester au-dessus de la barre gestuelle iOS/Safari sur téléphone. */
+  [data-theme="admin"] .toast-region--bottom,
+  [data-theme="admin"] .toast-region--bottom-start,
+  [data-theme="admin"] .toast-region--bottom-end {
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
 }

@@ -48,6 +48,24 @@ export function validateSlotRules(rules: DraftSlotRule[]): string | null {
       return "La capacidad de cada turno debe ser un número entero de al menos 1.";
     }
   }
+
+  // Non-chevauchement entre règles du même produit (spec 18 §0 Tranche 1) — même algorithme que
+  // validatePriceTiers (comparaison pairwise), restreint aux paires qui partagent au moins un jour
+  // de semaine : deux règles sur des jours disjoints peuvent librement se chevaucher en horaire
+  // (ex. "lundi 9h-12h" et "mardi 14h-18h" ne se gênent jamais). Comparaison de chaînes "HH:MM"
+  // valide ici (zero-padded, même convention que la validation endTime <= startTime ci-dessus).
+  for (let i = 0; i < rules.length; i += 1) {
+    for (let j = i + 1; j < rules.length; j += 1) {
+      const a = rules[i];
+      const b = rules[j];
+      const sharesWeekday = a.weekdays.some((day) => b.weekdays.includes(day));
+      if (!sharesWeekday) continue;
+      if (a.startTime < b.endTime && b.startTime < a.endTime) {
+        return "Dos horarios no pueden superponerse el mismo día de la semana.";
+      }
+    }
+  }
+
   return null;
 }
 
@@ -59,6 +77,27 @@ export function toSlotRuleRows(rules: DraftSlotRule[]): ParsedSlotRule[] {
     slot_duration_minutes: Number(rule.slotDurationMinutes),
     capacity: Number(rule.capacity),
   }));
+}
+
+// Sens inverse de toSlotRuleRows (colonne/payload → brouillon), spec 15 — hydrate le formulaire de
+// modération d'une proposition de création à partir de payload.slot_rules (même forme JSON qu'une
+// ligne product_slot_rules, "HH:MM:SS" compris — cf. toTimeInputValue déjà utilisé ailleurs dans
+// ProductForm pour la même conversion). Une entrée illisible est ignorée plutôt que de faire
+// planter l'hydratation de tout le formulaire, même philosophie que stayRatesFromColumn.
+export function slotRulesFromColumn(value: unknown): DraftSlotRule[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((row): row is Partial<ParsedSlotRule> => !!row && typeof row === "object")
+    .map((row) => ({
+      weekdays: Array.isArray(row.weekdays)
+        ? row.weekdays.filter((d): d is number => Number.isInteger(d) && d >= 1 && d <= 7)
+        : [],
+      startTime: typeof row.start_time === "string" ? row.start_time.slice(0, 5) : "",
+      endTime: typeof row.end_time === "string" ? row.end_time.slice(0, 5) : "",
+      slotDurationMinutes:
+        typeof row.slot_duration_minutes === "number" ? String(row.slot_duration_minutes) : "",
+      capacity: typeof row.capacity === "number" ? String(row.capacity) : "",
+    }));
 }
 
 const PREVIEW_LIMIT = 8;

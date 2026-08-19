@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button } from "@hifago/ui";
+import { Button, toast } from "@hifago/ui";
 
 export function ProductStatusBlock({
   productId,
@@ -14,11 +14,9 @@ export function ProductStatusBlock({
 }) {
   const router = useRouter();
   const [sellable, setSellable] = useState(initialSellable);
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function toggle() {
-    setError(null);
     setIsSubmitting(true);
 
     const nextSellable = !sellable;
@@ -29,13 +27,14 @@ export function ProductStatusBlock({
     });
 
     if (rpcError) {
-      setError("No se pudo cambiar el estado.");
+      toast.danger("No se pudo cambiar el estado.");
       setIsSubmitting(false);
       return;
     }
 
     setSellable(nextSellable);
     setIsSubmitting(false);
+    toast.success(nextSellable ? "Producto publicado." : "Producto despublicado.");
     router.refresh();
   }
 
@@ -54,11 +53,6 @@ export function ProductStatusBlock({
       >
         {isSubmitting ? "…" : sellable ? "Despublicar" : "Publicar"}
       </Button>
-      {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
     </div>
   );
 }

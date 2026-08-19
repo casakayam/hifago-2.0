@@ -148,7 +148,7 @@ async function runScenario1Once(run) {
       await go;
       const res = await client.query(
         "select create_order($1::jsonb, $2, $3, $4, $5) as result",
-        [lines, "Concurrency Camp Buyer", null, null, false]
+        [lines, "Concurrency Camp Buyer", "concurrency-camp-buyer@hifago.test", null, false]
       );
       return res.rows[0].result;
     })
@@ -284,7 +284,7 @@ async function runScenario2Once(run) {
           await go;
           const res = await client.query(
             "select create_order($1::jsonb, $2, $3, $4, $5) as result",
-            [cartA, "Concurrency Camp A Buyer", null, null, false]
+            [cartA, "Concurrency Camp A Buyer", "concurrency-camp-a-buyer@hifago.test", null, false]
           );
           return res.rows[0].result;
         })
@@ -295,7 +295,7 @@ async function runScenario2Once(run) {
           await go;
           const res = await client.query(
             "select create_order($1::jsonb, $2, $3, $4, $5) as result",
-            [cartB, "Concurrency Camp B Buyer", null, null, false]
+            [cartB, "Concurrency Camp B Buyer", "concurrency-camp-b-buyer@hifago.test", null, false]
           );
           return res.rows[0].result;
         })

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Checkbox, Label, TextField, TextArea, Select, ListBox } from "@hifago/ui";
+import { Button, Checkbox, Label, TextField, TextArea, Select, ListBox, toast } from "@hifago/ui";
 
 type Audience = "clients" | "referrers" | "providers" | "partners" | "all";
 type Channel = "whatsapp" | "email";
@@ -27,17 +27,15 @@ export function NewCampaignForm() {
   const [channel, setChannel] = useState<Channel>("whatsapp");
   const [messageTemplate, setMessageTemplate] = useState("");
   const [includeIncomplete, setIncludeIncomplete] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const showHabeasDataWarning = AUDIENCES_WITH_CLIENT_WARNING.includes(audience);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
 
     if (!messageTemplate.trim()) {
-      setError("El mensaje es obligatorio.");
+      toast.danger("El mensaje es obligatorio.");
       return;
     }
 
@@ -54,15 +52,16 @@ export function NewCampaignForm() {
 
     const result = data as CreateCampaignResult | null;
     if (rpcError || !result?.ok || !result.campaign_id) {
-      setError("No se pudo crear la campaña.");
+      toast.danger("No se pudo crear la campaña.");
       return;
     }
 
+    toast.success("Campaña creada.");
     router.push(`/admin/campaigns/${result.campaign_id}`);
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex max-w-md flex-col gap-4">
+    <form onSubmit={handleSubmit} noValidate className="flex max-w-md flex-col gap-4">
       <Select
         fullWidth
         value={audience}
@@ -132,12 +131,6 @@ export function NewCampaignForm() {
           Esta audiencia incluye clientes: solo se enviará a quienes hayan dado su consentimiento
           de marketing en su pedido más reciente (Habeas Data). Este filtro se aplica al momento
           del envío, no impide crear la campaña.
-        </p>
-      ) : null}
-
-      {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
         </p>
       ) : null}
 

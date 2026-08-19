@@ -145,9 +145,10 @@ async function runOnce(run) {
       await go;
 
       if (worker.type === "buyer") {
-        const res = await worker.client.query("select create_order($1, $2) as result", [
+        const res = await worker.client.query("select create_order($1, $2, $3) as result", [
           JSON.stringify([{ product_id: PRODUCT_ID, date: SLOT_DATE, qty: 1 }]),
           "Concurrency Buyer",
+          "concurrency-buyer@hifago.test",
         ]);
         return { type: "buyer", result: res.rows[0].result };
       }

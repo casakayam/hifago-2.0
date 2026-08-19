@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createSignedInClient } from "@hifago/e2e-support";
+import { createSignedInClient, createActiveOperatorEstablishment } from "@hifago/e2e-support";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 
 // docs/specs/06-gestion-etablissement.md — un partenaire ne crée/n'édite jamais directement sa
@@ -50,7 +50,12 @@ test("un socio propone la creación de un establecimiento, publicado solo tras a
   await expect(page.getByTestId("proposed-values")).toContainText(proposedName);
 
   await page.getByTestId("approve-button").click();
-  await expect(page.getByTestId("moderation-success")).toBeVisible();
+  // Le succès n'est plus un texte inline mais un toast (docs/specs/16-notifications-toast.md) —
+  // HeroUI rend chaque toast avec role="alertdialog", le message passé à toast.success(...)
+  // devient son titre visible.
+  await expect(
+    page.getByRole("alertdialog").filter({ hasText: "Propuesta aprobada — establecimiento creado." }),
+  ).toBeVisible();
 
   // --- Le nouvel établissement existe désormais dans le registre admin ---
   await page.goto("/admin/establishments");
@@ -75,26 +80,11 @@ test("un socio propone une edición de su establecimiento ya rattaché, publicad
   // l'admin en approuvant une proposition, cf. §7 de la spec.
   const adminClient = await createSignedInClient(SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
   const seedName = `Establecimiento Dedicado ${Date.now()}`;
-  const { data: newEstablishmentId, error: createError } = await adminClient.rpc(
-    "create_establishment",
-    { p_partner_id: "b0000000-0000-4000-8000-000000000003", p_name: { es: seedName } },
+  const newEstablishmentId = await createActiveOperatorEstablishment(
+    adminClient,
+    "b0000000-0000-4000-8000-000000000003",
+    seedName,
   );
-  if (createError || !newEstablishmentId) {
-    throw new Error(`e2e setup: create_establishment a échoué : ${createError?.message}`);
-  }
-  const { data: capability } = await adminClient
-    .from("partner_capabilities")
-    .select("id")
-    .eq("establishment_id", newEstablishmentId)
-    .eq("role", "operator")
-    .single();
-  const { error: statusError } = await adminClient.rpc("set_capability_status", {
-    p_capability_id: capability!.id,
-    p_new_status: "active",
-  });
-  if (statusError) {
-    throw new Error(`e2e setup: set_capability_status a échoué : ${statusError.message}`);
-  }
 
   const proposedName = `Establecimiento Editado ${Date.now()}`;
 
@@ -128,7 +118,10 @@ test("un socio propone une edición de su establecimiento ya rattaché, publicad
   await expect(page.getByTestId("proposed-values")).toContainText(proposedName);
 
   await page.getByTestId("approve-button").click();
-  await expect(page.getByTestId("moderation-success")).toBeVisible();
+  // Le succès n'est plus un texte inline mais un toast (docs/specs/16-notifications-toast.md) —
+  // HeroUI rend chaque toast avec role="alertdialog", le message passé à toast.success(...)
+  // devient son titre visible.
+  await expect(page.getByRole("alertdialog").filter({ hasText: "Propuesta aprobada." })).toBeVisible();
 
   // --- La fiche admin reflète désormais le nom publié ---
   await page.goto(`/admin/establishments/${newEstablishmentId}`);

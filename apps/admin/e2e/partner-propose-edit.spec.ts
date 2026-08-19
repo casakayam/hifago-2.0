@@ -11,26 +11,26 @@ test("un socio propose une modification sur sa propre activité, la voit en atte
 }) => {
   await loginAs(context, SEEDED_ACCOUNTS.operadorPropuestas, SEEDED_PASSWORD);
 
-  await page.goto("/partner/products");
-
-  // products_select_own (feature 15) prouvée en pratique : cette fiche est sellable=false, donc
-  // invisible du catalogue public — elle n'apparaît ici que grâce à la nouvelle policy.
-  const row = page.getByTestId(`product-row-${PRODUCT_ID}`);
-  await expect(row).toBeVisible();
-  await expect(row).toContainText("No publicada");
-
-  await page.getByTestId(`edit-link-${PRODUCT_ID}`).click();
-  await expect(page).toHaveURL(new RegExp(`/partner/products/${PRODUCT_ID}/edit`));
+  // Navigation directe (pas via /partner/products puis clic) : `/partner/products` est désormais
+  // paginé (12/page, tri created_at desc) — cette fiche seedée le 2026-08-13 est l'une des plus
+  // anciennes du partenaire et n'est plus sur la 1ʳᵉ page parmi les ~90 accumulées sur cette
+  // instance locale. La visibilité RLS (products_select_own, fiche sellable=false quand même
+  // visible à son propriétaire) reste couverte ailleurs (pgTAP product_proposals.test.sql) — pas
+  // le sujet de CE test, qui porte sur la parité de champs de la proposition d'édition.
+  await page.goto(`/partner/products/${PRODUCT_ID}/edit`);
+  await page.waitForLoadState("networkidle");
 
   // Formulaire pré-rempli avec la fiche COMPLÈTE actuelle (pas vide) — propriété de sûreté n°3.
-  await expect(page.locator('input[name="name-es"]')).toHaveValue(
+  // LocalizedTextField (spec 15 bis, 2026-08-17 — ce formulaire réutilise désormais exactement les
+  // mêmes briques que ProductForm/ProductTypeFields, plus l'ancien name-es/name-en séparé).
+  await expect(page.locator('input[name="nombre"]')).toHaveValue(
     "Caminata ecológica por el bosque nativo"
   );
-  await expect(page.locator('input[name="price"]')).toHaveValue("60000");
+  await expect(page.getByTestId("price-input")).toHaveValue("60000");
   await expect(page.getByTestId("pending-proposal")).toHaveCount(0);
 
   const editedName = `Caminata ecológica renovada ${Date.now()}`;
-  await page.locator('input[name="name-es"]').fill(editedName);
+  await page.locator('input[name="nombre"]').fill(editedName);
   await page.getByTestId("submit-proposal-button").click();
 
   const pendingBlock = page.getByTestId("pending-proposal");

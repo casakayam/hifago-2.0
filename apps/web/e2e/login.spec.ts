@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { resetAvailability, countOrderLines } from "@hifago/e2e-support";
+import { resetAvailability, countOrderLines, mockMercadoPagoCheckout } from "@hifago/e2e-support";
 
 // Feature 6 : la fiche produit n'a plus aucun état dépendant de l'authentification (le bouton
 // "Añadir al carrito" est identique connecté ou non — la vérification de session a été déplacée
@@ -40,11 +40,17 @@ test("un compte seedé peut se connecter via le formulaire /[locale]/login", asy
 
   await page.locator('input[name="holder-name"]').fill("Cliente E2E Login");
   await page.locator('input[name="holder-phone"]').fill("+57 300 111 4444");
+  await page.locator('input[name="holder-email"]').fill("cliente.login@example.com");
+  // Spec 19 §0 Tranche 1 : create_order réussi enchaîne désormais automatiquement le paiement
+  // Mercado Pago (redirection réelle, seul l'appel SDK externe est mocké). order-success n'est
+  // qu'un état transitoire — la redirection peut déjà l'avoir remplacé avant que Playwright ne
+  // l'observe (race constatée en testant) : attendre l'URL finale est le seul checkpoint fiable.
+  const { redirectUrl } = await mockMercadoPagoCheckout(page);
   await page.getByTestId("submit-order-button").click();
 
   // Preuve la plus forte : create_order a lui-même relu auth.uid() côté serveur et accepté la
   // commande — la session posée par le formulaire de login a donc bien survécu jusque-là.
-  await expect(page.getByTestId("order-success")).toBeVisible();
+  await page.waitForURL(redirectUrl);
   const { lines } = await countOrderLines(PRODUCT_ID, DATE);
   expect(lines).toBe(1);
 });

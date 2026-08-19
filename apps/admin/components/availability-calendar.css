@@ -70,3 +70,34 @@
   color: var(--danger);
   font-weight: 600;
 }
+
+/* products.default_capacity (migration 20260818090000) : le jour est réservable via ce cupo par
+   défaut, mais aucune ligne product_availability explicite n'existe encore pour cette date — état
+   intermédiaire entre "unconfigured" (gris plein, vide) et "configured" (plein, --accent) : un
+   contour en pointillé sur le même token --accent, fond transparent, distingue visuellement "il y a
+   une valeur qui compte" de "rien n'est configuré" sans se confondre avec un override explicite.
+   Sélecteur composé `.availability-badge.availability-badge--default` (spécificité 0,2,0, même
+   niveau que `.availability-badge.fc-event` ci-dessus qui pose `border: none`) nécessaire pour que
+   ce `border` gagne réellement — un simple `.availability-badge--default` (0,1,0) serait toujours
+   perdant face à `border: none` quel que soit l'ordre dans le fichier. */
+.availability-badge.availability-badge--default {
+  background-color: transparent;
+  border: 1px dashed var(--accent);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* Precio especial (product_date_rates) — second line under the cupo/estado badge, same visual
+   hierarchy as RoomDateEditor's stacked span (room-availability-grid.tsx): status first, price
+   dimmed below it. */
+.availability-badge-inner {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.availability-badge-price {
+  font-size: 0.65rem;
+  font-weight: 600;
+  opacity: 0.85;
+}

@@ -256,6 +256,49 @@ décidé, mérite un essai visuel avant d'y toucher.
   reste réel mais plus modeste qu'un couplage officiel, à chiffrer sur cette base plutôt que sur
   la promesse générique de la bibliothèque.
 
+#### Révision du 2026-08-18 — SVAR React Calendar pour l'agenda de réservations socio (calendrier de cupos FullCalendar inchangé)
+
+**Fait nouveau** (pas juste un changement d'avis) : besoin jamais couvert par le choix FullCalendar
+ci-dessus — un agenda affichant chaque **réservation individuelle** (jour/semaine/mois, façon
+Google Calendar, plusieurs événements simultanés côte à côte, titre `activité - client - N pers.`)
+plutôt qu'un agrégat de capacité par jour sur un seul produit. FullCalendar tel qu'intégré ici
+(`dayGrid` + `interaction` seulement, cf. `docs/specs/17-...md` §3bis) n'a jamais eu vocation à
+porter une vue événement-par-réservation multi-produits — étendre son périmètre aurait exigé les
+plugins `timeGrid`/`list` non installés et une refonte du modèle d'événement, pas une simple
+extension.
+
+**Décision en 3 temps**, cf. `docs/specs/20-agenda-reservations-socio.md` §10 point 1 pour le détail :
+
+1. Jérôme choisit initialement **MUI X Scheduler** (`@mui/x-scheduler`), malgré deux points de
+   friction signalés avec les décisions ci-dessus (second design system Material/Emotion en
+   parallèle de HeroUI ; statut beta + responsive marqué "expérimental" par l'éditeur lui-même,
+   vérifié sur mui.com/x/react-scheduler) — maintenu en connaissance de cause.
+2. **En construisant l'écran**, inspection directe des `.d.ts` du package installé (pas la doc
+   marketing — le code livré) révèle un blocage réel, pas seulement un risque : `EventCalendar`
+   n'expose **aucun** callback de clic public (`onEventClick`/`onDateClick`/`onSlotClick` absents),
+   aucune prop de personnalisation du popup d'événement (`slots`/render), et l'API impérative
+   (`apiRef`) se limite à `setVisibleDate`. Sans callback de clic, ni "cliquer une réservation → sa
+   fiche" ni "cliquer une case vide → l'ajouter" (les deux interactions centrales de la spec 20) ne
+   sont réalisables sans hack DOM sur des classes internes non garanties d'une version beta à
+   l'autre.
+3. Jérôme propose **SVAR React Calendar** (`@svar-ui/react-calendar`) en alternative — vérifié en
+   direct (npm + `.d.ts` réels, pas seulement la doc) : version stable **`2.6.2`** (aucun tag beta),
+   licence **MIT**, zéro dépendance à un design system de composants (juste le rendu du calendrier
+   — CSS propre, même statut que FullCalendar déjà accepté dans ce projet, pas de boutons/inputs
+   SVAR qui concurrenceraient HeroUI), et une vraie API d'événements : le bus d'actions interne
+   (`select-event`, `add-event`, `move-event`, `update-event`, `delete-event`) est exposé comme
+   props React directes (`onSelectEvent`, `onAddEvent`, …) et bloquable via `api.intercept(...)`.
+   **Retenu** — résout le blocage du point 2 sans les deux frictions du point 1.
+
+**Ce qui ne change pas** : FullCalendar reste la bibliothèque du calendrier de cupos/disponibilité
+existant (`apps/admin/components/availability-calendar.tsx`, admin + socio, spec 17) — non touché,
+outil différent (gestion de capacité agrégée, pas agenda de réservations individuelles). Les deux
+bibliothèques calendrier coexistent désormais dans `apps/admin`, chacune strictement scopée à son
+propre usage, comme le sont déjà react-day-picker (client) et FullCalendar (admin/socio) depuis la
+révision du 2026-08-14 — même principe, un troisième registre visuel borné à un seul écran plutôt
+que généralisé. Aucune dépendance MUI/Emotion ne reste dans le projet (installées puis retirées le
+même jour, avant tout usage réel en dehors de l'exploration de l'API).
+
 ### Internationalisation (i18n) et SEO multilingue — next-intl, routage par sous-chemin, indexation conditionnée à la vraie traduction
 
 Deux couches multilingues bien distinctes coexistent dans ce projet — une confusion entre les deux
@@ -781,6 +824,7 @@ Jérôme a explicitement demandé une vraie séparation préprod/prod (pas seule
 | Outillage admin | Non précisé (question posée par Jérôme) | Code custom + Refine.dev en bibliothèque pour les écrans CRUD seulement, pas de plateforme low-code hébergée | La complexité est dans le backend métier, pas l'UI ; Retool/Appsmith n'accélèrent que la part minoritaire |
 | CRM | Non précisé (question posée par Jérôme) | Construit dans la même base Postgres/Supabase, + 360dialog (WhatsApp) + Google Routes API (itinéraire) | Toute plateforme CRM du marché recréerait la désynchronisation d'identité déjà résolue |
 | Design system / UI | Non précisé (question posée par Jérôme) | **Révisé le 2026-08-14** : HeroUI v3 (React Aria+Tailwind v4) partout, Recharts pour les graphiques, react-day-picker (client) + FullCalendar (admin) pour le calendrier, TanStack Table pour les tables | Un seul système visuel cohérent (deux thèmes nommés `vitrine`/`admin`, mêmes composants) ; HeroUI non évalué le 2026-08-12 (fait nouveau) ; MUI X Data Grid toujours écarté, pour ne pas réintroduire un second design system |
+| Calendrier agenda socio | Non précisé | **Révisé le 2026-08-18** : SVAR React Calendar (`@svar-ui/react-calendar`, MIT, v2.6.2 stable) — après un premier choix MUI X Scheduler abandonné en cours de construction (aucun callback de clic public, vérifié dans ses `.d.ts`) | Besoin événement-par-réservation multi-produits jamais couvert par FullCalendar dayGrid ; SVAR expose une vraie API d'événements (`onSelectEvent`/`onAddEvent`) sans réintroduire de second design system — cf. section Design system plus haut |
 | i18n interface + SEO multilingue | Non précisé (question posée par Jérôme) | next-intl pour les libellés d'interface ; routage par sous-chemin `/es/`/`/en/`, hreflang généré via `generateMetadata`, indexation conditionnée à l'existence d'une vraie traduction (pas au repli JSONB) | Seule lib nativement App Router + SEO intégré ; évite le duplicate content perçu entre langue de repli et langue routée |
 | Multilingue | Non précisé | JSONB par champ | Fit direct avec le besoin (extensible, replié, SEO-friendly) |
 | Invariant anti-survente | Non précisé | RPC Postgres `SECURITY DEFINER` avec verrouillage explicite | Gratuit sous SQLite, doit être reconçu explicitement sous Postgres réseau |
@@ -800,8 +844,10 @@ Jérôme a explicitement demandé une vraie séparation préprod/prod (pas seule
   le schéma se conçoit au chiffrage.
 - Fréquence exacte du cron PMS par propriété et taille de lot par tick — dépend du volume réel de
   propriétés PMS-backed, à dimensionner au chiffrage.
-- Paiement en ligne (MercadoPago/Stripe) — explicitement hors périmètre v1 (cadrage général),
-  l'architecture ci-dessus ne l'exclut pas mais ne le construit pas.
+- Paiement en ligne — **rouvert le 2026-08-18** (n'est plus hors périmètre) : Jérôme a tranché
+  Mercado Pago comme gateway cible (remplace l'hypothèse Wompi/Stripe évoquée ici), acompte
+  obligatoire, ledger de règlement, virement automatique au référent et à l'établissement
+  (compensation no-show) — voir `docs/specs/19-paiement-mercadopago-acompte-ledger.md`.
 - Plan de bascule (migration des données réelles, cutover) — étape séparée et ultérieure du
   chantier, pas ce document.
 - **Format de l'export comptable/fiscal** (admin §3g — "un format exploitable par un comptable") :

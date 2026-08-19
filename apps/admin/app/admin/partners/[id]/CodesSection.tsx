@@ -3,18 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Switch, Table } from "@hifago/ui";
+import { Switch, Table, toast } from "@hifago/ui";
 
 type Code = { code: string; active: boolean };
 
 export function CodesSection({ codes }: { codes: Code[] }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
 
   async function handleToggle(code: string, nextActive: boolean) {
     setUpdating(code);
-    setError(null);
 
     const supabase = createClient();
     const { error: rpcError } = await supabase.rpc("set_partner_code_active", {
@@ -24,9 +22,10 @@ export function CodesSection({ codes }: { codes: Code[] }) {
 
     setUpdating(null);
     if (rpcError) {
-      setError("No se pudo cambiar el estado del código.");
+      toast.danger("No se pudo cambiar el estado del código.");
       return;
     }
+    toast.success(nextActive ? "Código activado." : "Código desactivado.");
     router.refresh();
   }
 
@@ -71,11 +70,6 @@ export function CodesSection({ codes }: { codes: Code[] }) {
           </Table.Content>
         </Table.ScrollContainer>
       </Table>
-      {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
     </section>
   );
 }

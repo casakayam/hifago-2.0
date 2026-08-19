@@ -28,6 +28,12 @@ const MAX_PHOTOS = 6;
 export function HotelRoomsEditor({
   rooms,
   onChange,
+  // true pour le variant socio-proposal de ProductForm (spec 15, décision 3 : aucune photo dans
+  // une proposition de création) — une chambre sans id uploade quand même immédiatement vers
+  // Storage via /api/upload/product (cf. handleAddFile), donc "pas encore de room.id" ne suffit
+  // pas à bloquer l'upload : il faut retirer le bloc entier, pas seulement s'appuyer sur l'absence
+  // d'id.
+  hidePhotos = false,
 }: {
   rooms: DraftRoomType[];
   // Dispatch, pas un simple callback : LocalizedTextField (nom/description) appelle TOUJOURS son
@@ -36,6 +42,7 @@ export function HotelRoomsEditor({
   // relayer, elle aussi fonctionnelle, jusqu'au vrai setState du parent) réintroduit la course déjà
   // corrigée en spec 11 (perte de la valeur ES lors d'une bascule de langue rapide).
   onChange: Dispatch<SetStateAction<DraftRoomType[]>>;
+  hidePhotos?: boolean;
 }) {
   function updateRoom(index: number, next: DraftRoomType | ((prev: DraftRoomType) => DraftRoomType)) {
     onChange((prevRooms) =>
@@ -50,7 +57,14 @@ export function HotelRoomsEditor({
   return (
     <div className="flex flex-col gap-3" data-testid="hotel-rooms-editor">
       {rooms.map((room, index) => (
-        <RoomCard key={index} room={room} index={index} onUpdate={updateRoom} onRemove={removeRoom} />
+        <RoomCard
+          key={index}
+          room={room}
+          index={index}
+          onUpdate={updateRoom}
+          onRemove={removeRoom}
+          hidePhotos={hidePhotos}
+        />
       ))}
       <button
         type="button"
@@ -72,6 +86,7 @@ function RoomCard({
   index,
   onUpdate,
   onRemove,
+  hidePhotos = false,
 }: {
   room: DraftRoomType;
   index: number;
@@ -86,6 +101,7 @@ function RoomCard({
   // laisser aucune combinaison de deux mises à jour concurrentes retomber dans le même piège.
   onUpdate: (index: number, next: DraftRoomType | ((prev: DraftRoomType) => DraftRoomType)) => void;
   onRemove: (index: number) => void;
+  hidePhotos?: boolean;
 }) {
   const [savedPhotos, setSavedPhotos] = useState<MediaGalleryPhoto[]>(room.savedPhotos);
 
@@ -215,16 +231,18 @@ function RoomCard({
         fieldTestId={`room-description-textarea-${index}`}
       />
 
-      <div className="flex flex-col gap-1.5">
-        <Label>Fotos — opcional</Label>
-        <MediaGallery
-          photos={galleryPhotos}
-          maxPhotos={MAX_PHOTOS}
-          onAddFile={handleAddFile}
-          onReorder={handleReorder}
-          onDelete={handleDelete}
-        />
-      </div>
+      {!hidePhotos ? (
+        <div className="flex flex-col gap-1.5">
+          <Label>Fotos — opcional</Label>
+          <MediaGallery
+            photos={galleryPhotos}
+            maxPhotos={MAX_PHOTOS}
+            onAddFile={handleAddFile}
+            onReorder={handleReorder}
+            onDelete={handleDelete}
+          />
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-2">
         <TextField

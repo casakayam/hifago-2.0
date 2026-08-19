@@ -8,6 +8,7 @@ type OrderLineQueryRow = {
   id: string;
   order_id: string;
   date: string;
+  end_date: string | null;
   qty: number;
   status: string;
   total_cop: number;
@@ -47,7 +48,7 @@ export default async function AdminOrdersPage({
   let query = supabase
     .from("order_lines")
     .select(
-      `id, order_id, date, qty, status, total_cop, created_at,
+      `id, order_id, date, end_date, qty, status, total_cop, created_at,
        product:products(name, establishment:establishments(name)),
        order:orders!inner(holder_name, holder_phone, referrer:partners(display_name))`,
       { count: "exact" }
@@ -67,6 +68,12 @@ export default async function AdminOrdersPage({
   if (filters.q) {
     query = query.ilike("order.holder_name", `%${filters.q}%`);
   }
+  // Spec 17 §0 Tranche 1 — posé par le lien "voir les réservations de ce jour" du calendrier
+  // produit, jamais saisi par l'admin : sans lui, un date_from/date_to seuls montreraient TOUTES
+  // les réservations de ce jour, tous produits confondus, pas seulement celles du produit consulté.
+  if (filters.product_id) {
+    query = query.eq("product_id", filters.product_id);
+  }
 
   const { data: lines, count } = await query.returns<OrderLineQueryRow[]>();
 
@@ -74,6 +81,7 @@ export default async function AdminOrdersPage({
     id: line.id,
     orderId: line.order_id,
     date: line.date,
+    endDate: line.end_date,
     qty: line.qty,
     status: line.status,
     productName: resolveLocalizedField(asLocalizedField(line.product?.name), "es") ?? "—",

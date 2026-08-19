@@ -419,6 +419,18 @@ cible) :
    actuelles jusqu'à l'approbation ; le formulaire de modification est pré-rempli avec la fiche
    **complète**, pour qu'un champ non retouché ne soit pas effacé à l'approbation.
 
+> **Révisé le 2026-08-17** (décision Jérôme, cf. `docs/specs/15-socio-creation-produit.md`) : le
+> mécanisme de proposition de **création** d'une fiche entièrement nouvelle couvre désormais les
+> **6 types de produit sans exception** — y compris `lodging`/`hotel`. La règle « jamais un
+> hébergement directement » du paragraphe ci-dessous ne s'applique donc plus à la **création**.
+> Le paragraphe « Proposer la grille tarifaire d'un hébergement » plus bas reste inchangé et
+> **distinct** : il décrit l'édition de la tarification d'un hébergement **déjà rattaché**, un
+> mécanisme séparé, toujours non construit à ce jour — hors périmètre de cette révision. Jusqu'à 6
+> photos incluses dès la proposition de création elle-même (même plafond que le « jusqu'à 6
+> photos » ci-dessous, décision confirmée par Jérôme le même jour après un premier passage où elles
+> avaient été différées après approbation) — à l'exception des photos PAR CHAMBRE d'un hôtel,
+> toujours hors périmètre socio (cf. spec 15 §10).
+
 **Proposer une fiche classique** (activité, tour, transport — jamais un hébergement directement,
 cf. ci-dessous) : nom, description, prix, cupos, planification, unité de facturation, un ou
 plusieurs **tags** de catégorisation (cf. client doc §2 — remplace la liste fixe actuelle de 6
@@ -520,7 +532,8 @@ d'implémentation (aperçu isolé vs vraie page client en mode preview) à tranc
 
 ## 3g. Datos de pago
 
-**Statut : ✅ validé par Jérôme le 2026-08-11.**
+**Statut : ✅ validé par Jérôme le 2026-08-11 ; méthode de paiement rouverte et retranchée le
+2026-08-18 (Mercado Pago obligatoire, cf. ci-dessous et spec 19).**
 
 Le partenaire renseigne ses coordonnées pour recevoir sa rétribution (§1 — modèle manuel pour ce
 premier périmètre) : un nom, et **au moins un** moyen de paiement valide.
@@ -531,9 +544,14 @@ chiffres identifient le moyen déjà enregistré, pour que le partenaire sache q
 plateforme les détient déjà **sans** que le numéro complet retraverse le réseau à chaque
 consultation. Invariant de sécurité à conserver tel quel dans la cible.
 
-**Décision (2026-08-11) — méthodes de paiement** : on **reste sur Bancolombia/Nequi** pour ce
-premier périmètre — d'autres méthodes viendront probablement (marketplace global), mais ce n'est
-pas à généraliser maintenant. Noté comme cible future dans `hifago/README.md`.
+**Décision (2026-08-11), rouverte le 2026-08-18 — méthodes de paiement** : **Mercado Pago devient
+le canal obligatoire** de règlement du référent et de la compensation établissement (no-show),
+remplaçant Bancolombia/Nequi pour ce cas précis — d'autres méthodes viendront probablement
+(marketplace global), mais ce n'est pas à généraliser maintenant. Le virement est désormais
+**automatique**, déclenché par API une fois la prestation réalisée (jamais un geste manuel admin,
+jamais un split au moment du paiement client) — voir
+`docs/specs/19-paiement-mercadopago-acompte-ledger.md` pour le détail complet et le découpage en
+tranches. Noté comme cible future dans `hifago/README.md`.
 
 **Décision (2026-08-11) — un jeu de coordonnées par établissement** : avec le
 multi-établissements (§1), chaque établissement déclare ses propres coordonnées de paiement —

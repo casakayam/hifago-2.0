@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Modal } from "@hifago/ui";
+import { Button, Modal, toast } from "@hifago/ui";
 
 // Même motif que ResolveEntryDialog.tsx (reconciliation) : dialogue contrôlé, RPC dédiée. Pas de
 // callback onSuccess remonté à un parent avec état local — page.tsx (Server Component) n'a pas
@@ -11,11 +11,9 @@ import { Button, Modal } from "@hifago/ui";
 export function RevokeInvitationButton({ invitationId }: { invitationId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleRevoke() {
-    setError(null);
     setIsSubmitting(true);
 
     const supabase = createClient();
@@ -27,10 +25,11 @@ export function RevokeInvitationButton({ invitationId }: { invitationId: string 
 
     const result = data as { ok: boolean; reason?: string } | null;
     if (rpcError || !result?.ok) {
-      setError("No se pudo revocar la invitación.");
+      toast.danger("No se pudo revocar la invitación.");
       return;
     }
 
+    toast.success("Invitación revocada.");
     setOpen(false);
     router.refresh();
   }
@@ -56,11 +55,6 @@ export function RevokeInvitationButton({ invitationId }: { invitationId: string 
                 <p className="text-sm text-muted">
                   El enlace dejará de funcionar. Esta acción no se puede deshacer.
                 </p>
-                {error ? (
-                  <p role="alert" data-testid="revoke-invitation-error" className="text-sm text-danger">
-                    {error}
-                  </p>
-                ) : null}
               </Modal.Body>
               <Modal.Footer>
                 <Button

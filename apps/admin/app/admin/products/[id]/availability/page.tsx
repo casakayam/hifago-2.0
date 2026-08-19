@@ -12,7 +12,7 @@ export default async function ProductAvailabilityPage({
   // RLS (products_select_public) : l'admin voit aussi les activités non publiées.
   const { data: product } = await supabase
     .from("products")
-    .select("id, name, calendar_default_open")
+    .select("id, name, calendar_default_open, default_capacity")
     .eq("id", id)
     .maybeSingle();
 
@@ -20,9 +20,10 @@ export default async function ProductAvailabilityPage({
     notFound();
   }
 
-  // product_availability/product_calendar : lecture publique (RLS), pas de filtre admin
-  // nécessaire — RPC-only seulement en écriture (correctif Tranche 2/3).
-  const [{ data: availability }, { data: calendar }] = await Promise.all([
+  // product_availability/product_calendar/product_date_rates : lecture publique (RLS), pas de
+  // filtre admin nécessaire — RPC-only seulement en écriture (correctif Tranche 2/3, set_date_rate
+  // spec 17 §0 Tranche 2).
+  const [{ data: availability }, { data: calendar }, { data: rates }] = await Promise.all([
     supabase
       .from("product_availability")
       .select("date, capacity, booked")
@@ -30,6 +31,10 @@ export default async function ProductAvailabilityPage({
     supabase
       .from("product_calendar")
       .select("date, open")
+      .eq("product_id", id),
+    supabase
+      .from("product_date_rates")
+      .select("date, price_cop")
       .eq("product_id", id),
   ]);
 
@@ -44,6 +49,8 @@ export default async function ProductAvailabilityPage({
         calendarDefaultOpen={product.calendar_default_open}
         availability={availability ?? []}
         calendar={calendar ?? []}
+        rates={rates ?? []}
+        defaultCapacity={product.default_capacity}
       />
     </div>
   );

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@hifago/supabase/client";
-import { Button, type MediaGalleryPhoto } from "@hifago/ui";
+import { Button, toast, type MediaGalleryPhoto } from "@hifago/ui";
 import { HotelRoomsEditor } from "@/components/hotel-rooms-editor";
 import { toRoomTypeRow, validateRoomTypes, type DraftRoomType } from "@/lib/products/hotelRooms";
 
@@ -24,17 +24,12 @@ export function ProductHotelRoomsBlock({
   initialRooms: DraftRoomType[];
 }) {
   const [rooms, setRooms] = useState(initialRooms);
-  const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   async function handleSave() {
-    setError(null);
-    setSaved(false);
-
     const validationError = validateRoomTypes(rooms);
     if (validationError) {
-      setError(validationError);
+      toast.danger(validationError);
       return;
     }
 
@@ -46,7 +41,7 @@ export function ProductHotelRoomsBlock({
     if (removedIds.length > 0) {
       const { error: deleteError } = await supabase.from("product_room_types").delete().in("id", removedIds);
       if (deleteError) {
-        setError("No se pudieron guardar las habitaciones.");
+        toast.danger("No se pudieron guardar las habitaciones.");
         setIsSaving(false);
         return;
       }
@@ -59,7 +54,7 @@ export function ProductHotelRoomsBlock({
       if (room.id) {
         const { error: updateError } = await supabase.from("product_room_types").update(row).eq("id", room.id);
         if (updateError) {
-          setError("No se pudieron guardar las habitaciones.");
+          toast.danger("No se pudieron guardar las habitaciones.");
           setIsSaving(false);
           return;
         }
@@ -73,7 +68,7 @@ export function ProductHotelRoomsBlock({
         .select("id")
         .single();
       if (insertError || !newRoom) {
-        setError("No se pudieron guardar las habitaciones.");
+        toast.danger("No se pudieron guardar las habitaciones.");
         setIsSaving(false);
         return;
       }
@@ -89,7 +84,7 @@ export function ProductHotelRoomsBlock({
           p_storage_path: photo.path,
         });
         if (mediaError || !mediaId) {
-          console.warn("[ProductHotelRoomsBlock] add_catalog_media a échoué :", mediaError);
+          toast.danger("La habitación se guardó, pero una de sus fotos no se pudo asociar.");
           continue;
         }
         const { data: publicUrl } = supabase.storage.from("catalog-media").getPublicUrl(photo.path);
@@ -101,7 +96,7 @@ export function ProductHotelRoomsBlock({
 
     setRooms(nextRooms);
     setIsSaving(false);
-    setSaved(true);
+    toast.success("Habitaciones guardadas.");
   }
 
   return (
@@ -119,13 +114,7 @@ export function ProductHotelRoomsBlock({
         >
           {isSaving ? "Guardando…" : "Guardar habitaciones"}
         </Button>
-        {saved ? <span className="text-xs text-muted">Guardado.</span> : null}
       </div>
-      {error ? (
-        <p role="alert" className="mt-2 text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
     </div>
   );
 }

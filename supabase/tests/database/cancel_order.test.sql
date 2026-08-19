@@ -53,55 +53,58 @@ insert into auth.users (id, email) values
 -- pas le calcul de commission.
 
 -- Commande 1 (OWNER) : 2 lignes reserved — cas 4 (annulation complète) puis cas 6 (second appel).
-insert into orders (id, account_id, holder_name)
+insert into orders (id, account_id, holder_name, holder_email)
 values (
-  '88890000-0000-4000-8000-000000000041', '88890000-0000-4000-8000-000000000031', 'Holder Cancel Full'
+  '88890000-0000-4000-8000-000000000041', '88890000-0000-4000-8000-000000000031', 'Holder Cancel Full',
+  'holder-cancel-full@test.local'
 );
 insert into order_lines (
-  order_id, account_id, product_id, date, qty, status,
+  order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values
   ('88890000-0000-4000-8000-000000000041', '88890000-0000-4000-8000-000000000031',
-   '88890000-0000-4000-8000-000000000021', '2028-11-01', 1, 'reserved',
+   '88890000-0000-4000-8000-000000000021', '2028-11-01', 1, 'reserved', 'Holder Cancel Full',
    50000, 50000, 'direct', 0, 0, 0, 0, 0, 0),
   ('88890000-0000-4000-8000-000000000041', '88890000-0000-4000-8000-000000000031',
-   '88890000-0000-4000-8000-000000000021', '2028-11-01', 2, 'reserved',
+   '88890000-0000-4000-8000-000000000021', '2028-11-01', 2, 'reserved', 'Holder Cancel Full',
    50000, 100000, 'direct', 0, 0, 0, 0, 0, 0);
 
 -- Commande 2 (OWNER) : 1 ligne fulfilled (seedée ainsi) + 1 ligne reserved — cas 5 (seule la
 -- ligne reserved doit être touchée).
-insert into orders (id, account_id, holder_name)
+insert into orders (id, account_id, holder_name, holder_email)
 values (
-  '88890000-0000-4000-8000-000000000042', '88890000-0000-4000-8000-000000000031', 'Holder Cancel Partial'
+  '88890000-0000-4000-8000-000000000042', '88890000-0000-4000-8000-000000000031', 'Holder Cancel Partial',
+  'holder-cancel-partial@test.local'
 );
 -- qty distincts entre les 2 lignes : permet d'identifier sans ambiguïté « la ligne reserved » par
 -- un attribut d'origine stable après l'appel, plutôt que par son statut qui vient justement de
 -- changer.
 insert into order_lines (
-  order_id, account_id, product_id, date, qty, status,
+  order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values
   ('88890000-0000-4000-8000-000000000042', '88890000-0000-4000-8000-000000000031',
-   '88890000-0000-4000-8000-000000000021', '2028-11-01', 5, 'fulfilled',
+   '88890000-0000-4000-8000-000000000021', '2028-11-01', 5, 'fulfilled', 'Holder Cancel Partial',
    50000, 250000, 'direct', 0, 0, 0, 0, 0, 0),
   ('88890000-0000-4000-8000-000000000042', '88890000-0000-4000-8000-000000000031',
-   '88890000-0000-4000-8000-000000000021', '2028-11-01', 1, 'reserved',
+   '88890000-0000-4000-8000-000000000021', '2028-11-01', 1, 'reserved', 'Holder Cancel Partial',
    50000, 50000, 'direct', 0, 0, 0, 0, 0, 0);
 
 -- Commande 3 (OTHER) : pour le cas order_not_found « commande d'un autre compte ».
-insert into orders (id, account_id, holder_name)
+insert into orders (id, account_id, holder_name, holder_email)
 values (
-  '88890000-0000-4000-8000-000000000043', '88890000-0000-4000-8000-000000000032', 'Holder Cancel Other'
+  '88890000-0000-4000-8000-000000000043', '88890000-0000-4000-8000-000000000032', 'Holder Cancel Other',
+  'holder-cancel-other@test.local'
 );
 insert into order_lines (
-  order_id, account_id, product_id, date, qty, status,
+  order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values
   ('88890000-0000-4000-8000-000000000043', '88890000-0000-4000-8000-000000000032',
-   '88890000-0000-4000-8000-000000000021', '2028-11-01', 1, 'reserved',
+   '88890000-0000-4000-8000-000000000021', '2028-11-01', 1, 'reserved', 'Holder Cancel Other',
    50000, 50000, 'direct', 0, 0, 0, 0, 0, 0);
 
 set local role authenticated;

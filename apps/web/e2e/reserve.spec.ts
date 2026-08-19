@@ -6,6 +6,7 @@ import {
   getPrice,
   countOrderLines,
   getAvailability,
+  mockMercadoPagoCheckout,
 } from "@hifago/e2e-support";
 
 // Feature 6 : le flux Checkpoint B (bouton unique "Reservar" appelant reserve_order_line
@@ -53,8 +54,13 @@ test("connexion → catalogue → fiche produit → panier → checkout : comman
   await page.locator('input[name="holder-email"]').fill("cliente.reserve@example.com");
   await page.getByTestId("marketing-consent-checkbox").click();
 
+  // Spec 19 §0 Tranche 1 : create_order réussi enchaîne désormais automatiquement le paiement
+  // Mercado Pago (redirection réelle, seul l'appel SDK externe est mocké). order-success n'est
+  // qu'un état transitoire — la redirection peut déjà l'avoir remplacé avant que Playwright ne
+  // l'observe (race constatée en testant) : attendre l'URL finale est le seul checkpoint fiable.
+  const { redirectUrl } = await mockMercadoPagoCheckout(page);
   await page.getByTestId("submit-order-button").click();
-  await expect(page.getByTestId("order-success")).toBeVisible();
+  await page.waitForURL(redirectUrl);
 
   const { lines, qty } = await countOrderLines(PRODUCT_ID, DATE);
   expect(lines).toBe(1);
@@ -87,6 +93,7 @@ test("capacité épuisée entre l'ajout au panier et la validation → erreur cl
   await page.getByTestId("go-to-checkout-link").click();
   await page.locator('input[name="holder-name"]').fill("Cliente E2E Reserve Full");
   await page.locator('input[name="holder-phone"]').fill("+57 300 111 3333");
+  await page.locator('input[name="holder-email"]').fill("cliente.reserve.full@example.com");
   await page.getByTestId("submit-order-button").click();
 
   await expect(page.getByTestId("checkout-error")).toBeVisible();

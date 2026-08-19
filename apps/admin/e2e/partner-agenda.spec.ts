@@ -1,0 +1,126 @@
+import { test, expect } from "@playwright/test";
+import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
+import { createSignedInClient, webProductUrl, mockMercadoPagoCheckout } from "@hifago/e2e-support";
+import { slugify } from "../lib/utils";
+
+// Spec 20 — agenda de réservations socio (remplace la page d'accueil /partner). Établissement/
+// partenaire operadorPropuestas déjà utilisé ailleurs dans la suite (capacité operator ACTIVE
+// scopée, cf. supabase/seed.sql), mais un produit DÉDIÉ à ce test — même précédent que
+// partner-reservations.spec.ts (base locale non remise à zéro entre deux exécutions e2e).
+const ESTABLISHMENT_ID = "b0000000-0000-4000-8000-000000000004";
+const PARTNER_ID = "b0000000-0000-4000-8000-000000000003";
+
+// Date future dans le mois courant, DISPERSÉE selon `stamp` — la vue par défaut de l'agenda
+// ("month") doit déjà l'afficher sans navigation. Une date fixe (ex. "demain") accumulerait les
+// réservations de chaque exécution e2e successive sur LA MÊME cellule (base locale jamais remise
+// à zéro entre deux runs, même précédent que partner-reservations.spec.ts) jusqu'à dépasser le
+// nombre d'événements affichés par SVAR dans une cellule mensuelle chargée (repliés derrière un
+// bouton "+N more") — constaté en développant ce test. Disperser sur le reste du mois courant
+// évite la collision plutôt que de la découvrir en CI.
+function futureDateInCurrentMonth(stamp: number): string {
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const remainingDays = Math.max(daysInMonth - now.getDate(), 1);
+  const offset = 1 + (stamp % remainingDays);
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+test("un socio voit une réservation réelle dans son agenda, clique dessus pour ouvrir la fiche, marque une ausencia, puis ajoute une réservation manuelle", async ({
+  page,
+  context,
+}) => {
+  const stamp = Date.now();
+  const productName = `Actividad Agenda E2E ${stamp}`;
+  const holderName = `Cliente Agenda E2E ${stamp}`;
+  const date = futureDateInCurrentMonth(stamp);
+
+  const adminClient = await createSignedInClient(SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
+  const { data: product, error: insertError } = await adminClient
+    .from("products")
+    .insert({
+      partner_id: PARTNER_ID,
+      establishment_id: ESTABLISHMENT_ID,
+      type: "activity",
+      name: { es: productName },
+      price_cop: 45000,
+      sellable: true,
+      slug: slugify(productName),
+    })
+    .select("id")
+    .single();
+  if (insertError || !product) {
+    throw new Error(`e2e setup: création du produit a échoué : ${insertError?.message}`);
+  }
+  const { data: availabilityResult, error: availabilityError } = await adminClient.rpc(
+    "set_product_availability",
+    { p_product_id: product.id, p_date: date, p_capacity: 5, p_open: true }
+  );
+  if (availabilityError || !(availabilityResult as { ok: boolean } | null)?.ok) {
+    throw new Error(
+      `e2e setup: ouverture de la disponibilité a échoué : ${availabilityError?.message ?? JSON.stringify(availabilityResult)}`
+    );
+  }
+
+  // --- Client anonyme : réservation réelle, jamais via l'UI socio/admin (create_order) ---------
+  await context.clearCookies();
+  await page.goto(webProductUrl(slugify(productName)));
+  await page.locator(`[data-date="${date}"]`).click();
+  await expect(page.getByTestId("add-to-cart-button")).toBeEnabled();
+  await page.getByTestId("add-to-cart-button").click();
+  await expect(page.getByTestId("added-to-cart")).toBeVisible();
+  await page.getByTestId("go-to-checkout-link").click();
+  await expect(page).toHaveURL(/\/checkout$/);
+  await page.locator('input[name="holder-name"]').fill(holderName);
+  await page.locator('input[name="holder-phone"]').fill("+57 300 222 3344");
+  await page.locator('input[name="holder-email"]').fill(`cliente.agenda.${stamp}@example.com`);
+  // Spec 19 §0 Tranche 1 : create_order réussi enchaîne désormais automatiquement le paiement
+  // Mercado Pago (redirection réelle, seul l'appel SDK externe est mocké). order-success n'est
+  // qu'un état transitoire — la redirection peut déjà l'avoir remplacé avant que Playwright ne
+  // l'observe (race constatée en testant) : attendre l'URL finale est le seul checkpoint fiable.
+  const { redirectUrl } = await mockMercadoPagoCheckout(page);
+  await page.getByTestId("submit-order-button").click();
+  await page.waitForURL(redirectUrl);
+
+  // --- Socio operator : voit la réservation dans son agenda (/partner, ex-page d'accueil) -------
+  await loginAs(context, SEEDED_ACCOUNTS.operadorPropuestas, SEEDED_PASSWORD);
+  await page.goto("/partner");
+  await page.waitForLoadState("networkidle");
+
+  const eventLocator = page.getByText(`${productName} - ${holderName} - 1 pers.`, { exact: false });
+  await expect(eventLocator).toBeVisible();
+  await eventLocator.click();
+
+  await expect(page).toHaveURL(/\/partner\/reservations\/.+/);
+  await expect(page.getByTestId("reservation-detail-card")).toContainText(productName);
+  await expect(page.getByTestId("reservation-detail-card")).toContainText(holderName);
+  await expect(page.getByTestId("reservation-detail-status")).toContainText("Reservada");
+
+  await page.getByTestId("detail-no-show-button").click();
+  await page.waitForSelector('[data-testid="status-reason-input"]');
+  await page.getByTestId("status-reason-input").fill("Cliente no llegó al punto de encuentro (e2e).");
+  await page.getByTestId("confirm-status-button").click();
+  await expect(page.getByTestId("reservation-detail-status")).toContainText("Ausencia");
+  await expect(page.getByTestId("detail-no-show-button")).toHaveCount(0);
+
+  // --- Ajout manuel (walk-in) depuis l'agenda : bouton "Nueva reserva", create_manual_order_line -
+  const manualHolderName = `Cliente Walk-in E2E ${stamp}`;
+  await page.goto("/partner");
+  await page.waitForLoadState("networkidle");
+  await page.getByTestId("new-reservation-button").click();
+  await page.waitForSelector('[data-testid="manual-product-select"]');
+  await page.getByTestId("manual-date-input").fill(date);
+  await page.getByTestId("manual-product-select").click();
+  await page.getByRole("option", { name: productName }).click();
+  await page.getByTestId("manual-holder-name-input").fill(manualHolderName);
+  await page.getByTestId("manual-qty-input").fill("2");
+  await page.getByTestId("confirm-manual-reservation-button").click();
+
+  // Pas une nouvelle recherche de l'événement dans la grille mensuelle (repose sur "Reserva
+  // creada.", le toast de succès) : la journée de test accumule les réservations d'exécutions e2e
+  // précédentes (base locale jamais remise à zéro, même précédent que partner-reservations.spec.ts)
+  // — SVAR replie les événements en trop derrière un bouton "+N more" dans une cellule mensuelle
+  // chargée, ce que positionOrderLines.test.ts couvre déjà unitairement (placement correct), pas
+  // besoin de le reprouver ici au prix d'un test fragile au volume de données accumulé.
+  await expect(page.getByRole("alertdialog").filter({ hasText: "Reserva creada." })).toBeVisible();
+});

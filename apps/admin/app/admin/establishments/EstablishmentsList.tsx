@@ -9,6 +9,7 @@ export type EstablishmentRow = {
   partnerName: string;
   status: string;
   activitiesCount: number;
+  hasSharedResourceProducts: boolean;
 };
 
 export type EstablishmentsListProps = {
@@ -60,6 +61,10 @@ export function EstablishmentsList({
       label: "Recurso compartido",
       href: (row) => `/admin/establishments/${row.id}/resource`,
       testId: (row) => `resource-link-${row.id}`,
+      // Spec 17 §0 Tranche 0 — la ressource partagée n'a de sens que pour un établissement qui
+      // porte au moins un camp/evento (seuls types câblés sur provider_resource_calendar) ; masqué
+      // sinon, plutôt qu'un lien vers un écran vide sans rapport avec l'établissement.
+      isVisible: (row) => row.hasSharedResourceProducts,
     },
   ];
 

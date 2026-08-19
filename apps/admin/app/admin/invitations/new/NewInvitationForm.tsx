@@ -5,11 +5,11 @@ import { createClient } from "@hifago/supabase/client";
 import {
   Button,
   Description,
-  ErrorMessage,
   Input,
   Label,
   ListBox,
   Select,
+  toast,
 } from "@hifago/ui";
 
 type OnboardingPath = "referrer" | "provider";
@@ -18,17 +18,15 @@ type CreateInvitationResult = { ok: boolean; invitation_id?: string; token?: str
 export function NewInvitationForm() {
   const [code, setCode] = useState("");
   const [onboardingPath, setOnboardingPath] = useState<OnboardingPath | "">("");
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
 
     if (!code.trim() || !onboardingPath) {
-      setError("El código y el tipo de invitación son obligatorios.");
+      toast.danger("El código y el tipo de invitación son obligatorios.");
       return;
     }
 
@@ -46,10 +44,11 @@ export function NewInvitationForm() {
 
     const result = data as CreateInvitationResult | null;
     if (rpcError || !result?.ok || !result.token) {
-      setError("No se pudo crear la invitación.");
+      toast.danger("No se pudo crear la invitación.");
       return;
     }
 
+    toast.success("Invitación creada.");
     setLink(`${window.location.origin}/partner/join?token=${result.token}`);
   }
 
@@ -78,7 +77,7 @@ export function NewInvitationForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex max-w-md flex-col gap-4">
+    <form onSubmit={handleSubmit} noValidate className="flex max-w-md flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="code">Código</Label>
         <Input
@@ -115,7 +114,6 @@ export function NewInvitationForm() {
           </Select.Popover>
         </Select>
       </div>
-      {error ? <ErrorMessage role="alert">{error}</ErrorMessage> : null}
       <Button type="submit" isDisabled={isSubmitting} data-testid="create-invitation-button">
         {isSubmitting ? "Creando…" : "Crear invitación"}
       </Button>

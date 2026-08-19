@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@hifago/supabase/client";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
-import { Button, Input, Label, TextArea, TextField, cn } from "@hifago/ui";
+import { Button, Input, Label, TextArea, TextField, cn, toast } from "@hifago/ui";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
 
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
@@ -58,7 +58,6 @@ export function EditEstablishmentProposalForm({
   const [lon, setLon] = useState(initialLon);
 
   const [proposal, setProposal] = useState(pendingProposal);
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
@@ -88,10 +87,9 @@ export function EditEstablishmentProposalForm({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
 
     if (!nombre.trim()) {
-      setError("El nombre es obligatorio.");
+      toast.danger("El nombre es obligatorio.");
       return;
     }
 
@@ -115,7 +113,7 @@ export function EditEstablishmentProposalForm({
 
     const result = data as { ok: boolean; reason?: string; proposal_id?: string } | null;
     if (rpcError || !result?.ok) {
-      setError(
+      toast.danger(
         SUBMIT_ERRORS[result?.reason ?? ""] ?? "No se pudo enviar la propuesta. Inténtalo de nuevo.",
       );
       return;
@@ -124,11 +122,11 @@ export function EditEstablishmentProposalForm({
     if (result.proposal_id) {
       setProposal({ id: result.proposal_id, payload, created_at: new Date().toISOString() });
     }
+    toast.success("Propuesta enviada.");
   }
 
   async function handleWithdraw() {
     if (!proposal) return;
-    setError(null);
     setIsWithdrawing(true);
 
     const supabase = createClient();
@@ -140,13 +138,14 @@ export function EditEstablishmentProposalForm({
 
     const result = data as { ok: boolean; reason?: string } | null;
     if (rpcError || !result?.ok) {
-      setError(
+      toast.danger(
         WITHDRAW_ERRORS[result?.reason ?? ""] ?? "No se pudo retirar la propuesta. Inténtalo de nuevo.",
       );
       return;
     }
 
     setProposal(null);
+    toast.success("Propuesta retirada.");
   }
 
   const proposedName = proposal
@@ -175,7 +174,7 @@ export function EditEstablishmentProposalForm({
         </div>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="edit-proposal-nombre">Nombre</Label>
           <Input
@@ -257,12 +256,6 @@ export function EditEstablishmentProposalForm({
             />
           </div>
         </div>
-
-        {error ? (
-          <p role="alert" data-testid="edit-proposal-error" className="text-sm text-danger">
-            {error}
-          </p>
-        ) : null}
 
         <Button type="submit" isDisabled={isSubmitting} data-testid="submit-edit-proposal-button">
           {isSubmitting ? "Enviando…" : "Enviar propuesta"}

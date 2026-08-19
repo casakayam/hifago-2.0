@@ -12,6 +12,7 @@ import {
   Select,
   TextArea,
   TextField,
+  toast,
 } from "@hifago/ui";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
 
@@ -75,7 +76,6 @@ export function NewPartnerForm() {
   // Invitación
   const [sendInvitation, setSendInvitation] = useState(true);
 
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [invitationLink, setInvitationLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -145,21 +145,20 @@ export function NewPartnerForm() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
 
     if (!displayName.trim()) {
-      setError("El nombre es obligatorio.");
+      toast.danger("El nombre es obligatorio.");
       return;
     }
     const roles: string[] = [];
     if (isReferrer) roles.push("referrer");
     if (isOperator) roles.push("operator");
     if (roles.length === 0) {
-      setError("Selecciona al menos una capacidad (referente y/o prestador).");
+      toast.danger("Selecciona al menos una capacidad (referente y/o prestador).");
       return;
     }
     if (sendInvitation && !code.trim()) {
-      setError("Un código de atribución es obligatorio para enviar una invitación.");
+      toast.danger("Un código de atribución es obligatorio para enviar una invitación.");
       return;
     }
 
@@ -185,9 +184,11 @@ export function NewPartnerForm() {
 
     const result = data as CreatePartnerResult | null;
     if (rpcError || !result?.ok || !result.partner_id) {
-      setError("No se pudo crear el partner.");
+      toast.danger("No se pudo crear el partner.");
       return;
     }
+
+    toast.success("Partner creado.");
 
     if (result.invitation_token) {
       setInvitationLink(`${window.location.origin}/partner/join?token=${result.invitation_token}`);
@@ -224,7 +225,7 @@ export function NewPartnerForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-8">
+    <form onSubmit={handleSubmit} noValidate className="flex max-w-2xl flex-col gap-8">
       <fieldset className="flex flex-col gap-4">
         <legend className="text-lg font-semibold">Identidad</legend>
 
@@ -523,12 +524,6 @@ export function NewPartnerForm() {
           </Checkbox.Content>
         </Checkbox>
       </fieldset>
-
-      {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
 
       <Button type="submit" isDisabled={isSubmitting} data-testid="create-partner-button">
         {isSubmitting ? "Creando…" : "Crear partner"}

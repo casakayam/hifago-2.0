@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@hifago/supabase/client";
-import { Button } from "@hifago/ui";
+import { Button, toast } from "@hifago/ui";
 
 const COOLDOWN_SECONDS = 30;
 
@@ -12,7 +12,6 @@ const COOLDOWN_SECONDS = 30;
 // répété évident, pas un remplacement du rate-limit serveur.
 export function ResendConfirmationForm({ email }: { email: string | null }) {
   const [cooldown, setCooldown] = useState(0);
-  const [status, setStatus] = useState<"idle" | "sent" | "error">("idle");
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -29,10 +28,13 @@ export function ResendConfirmationForm({ email }: { email: string | null }) {
   }
 
   async function handleResend() {
-    setStatus("idle");
     const supabase = createClient();
     const { error } = await supabase.auth.resend({ type: "signup", email: email as string });
-    setStatus(error ? "error" : "sent");
+    if (error) {
+      toast.danger("No se pudo reenviar el correo. Inténtalo de nuevo en unos segundos.");
+    } else {
+      toast.success("Correo reenviado.");
+    }
     setCooldown(COOLDOWN_SECONDS);
   }
 
@@ -47,16 +49,6 @@ export function ResendConfirmationForm({ email }: { email: string | null }) {
       >
         {cooldown > 0 ? `Reenviar correo (${cooldown}s)` : "Reenviar correo"}
       </Button>
-      {status === "sent" ? (
-        <p role="status" className="text-sm text-success">
-          Correo reenviado.
-        </p>
-      ) : null}
-      {status === "error" ? (
-        <p role="alert" className="text-sm text-danger">
-          No se pudo reenviar el correo. Inténtalo de nuevo en unos segundos.
-        </p>
-      ) : null}
       <Link href="/login" className="text-sm underline">
         Volver a iniciar sesión
       </Link>

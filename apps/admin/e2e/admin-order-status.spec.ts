@@ -20,6 +20,7 @@ test("admin ouvre /admin/orders, fait passer une ligne reserved à no_show avec 
   const { data: result, error: rpcError } = await setupClient.rpc("create_order", {
     p_lines: [{ product_id: PRODUCT_ID, date: DATE, qty: 1 }],
     p_holder_name: holderName,
+    p_holder_email: "cliente.order.status@example.com",
   });
   const created = result as { ok: boolean; order_id?: string } | null;
   if (rpcError || !created?.ok || !created.order_id) {

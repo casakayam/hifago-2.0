@@ -234,4 +234,37 @@ function DayPickerCalendarDayButton({
   );
 }
 
-export { DayPickerCalendar, DayPickerCalendarDayButton };
+// Réplique exactement date-fns `format(date, "yyyy-MM-dd")` (composants de date locaux, pas UTC —
+// mêmes composants que ceux lus par `new Date(...).getFullYear()/getMonth()/getDate()`) sans
+// ajouter date-fns comme dépendance de ce package pour ce seul usage (packages/ui ne dépend d'aucun
+// utilitaire de date ailleurs).
+function toIsoDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+// Fabrique de DayButton "tagué" data-date=ISO (cible stable pour les tests e2e, indépendante de la
+// locale d'affichage) — référence de fonction module-scope, JAMAIS recréée par rendu. Les 4 écrans
+// de réservation d'apps/web (ReservationForm/HotelReservationForm/LodgingReservationForm/
+// SlotReservationForm) passaient chacun une arrow function fraîche à `components.DayButton` à
+// chaque rendu, défaisant le useMemo(mergedComponents, [locale, components]) ci-dessus à chaque
+// frappe/sélection dans l'écran consommateur (DayPicker démontait/remontait alors toute la grille
+// de jours inutilement, cf. le composant type utilisé comme tag JSX). `dateTaggedDayButtonComponents`
+// ci-dessous, passé tel quel comme prop `components` (jamais reconstruit en objet littéral par
+// l'appelant), stabilise aussi la référence de l'objet `components` lui-même.
+function dateTaggedDayButton(dayButtonProps: React.ComponentProps<typeof DayButton>) {
+  return (
+    <DayPickerCalendarDayButton {...dayButtonProps} data-date={toIsoDate(dayButtonProps.day.date)} />
+  );
+}
+
+const dateTaggedDayButtonComponents = { DayButton: dateTaggedDayButton };
+
+export {
+  DayPickerCalendar,
+  DayPickerCalendarDayButton,
+  dateTaggedDayButton,
+  dateTaggedDayButtonComponents,
+};

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Modal } from "@hifago/ui";
+import { Button, Modal, toast } from "@hifago/ui";
 
 // Mirroir de apps/admin/app/admin/invitations/RevokeInvitationButton.tsx — pattern déjà utilisé
 // dans le projet pour une confirmation destructive. Branché sur rpcError.code (pas le texte du
@@ -15,12 +15,10 @@ import { Button, Modal } from "@hifago/ui";
 export function DeleteProductButton({ productId }: { productId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [alreadyOrdered, setAlreadyOrdered] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleDelete() {
-    setError(null);
     setAlreadyOrdered(false);
     setIsSubmitting(true);
 
@@ -34,12 +32,14 @@ export function DeleteProductButton({ productId }: { productId: string }) {
     if (rpcError) {
       if (rpcError.code === "23503") {
         setAlreadyOrdered(true);
+        toast.danger("No se pudo eliminar la actividad: ya fue reservada.");
       } else {
-        setError("No se pudo eliminar la actividad.");
+        toast.danger("No se pudo eliminar la actividad.");
       }
       return;
     }
 
+    toast.success("Actividad eliminada.");
     router.push("/admin/products");
     router.refresh();
   }
@@ -74,11 +74,6 @@ export function DeleteProductButton({ productId }: { productId: string }) {
                 ) : (
                   <p className="text-sm text-muted">Esta acción no se puede deshacer.</p>
                 )}
-                {error ? (
-                  <p role="alert" data-testid="delete-product-error" className="text-sm text-danger">
-                    {error}
-                  </p>
-                ) : null}
               </Modal.Body>
               <Modal.Footer>
                 <Button

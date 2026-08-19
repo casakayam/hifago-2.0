@@ -49,9 +49,12 @@ test("un socio propose une photo, elle n'apparaît qu'après approbation admin",
   await expect(page.getByTestId("image-crop-stage")).toBeVisible();
   await page.getByTestId("image-crop-confirm").click();
 
-  // La proposition apparaît comme "en attente" — jamais directement dans la galerie publiée.
+  // La proposition apparaît comme "en attente" — jamais directement dans la galerie publiée, mais
+  // avec un aperçu visuel de la photo envoyée (retour Jérôme 2026-08-17 : le module n'affichait
+  // rien après l'ajout, juste un compteur texte).
   await expect(page.getByTestId("pending-photos-proposal")).toBeVisible({ timeout: 10000 });
   await expect(page.getByTestId("pending-photos-proposal")).toContainText("1 foto propuesta");
+  await expect(page.getByTestId("pending-photo-item")).toHaveCount(1);
   await expect(socioGallery.getByTestId("media-gallery-item")).toHaveCount(0);
 
   // --- Admin : la proposition apparaît dans la file, marquée "Fotos" ---
@@ -71,7 +74,10 @@ test("un socio propose une photo, elle n'apparaît qu'après approbation admin",
   await expect(page.getByTestId("proposed-photos")).toBeVisible();
   await expect(page.getByTestId("proposed-photo-item")).toHaveCount(1);
   await page.getByTestId("approve-button").click();
-  await expect(page.getByTestId("moderation-success")).toBeVisible();
+  // Le succès n'est plus un texte inline mais un toast (docs/specs/16-notifications-toast.md) —
+  // HeroUI rend chaque toast avec role="alertdialog", le message passé à toast.success(...)
+  // devient son titre visible.
+  await expect(page.getByRole("alertdialog").filter({ hasText: "Fotos aprobadas." })).toBeVisible();
 
   // --- La galerie du socio reflète maintenant la photo PUBLIÉE, plus de proposition en attente ---
   await page.goto(`/partner/products/${PRODUCT_ID}/edit`);

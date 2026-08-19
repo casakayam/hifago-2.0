@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Label, TextArea, TextField } from "@hifago/ui";
+import { Button, Label, TextArea, TextField, toast } from "@hifago/ui";
 
 type Offboarding = {
   id: string;
@@ -24,7 +24,6 @@ export function OffboardingChecklist({
 }) {
   const router = useRouter();
   const [note, setNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [pendingStep, setPendingStep] = useState<1 | 3 | 4 | null>(null);
 
   const unpublishedAt = offboarding?.unpublished_at ?? null;
@@ -44,7 +43,6 @@ export function OffboardingChecklist({
   }
 
   async function handleUnpublish() {
-    setError(null);
     setPendingStep(1);
     try {
       const offboardingId = await ensureOffboardingId();
@@ -53,9 +51,10 @@ export function OffboardingChecklist({
         p_offboarding_id: offboardingId,
       });
       if (rpcError) throw rpcError;
+      toast.success("Oferta despublicada.");
       router.refresh();
     } catch {
-      setError("No se pudo despublicar la oferta.");
+      toast.danger("No se pudo despublicar la oferta.");
     } finally {
       setPendingStep(null);
     }
@@ -63,7 +62,6 @@ export function OffboardingChecklist({
 
   async function handleAttestPayments() {
     if (!offboarding?.id) return;
-    setError(null);
     setPendingStep(3);
     try {
       const supabase = createClient();
@@ -72,10 +70,11 @@ export function OffboardingChecklist({
         p_note: note,
       });
       if (rpcError) throw rpcError;
+      toast.success("Pago atestiguado.");
       setNote("");
       router.refresh();
     } catch {
-      setError("No se pudo atestiguar el pago (¿motivo vacío?).");
+      toast.danger("No se pudo atestiguar el pago (¿motivo vacío?).");
     } finally {
       setPendingStep(null);
     }
@@ -83,7 +82,6 @@ export function OffboardingChecklist({
 
   async function handleRevokeCapability() {
     if (!offboarding?.id) return;
-    setError(null);
     setPendingStep(4);
     try {
       const supabase = createClient();
@@ -91,9 +89,10 @@ export function OffboardingChecklist({
         p_offboarding_id: offboarding.id,
       });
       if (rpcError) throw rpcError;
+      toast.success("Capacidad retirada.");
       router.refresh();
     } catch {
-      setError("No se pudo retirar la capacidad.");
+      toast.danger("No se pudo retirar la capacidad.");
     } finally {
       setPendingStep(null);
     }
@@ -201,12 +200,6 @@ export function OffboardingChecklist({
           </>
         )}
       </section>
-
-      {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
     </div>
   );
 }

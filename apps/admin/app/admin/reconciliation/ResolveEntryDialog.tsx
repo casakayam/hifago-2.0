@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Label, Modal, TextArea } from "@hifago/ui";
+import { Button, Label, Modal, TextArea, TextField, toast } from "@hifago/ui";
 
 // Même motif que ChangeStatusDialog (feature 10, apps/admin/app/admin/orders/ChangeStatusDialog.tsx) :
 // dialogue contrôlé, motif obligatoire vérifié côté client (message immédiat) ET côté
@@ -20,23 +20,20 @@ export function ResolveEntryDialog({
   onSuccess: () => void;
 }) {
   const [note, setNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   function reset() {
     setNote("");
-    setError(null);
   }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
 
     // Motif obligatoire — même exigence que set_order_line_status (feature 10) et
     // resolve_reconciliation_entry côté serveur (feature 22) : un message clair immédiat évite un
     // aller-retour réseau pour une erreur évidente.
     if (note.trim() === "") {
-      setError("El motivo es obligatorio.");
+      toast.danger("El motivo es obligatorio.");
       return;
     }
 
@@ -49,10 +46,11 @@ export function ResolveEntryDialog({
     setIsSubmitting(false);
 
     if (rpcError || !(data as { ok: boolean } | null)?.ok) {
-      setError(rpcError?.message ?? "No se pudo resolver la entrada.");
+      toast.danger(rpcError?.message ?? "No se pudo resolver la entrada.");
       return;
     }
 
+    toast.success("Entrada resuelta.");
     onSuccess();
     reset();
     onOpenChange(false);
@@ -72,24 +70,12 @@ export function ResolveEntryDialog({
             <Modal.Header>
               <Modal.Heading>Resolver entrada</Modal.Heading>
             </Modal.Header>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
               <Modal.Body className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
+                <TextField fullWidth isRequired value={note} onChange={setNote}>
                   <Label htmlFor="resolution-note">Motivo de la resolución</Label>
-                  <TextArea
-                    id="resolution-note"
-                    name="resolution-note"
-                    required
-                    value={note}
-                    onChange={(event) => setNote(event.target.value)}
-                    data-testid="resolution-note-input"
-                  />
-                </div>
-                {error ? (
-                  <p role="alert" data-testid="resolve-dialog-error" className="text-sm text-danger">
-                    {error}
-                  </p>
-                ) : null}
+                  <TextArea id="resolution-note" name="resolution-note" data-testid="resolution-note-input" />
+                </TextField>
               </Modal.Body>
               <Modal.Footer>
                 <Button type="submit" isDisabled={isSubmitting} data-testid="confirm-resolve-button">

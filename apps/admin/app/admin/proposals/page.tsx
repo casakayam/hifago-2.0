@@ -7,10 +7,12 @@ export default async function AdminProposalsPage() {
 
   // product_proposals_select_admin (feature 15) : l'admin voit les propositions de tous les
   // partenaires. Nom actuel du produit affiché ici pour l'identifier — la comparaison
-  // valeur actuelle/proposée champ par champ vit sur l'écran de détail, pas ici.
+  // valeur actuelle/proposée champ par champ vit sur l'écran de détail, pas ici. product est null
+  // pour une proposition kind='create' pas encore approuvée (spec 15, le produit n'existe pas
+  // encore) : repli sur le nom proposé (payload), même patron que establishmentProposals ci-dessous.
   const { data: productProposals } = await supabase
     .from("product_proposals")
-    .select("id, created_at, kind, product:products(name), partner:partners(display_name)")
+    .select("id, created_at, kind, payload, product:products(name), partner:partners(display_name)")
     .eq("status", "pending")
     .order("created_at", { ascending: true });
 
@@ -32,7 +34,10 @@ export default async function AdminProposalsPage() {
       created_at: p.created_at,
       kind: p.kind,
       entityType: "product" as const,
-      displayName: resolveLocalizedField(asLocalizedField(p.product?.name), "es") ?? "—",
+      displayName:
+        resolveLocalizedField(asLocalizedField(p.product?.name), "es") ??
+        resolveLocalizedField(asLocalizedField((p.payload as { name?: unknown } | null)?.name), "es") ??
+        "—",
       partner: p.partner,
     })),
     ...(establishmentProposals ?? []).map((p) => ({

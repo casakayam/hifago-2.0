@@ -162,7 +162,7 @@ test("admin crée une actividad avec tous les champs (i18n, lieu, foto, tramos, 
   await page.goto(`/admin/products/${productId}/edit`);
   await page.getByTestId("slot-rule-capacity-0").fill("6");
   await page.getByTestId("save-slot-rules-button").click();
-  await expect(page.getByText("Guardado.")).toBeVisible();
+  await expect(page.getByRole("alertdialog").filter({ hasText: "Horarios guardados." })).toBeVisible();
   await page.reload();
   await expect(page.getByTestId("slot-rule-capacity-0")).toHaveValue("6");
 });

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
 import { EditProposalForm } from "./EditProposalForm";
-import { ProductPhotosSocioBlock } from "./ProductPhotosSocioBlock";
+import { PhotosSocioBlock } from "@/components/photos-socio-block";
 
 export default async function EditProductProposalPage({
   params,
@@ -13,9 +13,14 @@ export default async function EditProductProposalPage({
   // products_select_own (feature 15) : la RLS ne renvoie cette fiche que si elle appartient au
   // partenaire connecté (ou si elle est publiée) — un produit d'un autre partenaire ressort donc
   // ici comme "introuvable", jamais un refus explicite qui en révèlerait l'existence.
+  // Colonnes étendues (spec 15 bis, 2026-08-17) : parité de champs avec ProductForm en mode
+  // édition — address/lat/lon/price_tiers/min_qty/max_qty/check_in_time/check_out_time/capacity/
+  // stay_rates, plus `type` pour le gating (ProductTypeFields).
   const { data: product } = await supabase
     .from("products")
-    .select("id, name, description, price_cop, category")
+    .select(
+      "id, type, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, default_capacity, stay_rates"
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -23,40 +28,51 @@ export default async function EditProductProposalPage({
     notFound();
   }
 
-  // Au plus une proposition pending par produit/partenaire à la fois côté écran (le plafond de 10
-  // est un plafond global par partenaire, pas par produit — mais rien n'empêche plusieurs
-  // pending sur des produits différents ; ici on n'affiche que celle de CE produit, s'il y en a une).
-  const { data: pendingProposal } = await supabase
-    .from("product_proposals")
-    .select("id, payload, created_at")
-    .eq("product_id", id)
-    .eq("status", "pending")
-    .eq("kind", "content")
-    .order("created_at", { ascending: false })
-    .maybeSingle();
-
-  const { data: media } = await supabase
-    .from("product_media")
-    .select("id, storage_path")
-    .eq("product_id", id)
-    .order("sort", { ascending: true });
+  // 3 lectures indépendantes (aucune ne dépend du résultat d'une autre, seulement de `id` déjà
+  // connu) — lancées en parallèle plutôt qu'en séquence, même raisonnement documenté dans le
+  // admin/products/[id]/edit/page.tsx voisin (5 lectures indépendantes, Promise.all).
+  const [{ data: pendingProposal }, { data: media }, { data: pendingPhotosProposal }] =
+    await Promise.all([
+      // Au plus une proposition pending par produit/partenaire à la fois côté écran (le plafond de
+      // 10 est un plafond global par partenaire, pas par produit — mais rien n'empêche plusieurs
+      // pending sur des produits différents ; ici on n'affiche que celle de CE produit, s'il y en a
+      // une).
+      supabase
+        .from("product_proposals")
+        .select("id, payload, created_at")
+        .eq("product_id", id)
+        .eq("status", "pending")
+        .eq("kind", "content")
+        .order("created_at", { ascending: false })
+        .maybeSingle(),
+      supabase
+        .from("product_media")
+        .select("id, storage_path")
+        .eq("product_id", id)
+        .order("sort", { ascending: true }),
+      supabase
+        .from("product_proposals")
+        .select("payload")
+        .eq("product_id", id)
+        .eq("status", "pending")
+        .eq("kind", "photos")
+        .maybeSingle(),
+    ]);
 
   const photos = (media ?? []).map((m) => ({
     id: m.id,
     url: supabase.storage.from("catalog-media").getPublicUrl(m.storage_path).data.publicUrl,
   }));
 
-  const { data: pendingPhotosProposal } = await supabase
-    .from("product_proposals")
-    .select("payload")
-    .eq("product_id", id)
-    .eq("status", "pending")
-    .eq("kind", "photos")
-    .maybeSingle();
-
-  const pendingPhotosCount = (
-    (pendingPhotosProposal?.payload as { photos?: unknown[] } | null)?.photos ?? []
-  ).length;
+  // Aperçu réel des photos proposées, pas seulement leur nombre : le socio doit voir CE qu'il a
+  // envoyé, pas juste un compteur (retour Jérôme 2026-08-17 — le module de photos n'affichait rien
+  // après l'ajout).
+  const pendingPhotos = (
+    (pendingPhotosProposal?.payload as { photos?: { storage_path?: string }[] } | null)?.photos ?? []
+  )
+    .map((p) => p?.storage_path)
+    .filter((path): path is string => Boolean(path))
+    .map((path) => supabase.storage.from("catalog-media").getPublicUrl(path).data.publicUrl);
 
   return (
     <div className="flex flex-col gap-6">
@@ -64,22 +80,21 @@ export default async function EditProductProposalPage({
         Proponer edición — {resolveLocalizedField(asLocalizedField(product.name), "es") ?? product.id}
       </h1>
 
-      <ProductPhotosSocioBlock
-        productId={product.id}
+      <PhotosSocioBlock
+        entityType="product"
+        entityId={product.id}
+        uploadEndpoint="/api/upload/product"
+        submitRpc="submit_photos_proposal"
+        deleteTable="product_media"
+        notFoundLabel="No se encontró la actividad."
         initialPhotos={photos}
-        initialPendingCount={pendingPhotosCount}
+        initialPendingPhotos={pendingPhotos}
       />
 
       <EditProposalForm
         productId={product.id}
-        initialNameEs={asLocalizedField(product.name)?.es ?? ""}
-        initialNameEn={asLocalizedField(product.name)?.en ?? ""}
-        initialDescriptionEs={asLocalizedField(product.description)?.es ?? ""}
-        initialDescriptionEn={asLocalizedField(product.description)?.en ?? ""}
-        // price_cop nullable depuis la feature 21 (evento vitrine) — jamais le cas ici en
-        // pratique : un evento n'a pas de proposition socio (admin-direct seulement).
-        initialPriceCop={product.price_cop ?? 0}
-        initialCategory={product.category}
+        type={product.type as "activity" | "evento" | "camp" | "lodging" | "hotel" | "transport"}
+        currentPayload={product}
         pendingProposal={pendingProposal}
       />
     </div>

@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: "/partner/establishment", label: "Mi establecimiento" },
   { href: "/partner/commissions", label: "Mis comisiones" },
   { href: "/partner/products", label: "Mis actividades" },
+  { href: "/partner/reservations", label: "Mis reservas" },
   { href: "/partner/tools", label: "Mi enlace y QR" },
 ] as const;
 

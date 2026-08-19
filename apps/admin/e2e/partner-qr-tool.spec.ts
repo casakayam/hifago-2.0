@@ -8,6 +8,7 @@ import {
   WEB_APP_URL,
   ADMIN_APP_URL,
   webReferralUrl,
+  mockMercadoPagoCheckout,
 } from "@hifago/e2e-support";
 import { formatCop } from "@hifago/domain";
 
@@ -118,8 +119,14 @@ test("un socio génère son lien/QR réel sur /partner/tools, un visiteur anonym
 
   await visitorPage.locator('input[name="holder-name"]').fill("Cliente E2E QR Tool");
   await visitorPage.locator('input[name="holder-phone"]').fill("+57 300 111 9090");
+  await visitorPage.locator('input[name="holder-email"]').fill("cliente.qrtool@example.com");
+  // Spec 19 §0 Tranche 1 : create_order réussi enchaîne désormais automatiquement le paiement
+  // Mercado Pago (redirection réelle, seul l'appel SDK externe est mocké). order-success n'est
+  // qu'un état transitoire — la redirection peut déjà l'avoir remplacé avant que Playwright ne
+  // l'observe (race constatée en testant) : attendre l'URL finale est le seul checkpoint fiable.
+  const { redirectUrl } = await mockMercadoPagoCheckout(visitorPage);
   await visitorPage.getByTestId("submit-order-button").click();
-  await expect(visitorPage.getByTestId("order-success")).toBeVisible();
+  await visitorPage.waitForURL(redirectUrl);
 
   await visitorContext.close();
 

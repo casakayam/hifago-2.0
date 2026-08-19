@@ -12,10 +12,10 @@ import { Link } from "@/i18n/navigation";
 import {
   Button,
   DayPickerCalendar as Calendar,
-  DayPickerCalendarDayButton as CalendarDayButton,
   Input,
   Label,
   TextField,
+  dateTaggedDayButtonComponents,
 } from "@hifago/ui";
 import { useCart } from "@/lib/cart/CartContext";
 
@@ -122,16 +122,10 @@ export function ReservationForm({
             lastSpot: "ring-2 ring-accent",
             full: "line-through opacity-60",
           }}
-          components={{
-            // data-date (ISO, indépendant de la locale) : cible stable pour les tests e2e, la
-            // locale d'affichage du calendrier ne doit jamais faire flancher un sélecteur de test.
-            DayButton: (dayButtonProps) => (
-              <CalendarDayButton
-                {...dayButtonProps}
-                data-date={format(dayButtonProps.day.date, "yyyy-MM-dd")}
-              />
-            ),
-          }}
+          // data-date (ISO, indépendant de la locale) : cible stable pour les tests e2e, la locale
+          // d'affichage du calendrier ne doit jamais faire flancher un sélecteur de test. Référence
+          // module-scope (packages/ui), jamais reconstruite ici à chaque rendu — cf. sa doc.
+          components={dateTaggedDayButtonComponents}
         />
       </div>
 

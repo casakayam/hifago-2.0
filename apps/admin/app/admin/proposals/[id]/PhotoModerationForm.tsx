@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Label, TextArea, cn } from "@hifago/ui";
+import { Button, Label, TextArea, cn, toast } from "@hifago/ui";
 
 const MODERATE_ERRORS: Record<string, string> = {
   proposal_not_found: "No se encontró la propuesta.",
@@ -19,26 +20,29 @@ const overlayButtonClass =
 
 type ModerateResult = { ok: boolean; reason?: string; status?: string; reviewed_by_email?: string };
 
-// Aperçu isolé (décision explicite avec Jérôme, 2026-08-14, docs/specs/04-gestion-images.md §3) —
-// pas une vraie page client en mode preview : ce composant rejoue juste les photos proposées,
-// confiné à apps/admin. L'approbation n'ajoute QUE les images (branche kind='photos' de
-// moderate_product_proposal, 20260815110000_gestion_images.sql) — jamais un champ de contenu,
-// même si l'admin retire une photo de la sélection avant d'approuver.
-export function ModeratePhotosProposalForm({
+// Factorise ModeratePhotosProposalForm.tsx (produits) / ModerateEstablishmentPhotosProposalForm.tsx
+// (établissements) — byte-for-byte identiques hormis le nom de la RPC appelée, dont la signature
+// (p_proposal_id/p_decision/p_expected_version/p_corrected_payload/p_rejection_reason) est
+// partagée par moderate_product_proposal ET moderate_establishment_proposal. Aperçu isolé (décision
+// explicite avec Jérôme, 2026-08-14, docs/specs/04-gestion-images.md §3) — pas une vraie page client
+// en mode preview : ce composant rejoue juste les photos proposées, confiné à apps/admin.
+// L'approbation n'ajoute QUE les images (branche kind='photos'), jamais un champ de contenu, même
+// si l'admin retire une photo de la sélection avant d'approuver.
+export function PhotoModerationForm({
   proposalId,
   expectedVersion,
+  rpcName,
   proposedPhotoPaths,
 }: {
   proposalId: string;
   expectedVersion: number;
+  rpcName: "moderate_product_proposal" | "moderate_establishment_proposal";
   proposedPhotoPaths: string[];
 }) {
+  const router = useRouter();
   const supabase = createClient();
   const [selectedPaths, setSelectedPaths] = useState(proposedPhotoPaths);
   const [rejectionReason, setRejectionReason] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [success, setSuccess] = useState<"approved" | "rejected" | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   function removeFromSelection(path: string) {
@@ -46,20 +50,17 @@ export function ModeratePhotosProposalForm({
   }
 
   async function handleDecision(decision: "approve" | "reject") {
-    setError(null);
-    setNotice(null);
-
     if (decision === "approve" && selectedPaths.length === 0) {
-      setError("Selecciona al menos una foto, o rechaza la propuesta.");
+      toast.danger("Selecciona al menos una foto, o rechaza la propuesta.");
       return;
     }
     if (decision === "reject" && !rejectionReason.trim()) {
-      setError("El motivo es obligatorio para rechazar.");
+      toast.danger("El motivo es obligatorio para rechazar.");
       return;
     }
 
     setIsSubmitting(true);
-    const { data, error: rpcError } = await supabase.rpc("moderate_product_proposal", {
+    const { data, error: rpcError } = await supabase.rpc(rpcName, {
       p_proposal_id: proposalId,
       p_decision: decision,
       p_expected_version: expectedVersion,
@@ -72,24 +73,18 @@ export function ModeratePhotosProposalForm({
     const result = data as ModerateResult | null;
     if (rpcError || !result?.ok) {
       if (result?.reason === "already_handled") {
-        setNotice(
+        toast.danger(
           `Esta propuesta ya fue procesada${result.reviewed_by_email ? ` por ${result.reviewed_by_email}` : ""} (estado: ${result.status}).`
         );
         return;
       }
-      setError(MODERATE_ERRORS[result?.reason ?? ""] ?? "No se pudo procesar la propuesta. Inténtalo de nuevo.");
+      toast.danger(MODERATE_ERRORS[result?.reason ?? ""] ?? "No se pudo procesar la propuesta. Inténtalo de nuevo.");
       return;
     }
 
-    setSuccess(decision === "approve" ? "approved" : "rejected");
-  }
-
-  if (success) {
-    return (
-      <p role="status" data-testid="moderation-success" className="text-sm font-medium">
-        {success === "approved" ? "Fotos aprobadas — ya están en la galería publicada." : "Propuesta rechazada."}
-      </p>
-    );
+    toast.success(decision === "approve" ? "Fotos aprobadas." : "Propuesta rechazada.");
+    router.push("/admin/proposals");
+    router.refresh();
   }
 
   return (
@@ -138,17 +133,6 @@ export function ModeratePhotosProposalForm({
             onChange={(event) => setRejectionReason(event.target.value)}
           />
         </div>
-
-        {notice ? (
-          <p role="status" data-testid="moderation-notice" className="text-sm text-muted">
-            {notice}
-          </p>
-        ) : null}
-        {error ? (
-          <p role="alert" data-testid="moderation-error" className="text-sm text-danger">
-            {error}
-          </p>
-        ) : null}
 
         <div className="flex gap-2">
           <Button type="button" isDisabled={isSubmitting} onPress={() => handleDecision("approve")} data-testid="approve-button">

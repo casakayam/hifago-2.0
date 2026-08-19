@@ -20,6 +20,7 @@ import {
 import { buildLocalizedPayload, type LocalizedValue } from "@/components/localized-text-field";
 import {
   emptyStayRates,
+  stayRatesFromColumn,
   toStayRatesColumn,
   validateStayRates,
   type DraftStayRates,
@@ -146,4 +147,42 @@ export function toRoomTypeRow(room: DraftRoomType, sort: number): RoomTypeRow {
 
 export function toRoomTypeRows(rooms: DraftRoomType[]): RoomTypeRow[] {
   return rooms.map((room, index) => toRoomTypeRow(room, index));
+}
+
+// Sens inverse de toRoomTypeRow (colonne/payload → brouillon), spec 15 — hydrate le formulaire de
+// modération d'une proposition de création à partir de payload.room_types. `photos`/`savedPhotos`
+// restent toujours vides ICI : ModerateProductCreationProposalForm.tsx masque toujours l'éditeur de
+// photos de chambre (hidePhotosInHotelRooms=true), cette fonction ne sert jamais à les afficher.
+// Une proposition PEUT désormais transporter des photos de chambre (retour Jérôme 2026-08-18,
+// apps/admin/lib/products/productCreationPayload.ts) — moderate_product_proposal les réinjecte
+// depuis la proposition ORIGINALE au moment de l'approbation (jamais depuis ce formulaire de
+// modération), donc leur absence ici n'a aucune conséquence sur ce qui sera réellement persisté.
+export function roomTypesFromColumn(value: unknown): DraftRoomType[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((row): row is Partial<RoomTypeRow> => !!row && typeof row === "object")
+    .map((row) => {
+      const usesTiers = Array.isArray(row.price_tiers) && row.price_tiers.length > 0;
+      return {
+        kind: row.kind === "private" ? "private" : "dorm",
+        name: (row.name as LocalizedValue) ?? {},
+        description: (row.description as LocalizedValue) ?? {},
+        capacity: typeof row.capacity === "number" ? String(row.capacity) : "",
+        quantity: typeof row.quantity === "number" ? String(row.quantity) : "",
+        priceMode: usesTiers ? "tiers" : "simple",
+        priceCop: !usesTiers && typeof row.price_cop === "number" ? String(row.price_cop) : "",
+        priceTiers: usesTiers
+          ? (row.price_tiers as { min_qty: number; max_qty: number; price_cop: number }[]).map((tier) => ({
+              minQty: String(tier.min_qty),
+              maxQty: String(tier.max_qty),
+              priceCop: String(tier.price_cop),
+            }))
+          : [emptyTier()],
+        minQty: typeof row.min_qty === "number" ? String(row.min_qty) : "",
+        maxQty: typeof row.max_qty === "number" ? String(row.max_qty) : "",
+        stayRates: row.stay_rates ? stayRatesFromColumn(row.stay_rates) : emptyStayRates(),
+        photos: [],
+        savedPhotos: [],
+      };
+    });
 }

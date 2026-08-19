@@ -32,12 +32,7 @@ export default async function LoginPage({
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
       <h1 className="text-2xl font-semibold">Iniciar sesión</h1>
-      {hasCallbackError ? (
-        <p role="alert" data-testid="callback-error" className="text-sm text-danger">
-          El enlace no es válido o ha expirado. Inténtalo de nuevo.
-        </p>
-      ) : null}
-      <LoginForm next={next} />
+      <LoginForm next={next} hasCallbackError={hasCallbackError} />
     </main>
   );
 }

@@ -161,10 +161,10 @@ découverte) :
 5. **Suggestions complémentaires** — *nouveau, à définir* : après un ajout au panier et/ou à
    l'étape de paiement (point ouvert ci-dessous), le client se voit proposer d'autres offres
    pertinentes à ajouter — jamais un blocage, une simple proposition qu'il peut ignorer.
-6. **Coordonnées du client** : nom et WhatsApp (obligatoires), email/document/commentaire
-   (optionnels) — cf. §3e. Si le client est connecté à son compte (ci-dessous), ces informations
-   sont pré-remplies depuis son profil. **Aucun champ de code promo/code partenaire n'est affiché au
-   client final** dans le périmètre actuel (§3c).
+6. **Coordonnées du client** : nom, WhatsApp et email (**tous trois obligatoires depuis le
+   2026-08-17**, cf. §3e) ; document/commentaire restent optionnels. Si le client est connecté à
+   son compte (ci-dessous), ces informations sont pré-remplies depuis son profil. **Aucun champ de
+   code promo/code partenaire n'est affiché au client final** dans le périmètre actuel (§3c).
 7. **Étape de paiement** : **un seul paiement, à la fin**, pour toute la commande — même si elle
    combine plusieurs établissements/prestataires (§3e). Aujourd'hui, confirmation du paiement à
    l'arrivée (pas de saisie de moyen de paiement en ligne) ; demain, si le paiement en ligne se
@@ -490,11 +490,17 @@ client enregistré** et non au panier/navigateur (§3c).
 - `'date'` : une date, sans créneau ;
 - `'none'` : aucune date requise.
 
+> **Révisé le 2026-08-17** (décision Jérôme, cf. `hifago/docs/specs/17-calendrier-disponibilite-refonte.md`) :
+> l'email passe d'optionnel à **requis**, au même titre que le nom et le WhatsApp — un client a
+> désormais obligatoirement au moins une adresse email valide, qu'il réserve en invité ou depuis un
+> compte. Aucun des deux champs déjà requis n'est retiré : l'email s'ajoute au WhatsApp, il ne le
+> remplace pas.
+
 **Informations du client, requises pour valider le panier** :
 - nom : requis ;
 - WhatsApp : **requis**, normalisé (un numéro colombien local est complété avec l'indicatif
   pays automatiquement) ;
-- email : optionnel, mais doit être valide s'il est fourni ;
+- email : **requis**, doit être valide ;
 - document d'identité, commentaire : optionnels, texte assaini (longueur bornée, caractères de
   contrôle retirés) ;
 - **case de consentement marketing (Habeas Data), ajoutée le 2026-08-12** : une case explicite au

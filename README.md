@@ -41,8 +41,10 @@ code actuel — est challengée avant d'être reprise dans la cible, avec l'aval
 - **LobbyPMS** : traité comme un connecteur optionnel par propriété (comme aujourd'hui : Casa
   Kayam est PMS-backed, Bania ne l'est pas), pas un lien en dur — pour rester valable si d'autres
   hébergements s'ajoutent sans PMS ou avec un PMS différent.
-- **Paiement en ligne** : pas encore tranché, orientation probable MercadoPago + Stripe, à
-  confirmer plus tard. Noté comme cible évoquée, hors périmètre du cahier des charges v1.
+- **Paiement en ligne** : **tranché le 2026-08-18** — Mercado Pago (remplace Wompi/Stripe comme
+  hypothèse), acompte obligatoire, ledger de règlement, virement automatique au référent et à
+  l'établissement (compensation no-show). Voir
+  `docs/specs/19-paiement-mercadopago-acompte-ledger.md`.
 - **Niveau de détail des specs** : règles métier, invariants et contrats d'API — pas les détails
   d'implémentation UI de l'app actuelle (le front sera entièrement refait), sauf quand un détail
   UI encode en réalité une règle serveur.
@@ -64,8 +66,8 @@ phases suivantes :
   ne protège que contre une survente à l'intérieur du portail — dès qu'on ouvre à plusieurs
   hôtels/maisons indépendants qui vendent potentiellement aussi sur Booking.com/Airbnb, le risque
   de survente inter-canaux devient réel. Voir `docs/01-cahier-des-charges-client.md` §5.
-- **Paiement en ligne** (MercadoPago + Stripe évoqués, non tranché) — voir décisions de cadrage
-  ci-dessus.
+- **Paiement en ligne** (Mercado Pago, tranché le 2026-08-18) — voir décisions de cadrage
+  ci-dessus et `docs/specs/19-paiement-mercadopago-acompte-ledger.md`.
 - **Options pour les logements entiers** : séjour minimum, délai de préavis minimum, tarif
   week-end différencié — bonnes options à garder en tête, pas construites dans ce premier lot.
   Voir `docs/01-cahier-des-charges-client.md` §7 (A11).
@@ -73,12 +75,14 @@ phases suivantes :
   marketplace multi-prestataires, mais pas construit dans ce premier périmètre. Voir
   `docs/01-cahier-des-charges-client.md` §2.
 - **Liste de souhaits/favoris** — mineur, pas construit dans ce premier périmètre.
-- **Flux self-service de paiement des rétributions** (demande de retrait, suivi en temps réel) —
-  pas encore décidé ; le modèle manuel actuel (Jérôme paie hors-plateforme + preuve déposée) est
-  conservé pour ce premier périmètre. Voir `docs/02-cahier-des-charges-socio.md` §1.
-- **Méthodes de paiement au-delà de la Colombie** (Bancolombia/Nequi seulement pour l'instant) —
-  à généraliser quand un partenaire hors Colombie se présentera. Voir
-  `docs/02-cahier-des-charges-socio.md` §3g.
+- **Flux self-service de paiement des rétributions** (demande de retrait à la volée, suivi en
+  temps réel) — reste hors périmètre (spec 19, 2026-08-18) : le virement devient automatique
+  (déclenché par API dès la ligne réalisée) mais le référent n'a pas d'interface pour en déclencher
+  un à la demande. Voir `docs/02-cahier-des-charges-socio.md` §1 et
+  `docs/specs/19-paiement-mercadopago-acompte-ledger.md`.
+- **Méthodes de paiement au-delà de la Colombie** — Mercado Pago devient le canal obligatoire
+  (référent et établissement, remplace Bancolombia/Nequi, spec 19) ; à généraliser au-delà si un
+  partenaire hors zone Mercado Pago se présente. Voir `docs/02-cahier-des-charges-socio.md` §3g.
 - **Droit à l'export/suppression de ses données** (Habeas Data, self-service) — cohérent avec les
   pages légales déjà décidées côté client, pas encore spécifié côté socio.
 - **Facture/document fiscal** pour un prestataire (pratique DIAN locale) — pas urgent, pratique

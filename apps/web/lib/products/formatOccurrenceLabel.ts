@@ -30,15 +30,30 @@ export function formatOccurrenceLabel(
 
   if (occurrence.occurrenceType === "recurring" && occurrence.recurrenceFrequencyDays) {
     const days = occurrence.recurrenceFrequencyDays;
+    // Alignement hebdomadaire (ex. "toutes les 2 semaines, le mardi") : seulement quand la
+    // fréquence est un multiple de 7 ET qu'une date d'ancrage existe — sans les deux, aucun jour de
+    // semaine n'est mathématiquement déterminable (une donnée plus ancienne peut n'avoir aucune
+    // occurrence_date, cf. gap corrigé côté formulaire admin). weekday pré-formaté ici (chaîne
+    // simple interpolée), même convention que `date` ci-dessous — jamais un 2e niveau de select ICU.
+    const weekday =
+      occurrence.occurrenceDate && days % 7 === 0
+        ? new Intl.DateTimeFormat(locale, { weekday: "long" }).format(
+            new Date(`${occurrence.occurrenceDate}T00:00:00`)
+          )
+        : null;
     // 3e condition de fin (indéfini) = aucune des deux posée, cf. contrainte
     // products_recurrence_end_shape (mutuellement exclusives entre elles).
     if (occurrence.recurrenceEndDate) {
-      return t("recurringUntilDate", { days, date: formatDate(occurrence.recurrenceEndDate) });
+      return weekday
+        ? t("recurringWeeklyUntilDate", { weekday, days, date: formatDate(occurrence.recurrenceEndDate) })
+        : t("recurringUntilDate", { days, date: formatDate(occurrence.recurrenceEndDate) });
     }
     if (occurrence.recurrenceEndCount) {
-      return t("recurringForCount", { days, count: occurrence.recurrenceEndCount });
+      return weekday
+        ? t("recurringWeeklyForCount", { weekday, days, count: occurrence.recurrenceEndCount })
+        : t("recurringForCount", { days, count: occurrence.recurrenceEndCount });
     }
-    return t("recurringOngoing", { days });
+    return weekday ? t("recurringWeeklyOngoing", { weekday, days }) : t("recurringOngoing", { days });
   }
 
   return "";

@@ -136,7 +136,7 @@ async function runScenario1Once(run) {
       await go;
       const res = await client.query(
         "select create_order($1::jsonb, $2, $3, $4, $5) as result",
-        [lines, "Concurrency Buyer", null, null, false]
+        [lines, "Concurrency Buyer", "concurrency-buyer@hifago.test", null, false]
       );
       return res.rows[0].result;
     })
@@ -276,7 +276,7 @@ async function runScenario2Once(run) {
         await go;
         const res = await client.query(
           "select create_order($1::jsonb, $2, $3, $4, $5) as result",
-          [cart, "Concurrency Buyer", null, null, false]
+          [cart, "Concurrency Buyer", "concurrency-buyer@hifago.test", null, false]
         );
         return res.rows[0].result;
       })

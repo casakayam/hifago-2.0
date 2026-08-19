@@ -4,23 +4,21 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Input, Label, TextField } from "@hifago/ui";
-import { GoogleButton } from "@/components/GoogleButton";
+import { Button, Input, Label, TextField, toast } from "@hifago/ui";
+import { OAuthSection } from "@/components/GoogleButton";
 
 export function SignupForm({ next }: { next: string }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
 
     if (password !== confirmPassword) {
-      setError("Las contraseñas no coinciden.");
+      toast.danger("Las contraseñas no coinciden.");
       return;
     }
 
@@ -34,7 +32,7 @@ export function SignupForm({ next }: { next: string }) {
       // Supabase répond volontairement de façon générique pour ne jamais confirmer l'existence
       // d'un compte (docs/specs/07-connexion-inscription-complete.md §3) ; seules les erreurs de
       // validation réelles (mot de passe trop faible, email invalide, rate-limit) remontent ici.
-      setError("No se pudo crear la cuenta. Verifica los datos e inténtalo de nuevo.");
+      toast.danger("No se pudo crear la cuenta. Verifica los datos e inténtalo de nuevo.");
       return;
     }
 
@@ -51,15 +49,9 @@ export function SignupForm({ next }: { next: string }) {
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-4">
-      <GoogleButton next={next} />
+      <OAuthSection next={next} />
 
-      <div className="flex items-center gap-3 text-xs text-muted" role="separator">
-        <div className="h-px flex-1 bg-border" />
-        o
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <TextField name="email" value={email} onChange={setEmail} isRequired>
           <Label>Correo electrónico</Label>
           <Input type="email" autoComplete="email" />
@@ -77,11 +69,6 @@ export function SignupForm({ next }: { next: string }) {
           <Label>Confirmar contraseña</Label>
           <Input type="password" autoComplete="new-password" minLength={6} />
         </TextField>
-        {error ? (
-          <p role="alert" data-testid="signup-error" className="text-sm text-danger">
-            {error}
-          </p>
-        ) : null}
         <Button type="submit" isDisabled={isSubmitting} data-testid="signup-submit-button">
           {isSubmitting ? "Creando…" : "Crear cuenta"}
         </Button>

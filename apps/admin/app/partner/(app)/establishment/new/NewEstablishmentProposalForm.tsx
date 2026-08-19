@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Input, Label, TextArea, TextField, cn } from "@hifago/ui";
+import { Button, Input, Label, TextArea, TextField, cn, toast } from "@hifago/ui";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
 
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
@@ -30,7 +30,6 @@ export function NewEstablishmentProposalForm() {
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
 
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const addressSearchRef = useRef<HTMLDivElement | null>(null);
@@ -59,10 +58,9 @@ export function NewEstablishmentProposalForm() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
 
     if (!nombre.trim()) {
-      setError("El nombre es obligatorio.");
+      toast.danger("El nombre es obligatorio.");
       return;
     }
 
@@ -85,18 +83,19 @@ export function NewEstablishmentProposalForm() {
 
     const result = data as { ok: boolean; reason?: string; proposal_id?: string } | null;
     if (rpcError || !result?.ok) {
-      setError(
+      toast.danger(
         SUBMIT_ERRORS[result?.reason ?? ""] ?? "No se pudo enviar la propuesta. Inténtalo de nuevo.",
       );
       return;
     }
 
+    toast.success("Propuesta enviada.");
     router.push("/partner/establishment");
     router.refresh();
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-4">
+    <form onSubmit={handleSubmit} noValidate className="flex max-w-2xl flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="proposal-nombre">Nombre</Label>
         <Input
@@ -174,12 +173,6 @@ export function NewEstablishmentProposalForm() {
           />
         </div>
       </div>
-
-      {error ? (
-        <p role="alert" data-testid="proposal-error" className="text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
 
       <Button type="submit" isDisabled={isSubmitting} data-testid="submit-establishment-proposal-button">
         {isSubmitting ? "Enviando…" : "Enviar propuesta"}

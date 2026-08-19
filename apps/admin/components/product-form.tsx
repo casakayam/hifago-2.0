@@ -1,48 +1,32 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { slugify } from "@/lib/utils";
 import { asLocalizedField } from "@hifago/domain";
-import { Button, Input, Label, ListBox, Select, TextField } from "@hifago/ui";
-import { TagsMultiSelect, type TagOption } from "@/components/tags-multiselect";
+import type { Json } from "@hifago/supabase/database.types";
+import { Button, Label, ListBox, Select, toast } from "@hifago/ui";
+import { type TagOption } from "@/components/tags-multiselect";
 import {
   LocalizedTextField,
   buildLocalizedPayload,
   type LocalizedValue,
 } from "@/components/localized-text-field";
-import { SlotRulesEditor } from "@/components/slot-rules-editor";
-import { StayRatesEditor } from "@/components/stay-rates-editor";
-import { HotelRoomsEditor } from "@/components/hotel-rooms-editor";
-import { PriceTiersEditor } from "@/components/price-tiers-editor";
+import { ProductTypeFields } from "@/components/product-type-fields";
 import { StagedProductPhotos, type StagedPhoto } from "@/components/product-photos-staged";
-import { mountAddressAutocomplete } from "@/components/address-autocomplete";
+import { lowestTierPrice, toPriceTiersColumn, validatePriceTiers } from "@/lib/products/priceTiers";
+import { validateSlotRules, toSlotRuleRows } from "@/lib/products/slotRules";
+import { toStayRatesColumn, validateStayRates } from "@/lib/products/stayRates";
+import { toRoomTypeRow, validateRoomTypes } from "@/lib/products/hotelRooms";
+import { buildProductCreationPayload } from "@/lib/products/productCreationPayload";
 import {
-  lowestTierPrice,
-  tiersFromColumn,
-  toPriceTiersColumn,
-  validatePriceTiers,
-  type PriceTier,
-} from "@/lib/products/priceTiers";
-import {
-  toSlotRuleRows,
-  validateSlotRules,
-  type DraftSlotRule,
-} from "@/lib/products/slotRules";
-import {
-  emptyStayRates,
-  stayRatesFromColumn,
-  toStayRatesColumn,
-  validateStayRates,
-} from "@/lib/products/stayRates";
-import { toRoomTypeRow, validateRoomTypes, type DraftRoomType } from "@/lib/products/hotelRooms";
+  productTypeGating,
+  useProductTypeFieldsState,
+  type ProductType,
+} from "@/lib/products/useProductTypeFieldsState";
 
 type Establishment = { id: string; name: unknown; partner_id: string };
-type ProductType = "activity" | "evento" | "camp" | "lodging" | "hotel" | "transport";
-type OccurrenceType = "once" | "recurring";
-type RecurrenceEndKind = "date" | "count" | "none";
-type PriceMode = "simple" | "tiers";
 
 export type EditableProduct = {
   id: string;
@@ -58,17 +42,27 @@ export type EditableProduct = {
   check_in_time: string | null;
   check_out_time: string | null;
   capacity: number | null;
+  default_capacity: number | null;
   stay_rates: unknown;
   type: string;
   establishment_id: string;
 };
 
-// "HH:MM:SS" (sérialisation Postgres d'une colonne time) → "HH:MM" (valeur attendue par
-// <Input type="time">) — même conversion que celle déjà faite côté page d'édition pour les
-// créneaux (spec 11).
-function toTimeInputValue(time: string | null): string {
-  return time ? time.slice(0, 5) : "";
-}
+// Spec 15 — variant "socio-proposal" : un socio ne peut jamais écrire products directement (RLS
+// admin-only, jamais étendue), donc handleSubmit appelle submit_product_creation_proposal au lieu
+// d'insérer, et attend une modération avant que la fiche existe réellement. Mêmes 3 codes
+// "not_found"/"suspended"/"invalid" que les autres RPC de proposition du projet.
+const SUBMIT_ERRORS: Record<string, string> = {
+  not_authenticated: "No se pudo verificar tu sesión. Vuelve a intentarlo.",
+  establishment_not_found: "No se encontró el establecimiento seleccionado.",
+  capability_suspended: "Tu capacidad de operador para este establecimiento no está activa.",
+  invalid_type: "Tipo de producto no válido.",
+  name_required: "El nombre es obligatorio.",
+  // pending_creation_exists retiré côté serveur (2026-08-18) : un socio peut désormais proposer
+  // plusieurs créations en attente sur le même establecimiento, cf. 20260818110000_
+  // product_creation_review_ux.sql — cette raison n'est plus jamais renvoyée par la RPC.
+  pending_cap_exceeded: "Tienes demasiadas propuestas pendientes de revisión.",
+};
 
 // Spec 11 — un seul composant pour la création ET l'édition d'un produit (fusionne
 // NewProductForm.tsx/EditProductForm.tsx, supprimés) : `product` absent = création, présent =
@@ -80,16 +74,31 @@ function toTimeInputValue(time: string | null): string {
 // soumission que l'insert, cf. handleSubmit) et délégués en édition à des blocs séparés à
 // sauvegarde immédiate rendus par la page (ProductPhotosBlock/ProductTagsBlock/
 // ProductSlotRulesBlock), jamais par ce composant.
+//
+// Spec 15 — variant "socio-proposal" (nouveau, création seulement — `product` toujours absent dans
+// ce variant) : mêmes champs, même gating par type (délégué à ProductTypeFields, extrait de ce
+// fichier pour être aussi consommé par ModerateProductCreationProposalForm côté admin — décision
+// Jérôme "extraire plutôt que dupliquer", cf. journal 2026-08-17). Photos du produit incluses dès
+// la proposition (StagedProductPhotos, révision Jérôme du même jour — cf. cahier des charges socio
+// §3e "jusqu'à 6 photos") : uploadées immédiatement vers Storage (même Route Handler qu'admin-
+// direct), seul storage_path traverse la proposition, rattachées à product_media par
+// create_product_from_proposal à l'approbation. Seules différences restantes avec le variant
+// admin : (1) HotelRoomsEditor sans son bloc photo par chambre (room_types.photos toujours hors
+// périmètre, cf. spec 15 §10) ; (2) écriture via RPC (proposition modérée) au lieu d'un insert
+// direct, TagsMultiSelect sans création de tag à la volée (catalog_tags reste en écriture
+// admin-only).
 export function ProductForm({
   establishments = [],
   initialEstablishmentId = "",
   allTags = [],
   product,
+  variant = "admin",
 }: {
   establishments?: Establishment[];
   initialEstablishmentId?: string;
   allTags?: TagOption[];
   product?: EditableProduct;
+  variant?: "admin" | "socio-proposal";
 }) {
   const router = useRouter();
   const isEditing = Boolean(product);
@@ -100,86 +109,40 @@ export function ProductForm({
   const [description, setDescription] = useState<LocalizedValue>(() => ({
     ...(asLocalizedField(product?.description) ?? {}),
   }));
-  const [address, setAddress] = useState(product?.address ?? "");
-  const [lat, setLat] = useState(product?.lat != null ? String(product.lat) : "");
-  const [lon, setLon] = useState(product?.lon != null ? String(product.lon) : "");
-  const [priceCop, setPriceCop] = useState(product ? String(product.price_cop ?? 0) : "");
 
-  // Feature 21 (evento vitrine) / Feature 20 (camp) : création-only, jamais éditables aujourd'hui —
-  // gap préexistant, non traité par cette spec.
-  const [priceLabel, setPriceLabel] = useState("");
-  const [occurrenceType, setOccurrenceType] = useState<OccurrenceType>("once");
-  const [occurrenceDate, setOccurrenceDate] = useState("");
-  const [recurrenceFrequencyDays, setRecurrenceFrequencyDays] = useState("");
-  const [recurrenceEndKind, setRecurrenceEndKind] = useState<RecurrenceEndKind>("none");
-  const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
-  const [recurrenceEndCount, setRecurrenceEndCount] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [durationMinutes, setDurationMinutes] = useState("");
-  const [externalBookingUrl, setExternalBookingUrl] = useState("");
-  const [durationDays, setDurationDays] = useState("");
-
-  const hasInitialTiers = Array.isArray(product?.price_tiers) && (product?.price_tiers as unknown[]).length > 0;
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [priceMode, setPriceMode] = useState<PriceMode>(hasInitialTiers ? "tiers" : "simple");
-  const [priceTiers, setPriceTiers] = useState<PriceTier[]>(() => tiersFromColumn(product?.price_tiers));
-  const [minQty, setMinQty] = useState(product?.min_qty != null ? String(product.min_qty) : "");
-  const [maxQty, setMaxQty] = useState(product?.max_qty != null ? String(product.max_qty) : "");
-  const [slotRules, setSlotRules] = useState<DraftSlotRule[]>([]);
-  const [checkInTime, setCheckInTime] = useState(toTimeInputValue(product?.check_in_time ?? null));
-  const [checkOutTime, setCheckOutTime] = useState(toTimeInputValue(product?.check_out_time ?? null));
-  const [capacity, setCapacity] = useState(product?.capacity != null ? String(product.capacity) : "");
-  const [stayRates, setStayRates] = useState(() =>
-    product ? stayRatesFromColumn(product.stay_rates) : emptyStayRates(),
+  const fields = useProductTypeFieldsState(
+    product
+      ? {
+          address: product.address,
+          lat: product.lat,
+          lon: product.lon,
+          priceCop: product.price_cop,
+          priceTiers: product.price_tiers,
+          minQty: product.min_qty,
+          maxQty: product.max_qty,
+          checkInTime: product.check_in_time,
+          checkOutTime: product.check_out_time,
+          capacity: product.capacity,
+          defaultCapacity: product.default_capacity,
+          stayRates: product.stay_rates,
+        }
+      : undefined,
   );
-  const [hotelRooms, setHotelRooms] = useState<DraftRoomType[]>([]);
   const [stagedPhotos, setStagedPhotos] = useState<StagedPhoto[]>([]);
 
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const addressSearchRef = useRef<HTMLDivElement | null>(null);
-
-  const isEvento = type === "evento";
-  const isCamp = type === "camp";
-  const isActivity = type === "activity";
-  const isLodging = type === "lodging";
-  const isHotel = type === "hotel";
-  const isTransport = type === "transport";
-  // Lieu/tags : parcours partagé entre activité, alojamiento, hôtel et transport (spec 12/13/14 —
-  // "sensiblement la même chose que les activités"). Prix/tramos/bornes de quantité restent réservés
-  // à l'activité/alojamiento/transport : un hôtel n'a pas de prix propre, il vit sur ses chambres
-  // (spec 13 §3) ; un transport a bien un prix propre, par tramos de capacité de véhicule plutôt que
-  // par produit séparé comme en V1 (spec 14). Check-in/check-out partagés entre alojamiento et hôtel ;
-  // capacité/stay_rates restent réservés à l'alojamiento (la capacité d'un hôtel vit désormais par
-  // chambre, product_room_types.capacity ; un transport n'a pas de cupo interne, le transporteur
-  // dispatche son propre parc — même absence que pour une activité).
-  const hasLocationAndTags = isActivity || isLodging || isHotel || isTransport;
-  const hasPriceQtyFields = isActivity || isLodging || isTransport;
-  const hasCheckInOut = isLodging || isHotel;
-
-  // Même widget que la création d'établissement (docs/specs/01-admin-creation-partenaire.md §5) —
-  // repli manuel toujours possible, no-op silencieux si la clé Google Maps est absente.
-  useEffect(() => {
-    if (!hasLocationAndTags) return;
-    const container = addressSearchRef.current;
-    if (!container) return;
-    return mountAddressAutocomplete(container, (place) => {
-      setAddress(place.address);
-      if (place.lat !== null && place.lon !== null) {
-        setLat(String(place.lat));
-        setLon(String(place.lon));
-      }
-    });
-  }, [hasLocationAndTags]);
+  const {
+    isEvento, isCamp, isActivity, isLodging, isHotel, isTransport,
+    hasLocationAndTags, hasPriceQtyFields, hasCheckInOut, hasDefaultCapacity,
+  } = productTypeGating(type);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
 
     const nombreEs = name.es?.trim() ?? "";
-    const price = Number(priceCop);
-    const usesTiers = hasPriceQtyFields && priceMode === "tiers";
+    const price = Number(fields.priceCop);
+    const usesTiers = hasPriceQtyFields && fields.priceMode === "tiers";
     // Un hôtel n'a pas de prix propre (il vit sur ses chambres, product_room_types) — exempté du
     // prix obligatoire comme l'evento, cf. products_price_cop_required_unless_evento (spec 13).
     const needsOwnPrice = !isEvento && !isHotel;
@@ -188,70 +151,74 @@ export function ProductForm({
       // partner_id n'est jamais saisi indépendamment — dérivé de l'établissement choisi.
       const establishment = establishments.find((item) => item.id === establishmentId);
       if (!establishment || !nombreEs) {
-        setError("El nombre (es) y el establecimiento son obligatorios.");
+        toast.danger("El nombre (es) y el establecimiento son obligatorios.");
         return;
       }
       if (needsOwnPrice && !usesTiers && (!Number.isFinite(price) || price <= 0)) {
-        setError("El precio es obligatorio para este tipo de producto.");
+        toast.danger("El precio es obligatorio para este tipo de producto.");
         return;
       }
-      if (isEvento && !priceLabel.trim()) {
-        setError("El precio en texto libre es obligatorio para un evento.");
+      if (isEvento && !fields.priceLabel.trim()) {
+        toast.danger("El precio en texto libre es obligatorio para un evento.");
         return;
       }
-      if (isEvento && occurrenceType === "once" && !occurrenceDate) {
-        setError("La fecha es obligatoria para un evento puntual.");
+      if (isEvento && !fields.occurrenceDate) {
+        toast.danger(
+          fields.occurrenceType === "once"
+            ? "La fecha es obligatoria para un evento puntual."
+            : "La fecha de la primera ocurrencia es obligatoria para un evento recurrente.",
+        );
         return;
       }
-      if (isEvento && occurrenceType === "recurring" && !recurrenceFrequencyDays) {
-        setError("La frecuencia es obligatoria para un evento recurrente.");
+      if (isEvento && fields.occurrenceType === "recurring" && !fields.recurrenceFrequencyDays) {
+        toast.danger("La frecuencia es obligatoria para un evento recurrente.");
         return;
       }
-      if (isCamp && (!durationDays || Number(durationDays) < 1)) {
-        setError("La duración (días) es obligatoria para un campamento.");
+      if (isCamp && (!fields.durationDays || Number(fields.durationDays) < 1)) {
+        toast.danger("La duración (días) es obligatoria para un campamento.");
         return;
       }
       if (isActivity) {
-        const slotRulesError = validateSlotRules(slotRules);
+        const slotRulesError = validateSlotRules(fields.slotRules);
         if (slotRulesError) {
-          setError(slotRulesError);
+          toast.danger(slotRulesError);
           return;
         }
       }
       if (isHotel) {
-        const roomsError = validateRoomTypes(hotelRooms);
+        const roomsError = validateRoomTypes(fields.hotelRooms);
         if (roomsError) {
-          setError(roomsError);
+          toast.danger(roomsError);
           return;
         }
       }
     } else if (!nombreEs) {
-      setError("El nombre (es) es obligatorio.");
+      toast.danger("El nombre (es) es obligatorio.");
       return;
     } else if (needsOwnPrice && !usesTiers && (!Number.isFinite(price) || price <= 0)) {
-      setError("El precio es obligatorio para este tipo de producto.");
+      toast.danger("El precio es obligatorio para este tipo de producto.");
       return;
     }
 
     if (usesTiers) {
-      const tiersError = validatePriceTiers(priceTiers);
+      const tiersError = validatePriceTiers(fields.priceTiers);
       if (tiersError) {
-        setError(tiersError);
+        toast.danger(tiersError);
         return;
       }
     }
-    if (hasPriceQtyFields && minQty.trim() && maxQty.trim() && Number(minQty) > Number(maxQty)) {
-      setError("La cantidad mínima no puede ser mayor a la máxima.");
+    if (hasPriceQtyFields && fields.minQty.trim() && fields.maxQty.trim() && Number(fields.minQty) > Number(fields.maxQty)) {
+      toast.danger("La cantidad mínima no puede ser mayor a la máxima.");
       return;
     }
     if (isLodging) {
-      if (capacity.trim() && (!Number.isInteger(Number(capacity)) || Number(capacity) <= 0)) {
-        setError("La capacidad (número de couchage) debe ser un número entero mayor a 0.");
+      if (fields.capacity.trim() && (!Number.isInteger(Number(fields.capacity)) || Number(fields.capacity) <= 0)) {
+        toast.danger("La capacidad (número de couchage) debe ser un número entero mayor a 0.");
         return;
       }
-      const stayRatesError = validateStayRates(stayRates);
+      const stayRatesError = validateStayRates(fields.stayRates);
       if (stayRatesError) {
-        setError(stayRatesError);
+        toast.danger(stayRatesError);
         return;
       }
     }
@@ -269,43 +236,71 @@ export function ProductForm({
           description: descriptionJson,
           ...(hasLocationAndTags
             ? {
-                address: address.trim() || null,
-                lat: lat.trim() ? Number(lat) : null,
-                lon: lon.trim() ? Number(lon) : null,
+                address: fields.address.trim() || null,
+                lat: fields.lat.trim() ? Number(fields.lat) : null,
+                lon: fields.lon.trim() ? Number(fields.lon) : null,
               }
             : {}),
-          price_cop: isHotel ? null : usesTiers ? lowestTierPrice(priceTiers) : price,
-          price_tiers: usesTiers ? toPriceTiersColumn(priceTiers) : null,
+          price_cop: isHotel ? null : usesTiers ? lowestTierPrice(fields.priceTiers) : price,
+          price_tiers: usesTiers ? toPriceTiersColumn(fields.priceTiers) : null,
           ...(hasPriceQtyFields
             ? {
-                min_qty: minQty.trim() ? Number(minQty) : null,
-                max_qty: maxQty.trim() ? Number(maxQty) : null,
+                min_qty: fields.minQty.trim() ? Number(fields.minQty) : null,
+                max_qty: fields.maxQty.trim() ? Number(fields.maxQty) : null,
               }
             : {}),
           ...(hasCheckInOut
-            ? { check_in_time: checkInTime || null, check_out_time: checkOutTime || null }
+            ? { check_in_time: fields.checkInTime || null, check_out_time: fields.checkOutTime || null }
             : {}),
           ...(isLodging
             ? {
-                capacity: capacity.trim() ? Number(capacity) : null,
-                stay_rates: toStayRatesColumn(stayRates),
+                capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
+                stay_rates: toStayRatesColumn(fields.stayRates),
               }
+            : {}),
+          ...(hasDefaultCapacity
+            ? { default_capacity: fields.defaultCapacity.trim() ? Number(fields.defaultCapacity) : null }
             : {}),
         })
         .eq("id", product.id);
 
       if (updateError) {
-        setError("No se pudo guardar la actividad.");
+        toast.danger("No se pudo guardar la actividad.");
         setIsSubmitting(false);
         return;
       }
 
+      toast.success("Cambios guardados.");
       router.push(`/admin/establishments/${product.establishment_id}`);
       router.refresh();
       return;
     }
 
     const establishment = establishments.find((item) => item.id === establishmentId)!;
+
+    if (variant === "socio-proposal") {
+      const payload = buildProductCreationPayload(type, name, description, fields, stagedPhotos);
+      const { data, error: rpcError } = await supabase.rpc("submit_product_creation_proposal", {
+        p_establishment_id: establishment.id,
+        p_type: type,
+        p_payload: payload as Json,
+      });
+
+      setIsSubmitting(false);
+
+      const result = data as { ok: boolean; reason?: string; proposal_id?: string } | null;
+      if (rpcError || !result?.ok) {
+        toast.danger(
+          SUBMIT_ERRORS[result?.reason ?? ""] ?? "No se pudo enviar la propuesta. Inténtalo de nuevo.",
+        );
+        return;
+      }
+
+      toast.success("Propuesta enviada.");
+      router.push("/partner/products");
+      router.refresh();
+      return;
+    }
 
     const { data: newProduct, error: insertError } = await supabase
       .from("products")
@@ -320,54 +315,60 @@ export function ProductForm({
         // un produit ne le rend pas vendable immédiatement (feature 4, bloc séparé).
         sellable: false,
         price_cop: isEvento || isHotel ? null : price,
-        duration_days: isCamp ? Number(durationDays) : null,
+        duration_days: isCamp ? Number(fields.durationDays) : null,
         ...(isEvento
           ? {
-              price_label: priceLabel.trim(),
-              occurrence_type: occurrenceType,
-              occurrence_date: occurrenceType === "once" ? occurrenceDate : null,
+              price_label: fields.priceLabel.trim(),
+              occurrence_type: fields.occurrenceType,
+              // Ancre nécessaire pour les deux modes désormais (cf. product-type-fields.tsx) — plus
+              // seulement "once" : sans elle, un evento récurrent ne peut jamais dire sur quel jour
+              // de semaine il tombe.
+              occurrence_date: fields.occurrenceDate,
               recurrence_frequency_days:
-                occurrenceType === "recurring" ? Number(recurrenceFrequencyDays) : null,
+                fields.occurrenceType === "recurring" ? Number(fields.recurrenceFrequencyDays) : null,
               recurrence_end_date:
-                occurrenceType === "recurring" && recurrenceEndKind === "date"
-                  ? recurrenceEndDate
+                fields.occurrenceType === "recurring" && fields.recurrenceEndKind === "date"
+                  ? fields.recurrenceEndDate
                   : null,
               recurrence_end_count:
-                occurrenceType === "recurring" && recurrenceEndKind === "count"
-                  ? Number(recurrenceEndCount)
+                fields.occurrenceType === "recurring" && fields.recurrenceEndKind === "count"
+                  ? Number(fields.recurrenceEndCount)
                   : null,
-              start_time: startTime || null,
-              duration_minutes: durationMinutes ? Number(durationMinutes) : null,
-              external_booking_url: externalBookingUrl.trim() || null,
+              start_time: fields.startTime || null,
+              duration_minutes: fields.durationMinutes ? Number(fields.durationMinutes) : null,
+              external_booking_url: fields.externalBookingUrl.trim() || null,
             }
           : {}),
         ...(hasLocationAndTags
           ? {
-              address: address.trim() || null,
-              lat: lat.trim() ? Number(lat) : null,
-              lon: lon.trim() ? Number(lon) : null,
+              address: fields.address.trim() || null,
+              lat: fields.lat.trim() ? Number(fields.lat) : null,
+              lon: fields.lon.trim() ? Number(fields.lon) : null,
             }
           : {}),
-        ...(hasPriceQtyFields && priceMode === "tiers"
-          ? { price_cop: lowestTierPrice(priceTiers), price_tiers: toPriceTiersColumn(priceTiers) }
+        ...(hasPriceQtyFields && fields.priceMode === "tiers"
+          ? { price_cop: lowestTierPrice(fields.priceTiers), price_tiers: toPriceTiersColumn(fields.priceTiers) }
           : {}),
-        ...(hasPriceQtyFields && minQty.trim() ? { min_qty: Number(minQty) } : {}),
-        ...(hasPriceQtyFields && maxQty.trim() ? { max_qty: Number(maxQty) } : {}),
+        ...(hasPriceQtyFields && fields.minQty.trim() ? { min_qty: Number(fields.minQty) } : {}),
+        ...(hasPriceQtyFields && fields.maxQty.trim() ? { max_qty: Number(fields.maxQty) } : {}),
         ...(hasCheckInOut
-          ? { check_in_time: checkInTime || null, check_out_time: checkOutTime || null }
+          ? { check_in_time: fields.checkInTime || null, check_out_time: fields.checkOutTime || null }
           : {}),
         ...(isLodging
           ? {
-              capacity: capacity.trim() ? Number(capacity) : null,
-              stay_rates: toStayRatesColumn(stayRates),
+              capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
+              stay_rates: toStayRatesColumn(fields.stayRates),
             }
+          : {}),
+        ...(hasDefaultCapacity
+          ? { default_capacity: fields.defaultCapacity.trim() ? Number(fields.defaultCapacity) : null }
           : {}),
       })
       .select("id")
       .single();
 
     if (insertError || !newProduct) {
-      setError(
+      toast.danger(
         isEvento
           ? "No se pudo crear el evento."
           : isLodging
@@ -388,12 +389,12 @@ export function ProductForm({
     // parallèle plutôt qu'en séquence, le temps total tombe au max des 4 au lieu de leur somme.
     await Promise.all([
       (async () => {
-        if (selectedTagIds.length === 0) return;
+        if (fields.selectedTagIds.length === 0) return;
         const { error: tagsError } = await supabase
           .from("product_tag_assignments")
-          .insert(selectedTagIds.map((tagId) => ({ product_id: newProduct.id, tag_id: tagId })));
+          .insert(fields.selectedTagIds.map((tagId) => ({ product_id: newProduct.id, tag_id: tagId })));
         if (tagsError) {
-          console.warn("[ProductForm] product_tag_assignments a échoué :", tagsError);
+          toast.danger("El producto se creó, pero los tags no se pudieron asociar.");
         }
       })(),
       (async () => {
@@ -405,16 +406,16 @@ export function ProductForm({
             p_sort: index,
           });
           if (mediaError) {
-            console.warn("[ProductForm] add_catalog_media a échoué :", mediaError);
+            toast.danger("El producto se creó, pero una foto no se pudo asociar.");
           }
         }
       })(),
       (async () => {
-        if (!isActivity || slotRules.length === 0) return;
-        const rows = toSlotRuleRows(slotRules).map((row) => ({ product_id: newProduct.id, ...row }));
+        if (!isActivity || fields.slotRules.length === 0) return;
+        const rows = toSlotRuleRows(fields.slotRules).map((row) => ({ product_id: newProduct.id, ...row }));
         const { error: slotRulesError } = await supabase.from("product_slot_rules").insert(rows);
         if (slotRulesError) {
-          console.warn("[ProductForm] product_slot_rules a échoué :", slotRulesError);
+          toast.danger("El producto se creó, pero los horarios no se pudieron guardar.");
         }
       })(),
       (async () => {
@@ -422,7 +423,7 @@ export function ProductForm({
         // Une chambre à la fois (pas un insert en bloc) : son id est nécessaire pour y attacher
         // ses photos stagées juste après, exactement comme le rattachement photos/tags du produit
         // ci-dessus — non-bloquant, un échec sur une chambre n'annule pas les autres.
-        for (const [index, room] of hotelRooms.entries()) {
+        for (const [index, room] of fields.hotelRooms.entries()) {
           const row = toRoomTypeRow(room, index);
           const { data: newRoom, error: roomError } = await supabase
             .from("product_room_types")
@@ -430,7 +431,7 @@ export function ProductForm({
             .select("id")
             .single();
           if (roomError || !newRoom) {
-            console.warn("[ProductForm] product_room_types a échoué :", roomError);
+            toast.danger("El producto se creó, pero una habitación no se pudo guardar.");
             continue;
           }
           for (const photo of room.photos) {
@@ -440,19 +441,30 @@ export function ProductForm({
               p_storage_path: photo.path,
             });
             if (mediaError) {
-              console.warn("[ProductForm] add_catalog_media (room_type) a échoué :", mediaError);
+              toast.danger("El producto se creó, pero una foto de habitación no se pudo asociar.");
             }
           }
         }
       })(),
     ]);
 
+    toast.success(
+      isEvento
+        ? "Evento creado."
+        : isLodging
+          ? "Alojamiento creado."
+          : isHotel
+            ? "Hotel creado."
+            : isTransport
+              ? "Transporte creado."
+              : "Actividad creada.",
+    );
     router.push("/admin/establishments");
     router.refresh();
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex max-w-md flex-col gap-4">
+    <form onSubmit={handleSubmit} noValidate className="flex max-w-md flex-col gap-4">
       <LocalizedTextField
         label="Nombre"
         value={name}
@@ -537,34 +549,20 @@ export function ProductForm({
         fieldTestId="description-textarea"
       />
 
-      {hasLocationAndTags ? (
-        <>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="address-search">Buscar dirección (Google) — opcional</Label>
-            <div id="address-search" ref={addressSearchRef} data-testid="address-search" />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="address">Dirección</Label>
-            <Input
-              id="address"
-              value={address}
-              onChange={(event) => setAddress(event.target.value)}
-              placeholder="Se completa al elegir una sugerencia arriba, o escribe aquí directamente"
-              data-testid="address-input"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lat">Latitud — detectada o manual</Label>
-              <Input id="lat" value={lat} onChange={(event) => setLat(event.target.value)} data-testid="lat-input" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="lon">Longitud — detectada o manual</Label>
-              <Input id="lon" value={lon} onChange={(event) => setLon(event.target.value)} data-testid="lon-input" />
-            </div>
-          </div>
-        </>
-      ) : null}
+      <ProductTypeFields
+        type={type}
+        state={fields}
+        showTags={!isEditing}
+        showHotelRoomsEditor={!isEditing}
+        showSlotRulesEditor={!isEditing}
+        allowCreateTags={variant === "admin"}
+        // Retour Jérôme (2026-08-18) : les chambres/dortoires doivent pouvoir avoir des photos
+        // aussi côté socio — les masquer ici était la seule raison pour laquelle elles ne
+        // pouvaient jamais en avoir (buildProductCreationPayload transporte désormais ces photos,
+        // moderate_product_proposal/create_product_from_proposal les persistent à l'approbation).
+        hidePhotosInHotelRooms={false}
+        availableTags={allTags}
+      />
 
       {!isEditing ? (
         <div className="flex flex-col gap-1.5">
@@ -573,280 +571,36 @@ export function ProductForm({
         </div>
       ) : null}
 
-      {!isEditing && hasLocationAndTags ? (
-        <TagsMultiSelect
-          availableTags={allTags}
-          selectedTagIds={selectedTagIds}
-          onChange={setSelectedTagIds}
-          testId="tags-multiselect"
-        />
-      ) : null}
-
-      {!isEvento && !hasLocationAndTags ? (
-        <TextField fullWidth name="price" value={priceCop} onChange={setPriceCop} isRequired>
-          <Label>Precio (COP)</Label>
-          <Input id="price" type="number" min={1} />
-        </TextField>
-      ) : null}
-
-      {hasPriceQtyFields ? (
-        <div className="flex flex-col gap-2">
-          <PriceTiersEditor
-            priceMode={priceMode}
-            onPriceModeChange={setPriceMode}
-            priceCop={priceCop}
-            onPriceCopChange={setPriceCop}
-            priceTiers={priceTiers}
-            onPriceTiersChange={setPriceTiers}
-            testId={(part, tierIndex) => {
-              switch (part) {
-                case "toggle":
-                  return "price-mode-toggle";
-                case "simple-input":
-                  return "price-input";
-                case "tiers-editor":
-                  return "price-tiers-editor";
-                case "add-tier":
-                  return "add-price-tier-button";
-                case "tier-min":
-                  return `price-tier-min-${tierIndex}`;
-                case "tier-max":
-                  return `price-tier-max-${tierIndex}`;
-                case "tier-price":
-                  return `price-tier-price-${tierIndex}`;
-                case "remove-tier":
-                  return `remove-price-tier-${tierIndex}`;
-              }
-            }}
-          />
-          <div className="grid grid-cols-2 gap-4">
-            <TextField value={minQty} onChange={setMinQty}>
-              <Label>{isLodging ? "Huéspedes mínimos — opcional" : "Cantidad mínima — opcional"}</Label>
-              <Input type="number" min={1} data-testid="min-qty-input" />
-            </TextField>
-            <TextField value={maxQty} onChange={setMaxQty}>
-              <Label>{isLodging ? "Huéspedes máximos — opcional" : "Cantidad máxima — opcional"}</Label>
-              <Input type="number" min={1} data-testid="max-qty-input" />
-            </TextField>
-          </div>
-        </div>
-      ) : null}
-
-      {hasCheckInOut ? (
-        <div className={isLodging ? "grid grid-cols-3 gap-4" : "grid grid-cols-2 gap-4"}>
-          <TextField fullWidth name="check-in" value={checkInTime} onChange={setCheckInTime}>
-            <Label>Check-in — opcional</Label>
-            <Input type="time" data-testid="check-in-input" />
-          </TextField>
-          <TextField fullWidth name="check-out" value={checkOutTime} onChange={setCheckOutTime}>
-            <Label>Check-out — opcional</Label>
-            <Input type="time" data-testid="check-out-input" />
-          </TextField>
-          {isLodging ? (
-            <TextField fullWidth name="capacity" value={capacity} onChange={setCapacity}>
-              <Label>Capacidad (couchage) — opcional</Label>
-              <Input type="number" min={1} data-testid="capacity-input" />
-            </TextField>
-          ) : null}
-        </div>
-      ) : null}
-
-      {isLodging ? <StayRatesEditor value={stayRates} onChange={setStayRates} /> : null}
-
-      {!isEditing && isHotel ? (
-        <div className="flex flex-col gap-1.5">
-          <Label>Habitaciones — opcional</Label>
-          <HotelRoomsEditor rooms={hotelRooms} onChange={setHotelRooms} />
-        </div>
-      ) : null}
-
-      {isCamp ? (
-        <TextField
-          fullWidth
-          name="duration-days"
-          value={durationDays}
-          onChange={setDurationDays}
-          isRequired
-        >
-          <Label>Duración (días)</Label>
-          <Input type="number" min={1} data-testid="duration-days-input" />
-        </TextField>
-      ) : null}
-
-      {isEvento ? (
-        <>
-          <TextField
-            fullWidth
-            name="price-label"
-            value={priceLabel}
-            onChange={setPriceLabel}
-            isRequired
-          >
-            <Label>Precio (texto libre)</Label>
-            <Input
-              placeholder="Ej. Desde $50.000 COP, entrada gratuita…"
-              data-testid="price-label-input"
-            />
-          </TextField>
-
-          <Select
-            fullWidth
-            value={occurrenceType}
-            onChange={(value) => value && setOccurrenceType(value as OccurrenceType)}
-          >
-            <Label>Ocurrencia</Label>
-            <Select.Trigger data-testid="occurrence-type-select">
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="once" textValue="Puntual">
-                  Puntual
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-                <ListBox.Item id="recurring" textValue="Recurrente">
-                  Recurrente
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
-
-          {occurrenceType === "once" ? (
-            <TextField
-              fullWidth
-              name="occurrence-date"
-              value={occurrenceDate}
-              onChange={setOccurrenceDate}
-              isRequired
-            >
-              <Label>Fecha</Label>
-              <Input type="date" data-testid="occurrence-date-input" />
-            </TextField>
-          ) : (
-            <>
-              <TextField
-                fullWidth
-                name="recurrence-frequency"
-                value={recurrenceFrequencyDays}
-                onChange={setRecurrenceFrequencyDays}
-                isRequired
-              >
-                <Label>Frecuencia (días)</Label>
-                <Input type="number" min={1} data-testid="recurrence-frequency-input" />
-              </TextField>
-              <Select
-                fullWidth
-                value={recurrenceEndKind}
-                onChange={(value) => value && setRecurrenceEndKind(value as RecurrenceEndKind)}
-              >
-                <Label>Fin de la recurrencia</Label>
-                <Select.Trigger data-testid="recurrence-end-select">
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="none" textValue="Indefinida">
-                      Indefinida
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                    <ListBox.Item id="date" textValue="Hasta una fecha">
-                      Hasta una fecha
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                    <ListBox.Item id="count" textValue="Número de repeticiones">
-                      Número de repeticiones
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-              {recurrenceEndKind === "date" ? (
-                <TextField
-                  fullWidth
-                  name="recurrence-end-date"
-                  value={recurrenceEndDate}
-                  onChange={setRecurrenceEndDate}
-                  isRequired
-                >
-                  <Label>Fecha de fin</Label>
-                  <Input type="date" data-testid="recurrence-end-date-input" />
-                </TextField>
-              ) : null}
-              {recurrenceEndKind === "count" ? (
-                <TextField
-                  fullWidth
-                  name="recurrence-end-count"
-                  value={recurrenceEndCount}
-                  onChange={setRecurrenceEndCount}
-                  isRequired
-                >
-                  <Label>Número de repeticiones</Label>
-                  <Input type="number" min={1} data-testid="recurrence-end-count-input" />
-                </TextField>
-              ) : null}
-            </>
-          )}
-
-          <TextField fullWidth name="start-time" value={startTime} onChange={setStartTime}>
-            <Label>Hora de inicio — opcional</Label>
-            <Input type="time" />
-          </TextField>
-          <TextField
-            fullWidth
-            name="duration"
-            value={durationMinutes}
-            onChange={setDurationMinutes}
-          >
-            <Label>Duración (minutos) — opcional</Label>
-            <Input type="number" min={1} />
-          </TextField>
-          <TextField
-            fullWidth
-            name="external-booking-url"
-            value={externalBookingUrl}
-            onChange={setExternalBookingUrl}
-          >
-            <Label>Enlace de reserva externo</Label>
-            <Input type="url" placeholder="https://…" data-testid="external-booking-url-input" />
-          </TextField>
-        </>
-      ) : null}
-
-      {!isEditing && isActivity ? (
-        <div className="flex flex-col gap-1.5">
-          <Label>Horarios — opcional</Label>
-          <SlotRulesEditor rules={slotRules} onChange={setSlotRules} />
-        </div>
-      ) : null}
-
-      {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
       <Button
         type="submit"
         isDisabled={isSubmitting}
-        data-testid={isEditing ? "save-product-button" : "create-product-button"}
+        data-testid={
+          isEditing
+            ? "save-product-button"
+            : variant === "socio-proposal"
+              ? "submit-product-proposal-button"
+              : "create-product-button"
+        }
       >
         {isEditing
           ? isSubmitting
             ? "Guardando…"
             : "Guardar cambios"
-          : isSubmitting
-            ? "Creando…"
-            : isEvento
-              ? "Crear evento"
-              : isLodging
-                ? "Crear alojamiento"
-                : isHotel
-                  ? "Crear hotel"
-                  : isTransport
-                    ? "Crear transporte"
-                    : "Crear actividad"}
+          : variant === "socio-proposal"
+            ? isSubmitting
+              ? "Enviando…"
+              : "Enviar propuesta"
+            : isSubmitting
+              ? "Creando…"
+              : isEvento
+                ? "Crear evento"
+                : isLodging
+                  ? "Crear alojamiento"
+                  : isHotel
+                    ? "Crear hotel"
+                    : isTransport
+                      ? "Crear transporte"
+                      : "Crear actividad"}
       </Button>
     </form>
   );

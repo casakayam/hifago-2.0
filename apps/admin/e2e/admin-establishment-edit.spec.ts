@@ -32,7 +32,12 @@ test("un admin édite un établissement existant (nom, descripción, dirección,
 
   await page.getByTestId("save-establishment-button").click();
 
-  await expect(page.getByTestId("establishment-edit-success")).toBeVisible();
+  // Le succès n'est plus un texte inline dans la page mais un toast (docs/specs/16-notifications-
+  // toast.md) — HeroUI rend chaque toast avec role="alertdialog", le message passé à
+  // toast.success(...) devient son titre visible.
+  await expect(
+    page.getByRole("alertdialog").filter({ hasText: "Establecimiento actualizado." }),
+  ).toBeVisible();
   await expect(page.getByRole("heading", { name: updatedName })).toBeVisible();
 
   // Reload : les valeurs persistées viennent bien de la base, pas seulement de l'état local du

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { Key } from "react";
-import { ComboBox, Input, Label, ListBox, Tag, TagGroup } from "@hifago/ui";
+import { ComboBox, Input, Label, ListBox, Tag, TagGroup, toast } from "@hifago/ui";
 import { createClient } from "@hifago/supabase/client";
 import { slugify } from "@/lib/utils";
 
@@ -24,6 +24,10 @@ export function TagsMultiSelect({
   label = "Etiquetas",
   testId = "tags-multiselect",
   emptyMessage = "Ningún tag disponible.",
+  // false pour le variant socio-proposal de ProductForm (spec 15) : catalog_tags reste en
+  // écriture admin-only (RLS), un socio qui déclencherait handleCreateTag échouerait
+  // silencieusement — retirer l'affordance "+ Crear…" plutôt que de montrer un geste qui échoue.
+  allowCreate = true,
 }: {
   availableTags: TagOption[];
   selectedTagIds: string[];
@@ -31,13 +35,13 @@ export function TagsMultiSelect({
   label?: string;
   testId?: string;
   emptyMessage?: string;
+  allowCreate?: boolean;
 }) {
   const [query, setQuery] = useState("");
   // Tags créés depuis ce composant pendant sa durée de vie — le parent (Server Component) n'a pas
   // besoin de refetch/rafraîchir pour que le tag nouvellement créé reste sélectionnable ensuite.
   const [localTags, setLocalTags] = useState<TagOption[]>([]);
   const [isCreating, setIsCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const allTags = useMemo(() => [...availableTags, ...localTags], [availableTags, localTags]);
 
@@ -63,14 +67,13 @@ export function TagsMultiSelect({
   const hasExactMatch = trimmedQuery
     ? allTags.some((t) => slugify(t.label) === slugify(trimmedQuery))
     : true;
-  const canCreate = trimmedQuery.length > 0 && !hasExactMatch;
+  const canCreate = allowCreate && trimmedQuery.length > 0 && !hasExactMatch;
 
   const listItems = canCreate
     ? [...filtered, { id: CREATE_TAG_KEY, label: `+ Crear "${trimmedQuery}"` }]
     : filtered;
 
   async function handleCreateTag() {
-    setError(null);
     setIsCreating(true);
 
     const supabase = createClient();
@@ -83,7 +86,7 @@ export function TagsMultiSelect({
     setIsCreating(false);
 
     if (insertError || !newTag) {
-      setError(
+      toast.danger(
         insertError?.code === "23505"
           ? "Ya existe una etiqueta con ese nombre."
           : "No se pudo crear la etiqueta.",
@@ -95,6 +98,7 @@ export function TagsMultiSelect({
     setLocalTags((prev) => [...prev, created]);
     onChange([...selectedTagIds, created.id]);
     setQuery("");
+    toast.success("Tag creado.");
   }
 
   function handleRemove(keys: Set<Key>) {
@@ -139,11 +143,6 @@ export function TagsMultiSelect({
         </ComboBox.Popover>
       </ComboBox>
       {isCreating ? <p className="text-xs text-muted">Creando…</p> : null}
-      {error ? (
-        <p role="alert" className="text-xs text-danger">
-          {error}
-        </p>
-      ) : null}
       {selectedTags.length > 0 ? (
         <TagGroup aria-label={label} onRemove={handleRemove} data-testid={`${testId}-selected`}>
           <TagGroup.List items={selectedTags}>

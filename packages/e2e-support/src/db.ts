@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import pg from "pg";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const { Client } = pg;
 
@@ -19,6 +21,25 @@ export async function withDb<T>(fn: (client: pg.Client) => Promise<T>): Promise<
   }
 }
 
+// Spec 19 §0 Tranche 1 : payments.order_id référence orders (FK payments_order_id_fkey). Une
+// commande devenue orpheline (plus aucune order_line) peut porter un paiement RÉEL même en e2e —
+// create_payment_intent n'est jamais mocké (seul l'appel SDK Mercado Pago externe l'est, cf.
+// mockMercadoPagoCheckout) — donc à purger AVANT le delete orders ci-dessous, sinon la contrainte
+// de clé étrangère bloque le nettoyage. Partagée entre resetAvailability (orderIds dérivés d'un
+// (productId, date)) et deleteOrdersByHolderName (orderIds dérivés d'un holder_name) — même
+// contrainte FK dans les deux cas, jamais une copie parallèle de cette logique.
+async function purgePaymentsThenOrders(client: pg.Client, orderIds: string[]) {
+  if (orderIds.length === 0) return;
+  await client.query(
+    "delete from payments where order_id = any($1) and order_id not in (select distinct order_id from order_lines)",
+    [orderIds]
+  );
+  await client.query(
+    "delete from orders where id = any($1) and id not in (select distinct order_id from order_lines)",
+    [orderIds]
+  );
+}
+
 /**
  * Remet une ressource (product_id, date) à un état de disponibilité connu et purge toute
  * commande existante qui la référence — extension réutilisable de resetLastSpot() (Checkpoint B,
@@ -37,20 +58,50 @@ export async function resetAvailability(
       "select distinct order_id from order_lines where product_id = $1 and date = $2",
       [productId, date]
     );
+    // Tables qui référencent order_lines(id) (ledger_entries depuis spec 19 Tranche 0,
+    // pms_reconciliation_entries/availability_blocks plus anciennes) — à purger AVANT le delete
+    // order_lines ci-dessous, sinon leurs FK respectives bloquent le nettoyage.
+    await client.query(
+      "delete from ledger_entries where order_line_id in (select id from order_lines where product_id = $1 and date = $2)",
+      [productId, date]
+    );
+    await client.query(
+      "delete from pms_reconciliation_entries where order_line_id in (select id from order_lines where product_id = $1 and date = $2)",
+      [productId, date]
+    );
+    await client.query(
+      "delete from availability_blocks where source_order_line_id in (select id from order_lines where product_id = $1 and date = $2)",
+      [productId, date]
+    );
     await client.query("delete from order_lines where product_id = $1 and date = $2", [
       productId,
       date,
     ]);
     const orderIds = rows.map((row) => row.order_id as string);
-    if (orderIds.length > 0) {
-      await client.query(
-        "delete from orders where id = any($1) and id not in (select distinct order_id from order_lines)",
-        [orderIds]
-      );
-    }
+    await purgePaymentsThenOrders(client, orderIds);
     await client.query(
       "update product_availability set capacity = $3, booked = $4 where product_id = $1 and date = $2",
       [productId, date, capacity, booked]
+    );
+  });
+}
+
+/**
+ * Purge les orders d'un titulaire donné (et les payments qui les référencent, cf.
+ * purgePaymentsThenOrders ci-dessus) — pour un fixture e2e qui construit ses propres commandes en
+ * dehors du scope (productId, date) couvert par resetAvailability (ex. reserve-hotel-room.spec.ts,
+ * reserve-lodging-range.spec.ts) et doit encore nettoyer la commande elle-même après avoir supprimé
+ * ses order_lines. Appeler APRÈS avoir supprimé les order_lines concernées, sinon ces orders ne
+ * sont pas encore orphelins et ne sont pas purgés.
+ */
+export async function deleteOrdersByHolderName(holderName: string) {
+  await withDb(async (client) => {
+    const { rows } = await client.query("select id from orders where holder_name = $1", [
+      holderName,
+    ]);
+    await purgePaymentsThenOrders(
+      client,
+      rows.map((row) => row.id as string)
     );
   });
 }
@@ -141,6 +192,107 @@ export async function getOrderLineStatuses(orderId: string) {
     ]);
     return rows.map((row) => row.status as string);
   });
+}
+
+/**
+ * Crée un établissement DÉDIÉ via create_establishment (RPC admin) puis active immédiatement sa
+ * capacité operator — même chemin que suivrait un admin en approuvant une proposition (§7 de la
+ * spec établissements), plutôt qu'un insert SQL brut. Centralise un bloc de fixture dupliqué dans
+ * plusieurs specs de proposition partenaire (établissement, photo, produit) qui ont chacune besoin
+ * d'un établissement dédié (jamais le fixture partagé, cf. commentaires de ces specs) avec une
+ * capacité operator déjà active pour operador.propuestas. Retourne l'id de l'établissement créé.
+ */
+export async function createActiveOperatorEstablishment(
+  adminClient: SupabaseClient,
+  partnerId: string,
+  name: string
+): Promise<string> {
+  const { data: establishmentId, error: createError } = await adminClient.rpc(
+    "create_establishment",
+    { p_partner_id: partnerId, p_name: { es: name } }
+  );
+  if (createError || !establishmentId) {
+    throw new Error(`e2e setup: create_establishment a échoué : ${createError?.message}`);
+  }
+  const { data: capability } = await adminClient
+    .from("partner_capabilities")
+    .select("id")
+    .eq("establishment_id", establishmentId)
+    .eq("role", "operator")
+    .single();
+  const { error: statusError } = await adminClient.rpc("set_capability_status", {
+    p_capability_id: capability!.id,
+    p_new_status: "active",
+  });
+  if (statusError) {
+    throw new Error(`e2e setup: set_capability_status a échoué : ${statusError.message}`);
+  }
+  return establishmentId as string;
+}
+
+/**
+ * Insère un produit 'hotel' + un product_room_types + une fenêtre de room_type_availability
+ * (generate_series) — fixture dupliquée quasi à l'identique (ne variant que kind/capacités/prix/
+ * fenêtre de dates) dans admin-room-availability-grid.spec.ts,
+ * admin-modify-room-range-order-line.spec.ts et reserve-hotel-room.spec.ts. `roomCapacity` est le
+ * nombre de personnes/lits par chambre (product_room_types.capacity, borne min_qty/max_qty) tandis
+ * qu'`availabilityCapacity` est le nombre d'unités réellement disponibles ce jour-là
+ * (room_type_availability.capacity) — les deux diffèrent selon les specs, jamais confondus. Retourne
+ * les ids générés (jamais des UUID littéraux figés dans le fichier de spec, pour qu'un run
+ * parallèle ne collisionne jamais).
+ */
+export async function createHotelRoomFixture(
+  client: pg.Client,
+  {
+    partnerId,
+    establishmentId,
+    slug,
+    productName,
+    roomName,
+    kind,
+    roomCapacity,
+    quantity,
+    priceCop,
+    minQty,
+    maxQty,
+    availabilityCapacity,
+    availabilityStartDate,
+    days,
+  }: {
+    partnerId: string;
+    establishmentId: string;
+    slug: string;
+    productName: string;
+    roomName: string;
+    kind: string;
+    roomCapacity: number;
+    quantity: number;
+    priceCop: number;
+    minQty: number;
+    maxQty: number;
+    availabilityCapacity: number;
+    availabilityStartDate: string;
+    days: number;
+  }
+): Promise<{ productId: string; roomId: string }> {
+  const productId = randomUUID();
+  const roomId = randomUUID();
+  await client.query(
+    `insert into products (id, partner_id, establishment_id, type, name, sellable, slug)
+     values ($1, $2, $3, 'hotel', $4, true, $5)`,
+    [productId, partnerId, establishmentId, JSON.stringify({ es: productName }), slug]
+  );
+  await client.query(
+    `insert into product_room_types (id, product_id, kind, name, capacity, quantity, price_cop, min_qty, max_qty)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [roomId, productId, kind, JSON.stringify({ es: roomName }), roomCapacity, quantity, priceCop, minQty, maxQty]
+  );
+  await client.query(
+    `insert into room_type_availability (room_type_id, date, capacity, booked)
+     select $1, $2::date + n, $3, 0 from generate_series(0, $4) as n`,
+    [roomId, availabilityStartDate, availabilityCapacity, days - 1]
+  );
+  return { productId, roomId };
 }
 
 export async function getOrderLinesForPhone(phone: string) {

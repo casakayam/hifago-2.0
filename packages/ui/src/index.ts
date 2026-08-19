@@ -13,3 +13,4 @@ export * from "./components/carousel";
 export * from "./components/media-gallery";
 export * from "./components/data-list";
 export * from "./components/server-filters";
+export * from "./components/sortable-paginated-table";

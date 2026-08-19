@@ -1,7 +1,30 @@
-import type { BrowserContext } from "@playwright/test";
+import { expect, type APIRequestContext, type BrowserContext } from "@playwright/test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
 import { ADMIN_TOTP_SECRET, generateTotp } from "./mfa";
+
+// Feature 31 (docs/specs/07-connexion-inscription-complete.md) — Mailpit local (port 54324, déjà
+// exposé par `supabase start`) reçoit réellement les emails de confirmation/reset envoyés par
+// Supabase Auth : ces tests lisent le vrai email plutôt que de simuler le clic, seule façon de
+// prouver que le lien {{ .TokenHash }} + /auth/callback fonctionne de bout en bout. Centralisé ici
+// (au lieu de deux copies locales, auth-connection-complete.spec.ts et partner-join.spec.ts) —
+// même classe de helper d'authentification programmatique que signInAndCollectCookies/
+// createSignedInClient ci-dessous.
+export async function latestCallbackLink(
+  request: APIRequestContext,
+  toEmail: string
+): Promise<string> {
+  const listRes = await request.get("http://127.0.0.1:54324/api/v1/messages?limit=20");
+  const { messages } = await listRes.json();
+  const message = messages.find((m: { To: { Address: string }[] }) =>
+    m.To.some((to) => to.Address === toEmail)
+  );
+  expect(message, `aucun email reçu pour ${toEmail}`).toBeTruthy();
+  const full = await (await request.get(`http://127.0.0.1:54324/api/v1/message/${message.ID}`)).json();
+  const match = (full.HTML as string).match(/href="([^"]*auth\/callback[^"]*)"/);
+  expect(match, "aucun lien /auth/callback trouvé dans l'email").toBeTruthy();
+  return match![1].replace(/&amp;/g, "&");
+}
 
 // Feature 31 : seul compte seedé avec un facteur TOTP enrôlé aujourd'hui — étendre cette table si
 // d'autres comptes de test admin apparaissent un jour, jamais en devinant un secret depuis l'email.

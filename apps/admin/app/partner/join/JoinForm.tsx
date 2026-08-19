@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Checkbox, Input, Label, TextField } from "@hifago/ui";
+import { Button, Checkbox, Input, Label, TextField, toast } from "@hifago/ui";
+import { OAuthSection } from "@/components/GoogleButton";
 import { PartnerTermsModal } from "./PartnerTermsModal";
 
 // Messages en français en dur : cette app, hors next-intl (cf. hifago/CLAUDE.md — l'i18n ne
@@ -24,14 +25,20 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 type ConsumeResult = { ok: boolean; reason?: string; roles?: string[]; partner_id?: string };
 type SignupResult = { ok: boolean; reason?: string };
+type InitialUser = { email: string; fullName: string } | null;
 
-export function JoinForm({ token }: { token: string | null }) {
+export function JoinForm({
+  token,
+  initialUser,
+}: {
+  token: string | null;
+  initialUser: InitialUser;
+}) {
   const router = useRouter();
-  const [name, setName] = useState("");
+  const [name, setName] = useState(initialUser?.fullName ?? "");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [consent, setConsent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
 
@@ -49,27 +56,32 @@ export function JoinForm({ token }: { token: string | null }) {
     // rendre ce formulaire quand token est absent) — garde ici uniquement pour que TypeScript
     // resserre `token` en `string` dans cette fermeture, définie après ce early return.
     if (!token) return;
-    setError(null);
     setIsSubmitting(true);
 
-    // Feature 31 (docs/specs/07-connexion-inscription-complete.md §7) : la vérification email
-    // (enable_confirmations = true) empêcherait désormais un signUp() client-side de renvoyer une
-    // session immédiate — ce Route Handler crée le compte déjà confirmé côté serveur (service_role)
-    // et établit la session, pour que ce parcours reste instantané comme avant.
-    const signupResponse = await fetch("/api/auth/invitation-signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, email, password }),
-    });
-    const signupResult = (await signupResponse.json()) as SignupResult;
+    // Un visiteur déjà authentifié (retour de GoogleButton, ou toute session existante) saute la
+    // création de compte email/mot de passe : consume_partner_invitation ci-dessous ne s'appuie
+    // que sur auth.uid(), jamais sur le mode de connexion — inutile de repasser par le Route
+    // Handler service_role qui ne sait créer QUE des comptes email/mot de passe.
+    if (!initialUser) {
+      // Feature 31 (docs/specs/07-connexion-inscription-complete.md §7) : la vérification email
+      // (enable_confirmations = true) empêcherait désormais un signUp() client-side de renvoyer une
+      // session immédiate — ce Route Handler crée le compte déjà confirmé côté serveur (service_role)
+      // et établit la session, pour que ce parcours reste instantané comme avant.
+      const signupResponse = await fetch("/api/auth/invitation-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, email, password }),
+      });
+      const signupResult = (await signupResponse.json()) as SignupResult;
 
-    if (!signupResult.ok) {
-      setError(
-        ERROR_MESSAGES[signupResult.reason ?? ""] ??
-          "Impossible de créer le compte. Vérifiez vos informations ou connectez-vous si vous avez déjà un compte."
-      );
-      setIsSubmitting(false);
-      return;
+      if (!signupResult.ok) {
+        toast.danger(
+          ERROR_MESSAGES[signupResult.reason ?? ""] ??
+            "Impossible de créer le compte. Vérifiez vos informations ou connectez-vous si vous avez déjà un compte."
+        );
+        setIsSubmitting(false);
+        return;
+      }
     }
 
     const supabase = createClient();
@@ -86,66 +98,81 @@ export function JoinForm({ token }: { token: string | null }) {
     setIsSubmitting(false);
 
     if (rpcError) {
-      setError("Une erreur est survenue. Réessayez.");
+      toast.danger("Une erreur est survenue. Réessayez.");
       return;
     }
 
     const result = data as ConsumeResult;
     if (!result.ok) {
-      setError(ERROR_MESSAGES[result.reason ?? ""] ?? "Une erreur est survenue. Réessayez.");
+      toast.danger(ERROR_MESSAGES[result.reason ?? ""] ?? "Une erreur est survenue. Réessayez.");
       return;
     }
 
     // Redirection immédiate vers le dashboard (spec §5.2) plutôt qu'un message inline : l'état
     // (rôle obtenu, établissement en attente éventuel) est recalculé à la volée par cette page,
     // pas transmis ici — robuste à un refresh, jamais un state éphémère perdu.
+    toast.success("Bienvenue !");
     router.push("/partner");
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-4">
-      <TextField fullWidth name="name" value={name} onChange={setName} isRequired>
-        <Label>Nom complet</Label>
-        <Input />
-      </TextField>
-      <TextField fullWidth name="email" value={email} onChange={setEmail} isRequired>
-        <Label>Email</Label>
-        <Input type="email" autoComplete="email" />
-      </TextField>
-      <TextField fullWidth name="password" value={password} onChange={setPassword} isRequired>
-        <Label>Mot de passe</Label>
-        <Input type="password" autoComplete="new-password" />
-      </TextField>
-      <div className="flex flex-col gap-1.5">
-        <Checkbox data-testid="consent-checkbox" isSelected={consent} onChange={setConsent}>
-          <Checkbox.Content>
-            <Checkbox.Control>
-              <Checkbox.Indicator />
-            </Checkbox.Control>
-            J&apos;accepte les conditions du rôle partenaire.
-          </Checkbox.Content>
-        </Checkbox>
-        {/* Hors de Checkbox.Content (CheckboxButton react-aria, toute la zone est pressable) —
-            un bouton imbriqué y déclencherait aussi le toggle de la case au lieu d'ouvrir la
-            modale seule. */}
-        <button
-          type="button"
-          onClick={() => setTermsOpen(true)}
-          data-testid="view-terms-button"
-          className="self-start text-xs text-muted underline"
-        >
-          Voir les conditions
-        </button>
-      </div>
-      <PartnerTermsModal open={termsOpen} onOpenChange={setTermsOpen} />
-      {error ? (
-        <p role="alert" data-testid="join-error" className="text-sm text-danger">
-          {error}
-        </p>
+    <div className="flex w-full flex-col gap-4">
+      {!initialUser ? (
+        // Le jeton survit à l'aller-retour Google via OAuthSection → GoogleButton →
+        // /auth/callback?next=… (même mécanique que /login et /signup, cf. GoogleButton.tsx) — au
+        // retour, page.tsx détecte la session et repasse initialUser, cette branche disparaît.
+        <OAuthSection next={`/partner/join?token=${token}`} />
       ) : null}
-      <Button type="submit" isDisabled={isSubmitting || !consent} data-testid="join-submit-button">
-        {isSubmitting ? "Création…" : "Rejoindre"}
-      </Button>
-    </form>
+
+      <form onSubmit={handleSubmit} noValidate className="flex w-full flex-col gap-4">
+        {initialUser ? (
+          <p className="text-sm text-muted" data-testid="join-connected-as">
+            Conectado como <span className="font-medium">{initialUser.email}</span>.
+          </p>
+        ) : null}
+
+        <TextField fullWidth name="name" value={name} onChange={setName} isRequired>
+          <Label>Nom complet</Label>
+          <Input />
+        </TextField>
+        {!initialUser ? (
+          <>
+            <TextField fullWidth name="email" value={email} onChange={setEmail} isRequired>
+              <Label>Email</Label>
+              <Input type="email" autoComplete="email" />
+            </TextField>
+            <TextField fullWidth name="password" value={password} onChange={setPassword} isRequired>
+              <Label>Mot de passe</Label>
+              <Input type="password" autoComplete="new-password" />
+            </TextField>
+          </>
+        ) : null}
+        <div className="flex flex-col gap-1.5">
+          <Checkbox data-testid="consent-checkbox" isSelected={consent} onChange={setConsent}>
+            <Checkbox.Content>
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              J&apos;accepte les conditions du rôle partenaire.
+            </Checkbox.Content>
+          </Checkbox>
+          {/* Hors de Checkbox.Content (CheckboxButton react-aria, toute la zone est pressable) —
+              un bouton imbriqué y déclencherait aussi le toggle de la case au lieu d'ouvrir la
+              modale seule. */}
+          <button
+            type="button"
+            onClick={() => setTermsOpen(true)}
+            data-testid="view-terms-button"
+            className="self-start text-xs text-muted underline"
+          >
+            Voir les conditions
+          </button>
+        </div>
+        <PartnerTermsModal open={termsOpen} onOpenChange={setTermsOpen} />
+        <Button type="submit" isDisabled={isSubmitting || !consent} data-testid="join-submit-button">
+          {isSubmitting ? "Création…" : "Rejoindre"}
+        </Button>
+      </form>
+    </div>
   );
 }

@@ -63,6 +63,7 @@ test("admin ne peut pas supprimer une activité déjà commandée — renvoyé v
   const { data: orderResult, error: orderError } = await adminClient.rpc("create_order", {
     p_lines: [{ product_id: productId, date, qty: 1 }],
     p_holder_name: `Cliente E2E Delete ${suffix}`,
+    p_holder_email: `cliente.delete.${suffix}@example.com`,
   });
   const created = orderResult as { ok: boolean; order_id?: string } | null;
   if (orderError || !created?.ok) {
@@ -76,6 +77,9 @@ test("admin ne peut pas supprimer une activité déjà commandée — renvoyé v
   await page.getByTestId("confirm-delete-product-button").click();
 
   await expect(page.getByTestId("delete-product-already-ordered")).toBeVisible();
+  await expect(
+    page.getByRole("alertdialog").filter({ hasText: "No se pudo eliminar la actividad: ya fue reservada." }),
+  ).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/admin/products/${productId}$`));
 
   // Le produit existe toujours en base, malgré la tentative.

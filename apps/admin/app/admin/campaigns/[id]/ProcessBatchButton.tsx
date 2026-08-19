@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button } from "@hifago/ui";
+import { Button, toast } from "@hifago/ui";
 
 type ProcessResult = { ok: boolean; sent?: number; skipped?: number; remaining?: number };
 
@@ -16,11 +16,9 @@ export function ProcessBatchButton({
 }) {
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<ProcessResult | null>(null);
 
   async function handleProcess() {
-    setError(null);
     setIsProcessing(true);
 
     const supabase = createClient();
@@ -32,11 +30,12 @@ export function ProcessBatchButton({
 
     const result = data as ProcessResult | null;
     if (rpcError || !result?.ok) {
-      setError("No se pudo procesar el lote.");
+      toast.danger("No se pudo procesar el lote.");
       return;
     }
 
     setLastResult(result);
+    toast.success(`Lote procesado: ${result.sent} enviados.`);
     // status='pending' est le curseur de position (feature 25) : répétable jusqu'à épuisement,
     // router.refresh() recharge les compteurs et le statut de la campagne depuis le serveur.
     router.refresh();
@@ -56,11 +55,6 @@ export function ProcessBatchButton({
         <p className="text-sm text-muted" data-testid="last-batch-result">
           Último lote: {lastResult.sent} enviados, {lastResult.skipped} ignorados,{" "}
           {lastResult.remaining} pendientes restantes.
-        </p>
-      ) : null}
-      {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
         </p>
       ) : null}
     </div>

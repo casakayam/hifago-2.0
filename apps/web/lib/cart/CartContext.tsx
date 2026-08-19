@@ -15,9 +15,18 @@ export type CartLine = {
   productId: string;
   productName: string;
   establishmentName: string;
-  date: string; // ISO yyyy-MM-dd
+  date: string; // ISO yyyy-MM-dd — check-in si endDate est posé (chambre/alojamiento par plage)
   qty: number;
+  // Spec 17 §0 Tranche 2 : pour une ligne par plage, priceCop est déjà le total de LA PLAGE ENTIÈRE
+  // POUR UNE SEULE unité (nuits × prix nightly estimé) — jamais multiplié par les nuits une
+  // deuxième fois. `qty` s'applique par-dessus exactement comme pour une ligne normale
+  // (`priceCop * qty`, cf. total du panier/CheckoutForm) : aucune formule spéciale à ajouter pour
+  // ce cas, le total réellement facturé reste de toute façon résolu par create_order.
   priceCop: number;
+  roomTypeId?: string; // Chambre d'hôtel réservée par plage — absent pour tout le reste.
+  roomTypeName?: string; // Affichage panier/checkout uniquement.
+  endDate?: string; // ISO — présent seulement pour une ligne par plage (chambre ou alojamiento).
+  slotStartTime?: string; // "HH:MM" — présent seulement pour une ligne à créneau horaire (spec 18 Tranche 1), toujours une chaîne opaque, jamais combinée à une Date JS.
 };
 
 type CartContextValue = {

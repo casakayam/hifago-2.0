@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toast } from "@hifago/ui";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,6 +29,16 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
         suppressHydrationWarning
       >
         {children}
+        {/* Seul point de montage du toast (succès/échec) de toute l'app admin+socio+auth — un
+            popup remplace le message inline partout, jamais les deux (décision Jérôme,
+            docs/specs/16-notifications-toast.md). SIBLING de {children}, jamais un wrapper autour :
+            le `children` de Toast.Provider est un render-prop pour personnaliser CHAQUE carte de
+            toast (rendu par UNSTABLE_ToastRegion), pas un slot pour le contenu de l'app — lui
+            passer {children} de la page fait retourner `null` à la région tant qu'aucun toast
+            n'existe (visibleToasts.length === 0), ce qui masque toute l'app (bug constaté en
+            testant réellement dans un navigateur, invisible au typecheck/build). placement="bottom"
+            = défaut HeroUI, explicité pour documenter l'intention plutôt que la laisser implicite. */}
+        <Toast.Provider placement="bottom" />
       </body>
     </html>
   );

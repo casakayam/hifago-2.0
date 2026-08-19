@@ -58,7 +58,7 @@ select create_order(
   jsonb_build_array(jsonb_build_object(
     'product_id', 'aa110000-0000-4000-8000-000000000021', 'date', '2028-12-01', 'qty', 1
   )),
-  'Holder Referrer RLS 1', null, null, false, 'RLS-TEST-A', 'link'
+  'Holder Referrer RLS 1', 'buyer-fixture@hifago.test', null, false, 'RLS-TEST-A', 'link'
 );
 
 -- Commande 2 : achetée par un AUTRE acheteur (jamais '...033'), référée par B (code RLS-TEST-B).
@@ -67,7 +67,7 @@ select create_order(
   jsonb_build_array(jsonb_build_object(
     'product_id', 'aa110000-0000-4000-8000-000000000021', 'date', '2028-12-02', 'qty', 1
   )),
-  'Holder Referrer RLS 2', null, null, false, 'RLS-TEST-B', 'link'
+  'Holder Referrer RLS 2', 'buyer-fixture@hifago.test', null, false, 'RLS-TEST-B', 'link'
 );
 
 reset role;

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Label, ListBox, Select, Table } from "@hifago/ui";
+import { Button, Label, ListBox, Select, Table, toast } from "@hifago/ui";
 
 type Capability = {
   id: string;
@@ -29,13 +29,11 @@ export function CapabilitiesSection({
   const router = useRouter();
   const [role, setRole] = useState<"referrer" | "operator">("referrer");
   const [establishmentId, setEstablishmentId] = useState(NO_ESTABLISHMENT);
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
 
   async function handleStatusChange(capabilityId: string, newStatus: string) {
     setStatusUpdating(capabilityId);
-    setError(null);
 
     const supabase = createClient();
     const { error: rpcError } = await supabase.rpc("set_capability_status", {
@@ -45,15 +43,15 @@ export function CapabilitiesSection({
 
     setStatusUpdating(null);
     if (rpcError) {
-      setError("No se pudo cambiar el estado de la capacidad.");
+      toast.danger("No se pudo cambiar el estado de la capacidad.");
       return;
     }
+    toast.success("Estado de la capacidad actualizado.");
     router.refresh();
   }
 
   async function handleGrant(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
     setIsSubmitting(true);
 
     const supabase = createClient();
@@ -66,9 +64,10 @@ export function CapabilitiesSection({
 
     setIsSubmitting(false);
     if (rpcError) {
-      setError("No se pudo otorgar la capacidad (¿ya existe para este rol/establecimiento?).");
+      toast.danger("No se pudo otorgar la capacidad (¿ya existe para este rol/establecimiento?).");
       return;
     }
+    toast.success("Capacidad otorgada.");
     setEstablishmentId(NO_ESTABLISHMENT);
     router.refresh();
   }
@@ -134,7 +133,7 @@ export function CapabilitiesSection({
         </Table.ScrollContainer>
       </Table>
 
-      <form onSubmit={handleGrant} className="flex flex-wrap items-end gap-3">
+      <form onSubmit={handleGrant} noValidate className="flex flex-wrap items-end gap-3">
         <Select
           className="w-40"
           value={role}
@@ -189,11 +188,6 @@ export function CapabilitiesSection({
           {isSubmitting ? "Otorgando…" : "Otorgar capacidad"}
         </Button>
       </form>
-      {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
     </section>
   );
 }

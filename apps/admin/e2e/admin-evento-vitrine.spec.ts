@@ -27,10 +27,13 @@ test("admin crée un evento récurrent vitrine, le publie, la fiche publique aff
   await expect(page.locator("#price")).toHaveCount(0);
   await page.getByTestId("price-label-input").fill("Entrada gratuita");
 
-  // Récurrence structurée : tous les 7 jours, fin laissée "Indefinida" (valeur par défaut du
-  // sélecteur) — la 3e condition de fin, aucune des deux posée.
+  // Récurrence structurée : tous les 7 jours à partir d'un mardi (2026-09-22), fin laissée
+  // "Indefinida" (valeur par défaut du sélecteur) — la 3e condition de fin, aucune des deux posée.
+  // occurrence-date-input désormais requis aussi en mode récurrent (gap corrigé 2026-08-18) :
+  // sans lui, "cada 7 días" ne dirait jamais sur quel jour de semaine tombe l'evento.
   await page.getByTestId("occurrence-type-select").click();
   await page.getByRole("option", { name: "Recurrente" }).click();
+  await page.getByTestId("occurrence-date-input").fill("2026-09-22");
   await page.getByTestId("recurrence-frequency-input").fill("7");
 
   await page.getByTestId("external-booking-url-input").fill("https://example.com/reservar");
@@ -55,8 +58,9 @@ test("admin crée un evento récurrent vitrine, le publie, la fiche publique aff
   await expect(page.getByTestId("product-name")).toHaveText(productName);
   // price_label affiché tel quel, jamais formaté en COP.
   await expect(page.getByTestId("product-price")).toHaveText("Entrada gratuita");
+  // Fréquence multiple de 7 + date d'ancrage → le jour de semaine (martes) est désormais affiché.
   await expect(page.getByTestId("evento-occurrence")).toHaveText(
-    "Cada 7 días, de forma indefinida."
+    "Los martes, cada 7 días, de forma indefinida."
   );
   await expect(page.getByTestId("evento-reserve-link")).toHaveAttribute(
     "href",

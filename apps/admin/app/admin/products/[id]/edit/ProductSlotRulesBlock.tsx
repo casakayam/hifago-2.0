@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@hifago/supabase/client";
-import { Button } from "@hifago/ui";
+import { Button, toast } from "@hifago/ui";
 import { SlotRulesEditor } from "@/components/slot-rules-editor";
 import { toSlotRuleRows, validateSlotRules, type DraftSlotRule } from "@/lib/products/slotRules";
 
@@ -19,17 +19,12 @@ export function ProductSlotRulesBlock({
   initialRules: DraftSlotRule[];
 }) {
   const [rules, setRules] = useState(initialRules);
-  const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   async function handleSave() {
-    setError(null);
-    setSaved(false);
-
     const validationError = validateSlotRules(rules);
     if (validationError) {
-      setError(validationError);
+      toast.danger(validationError);
       return;
     }
 
@@ -41,7 +36,7 @@ export function ProductSlotRulesBlock({
       .delete()
       .eq("product_id", productId);
     if (deleteError) {
-      setError("No se pudo guardar los horarios.");
+      toast.danger("No se pudo guardar los horarios.");
       setIsSaving(false);
       return;
     }
@@ -50,14 +45,14 @@ export function ProductSlotRulesBlock({
       const rows = toSlotRuleRows(rules).map((row) => ({ product_id: productId, ...row }));
       const { error: insertError } = await supabase.from("product_slot_rules").insert(rows);
       if (insertError) {
-        setError("No se pudo guardar los horarios.");
+        toast.danger("No se pudo guardar los horarios.");
         setIsSaving(false);
         return;
       }
     }
 
     setIsSaving(false);
-    setSaved(true);
+    toast.success("Horarios guardados.");
   }
 
   return (
@@ -75,13 +70,7 @@ export function ProductSlotRulesBlock({
         >
           {isSaving ? "Guardando…" : "Guardar horarios"}
         </Button>
-        {saved ? <span className="text-xs text-muted">Guardado.</span> : null}
       </div>
-      {error ? (
-        <p role="alert" className="mt-2 text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
     </div>
   );
 }

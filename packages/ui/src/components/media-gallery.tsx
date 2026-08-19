@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Modal } from "@heroui/react";
+import { Modal, toast } from "@heroui/react";
 import { ImageCrop } from "./image-crop";
 import { cn } from "../lib/utils";
 
@@ -49,23 +49,24 @@ export function MediaGallery({
 }: MediaGalleryProps) {
   const [pendingImage, setPendingImage] = React.useState<string | null>(null);
   const [isBusy, setIsBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    setError(null);
     setPendingImage(URL.createObjectURL(file));
   }
 
   async function handleCropConfirm(blob: Blob) {
     setIsBusy(true);
-    setError(null);
     try {
       const result = await onAddFile(blob);
-      if (!result.ok) setError(result.reason ?? "No se pudo subir la foto.");
+      if (result.ok) {
+        toast.success("Foto añadida.");
+      } else {
+        toast.danger(result.reason ?? "No se pudo subir la foto.");
+      }
     } finally {
       if (pendingImage) URL.revokeObjectURL(pendingImage);
       setPendingImage(null);
@@ -85,19 +86,25 @@ export function MediaGallery({
     const [moved] = reordered.splice(index, 1);
     reordered.splice(target, 0, moved!);
     setIsBusy(true);
-    setError(null);
     const result = await onReorder(reordered.map((p) => p.id));
     setIsBusy(false);
-    if (!result.ok) setError(result.reason ?? "No se pudo reordenar la galería.");
+    if (result.ok) {
+      toast.success("Foto reordenada.");
+    } else {
+      toast.danger(result.reason ?? "No se pudo reordenar la galería.");
+    }
   }
 
   async function handleDelete(id: string) {
     if (!onDelete) return;
     setIsBusy(true);
-    setError(null);
     const result = await onDelete(id);
     setIsBusy(false);
-    if (!result.ok) setError(result.reason ?? "No se pudo eliminar la foto.");
+    if (result.ok) {
+      toast.success("Foto eliminada.");
+    } else {
+      toast.danger(result.reason ?? "No se pudo eliminar la foto.");
+    }
   }
 
   const atCap = photos.length >= maxPhotos;
@@ -178,11 +185,6 @@ export function MediaGallery({
       </div>
 
       {addHint ? <p className="text-xs text-muted">{addHint}</p> : null}
-      {error ? (
-        <p role="alert" className="text-sm text-danger" data-testid="media-gallery-error">
-          {error}
-        </p>
-      ) : null}
 
       <Modal>
         <Modal.Backdrop

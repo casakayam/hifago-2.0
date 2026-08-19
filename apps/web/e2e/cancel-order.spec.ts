@@ -23,6 +23,7 @@ test("un client connecté annule sa réservation depuis /account/orders, l'état
   const { data: result, error: rpcError } = await setupClient.rpc("create_order", {
     p_lines: [{ product_id: PRODUCT_ID, date: DATE, qty: 1 }],
     p_holder_name: "Cliente E2E Cancel",
+    p_holder_email: "cliente.e2e.cancel@example.com",
   });
   const created = result as { ok: boolean; order_id?: string } | null;
   if (rpcError || !created?.ok || !created.order_id) {

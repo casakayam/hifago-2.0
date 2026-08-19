@@ -3,7 +3,7 @@
 -- CORRIGÉ (pas silencieusement le payload proposé), rejet laisse products inchangé, verrou
 -- optimiste (version) testé séquentiellement (pas de barrière, calibrage bas-risque déjà tranché).
 begin;
-select plan(21);
+select plan(22);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -97,12 +97,10 @@ select lives_ok(
   'approbation sans correction réussit (version attendue correcte)'
 );
 select is(
-  (select jsonb_build_object('name', name, 'price_cop', price_cop, 'category', category)
+  (select jsonb_build_object('name', name, 'price_cop', price_cop)
      from products where id = '77770000-0000-4000-8000-000000000021'),
-  jsonb_build_object(
-    'name', jsonb_build_object('es', 'P1 Propuesta'), 'price_cop', 70000, 'category', 'arte'
-  ),
-  'products reflète exactement les valeurs proposées (aucune correction fournie)'
+  jsonb_build_object('name', jsonb_build_object('es', 'P1 Propuesta'), 'price_cop', 70000),
+  'products reflète exactement les valeurs proposées (aucune correction fournie) — category (spec 15 bis, abandonné) plus jamais écrit'
 );
 select is(
   (select status from product_proposals where id = (select id from tmp_p1)),
@@ -137,12 +135,22 @@ create temp table tmp_p2 as
   )->>'proposal_id')::uuid as id;
 
 select test_login('77770000-0000-4000-8000-000000000032');
+-- Correction = objet COMPLET (spec 15 bis, 20260817150000 — plus un coalesce champ par champ,
+-- même patron que les branches kind='create'/'photos') : le formulaire de modération envoie
+-- toujours tous les champs, jamais un diff partiel — un objet partiel comme {price_cop:...} seul
+-- écraserait silencieusement name (NOT NULL) si ce n'était pas le cas.
 select lives_ok(
   $$ select moderate_product_proposal(
        (select id from tmp_p2), 'approve', 1,
-       jsonb_build_object('price_cop', 99000)
+       jsonb_build_object(
+         'name', jsonb_build_object('es', 'P2 Propuesta'),
+         'description', jsonb_build_object('es', 'Descripción propuesta'),
+         'price_cop', 99000,
+         -- Cupo diario por defecto (spec 18) — objet corrigé complet, comme name/price_cop.
+         'default_capacity', 3
+       )
      ) $$,
-  'approbation avec une correction de prix réussit'
+  'approbation avec une correction de prix réussit (objet complet)'
 );
 select is(
   (select price_cop from products where id = '77770000-0000-4000-8000-000000000022'),
@@ -153,6 +161,11 @@ select is(
   (select name from products where id = '77770000-0000-4000-8000-000000000022'),
   jsonb_build_object('es', 'P2 Propuesta'),
   'le nom, non corrigé, retombe bien sur la valeur proposée (coalesce)'
+);
+select is(
+  (select default_capacity from products where id = '77770000-0000-4000-8000-000000000022'),
+  3,
+  'default_capacity (cupo diario) corrigé par l''admin survit le merge de moderate_product_proposal (branche content)'
 );
 
 -- Proposition #3 sur P1, rejetée avec motif : products reste INCHANGÉ ---------------------------

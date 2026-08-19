@@ -79,6 +79,7 @@ test("admin crée une actividad avec paliers de prix et bornes de quantité ; cr
     const { data } = await adminClient.rpc("create_order", {
       p_lines: [{ product_id: productId, date, qty }],
       p_holder_name: `Cliente E2E Tramos ${suffix} qty${qty}`,
+      p_holder_email: `cliente.tramos.${suffix}@example.com`,
     });
     return data as { ok: boolean; reason?: string; order_id?: string };
   }

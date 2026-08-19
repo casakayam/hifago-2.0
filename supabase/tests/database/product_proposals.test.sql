@@ -2,7 +2,7 @@
 -- garde-fous : identité+propriété, capacité, plafond, puis filtrage du payload),
 -- withdraw_product_proposal, RLS sur product_proposals et products_select_own.
 begin;
-select plan(17);
+select plan(18);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -137,6 +137,11 @@ set local role authenticated;
 select test_login('66660000-0000-4000-8000-000000000021');
 
 -- Soumission valide + preuve du filtrage du payload (propriété de sûreté n°2) --------------------
+-- Whitelist étendue par type (spec 15 bis, 20260817150000) — miroir de ProductForm en mode
+-- édition : plus seulement name/description/price_cop/category (category abandonné, cf. tête de
+-- cette migration), le produit fixture est type='activity' → address/lat/lon/price_tiers/min_qty/
+-- max_qty rejoignent la whitelist (null ici, absents du payload soumis), jamais category/sellable/
+-- acompte_pct/champo_arbitrario.
 select lives_ok(
   $$ select submit_product_proposal(
        '66660000-0000-4000-8000-000000000031'::uuid,
@@ -144,6 +149,9 @@ select lives_ok(
          'name', jsonb_build_object('es', 'Nombre editado'),
          'description', jsonb_build_object('es', 'Descripción editada'),
          'price_cop', 95000,
+         -- Cupo diario por defecto (spec 18) — activity est dans le groupe hasDefaultCapacity,
+         -- doit survivre la whitelist au même titre que price_cop.
+         'default_capacity', 7,
          'category', 'adrenalina',
          'sellable', true,
          'acompte_pct', 0.99,
@@ -165,10 +173,17 @@ select is(
   jsonb_build_object(
     'name', jsonb_build_object('es', 'Nombre editado'),
     'description', jsonb_build_object('es', 'Descripción editada'),
-    'price_cop', 95000,
-    'category', 'adrenalina'
+    'address', null, 'lat', null, 'lon', null,
+    'price_cop', 95000, 'price_tiers', null, 'min_qty', null, 'max_qty', null,
+    'default_capacity', 7
   ),
-  'seuls les 4 champs autorisés (name/description/price_cop/category) se retrouvent dans payload — sellable/acompte_pct/champo_arbitrario absents'
+  'whitelist par type (activity) dans payload — jamais category/sellable/acompte_pct/champo_arbitrario'
+);
+select is(
+  (select (payload->>'default_capacity')::int from product_proposals
+    where product_id = '66660000-0000-4000-8000-000000000031' and status = 'pending'),
+  7,
+  'default_capacity (cupo diario) survit le round-trip payload → whitelist de submit_product_proposal'
 );
 
 -- withdraw_product_proposal : propriétaire sur pending → withdrawn ------------------------------

@@ -299,19 +299,23 @@ insert into partner_codes (code, partner_id, active)
 values ('SEED-DEMO-REF', 'b0000000-0000-4000-8000-000000000003', true);
 
 -- Commande directe : invité (account_id null), aucun référent — cf. correctif réservation invité.
-insert into orders (id, account_id, holder_name, holder_phone)
+insert into orders (id, account_id, holder_name, holder_phone, holder_email)
 values (
-  'c0000000-0000-4000-8000-000000000001', null, 'Cliente Directo Seed', '+57 300 000 0001'
+  'c0000000-0000-4000-8000-000000000001', null, 'Cliente Directo Seed', '+57 300 000 0001',
+  'cliente.directo.seed@test.local'
 );
 -- Feature 11 (snapshot prix+commission) : commande directe, qty=1, price_cop=80000 (produit
 -- tour-lancha-guatape ci-dessus) → total_cop=80000, direct (0/17), acompte_cop=13600.
+-- holder_name obligatoire (spec 17 §0 Tranche 1, 20260817180000) : bug latent trouvé en testant
+-- (spec 19) — ce seed n'avait jamais été rejoué depuis que la colonne est devenue NOT NULL,
+-- corrigé ici sur les 3 inserts order_lines du fichier, pas seulement celui-ci.
 insert into order_lines (
-  order_id, account_id, product_id, date, qty, status,
+  order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values (
   'c0000000-0000-4000-8000-000000000001', null,
-  'b0000000-0000-4000-8000-000000000001', '2026-10-01', 1, 'reserved',
+  'b0000000-0000-4000-8000-000000000001', '2026-10-01', 1, 'reserved', 'Cliente Directo Seed',
   80000, 80000, 'direct', 0.17, 0, 0.17, 13600, 0, 13600
 );
 
@@ -319,11 +323,11 @@ insert into order_lines (
 -- présenté, référent externe (Prestador Propuestas Org — différent du partenaire propriétaire du
 -- produit tour-lancha-guatape) — scénario réaliste, pas une auto-référence.
 insert into orders (
-  id, account_id, holder_name, holder_phone, referrer_partner_id, attribution_code, attribution_source
+  id, account_id, holder_name, holder_phone, holder_email, referrer_partner_id, attribution_code, attribution_source
 )
 values (
   'c0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002',
-  'Cliente Referido Seed', '+57 300 000 0002',
+  'Cliente Referido Seed', '+57 300 000 0002', 'cliente.referido.seed@test.local',
   'b0000000-0000-4000-8000-000000000003', 'SEED-DEMO-REF', 'link'
 );
 -- Feature 11 : référent externe (b0000000-...-0003, différent du propriétaire du produit), qty=2,
@@ -333,13 +337,13 @@ values (
 -- de cohérence — sans lui, ce référent ne verrait pas cette ligne dans /partner/commissions malgré
 -- orders.referrer_partner_id déjà résolu ci-dessus).
 insert into order_lines (
-  order_id, account_id, product_id, date, qty, status, referrer_partner_id,
+  order_id, account_id, product_id, date, qty, status, referrer_partner_id, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values (
   'c0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002',
   'b0000000-0000-4000-8000-000000000001', '2026-10-02', 2, 'reserved',
-  'b0000000-0000-4000-8000-000000000003',
+  'b0000000-0000-4000-8000-000000000003', 'Cliente Referido Seed',
   80000, 160000, 'external_referrer', 0.17, 0.10, 0.07, 27200, 16000, 11200
 );
 
@@ -352,36 +356,86 @@ insert into order_lines (
 -- les deux ne serait jamais visible (le ledger ne modifie jamais ces colonnes, il les DÉRIVE à la
 -- lecture, cf. deriveLedgerEntry).
 insert into orders (
-  id, account_id, holder_name, holder_phone, referrer_partner_id, attribution_code, attribution_source
+  id, account_id, holder_name, holder_phone, holder_email, referrer_partner_id, attribution_code, attribution_source
 )
 values (
   'c0000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000002',
-  'Cliente Ledger Seed', '+57 300 000 0003',
+  'Cliente Ledger Seed', '+57 300 000 0003', 'cliente.ledger.seed@test.local',
   'b0000000-0000-4000-8000-000000000003', 'SEED-DEMO-REF', 'link'
 );
 -- qty=1, price_cop=80000 → total_cop=80000, external_referrer (10/7) : acompte_cop=13600,
--- referrer_commission_cop=8000, app_commission_cop=5600 (identique sur les 2 lignes, seul le
--- statut diffère). Feature 14 : referrer_partner_id dénormalisé aussi ici — cette même paire
--- fulfilled/cancelled_by_client sert désormais aussi de fixture e2e pour
+-- referrer_commission_cop=8000, app_commission_cop=5600 (identique sur les 3 lignes, seul le
+-- statut diffère). Feature 14 : referrer_partner_id dénormalisé aussi ici — ce même trio
+-- fulfilled/cancelled_by_client/fulfilled(payé) sert désormais aussi de fixture e2e pour
 -- e2e/partner-commissions.spec.ts (compte operador.propuestas, référent de b0000000-...-0003),
--- pas seulement pour le ledger admin (feature 12) qui les a introduites.
+-- pas seulement pour le ledger admin (feature 12) qui a introduit les deux premières.
 insert into order_lines (
-  order_id, account_id, product_id, date, qty, status, referrer_partner_id,
+  order_id, account_id, product_id, date, qty, status, referrer_partner_id, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values
-  -- fulfilled → state 'earned' : referrer_commission_cop reste dû au référent tel quel.
+  -- fulfilled → ledger_entries status 'due' : referrer_commission_cop reste dû au référent tel quel.
   ('c0000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000002',
    'b0000000-0000-4000-8000-000000000001', '2026-10-03', 1, 'fulfilled',
-   'b0000000-0000-4000-8000-000000000003',
+   'b0000000-0000-4000-8000-000000000003', 'Cliente Ledger Seed',
    80000, 80000, 'external_referrer', 0.17, 0.10, 0.07, 13600, 8000, 5600),
-  -- cancelled_by_client → state 'redistributed' : referrer_commission_cop redirigé vers le
+  -- cancelled_by_client → ledger_entries status 'void' : referrer_commission_cop redirigé vers le
   -- prestataire (compensation), jamais simplement perdu — c'est précisément ce que l'écran doit
   -- rendre visible.
   ('c0000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000002',
    'b0000000-0000-4000-8000-000000000001', '2026-10-04', 1, 'cancelled_by_client',
-   'b0000000-0000-4000-8000-000000000003',
+   'b0000000-0000-4000-8000-000000000003', 'Cliente Ledger Seed',
+   80000, 80000, 'external_referrer', 0.17, 0.10, 0.07, 13600, 8000, 5600),
+  -- fulfilled + déjà réglé (spec 19 §0 Tranche 0) → ledger_entries status 'paid' directement en
+  -- fixture (représente un règlement historique déjà fait, pas une transition rejouée via les RPC
+  -- — même logique que pms_reconciliation_entries qui seed aussi un statut 'resolved' directement).
+  -- Seule ligne du seed capable de prouver que /partner/commissions affiche "Pagada", un état que
+  -- l'ancienne dérivation (deriveLedgerEntry) ne pouvait structurellement jamais produire.
+  ('c0000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000002',
+   'b0000000-0000-4000-8000-000000000001', '2026-10-05', 1, 'fulfilled',
+   'b0000000-0000-4000-8000-000000000003', 'Cliente Ledger Seed',
    80000, 80000, 'external_referrer', 0.17, 0.10, 0.07, 13600, 8000, 5600);
+
+-- Spec 19 §0 Tranche 0 (ledger de règlement réel) — ledger_entries correspondantes aux 4 lignes
+-- external_referrer ci-dessus, comme create_order/set_order_line_status/mark_ledger_entry_paid les
+-- auraient produites elles-mêmes (jamais un id en dur : order_lines n'a pas d'id explicite dans ses
+-- INSERT, résolu ici par sous-requête (order_id, date), même patron que
+-- pms_reconciliation_entries plus bas). Sert à la fois au dashboard référent (/partner/commissions,
+-- désormais lu depuis le vrai ledger, plus une dérivation) et à l'écran admin (/admin/ledger).
+insert into ledger_entries (order_line_id, beneficiary_type, referrer_partner_id, entry_type, amount_cop, status)
+select id, 'referrer', 'b0000000-0000-4000-8000-000000000003', 'referral_earned', 16000, 'estimated'
+  from order_lines
+ where order_id = 'c0000000-0000-4000-8000-000000000002' and date = '2026-10-02';
+
+insert into ledger_entries (order_line_id, beneficiary_type, referrer_partner_id, entry_type, amount_cop, status)
+select id, 'referrer', 'b0000000-0000-4000-8000-000000000003', 'referral_earned', 8000, 'due'
+  from order_lines
+ where order_id = 'c0000000-0000-4000-8000-000000000003' and date = '2026-10-03';
+
+-- cancelled_by_client (2026-10-04) : la part référent est void (jamais due, ligne pas réalisée) et
+-- redirigée en compensation à l'établissement propriétaire du produit (b0000000-...-0002, "Casa
+-- Kayam Guatapé") — même mécanique que set_order_line_status, §0 invariants spec 19.
+insert into ledger_entries (order_line_id, beneficiary_type, referrer_partner_id, entry_type, amount_cop, status)
+select id, 'referrer', 'b0000000-0000-4000-8000-000000000003', 'referral_earned', 8000, 'void'
+  from order_lines
+ where order_id = 'c0000000-0000-4000-8000-000000000003' and date = '2026-10-04';
+
+-- 2026-10-05 : déjà réglé (paid_at fixe, pas now() — un seed déterministe ne dépend jamais de
+-- l'heure d'exécution). comprobante_path/note factices, cohérents avec un vrai appel
+-- mark_ledger_entry_paid.
+insert into ledger_entries (
+  order_line_id, beneficiary_type, referrer_partner_id, entry_type, amount_cop, status,
+  comprobante_path, note, paid_at
+)
+select id, 'referrer', 'b0000000-0000-4000-8000-000000000003', 'referral_earned', 8000, 'paid',
+  'comprobantes/seed-demo.pdf', 'Transferencia Bancolombia (seed)', '2026-10-06 10:00:00+00'
+  from order_lines
+ where order_id = 'c0000000-0000-4000-8000-000000000003' and date = '2026-10-05';
+
+insert into ledger_entries (order_line_id, beneficiary_type, establishment_id, entry_type, amount_cop, status)
+select id, 'establishment', 'b0000000-0000-4000-8000-000000000002', 'establishment_compensation', 8000, 'due'
+  from order_lines
+ where order_id = 'c0000000-0000-4000-8000-000000000003' and date = '2026-10-04';
 
 -- Feature 22 (Admin : file de réconciliation PMS) — 2 entrées de démonstration (open/retrying),
 -- rattachées à des order_lines RÉELLEMENT seedées ci-dessus (jamais un UUID inventé : order_lines
@@ -409,8 +463,8 @@ insert into auth.users (id, email) values
   ('d0000000-0000-4000-8000-000000000001', 'campaign-client-consent-seed@test.local'),
   ('d0000000-0000-4000-8000-000000000002', 'campaign-client-no-consent-seed@test.local');
 
-insert into orders (id, account_id, holder_name, marketing_consent) values
+insert into orders (id, account_id, holder_name, holder_email, marketing_consent) values
   ('c0000000-0000-4000-8000-000000000004', 'd0000000-0000-4000-8000-000000000001',
-   'Cliente Campaign Consent Seed', true),
+   'Cliente Campaign Consent Seed', 'campaign-client-consent-seed@test.local', true),
   ('c0000000-0000-4000-8000-000000000005', 'd0000000-0000-4000-8000-000000000002',
-   'Cliente Campaign No Consent Seed', false);
+   'Cliente Campaign No Consent Seed', 'campaign-client-no-consent-seed@test.local', false);

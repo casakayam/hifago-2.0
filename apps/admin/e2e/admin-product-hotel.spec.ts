@@ -155,7 +155,7 @@ test("admin crée un hotel avec 2 tipos de habitación (dortoir prix simple, pri
 
   await page.getByTestId("room-capacity-0").fill("8");
   await page.getByTestId("save-hotel-rooms-button").click();
-  await expect(page.getByText("Guardado.")).toBeVisible();
+  await expect(page.getByRole("alertdialog").filter({ hasText: "Habitaciones guardadas." })).toBeVisible();
   await page.reload();
 
   await expect(page.getByTestId("room-capacity-0")).toHaveValue("8");

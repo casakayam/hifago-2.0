@@ -4,6 +4,11 @@ import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
 import { buttonVariants } from "@hifago/ui";
 import { ProductForm } from "@/components/product-form";
+import {
+  productTypeGating,
+  availabilityScreenFor,
+  type ProductType,
+} from "@/lib/products/useProductTypeFieldsState";
 import type { DraftSlotRule } from "@/lib/products/slotRules";
 import type { DraftRoomType } from "@/lib/products/hotelRooms";
 import { tiersFromColumn } from "@/lib/products/priceTiers";
@@ -30,7 +35,7 @@ export default async function EditProductPage({
   const { data: product } = await supabase
     .from("products")
     .select(
-      "id, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, stay_rates, category, type, establishment_id, sellable",
+      "id, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, default_capacity, stay_rates, category, type, establishment_id, sellable",
     )
     .eq("id", id)
     .maybeSingle();
@@ -40,12 +45,12 @@ export default async function EditProductPage({
   }
 
   // Spec 08/12/13 — tags : réservés au parcours partagé activité/alojamiento/hôtel (écran partagé
-  // conservé, champ conditionnel).
-  const isActivity = product.type === "activity";
-  const isLodging = product.type === "lodging";
-  const isHotel = product.type === "hotel";
-  const isTransport = product.type === "transport";
-  const hasLocationAndTags = isActivity || isLodging || isHotel || isTransport;
+  // conservé, champ conditionnel). productTypeGating : SEULE définition de ces booléens dans tout
+  // le projet (cf. apps/admin/lib/products/useProductTypeFieldsState.ts), partagée avec ProductForm
+  // et ModerateProductCreationProposalForm.
+  const { isActivity, isLodging, isHotel, isTransport, hasTags } = productTypeGating(
+    product.type as ProductType,
+  );
 
   // 5 lectures indépendantes (aucune ne dépend du résultat d'une autre, seulement de product.id/
   // product.type déjà connus) — lancées en parallèle plutôt qu'en séquence, le TTFB de la page tombe
@@ -62,10 +67,10 @@ export default async function EditProductPage({
       .select("id, storage_path")
       .eq("product_id", product.id)
       .order("sort", { ascending: true }),
-    hasLocationAndTags
+    hasTags
       ? supabase.from("catalog_tags").select("id, label").order("slug")
       : Promise.resolve({ data: [] as { id: string; label: unknown }[] }),
-    hasLocationAndTags
+    hasTags
       ? supabase.from("product_tag_assignments").select("tag_id").eq("product_id", product.id)
       : Promise.resolve({ data: [] as { tag_id: string }[] }),
     // Spec 11 — règles de créneaux : réservées à "activity", même gating que tags/tramos.
@@ -87,6 +92,14 @@ export default async function EditProductPage({
           .order("sort")
       : Promise.resolve({ data: [] as never[] }),
   ]);
+
+  // Spec 17 §0 Tranche 0 (générique) + Spec 18 Tranche 1 (créneaux) — SEULE définition de ce
+  // gating avec ProductsGrid.tsx (apps/admin/app/partner/(app)/products/ProductsGrid.tsx), via
+  // availabilityScreenFor (apps/admin/lib/products/useProductTypeFieldsState.ts).
+  const availabilityScreen = availabilityScreenFor(
+    product.type as ProductType,
+    (slotRulesRaw ?? []).length > 0,
+  );
 
   // Photos des chambres : dépend des id de roomTypesRaw, donc une 2e vague après le Promise.all
   // ci-dessus (dépendance réelle, pas parallélisable avec le reste).
@@ -153,17 +166,42 @@ export default async function EditProductPage({
                 ? "Editar transporte"
                 : "Editar actividad"}
         </h1>
-        <Link
-          href={`/admin/products/${product.id}/availability`}
-          className={buttonVariants({ variant: "outline" })}
-        >
-          Calendario &amp; cupos
-        </Link>
+        {availabilityScreen === "generic" || availabilityScreen === "slot" ? (
+          <Link
+            href={`/admin/products/${product.id}/availability`}
+            className={buttonVariants({ variant: "outline" })}
+          >
+            Calendario &amp; cupos
+          </Link>
+        ) : null}
+        {/* Spec 17 §0 Tranche 2 — le calendrier générique (product_availability, lien ci-dessus)
+            ne représente aucune chambre réelle pour un hôtel : grille dédiée chambres×dates. */}
+        {availabilityScreen === "room" ? (
+          <Link
+            href={`/admin/products/${product.id}/room-availability`}
+            className={buttonVariants({ variant: "outline" })}
+          >
+            Cupos por habitación
+          </Link>
+        ) : null}
+        {/* Spec 18 Tranche 1 — même raisonnement : product_availability ne représente pas la
+            capacité par créneau horaire d'une activité qui porte des product_slot_rules (ex.
+            jetski) ; grille dédiée horaires×dates, affichée seulement si au moins une règle existe.
+            Vient TOUJOURS avec le lien générique ci-dessus (availabilityScreenFor 'slot' n'exclut
+            pas 'generic', cf. son commentaire), jamais à sa place. */}
+        {availabilityScreen === "slot" ? (
+          <Link
+            href={`/admin/products/${product.id}/slot-availability`}
+            className={buttonVariants({ variant: "outline" })}
+          >
+            Cupos por horario
+          </Link>
+        ) : null}
       </div>
       {/* Bloc Statut séparé du formulaire d'édition — action distincte (feature 4), pas un champ
           de plus dans le même submit. */}
       <ProductStatusBlock productId={product.id} initialSellable={product.sellable} />
-      {hasLocationAndTags ? (
+      {hasTags ? (
         <ProductTagsBlock productId={product.id} allTags={allTags} initialTagIds={initialTagIds} />
       ) : null}
       <ProductPhotosBlock productId={product.id} initialPhotos={photos} />

@@ -253,6 +253,32 @@ export type Database = {
           },
         ]
       }
+      establishment_payout_accounts: {
+        Row: {
+          bank: Json
+          establishment_id: string
+          updated_at: string
+        }
+        Insert: {
+          bank: Json
+          establishment_id: string
+          updated_at?: string
+        }
+        Update: {
+          bank?: Json
+          establishment_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "establishment_payout_accounts_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: true
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       establishment_proposals: {
         Row: {
           created_at: string
@@ -380,6 +406,73 @@ export type Database = {
           },
         ]
       }
+      ledger_entries: {
+        Row: {
+          amount_cop: number
+          beneficiary_type: string
+          comprobante_path: string | null
+          created_at: string
+          entry_type: string
+          establishment_id: string | null
+          id: string
+          note: string | null
+          order_line_id: string
+          paid_at: string | null
+          referrer_partner_id: string | null
+          status: string
+        }
+        Insert: {
+          amount_cop: number
+          beneficiary_type: string
+          comprobante_path?: string | null
+          created_at?: string
+          entry_type: string
+          establishment_id?: string | null
+          id?: string
+          note?: string | null
+          order_line_id: string
+          paid_at?: string | null
+          referrer_partner_id?: string | null
+          status?: string
+        }
+        Update: {
+          amount_cop?: number
+          beneficiary_type?: string
+          comprobante_path?: string | null
+          created_at?: string
+          entry_type?: string
+          establishment_id?: string | null
+          id?: string
+          note?: string | null
+          order_line_id?: string
+          paid_at?: string | null
+          referrer_partner_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ledger_entries_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ledger_entries_order_line_id_fkey"
+            columns: ["order_line_id"]
+            isOneToOne: false
+            referencedRelation: "order_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ledger_entries_referrer_partner_id_fkey"
+            columns: ["referrer_partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_lines: {
         Row: {
           account_id: string | null
@@ -390,6 +483,8 @@ export type Database = {
           commission_case: string
           created_at: string
           date: string
+          end_date: string | null
+          holder_name: string
           id: string
           order_id: string
           price_cop: number
@@ -398,6 +493,9 @@ export type Database = {
           referrer_commission_cop: number
           referrer_partner_id: string | null
           referrer_pct: number
+          replaces_order_line_id: string | null
+          room_type_id: string | null
+          slot_start_time: string | null
           status: string
           total_cop: number
         }
@@ -410,6 +508,8 @@ export type Database = {
           commission_case: string
           created_at?: string
           date: string
+          end_date?: string | null
+          holder_name: string
           id?: string
           order_id: string
           price_cop: number
@@ -418,6 +518,9 @@ export type Database = {
           referrer_commission_cop: number
           referrer_partner_id?: string | null
           referrer_pct: number
+          replaces_order_line_id?: string | null
+          room_type_id?: string | null
+          slot_start_time?: string | null
           status?: string
           total_cop: number
         }
@@ -430,6 +533,8 @@ export type Database = {
           commission_case?: string
           created_at?: string
           date?: string
+          end_date?: string | null
+          holder_name?: string
           id?: string
           order_id?: string
           price_cop?: number
@@ -438,6 +543,9 @@ export type Database = {
           referrer_commission_cop?: number
           referrer_partner_id?: string | null
           referrer_pct?: number
+          replaces_order_line_id?: string | null
+          room_type_id?: string | null
+          slot_start_time?: string | null
           status?: string
           total_cop?: number
         }
@@ -470,6 +578,20 @@ export type Database = {
             referencedRelation: "partners"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "order_lines_replaces_order_line_id_fkey"
+            columns: ["replaces_order_line_id"]
+            isOneToOne: false
+            referencedRelation: "order_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_lines_room_type_id_fkey"
+            columns: ["room_type_id"]
+            isOneToOne: false
+            referencedRelation: "product_room_types"
+            referencedColumns: ["id"]
+          },
         ]
       }
       orders: {
@@ -478,11 +600,12 @@ export type Database = {
           attribution_code: string | null
           attribution_source: string | null
           created_at: string
-          holder_email: string | null
+          holder_email: string
           holder_name: string
           holder_phone: string | null
           id: string
           marketing_consent: boolean
+          payment_status: string
           referrer_partner_id: string | null
           status: string
         }
@@ -491,11 +614,12 @@ export type Database = {
           attribution_code?: string | null
           attribution_source?: string | null
           created_at?: string
-          holder_email?: string | null
+          holder_email: string
           holder_name: string
           holder_phone?: string | null
           id?: string
           marketing_consent?: boolean
+          payment_status?: string
           referrer_partner_id?: string | null
           status?: string
         }
@@ -504,11 +628,12 @@ export type Database = {
           attribution_code?: string | null
           attribution_source?: string | null
           created_at?: string
-          holder_email?: string | null
+          holder_email?: string
           holder_name?: string
           holder_phone?: string | null
           id?: string
           marketing_consent?: boolean
+          payment_status?: string
           referrer_partner_id?: string | null
           status?: string
         }
@@ -930,6 +1055,116 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_reconciliation_entries: {
+        Row: {
+          attempts: number
+          created_at: string
+          external_reference: string | null
+          failure_reason: string
+          id: string
+          last_attempt_at: string | null
+          mp_payment_id: string | null
+          payment_id: string | null
+          raw_event: Json
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          external_reference?: string | null
+          failure_reason: string
+          id?: string
+          last_attempt_at?: string | null
+          mp_payment_id?: string | null
+          payment_id?: string | null
+          raw_event: Json
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          external_reference?: string | null
+          failure_reason?: string
+          id?: string
+          last_attempt_at?: string | null
+          mp_payment_id?: string | null
+          payment_id?: string | null
+          raw_event?: Json
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_reconciliation_entries_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_reconciliation_entries_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "partner_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount_cop: number
+          created_at: string
+          id: string
+          mp_payment_id: string | null
+          order_id: string
+          payer_email: string | null
+          provider: string
+          raw_last_event: Json | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cop: number
+          created_at?: string
+          id?: string
+          mp_payment_id?: string | null
+          order_id: string
+          payer_email?: string | null
+          provider?: string
+          raw_last_event?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cop?: number
+          created_at?: string
+          id?: string
+          mp_payment_id?: string | null
+          order_id?: string
+          payer_email?: string | null
+          provider?: string
+          raw_last_event?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pms_reconciliation_entries: {
         Row: {
           attempts: number
@@ -1015,19 +1250,16 @@ export type Database = {
       }
       product_calendar: {
         Row: {
-          closed_slot: string | null
           date: string
           open: boolean
           product_id: string
         }
         Insert: {
-          closed_slot?: string | null
           date: string
           open?: boolean
           product_id: string
         }
         Update: {
-          closed_slot?: string | null
           date?: string
           open?: boolean
           product_id?: string
@@ -1035,6 +1267,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "product_calendar_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_date_rates: {
+        Row: {
+          date: string
+          note: string | null
+          price_cop: number
+          product_id: string
+        }
+        Insert: {
+          date: string
+          note?: string | null
+          price_cop: number
+          product_id: string
+        }
+        Update: {
+          date?: string
+          note?: string | null
+          price_cop?: number
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_date_rates_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
@@ -1077,50 +1338,63 @@ export type Database = {
       product_proposals: {
         Row: {
           created_at: string
+          establishment_id: string | null
           id: string
           kind: string
           partner_id: string
           payload: Json
-          product_id: string
+          product_id: string | null
           rejection_reason: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           status: string
           submitted_by: string
+          type: string | null
           updated_at: string
           version: number
         }
         Insert: {
           created_at?: string
+          establishment_id?: string | null
           id?: string
           kind?: string
           partner_id: string
           payload: Json
-          product_id: string
+          product_id?: string | null
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
           submitted_by: string
+          type?: string | null
           updated_at?: string
           version?: number
         }
         Update: {
           created_at?: string
+          establishment_id?: string | null
           id?: string
           kind?: string
           partner_id?: string
           payload?: Json
-          product_id?: string
+          product_id?: string | null
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
           submitted_by?: string
+          type?: string | null
           updated_at?: string
           version?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "product_proposals_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "product_proposals_partner_id_fkey"
             columns: ["partner_id"]
@@ -1216,6 +1490,44 @@ export type Database = {
           },
         ]
       }
+      product_slot_availability: {
+        Row: {
+          booked: number
+          capacity: number
+          id: string
+          product_id: string
+          slot_date: string
+          slot_duration_minutes: number
+          slot_start_time: string
+        }
+        Insert: {
+          booked?: number
+          capacity: number
+          id?: string
+          product_id: string
+          slot_date: string
+          slot_duration_minutes: number
+          slot_start_time: string
+        }
+        Update: {
+          booked?: number
+          capacity?: number
+          id?: string
+          product_id?: string
+          slot_date?: string
+          slot_duration_minutes?: number
+          slot_start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_slot_availability_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_slot_rules: {
         Row: {
           capacity: number
@@ -1300,6 +1612,7 @@ export type Database = {
           check_in_time: string | null
           check_out_time: string | null
           created_at: string
+          default_capacity: number | null
           description: Json | null
           duration_days: number | null
           duration_minutes: number | null
@@ -1344,6 +1657,7 @@ export type Database = {
           check_in_time?: string | null
           check_out_time?: string | null
           created_at?: string
+          default_capacity?: number | null
           description?: Json | null
           duration_days?: number | null
           duration_minutes?: number | null
@@ -1388,6 +1702,7 @@ export type Database = {
           check_in_time?: string | null
           check_out_time?: string | null
           created_at?: string
+          default_capacity?: number | null
           description?: Json | null
           duration_days?: number | null
           duration_minutes?: number | null
@@ -1564,6 +1879,67 @@ export type Database = {
           },
         ]
       }
+      room_type_availability: {
+        Row: {
+          booked: number
+          capacity: number
+          date: string
+          id: string
+          room_type_id: string
+        }
+        Insert: {
+          booked?: number
+          capacity: number
+          date: string
+          id?: string
+          room_type_id: string
+        }
+        Update: {
+          booked?: number
+          capacity?: number
+          date?: string
+          id?: string
+          room_type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_type_availability_room_type_id_fkey"
+            columns: ["room_type_id"]
+            isOneToOne: false
+            referencedRelation: "product_room_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_type_date_rates: {
+        Row: {
+          date: string
+          note: string | null
+          price_cop: number
+          room_type_id: string
+        }
+        Insert: {
+          date: string
+          note?: string | null
+          price_cop: number
+          room_type_id: string
+        }
+        Update: {
+          date?: string
+          note?: string | null
+          price_cop?: number
+          room_type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_type_date_rates_room_type_id_fkey"
+            columns: ["room_type_id"]
+            isOneToOne: false
+            referencedRelation: "product_room_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1577,6 +1953,15 @@ export type Database = {
           p_storage_path: string
         }
         Returns: string
+      }
+      apply_payment_webhook: {
+        Args: {
+          p_external_reference: string
+          p_mp_payment_id: string
+          p_raw_event: Json
+          p_status: string
+        }
+        Returns: Json
       }
       cancel_order: { Args: { p_order_id: string }; Returns: Json }
       check_partner_invitation: { Args: { p_token: string }; Returns: Json }
@@ -1610,6 +1995,18 @@ export type Database = {
           p_partner_id: string
         }
         Returns: string
+      }
+      create_manual_order_line: {
+        Args: {
+          p_date: string
+          p_holder_name: string
+          p_holder_phone?: string
+          p_note?: string
+          p_product_id: string
+          p_qty: number
+          p_slot_start_time?: string
+        }
+        Returns: Json
       }
       create_order: {
         Args: {
@@ -1652,9 +2049,38 @@ export type Database = {
         }
         Returns: Json
       }
+      create_payment_intent: { Args: { p_order_id: string }; Returns: Json }
+      create_product_from_proposal: {
+        Args: {
+          p_establishment_id: string
+          p_partner_id: string
+          p_payload: Json
+          p_type: string
+        }
+        Returns: string
+      }
       delete_product: {
         Args: { p_note?: string; p_product_id: string }
         Returns: undefined
+      }
+      expand_product_slots: {
+        Args: { p_date: string; p_product_id: string }
+        Returns: {
+          capacity: number
+          slot_duration_minutes: number
+          slot_start_time: string
+        }[]
+      }
+      expire_stale_payment_orders: { Args: never; Returns: undefined }
+      get_product_slots: {
+        Args: { p_from: string; p_product_id: string; p_to: string }
+        Returns: {
+          booked: number
+          capacity: number
+          slot_date: string
+          slot_duration_minutes: number
+          slot_start_time: string
+        }[]
       }
       grant_capability: {
         Args: {
@@ -1708,6 +2134,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      mark_ledger_entry_paid: {
+        Args: {
+          p_comprobante_path: string
+          p_ledger_entry_id: string
+          p_note: string
+        }
+        Returns: Json
+      }
       moderate_establishment_proposal: {
         Args: {
           p_corrected_payload?: Json
@@ -1725,6 +2159,16 @@ export type Database = {
           p_expected_version: number
           p_proposal_id: string
           p_rejection_reason?: string
+        }
+        Returns: Json
+      }
+      modify_order_line: {
+        Args: {
+          p_new_date: string
+          p_new_end_date?: string
+          p_new_qty: number
+          p_order_line_id: string
+          p_reason: string
         }
         Returns: Json
       }
@@ -1753,9 +2197,26 @@ export type Database = {
         }
         Returns: Json
       }
+      resolve_date_price: {
+        Args: {
+          p_date: string
+          p_product_id: string
+          p_room_type_id: string
+          p_tier_base_price_cop: number
+        }
+        Returns: number
+      }
+      resolve_payment_reconciliation_entry: {
+        Args: { p_entry_id: string; p_note: string }
+        Returns: Json
+      }
       resolve_reconciliation_entry: {
         Args: { p_entry_id: string; p_note: string }
         Returns: Json
+      }
+      resolve_tier_price: {
+        Args: { p_base_price_cop: number; p_price_tiers: Json; p_qty: number }
+        Returns: number
       }
       revoke_partner_invitation: {
         Args: { p_invitation_id: string }
@@ -1763,6 +2224,20 @@ export type Database = {
       }
       set_capability_status: {
         Args: { p_capability_id: string; p_new_status: string; p_note?: string }
+        Returns: Json
+      }
+      set_date_rate: {
+        Args: {
+          p_date: string
+          p_entity_id: string
+          p_entity_type: string
+          p_note?: string
+          p_price_cop: number
+        }
+        Returns: Json
+      }
+      set_establishment_payout_account: {
+        Args: { p_bank: Json; p_establishment_id: string; p_reason: string }
         Returns: Json
       }
       set_order_line_status: {
@@ -1791,6 +2266,16 @@ export type Database = {
         Args: { p_note?: string; p_product_id: string; p_sellable: boolean }
         Returns: undefined
       }
+      set_product_slot_capacity: {
+        Args: {
+          p_capacity: number
+          p_date: string
+          p_note?: string
+          p_product_id: string
+          p_slot_start_time: string
+        }
+        Returns: Json
+      }
       set_provider_resource_capacity: {
         Args: {
           p_capacity: number
@@ -1800,6 +2285,16 @@ export type Database = {
         }
         Returns: Json
       }
+      set_room_type_availability: {
+        Args: {
+          p_capacity: number
+          p_date: string
+          p_note?: string
+          p_room_type_id: string
+        }
+        Returns: Json
+      }
+      slugify: { Args: { p_text: string }; Returns: string }
       start_offboarding: { Args: { p_partner_id: string }; Returns: Json }
       submit_establishment_creation_proposal: {
         Args: { p_payload: Json }
@@ -1809,8 +2304,16 @@ export type Database = {
         Args: { p_establishment_id: string; p_payload: Json }
         Returns: Json
       }
+      submit_establishment_photos_proposal: {
+        Args: { p_establishment_id: string; p_storage_paths: string[] }
+        Returns: Json
+      }
       submit_photos_proposal: {
         Args: { p_product_id: string; p_storage_paths: string[] }
+        Returns: Json
+      }
+      submit_product_creation_proposal: {
+        Args: { p_establishment_id: string; p_payload: Json; p_type: string }
         Returns: Json
       }
       submit_product_proposal: {

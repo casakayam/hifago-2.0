@@ -15,6 +15,10 @@ export const ORDERS_FILTER_DEFINITIONS: FilterDefinition[] = [
   { kind: "date", name: "date_from" },
   { kind: "date", name: "date_to" },
   { kind: "text", name: "q" },
+  // Spec 17 §0 Tranche 1 — jamais exposé dans ORDERS_FILTERS (pas de select dédié) : arrive
+  // uniquement via le lien "voir les réservations de ce jour" posé sur une case du calendrier
+  // produit (AvailabilityCalendar), pas un filtre que l'admin choisit dans l'UI de la liste.
+  { kind: "text", name: "product_id" },
 ];
 
 export const ORDERS_FILTERS: DataListFilter[] = [
@@ -30,12 +34,13 @@ export const ORDERS_FILTERS: DataListFilter[] = [
   { kind: "text", name: "q", label: "Titular", placeholder: "Nombre del titular" },
 ];
 
-// products.type — check constraint réel (products_type_check,
-// supabase/migrations/20260814190000_products_evento_vitrine.sql). Pas de traduction ES établie
-// dans le projet pour ces 6 valeurs (la colonne "Tipo" de la liste affiche déjà la valeur brute
-// telle quelle, cf. ProductsList.tsx) — le filtre reprend la même convention plutôt que d'inventer
-// une traduction non tranchée.
-const PRODUCT_TYPES = ["lodging", "activity", "transport", "tour", "camp", "evento"] as const;
+// products.type — check constraint réel (products_type_check, dernière version
+// supabase/migrations/20260817160000_calendar_tranche0_fixes.sql, qui retire 'tour' — vestige
+// jamais créable depuis product-form.tsx, cf. docs/specs/17-calendrier-disponibilite-refonte.md
+// §0 Tranche 0). Pas de traduction ES établie dans le projet pour ces 6 valeurs (la colonne "Tipo"
+// de la liste affiche déjà la valeur brute telle quelle, cf. ProductsList.tsx) — le filtre reprend
+// la même convention plutôt que d'inventer une traduction non tranchée.
+const PRODUCT_TYPES = ["lodging", "activity", "transport", "hotel", "camp", "evento"] as const;
 
 export const PRODUCTS_FILTER_DEFINITIONS: FilterDefinition[] = [
   { kind: "text", name: "q" },
@@ -100,7 +105,7 @@ export const CAMPAIGNS_FILTERS: DataListFilter[] = [
 // establishments.status ('active'|'archived') — même vocabulaire ES qu'ailleurs dans l'app
 // (partner/(app)/page.tsx : Activo/Suspendido pour un autre statut, "Archivado" étendu ici pour
 // la valeur propre à establishments/partners, absente de cette vocabulaire-là).
-const ESTABLISHMENT_STATUS_LABELS: Record<string, string> = {
+export const ESTABLISHMENT_STATUS_LABELS: Record<string, string> = {
   active: "Activo",
   archived: "Archivado",
 };

@@ -424,10 +424,13 @@ correspondre exactement à la politique d'annulation — ce n'est plus vrai depu
 politique est devenue une règle fixe et universelle (client §7/A3) ; tout schéma dormant qui
 « correspond bien » doit être revérifié à chaque nouvelle décision, pas supposé acquis.
 
-**Décision (2026-08-11) — on ne touche pas au paiement pour l'instant.** La table `payments`
-(scaffoldée pour Wompi) reste notée ici comme un **axe possible**, pas une piste actée — rien à
-généraliser ni à trancher maintenant. À rouvrir seulement quand le paiement en ligne (gateway,
-MercadoPago/Stripe ou autre) sera définitivement décidé, pas avant.
+**Décision (2026-08-11), rouverte le 2026-08-18** — le paiement en ligne est désormais tranché :
+Mercado Pago remplace Wompi comme gateway cible, acompte obligatoire, nouvelle table `payments`
+(schéma propre, ne reprend pas le scaffolding Wompi noté ci-dessous comme legacy), nouveau ledger
+de règlement (`ledger_entries`) pour tracer les rétributions dues au référent et à l'établissement
+avant leur virement Mercado Pago automatique. Voir
+`docs/specs/19-paiement-mercadopago-acompte-ledger.md` pour le modèle de données complet et le
+découpage en tranches.
 
 **Le troisième axe structurant — contenu multilingue** : quasiment **tout champ texte libre**
 saisi par un partenaire ou un admin (noms, descriptions, accroches, inclusions, programmes

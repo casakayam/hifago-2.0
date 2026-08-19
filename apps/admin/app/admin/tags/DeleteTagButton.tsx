@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Modal } from "@hifago/ui";
+import { Button, Modal, toast } from "@hifago/ui";
 
 // Mirroir de apps/admin/app/admin/invitations/RevokeInvitationButton.tsx — pattern déjà utilisé
 // dans le projet pour une confirmation destructive (Modal + Button variant="danger"), pas
@@ -19,11 +19,9 @@ export function DeleteTagButton({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleDelete() {
-    setError(null);
     setIsSubmitting(true);
 
     const supabase = createClient();
@@ -32,10 +30,11 @@ export function DeleteTagButton({
     setIsSubmitting(false);
 
     if (deleteError) {
-      setError("No se pudo eliminar la etiqueta.");
+      toast.danger("No se pudo eliminar la etiqueta.");
       return;
     }
 
+    toast.success("Tag eliminado.");
     setOpen(false);
     // docs/specs/10-listes-standardisees-admin-socio.md — Eliminar vit désormais uniquement sur
     // la fiche /admin/tags/[id] (jamais sur la liste) : router.push nécessaire pour ne pas rester
@@ -68,11 +67,6 @@ export function DeleteTagButton({
                     ? `"${label}" será retirada de ${usageCount} actividad${usageCount > 1 ? "es" : ""}. Esta acción no se puede deshacer.`
                     : `Esta acción no se puede deshacer.`}
                 </p>
-                {error ? (
-                  <p role="alert" data-testid="delete-tag-error" className="text-sm text-danger">
-                    {error}
-                  </p>
-                ) : null}
               </Modal.Body>
               <Modal.Footer>
                 <Button

@@ -75,6 +75,58 @@ describe("formatOccurrenceLabel", () => {
     expect(label).toBe("Cada 7 días, de forma indefinida.");
   });
 
+  it("récurrent hebdomadaire (fréquence multiple de 7) + date d'ancrage → jour de semaine affiché", () => {
+    // 2026-09-22 est un mardi.
+    const label = formatOccurrenceLabel(
+      {
+        ...base,
+        occurrenceType: "recurring",
+        occurrenceDate: "2026-09-22",
+        recurrenceFrequencyDays: 14,
+        recurrenceEndDate: "2026-12-31",
+      },
+      "es",
+      t
+    );
+    expect(label).toBe(`Los martes, cada 14 días, hasta el ${formatDate("2026-12-31")}.`);
+  });
+
+  it("récurrent hebdomadaire, fin par nombre d'occurrences", () => {
+    const label = formatOccurrenceLabel(
+      { ...base, occurrenceType: "recurring", occurrenceDate: "2026-09-22", recurrenceFrequencyDays: 7, recurrenceEndCount: 5 },
+      "es",
+      t
+    );
+    expect(label).toBe("Los martes, cada 7 días, durante 5 repeticiones.");
+  });
+
+  it("récurrent hebdomadaire, indéfini", () => {
+    const label = formatOccurrenceLabel(
+      { ...base, occurrenceType: "recurring", occurrenceDate: "2026-09-22", recurrenceFrequencyDays: 7 },
+      "es",
+      t
+    );
+    expect(label).toBe("Los martes, cada 7 días, de forma indefinida.");
+  });
+
+  it("récurrent NON multiple de 7 malgré une date d'ancrage → pas de jour de semaine (pas mathématiquement déterminable)", () => {
+    const label = formatOccurrenceLabel(
+      { ...base, occurrenceType: "recurring", occurrenceDate: "2026-09-22", recurrenceFrequencyDays: 10 },
+      "es",
+      t
+    );
+    expect(label).toBe("Cada 10 días, de forma indefinida.");
+  });
+
+  it("récurrent multiple de 7 SANS date d'ancrage (donnée historique) → repli sur le texte simple", () => {
+    const label = formatOccurrenceLabel(
+      { ...base, occurrenceType: "recurring", occurrenceDate: null, recurrenceFrequencyDays: 7 },
+      "es",
+      t
+    );
+    expect(label).toBe("Cada 7 días, de forma indefinida.");
+  });
+
   it("les 4 cas rendent un texte distinct les uns des autres", () => {
     const labels = [
       formatOccurrenceLabel({ ...base, occurrenceType: "once", occurrenceDate: "2026-09-20" }, "es", t),

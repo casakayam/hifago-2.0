@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Checkbox, Input, Label, TextArea, TextField, cn } from "@hifago/ui";
+import { Button, Checkbox, Input, Label, TextArea, TextField, cn, toast } from "@hifago/ui";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
 
 // Miroir local du type Json généré par Supabase — même convention que NewEstablishmentForm.tsx.
@@ -47,8 +47,6 @@ export function EstablishmentEditBlock({
   const [lat, setLat] = useState(initialLat);
   const [lon, setLon] = useState(initialLon);
 
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const addressSearchRef = useRef<HTMLDivElement | null>(null);
@@ -77,11 +75,9 @@ export function EstablishmentEditBlock({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
-    setSuccess(false);
 
     if (!nombre.trim()) {
-      setError("El nombre es obligatorio.");
+      toast.danger("El nombre es obligatorio.");
       return;
     }
 
@@ -102,11 +98,11 @@ export function EstablishmentEditBlock({
 
     const result = data as { ok: boolean } | null;
     if (rpcError || !result?.ok) {
-      setError("No se pudo actualizar el establecimiento.");
+      toast.danger("No se pudo actualizar el establecimiento.");
       return;
     }
 
-    setSuccess(true);
+    toast.success("Establecimiento actualizado.");
     router.refresh();
   }
 
@@ -130,7 +126,7 @@ export function EstablishmentEditBlock({
         </p>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-4">
+      <form onSubmit={handleSubmit} noValidate className="flex max-w-2xl flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="edit-nombre">Nombre</Label>
           <Input
@@ -221,17 +217,6 @@ export function EstablishmentEditBlock({
             />
           </div>
         </div>
-
-        {success ? (
-          <p role="status" data-testid="establishment-edit-success" className="text-sm text-success">
-            Establecimiento actualizado.
-          </p>
-        ) : null}
-        {error ? (
-          <p role="alert" className="text-sm text-danger">
-            {error}
-          </p>
-        ) : null}
 
         <Button type="submit" isDisabled={isSubmitting} data-testid="save-establishment-button">
           {isSubmitting ? "Guardando…" : "Guardar cambios"}

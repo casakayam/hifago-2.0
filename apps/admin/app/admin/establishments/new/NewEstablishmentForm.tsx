@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Checkbox, ImageCrop, Input, Label, Modal, TextArea, TextField, cn } from "@hifago/ui";
+import { Button, Checkbox, ImageCrop, Input, Label, Modal, TextArea, TextField, cn, toast } from "@hifago/ui";
 import Link from "next/link";
 import { SearchableCombobox } from "@/components/searchable-combobox";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
@@ -57,9 +57,7 @@ export function NewEstablishmentForm({
   const [photos, setPhotos] = useState<{ path: string; url: string }[]>([]);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
-  const [photoError, setPhotoError] = useState<string | null>(null);
 
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const addressSearchRef = useRef<HTMLDivElement | null>(null);
@@ -87,7 +85,6 @@ export function NewEstablishmentForm({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    setPhotoError(null);
     setPendingImage(URL.createObjectURL(file));
   }
 
@@ -102,10 +99,11 @@ export function NewEstablishmentForm({
         | { ok: false; reason: string };
 
       if (!result.ok) {
-        setPhotoError("No se pudo subir la foto.");
+        toast.danger("No se pudo subir la foto.");
         return;
       }
       setPhotos((prev) => [...prev, { path: result.storage_path, url: URL.createObjectURL(blob) }]);
+      toast.success("Foto añadida.");
     } finally {
       if (pendingImage) URL.revokeObjectURL(pendingImage);
       setPendingImage(null);
@@ -134,10 +132,9 @@ export function NewEstablishmentForm({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
 
     if (!partnerId || !nombre.trim()) {
-      setError("El nombre y el partner son obligatorios.");
+      toast.danger("El nombre y el partner son obligatorios.");
       return;
     }
 
@@ -161,7 +158,7 @@ export function NewEstablishmentForm({
     });
 
     if (rpcError || !establishmentId) {
-      setError("No se pudo crear el establecimiento.");
+      toast.danger("No se pudo crear el establecimiento.");
       setIsSubmitting(false);
       return;
     }
@@ -169,25 +166,31 @@ export function NewEstablishmentForm({
     // Les photos déjà uploadées dans le bucket (cf. handleFilesSelected) sont rattachées
     // maintenant que l'établissement existe (establishment_media.establishment_id est not null,
     // spec 04 §6) — un échec ici n'annule pas la création déjà réussie (spec 03 §9 : une photo en
-    // échec ne bloque jamais la création), juste un avertissement non bloquant.
-    for (const [index, photo] of photos.entries()) {
-      const { error: mediaError } = await supabase.rpc("add_catalog_media", {
-        p_entity_type: "establishment",
-        p_entity_id: establishmentId,
-        p_storage_path: photo.path,
-        p_sort: index,
-      });
+    // échec ne bloque jamais la création), juste un avertissement non bloquant. Chaque appel est
+    // indépendant (p_sort distinct par photo) : lancés en parallèle plutôt qu'attendus un par un.
+    const mediaResults = await Promise.all(
+      photos.map((photo, index) =>
+        supabase.rpc("add_catalog_media", {
+          p_entity_type: "establishment",
+          p_entity_id: establishmentId,
+          p_storage_path: photo.path,
+          p_sort: index,
+        })
+      )
+    );
+    for (const { error: mediaError } of mediaResults) {
       if (mediaError) {
-        console.warn("[NewEstablishmentForm] add_catalog_media a échoué :", mediaError);
+        toast.danger("El establecimiento se creó, pero una foto no se pudo asociar.");
       }
     }
 
+    toast.success("Establecimiento creado.");
     router.push("/admin/establishments");
     router.refresh();
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-8">
+    <form onSubmit={handleSubmit} noValidate className="flex max-w-2xl flex-col gap-8">
       <fieldset className="flex flex-col gap-4">
         <legend className="text-lg font-semibold">Identidad</legend>
 
@@ -322,11 +325,6 @@ export function NewEstablishmentForm({
             </span>
           </label>
           {isUploadingPhotos ? <p className="text-xs text-muted">Subiendo…</p> : null}
-          {photoError ? (
-            <p role="alert" className="text-sm text-danger">
-              {photoError}
-            </p>
-          ) : null}
           {photos.length > 0 ? (
             <ul className="flex flex-wrap gap-2" data-testid="photos-list">
               {photos.map((photo) => (
@@ -372,11 +370,6 @@ export function NewEstablishmentForm({
         </div>
       </fieldset>
 
-      {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
       <Button
         type="submit"
         isDisabled={isSubmitting || isUploadingPhotos}

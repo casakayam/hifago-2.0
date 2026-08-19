@@ -44,6 +44,24 @@ describe("validateSlotRules", () => {
   it("capacité non entière ou nulle → erreur", () => {
     expect(validateSlotRules([rule({ capacity: "0" })])).toMatch(/capacidad/);
   });
+
+  it("deux règles qui partagent un jour et se chevauchent en horaire → erreur", () => {
+    const a = rule({ weekdays: [1, 2], startTime: "09:00", endTime: "12:00" });
+    const b = rule({ weekdays: [2, 3], startTime: "11:00", endTime: "15:00" });
+    expect(validateSlotRules([a, b])).toMatch(/superponerse/);
+  });
+
+  it("deux règles qui se touchent exactement (fin = début) sur un jour commun ne se chevauchent pas", () => {
+    const a = rule({ weekdays: [1], startTime: "09:00", endTime: "12:00" });
+    const b = rule({ weekdays: [1], startTime: "12:00", endTime: "15:00" });
+    expect(validateSlotRules([a, b])).toBeNull();
+  });
+
+  it("deux règles qui se chevauchent en horaire mais sur des jours disjoints sont valides", () => {
+    const a = rule({ weekdays: [1], startTime: "09:00", endTime: "12:00" });
+    const b = rule({ weekdays: [2], startTime: "09:00", endTime: "12:00" });
+    expect(validateSlotRules([a, b])).toBeNull();
+  });
 });
 
 describe("generateSlotPreview", () => {

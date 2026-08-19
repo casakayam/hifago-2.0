@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button, Chip, DataList, type DataListAction, type DataListColumn, type DataListSort } from "@hifago/ui";
 import { formatCop } from "@hifago/domain";
 import { ChangeStatusDialog } from "./ChangeStatusDialog";
+import { ModifyOrderLineDialog } from "@/components/ModifyOrderLineDialog";
 import { ORDERS_FILTERS } from "@/lib/lists/filters";
 import { STATUS_CHIP_COLOR, STATUS_LABELS } from "./statusLabels";
 
@@ -12,6 +13,7 @@ export type OrderLineRow = {
   id: string;
   orderId: string;
   date: string;
+  endDate: string | null;
   qty: number;
   status: string;
   productName: string;
@@ -47,6 +49,8 @@ export function OrdersTable({
 }: OrdersTableProps) {
   const router = useRouter();
   const [dialogRowId, setDialogRowId] = useState<string | null>(null);
+  const [modifyRowId, setModifyRowId] = useState<string | null>(null);
+  const modifyRow = rows.find((row) => row.id === modifyRowId) ?? null;
 
   const columns: DataListColumn<OrderLineRow>[] = [
     { id: "date", header: "Fecha", sortable: true },
@@ -109,6 +113,23 @@ export function OrdersTable({
         </Button>
       ),
     },
+    {
+      id: "modify",
+      label: "Modificar",
+      // Spec 17 §0 Tranche 1 — modify_order_line n'accepte qu'une ligne au statut reserved
+      // (raise exception sinon) : masqué plutôt que de proposer un geste voué à l'échec.
+      isVisible: (row) => row.status === "reserved",
+      render: (row) => (
+        <Button
+          size="sm"
+          variant="outline"
+          data-testid={`modify-button-${row.id}`}
+          onPress={() => setModifyRowId(row.id)}
+        >
+          Modificar
+        </Button>
+      ),
+    },
   ];
 
   return (
@@ -144,6 +165,25 @@ export function OrdersTable({
             // `rows` dérive du serveur (page + tri + filtres) — un vrai refetch de la page
             // courante reste correct même si le nouveau statut sort la ligne du filtre actif.
             setDialogRowId(null);
+            router.refresh();
+          }}
+        />
+      ) : null}
+
+      {modifyRow ? (
+        <ModifyOrderLineDialog
+          orderLineId={modifyRow.id}
+          initialDate={modifyRow.date}
+          initialEndDate={modifyRow.endDate}
+          initialQty={modifyRow.qty}
+          open={modifyRowId !== null}
+          onOpenChange={(open) => {
+            if (!open) setModifyRowId(null);
+          }}
+          onSuccess={() => {
+            // La ligne d'origine passe superseded (sort du filtre "reserved" par défaut) et une
+            // nouvelle ligne apparaît — même raisonnement que ChangeStatusDialog, un vrai refetch.
+            setModifyRowId(null);
             router.refresh();
           }}
         />

@@ -1,0 +1,226 @@
+// Spec 20 §0 (docs/specs/20-agenda-reservations-socio.md) — anti-survente réelle de
+// create_manual_order_line, branche créneau horaire. Même risque combiné que
+// create_order_slot.concurrency.mjs (matérialisation product_slot_availability AVANT verrouillage,
+// jamais seedée à l'avance) ET plafond réel à capacité > 1 : capacité=5, N=20 tentatives
+// concurrentes du MÊME créneau jamais configuré, exactement 5 succès attendus. Différence avec
+// create_order : l'appelant est un OPERATOR authentifié (has_capability), pas un acheteur.
+//
+// Même squelette que les autres fichiers de ce dossier : driver `pg` direct, barrière de
+// synchronisation, jamais pgTAP ni Promise.all naïf, jamais de sleep pour synchroniser (cf.
+// hifago/CLAUDE.md §6). Contre la stack Supabase locale uniquement (127.0.0.1:54322) — jamais un
+// projet cloud partagé.
+import pg from "pg";
+
+const { Client } = pg;
+
+const CONNECTION_STRING = "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+const RUNS = 5; // barre d'acceptation : ≥5 runs consécutifs propres
+
+// Préfixe UUID dédié à ce fichier (93000000-…) — ne collisionne avec aucun préfixe déjà utilisé par
+// seed.sql (a0000000-…/b0000000-…) ni les autres tests de concurrence (00000000-…/20000000-…/
+// 60000000-…/70000000-…/80000000-…/90000000-…/91000000-…/92000000-…/99990000-…).
+const PARTNER_ID = "93000000-0000-4000-8000-000000000001";
+const ESTABLISHMENT_ID = "93000000-0000-4000-8000-000000000002";
+const OPERATOR_ID = "93000000-0000-4000-8000-000000000003";
+const PRODUCT_ID = "93000000-0000-4000-8000-000000000010";
+const DATE = "2029-06-01";
+const SLOT_START_TIME = "09:00";
+const CAPACITY = 5;
+const N = 20; // tentatives concurrentes visant le même créneau jamais configuré
+
+async function connectAuthenticated(count) {
+  return Promise.all(
+    Array.from({ length: count }, async () => {
+      const client = new Client({ connectionString: CONNECTION_STRING });
+      await client.connect();
+      await client.query("select set_config('request.jwt.claims', $1, false)", [
+        JSON.stringify({ sub: OPERATOR_ID, role: "authenticated" }),
+      ]);
+      return client;
+    })
+  );
+}
+
+function makeBarrier(count) {
+  let readyCount = 0;
+  let resolveGo;
+  const go = new Promise((resolve) => {
+    resolveGo = resolve;
+  });
+  function markReady() {
+    if (++readyCount === count) resolveGo();
+  }
+  return { go, markReady };
+}
+
+async function endAll(clients) {
+  await Promise.all(clients.map((client) => client.end()));
+}
+
+async function resetAndSeed(seedClient) {
+  await seedClient.query(
+    `delete from order_lines
+      where product_id in (select id from products where establishment_id = $1)`,
+    [ESTABLISHMENT_ID]
+  );
+  await seedClient.query(
+    `delete from orders where holder_email = 'reserva-manual@hifago.local'
+      and id not in (select order_id from order_lines)`
+  );
+  await seedClient.query(
+    `delete from product_slot_availability
+      where product_id in (select id from products where establishment_id = $1)`,
+    [ESTABLISHMENT_ID]
+  );
+  await seedClient.query(
+    `delete from product_slot_rules
+      where product_id in (select id from products where establishment_id = $1)`,
+    [ESTABLISHMENT_ID]
+  );
+  await seedClient.query("delete from products where establishment_id = $1", [ESTABLISHMENT_ID]);
+  await seedClient.query("delete from partner_capabilities where partner_id = $1", [PARTNER_ID]);
+  await seedClient.query("delete from establishments where id = $1", [ESTABLISHMENT_ID]);
+  // create_manual_order_line journalise dans audit_log (actor_id → partner_accounts, FK sans
+  // cascade) — à purger avant de supprimer le compte, sinon la 2e itération échoue.
+  await seedClient.query("delete from audit_log where actor_id = $1", [OPERATOR_ID]);
+  await seedClient.query("delete from partner_accounts where id = $1", [OPERATOR_ID]);
+  await seedClient.query("delete from partners where id = $1", [PARTNER_ID]);
+  await seedClient.query("delete from auth.users where id = $1", [OPERATOR_ID]);
+
+  await seedClient.query("insert into auth.users (id, email) values ($1, $2)", [
+    OPERATOR_ID,
+    "create-manual-order-line-slot-concurrency@test.local",
+  ]);
+  await seedClient.query("insert into partners (id, display_name) values ($1, $2)", [
+    PARTNER_ID,
+    "Manual Order Line Slot Concurrency Partner",
+  ]);
+  await seedClient.query("update partner_accounts set partner_id = $1 where id = $2", [
+    PARTNER_ID,
+    OPERATOR_ID,
+  ]);
+  await seedClient.query("insert into establishments (id, partner_id, name) values ($1, $2, $3)", [
+    ESTABLISHMENT_ID,
+    PARTNER_ID,
+    JSON.stringify({ es: "Manual Order Line Slot Concurrency Establishment" }),
+  ]);
+  await seedClient.query(
+    "insert into partner_capabilities (partner_id, role, source, status) values ($1, 'referrer', 'migration', 'active')",
+    [PARTNER_ID]
+  );
+  await seedClient.query(
+    `insert into partner_capabilities (partner_id, role, establishment_id, source, status)
+     values ($1, 'operator', $2, 'migration', 'active')`,
+    [PARTNER_ID, ESTABLISHMENT_ID]
+  );
+  await seedClient.query(
+    `insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug)
+     values ($1, $2, $3, 'activity', jsonb_build_object('es', 'Manual slot concurrency activity'),
+             50000, true, $4)`,
+    [PRODUCT_ID, PARTNER_ID, ESTABLISHMENT_ID, "manual-slot-concurrency-activity"]
+  );
+  // Règle couvrant tous les jours de la semaine — le jour réel de DATE n'a aucune importance ici,
+  // seul compte le créneau 09:00-10:00/60min qu'elle génère (capacité CAPACITY).
+  await seedClient.query(
+    `insert into product_slot_rules (product_id, weekdays, start_time, end_time, slot_duration_minutes, capacity)
+     values ($1, array[1,2,3,4,5,6,7]::smallint[], '09:00', '10:00', 60, $2)`,
+    [PRODUCT_ID, CAPACITY]
+  );
+  // AUCUNE ligne product_slot_availability semée ici, volontairement — c'est exactement le scénario
+  // ciblé : la toute première réservation manuelle d'un créneau jamais matérialisé, sous
+  // concurrence réelle.
+}
+
+async function runOnce(run) {
+  const seedClient = new Client({ connectionString: CONNECTION_STRING });
+  await seedClient.connect();
+  await resetAndSeed(seedClient);
+
+  const clients = await connectAuthenticated(N);
+  const { go, markReady } = makeBarrier(N);
+
+  const settled = await Promise.allSettled(
+    clients.map(async (client) => {
+      markReady();
+      await go;
+      const res = await client.query(
+        "select create_manual_order_line($1, $2, $3, $4, $5, $6, $7) as result",
+        [PRODUCT_ID, DATE, 1, "Concurrency Walk-in", SLOT_START_TIME, null, "Test de concurrence"]
+      );
+      return res.rows[0].result;
+    })
+  );
+
+  const rejected = settled.filter((s) => s.status === "rejected");
+  const results = settled.filter((s) => s.status === "fulfilled").map((s) => s.value);
+  const successes = results.filter((r) => r.ok === true);
+  const failures = results.filter((r) => r.ok === false);
+  const unexpectedFailureReasons = failures.filter((r) => r.reason !== "full");
+
+  const { rows: state } = await seedClient.query(
+    `select capacity, booked from product_slot_availability
+      where product_id = $1 and slot_date = $2 and slot_start_time = $3`,
+    [PRODUCT_ID, DATE, SLOT_START_TIME]
+  );
+  const materializedOnce = state.length === 1;
+  const bookedMatchesCapacity =
+    materializedOnce && state[0].capacity === CAPACITY && state[0].booked === CAPACITY;
+
+  console.log(
+    `  run ${run}: succès ${successes.length} / ${N} (doit être exactement ${CAPACITY}), ` +
+      `échecs ${failures.length} (raison attendue: 'full'), rejets réseau/driver ${rejected.length}, ` +
+      `lignes product_slot_availability matérialisées=${state.length} (doit être 1), ` +
+      `booked=${state[0]?.booked} capacity=${state[0]?.capacity}`
+  );
+  if (rejected.length > 0) {
+    for (const r of rejected) {
+      console.error(`    rejet inattendu (connexion/deadlock ?) : ${r.reason?.message ?? r.reason}`);
+    }
+  }
+  if (unexpectedFailureReasons.length > 0) {
+    console.error(`    échecs avec une raison inattendue : ${JSON.stringify(unexpectedFailureReasons)}`);
+  }
+  if (!materializedOnce) {
+    console.error(
+      `    matérialisation dérivée : ${state.length} ligne(s) product_slot_availability au lieu de 1`
+    );
+  }
+
+  await endAll(clients);
+  await seedClient.end();
+
+  return (
+    rejected.length === 0 &&
+    successes.length === CAPACITY &&
+    unexpectedFailureReasons.length === 0 &&
+    bookedMatchesCapacity
+  );
+}
+
+async function main() {
+  console.log(
+    `\n=== create_manual_order_line — branche créneau horaire sous concurrence (N=${N}, capacité=${CAPACITY}, ${RUNS} runs consécutifs requis) ===`
+  );
+  for (let run = 1; run <= RUNS; run++) {
+    let clean;
+    try {
+      clean = await runOnce(run);
+    } catch (err) {
+      console.error(`  run ${run} a levé une erreur : ${err.message}`);
+      clean = false;
+    }
+    if (!clean) {
+      console.error(`\nÉCHEC — run ${run}/${RUNS}. Zéro tolérance à un échec isolé.`);
+      process.exit(1);
+    }
+  }
+  console.log(
+    `\n${RUNS} runs consécutifs propres — branche créneau de create_manual_order_line validée sous concurrence réelle (aucune survente, aucun conflit de matérialisation).`
+  );
+  process.exit(0);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

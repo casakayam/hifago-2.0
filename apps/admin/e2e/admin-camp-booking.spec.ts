@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { webProductUrl } from "@hifago/e2e-support";
+import { webProductUrl, mockMercadoPagoCheckout } from "@hifago/e2e-support";
 import { slugify } from "../lib/utils";
 
 // Feature 20 (Admin : créer et réserver un camp multi-jours) — chemin admin-direct de bout en
@@ -56,13 +56,17 @@ test("admin crée un camp, configure la ressource partagée et la capacité prop
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
   const establishmentRow = page.locator("tr", { hasText: establishmentName });
-  const resourceLink = establishmentRow.getByTestId(/^resource-link-/);
-  const resourceHref = await resourceLink.getAttribute("href");
-  if (!resourceHref) throw new Error("href introuvable sur le lien recurso compartido");
-  const establishmentId = resourceHref.split("/")[3];
+  // Spec 17 §0 Tranche 0 : "Recurso compartido" est désormais masqué tant que l'établissement ne
+  // porte aucun camp/evento (isVisible côté EstablishmentsList) — inexistant à ce stade, avant la
+  // création du camp ci-dessous. establishmentId extrait du lien "+ Actividad", toujours visible.
+  const addActivityLink = establishmentRow.getByRole("link", { name: "+ Actividad" });
+  const addActivityHref = await addActivityLink.getAttribute("href");
+  if (!addActivityHref) throw new Error("href introuvable sur le lien + Actividad");
+  const establishmentId = new URL(addActivityHref, page.url()).searchParams.get("establishment");
+  if (!establishmentId) throw new Error("establishment introuvable dans le href + Actividad");
 
   // 2. Camp de 5 jours, rattaché à cet établissement ------------------------------------------
-  await establishmentRow.getByRole("link", { name: "+ Actividad" }).click();
+  await addActivityLink.click();
   await expect(page).toHaveURL(/\/admin\/products\/new\?establishment=/);
   // Spec 11 — ProductForm est nettement plus lourd à hydrater que l'ancien NewProductForm
   // (galerie/crop, éditeur de créneaux, autocomplete d'adresse) : sans cette attente, la toute
@@ -119,8 +123,14 @@ test("admin crée un camp, configure la ressource partagée et la capacité prop
 
   await page.locator('input[name="holder-name"]').fill(`Cliente Camp E2E ${stamp}`);
   await page.locator('input[name="holder-phone"]').fill("+57 300 000 0099");
+  await page.locator('input[name="holder-email"]').fill(`cliente.camp.${stamp}@example.com`);
+  // Spec 19 §0 Tranche 1 : create_order réussi enchaîne désormais automatiquement le paiement
+  // Mercado Pago (redirection réelle, seul l'appel SDK externe est mocké). order-success n'est
+  // qu'un état transitoire — la redirection peut déjà l'avoir remplacé avant que Playwright ne
+  // l'observe (race constatée en testant) : attendre l'URL finale est le seul checkpoint fiable.
+  const { redirectUrl } = await mockMercadoPagoCheckout(page);
   await page.getByTestId("submit-order-button").click();
-  await expect(page.getByTestId("order-success")).toBeVisible();
+  await page.waitForURL(redirectUrl);
 
   // 6. Seconde tentative sur une ressource désormais épuisée → refus clair -------------------
   // La capacité PROPRE du camp (3, dont 1 seul utilisé) resterait disponible côté calendrier
@@ -135,6 +145,7 @@ test("admin crée un camp, configure la ressource partagée et la capacité prop
 
   await page.locator('input[name="holder-name"]').fill(`Cliente Camp E2E Retry ${stamp}`);
   await page.locator('input[name="holder-phone"]').fill("+57 300 000 0098");
+  await page.locator('input[name="holder-email"]').fill(`cliente.camp.retry.${stamp}@example.com`);
   await page.getByTestId("submit-order-button").click();
 
   await expect(page.getByTestId("checkout-error")).toBeVisible();

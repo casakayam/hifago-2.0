@@ -4,13 +4,13 @@ import { useState } from "react";
 import { createClient } from "@hifago/supabase/client";
 import {
   Button,
-  ErrorMessage,
   Label,
   ListBox,
   Modal,
   Select,
   TextArea,
   TextField,
+  toast,
   useOverlayState,
 } from "@hifago/ui";
 
@@ -37,13 +37,11 @@ export function ChangeStatusDialog({
 }) {
   const [status, setStatus] = useState<string>("");
   const [reason, setReason] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   function reset() {
     setStatus("");
     setReason("");
-    setError(null);
   }
 
   // Dialogue piloté entièrement depuis l'extérieur (OrdersTable) — pas de Modal.Trigger interne,
@@ -58,12 +56,11 @@ export function ChangeStatusDialog({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
 
     // Motif obligatoire (pas optionnel comme set_product_sellable) : vérifié aussi côté serveur,
     // mais un message clair immédiat évite un aller-retour réseau pour une erreur évidente.
     if (!status || reason.trim() === "") {
-      setError("El estado y el motivo son obligatorios.");
+      toast.danger("El estado y el motivo son obligatorios.");
       return;
     }
 
@@ -77,10 +74,11 @@ export function ChangeStatusDialog({
     setIsSubmitting(false);
 
     if (rpcError || !(data as { ok: boolean } | null)?.ok) {
-      setError(rpcError?.message ?? "No se pudo cambiar el estado.");
+      toast.danger(rpcError?.message ?? "No se pudo cambiar el estado.");
       return;
     }
 
+    toast.success("Estado actualizado.");
     onSuccess(status);
     reset();
     onOpenChange(false);
@@ -95,7 +93,7 @@ export function ChangeStatusDialog({
             <Modal.Header>
               <Modal.Heading>Cambiar estado</Modal.Heading>
             </Modal.Header>
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} noValidate>
               <Modal.Body className="flex flex-col gap-4">
                 <Select
                   fullWidth
@@ -124,12 +122,6 @@ export function ChangeStatusDialog({
                   <Label>Motivo</Label>
                   <TextArea name="reason" data-testid="status-reason-input" />
                 </TextField>
-
-                {error ? (
-                  <ErrorMessage role="alert" data-testid="status-dialog-error">
-                    {error}
-                  </ErrorMessage>
-                ) : null}
               </Modal.Body>
               <Modal.Footer>
                 <Button type="submit" isDisabled={isSubmitting} data-testid="confirm-status-button">

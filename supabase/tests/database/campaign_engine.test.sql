@@ -60,10 +60,10 @@ insert into partner_capabilities (account_id, role, source, status) values
 
 -- orders : uniquement la table orders (list_audience_members/process_campaign_batch ne lisent
 -- jamais order_lines) — account_id + holder_name + marketing_consent suffisent.
-insert into orders (account_id, holder_name, marketing_consent) values
-  ('dd110000-0000-4000-8000-000000000026', 'Cliente Consentimiento OK', true),
-  ('dd110000-0000-4000-8000-000000000027', 'Cliente Sin Consentimiento', false),
-  ('dd110000-0000-4000-8000-000000000028', 'Cliente Inalcanzable', true);
+insert into orders (account_id, holder_name, holder_email, marketing_consent) values
+  ('dd110000-0000-4000-8000-000000000026', 'Cliente Consentimiento OK', 'consentimiento-ok@test.local', true),
+  ('dd110000-0000-4000-8000-000000000027', 'Cliente Sin Consentimiento', 'sin-consentimiento@test.local', false),
+  ('dd110000-0000-4000-8000-000000000028', 'Cliente Inalcanzable', 'inalcanzable@test.local', true);
 
 set local role authenticated;
 

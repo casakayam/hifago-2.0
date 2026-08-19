@@ -1,22 +1,5 @@
-import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
-import { generateTotp, withDb } from "@hifago/e2e-support";
-
-// Feature 31 (docs/specs/07-connexion-inscription-complete.md) — Mailpit local (port 54324, déjà
-// exposé par `supabase start`) reçoit réellement les emails de confirmation/reset envoyés par
-// Supabase Auth : ces tests lisent le vrai email plutôt que de simuler le clic, seule façon de
-// prouver que le lien {{ .TokenHash }} + /auth/callback fonctionne de bout en bout.
-async function latestCallbackLink(request: APIRequestContext, toEmail: string): Promise<string> {
-  const listRes = await request.get("http://127.0.0.1:54324/api/v1/messages?limit=20");
-  const { messages } = await listRes.json();
-  const message = messages.find((m: { To: { Address: string }[] }) =>
-    m.To.some((to) => to.Address === toEmail)
-  );
-  expect(message, `aucun email reçu pour ${toEmail}`).toBeTruthy();
-  const full = await (await request.get(`http://127.0.0.1:54324/api/v1/message/${message.ID}`)).json();
-  const match = (full.HTML as string).match(/href="([^"]*auth\/callback[^"]*)"/);
-  expect(match, "aucun lien /auth/callback trouvé dans l'email").toBeTruthy();
-  return match![1].replace(/&amp;/g, "&");
-}
+import { test, expect, type Page } from "@playwright/test";
+import { generateTotp, withDb, latestCallbackLink } from "@hifago/e2e-support";
 
 async function signUp(page: Page, email: string, password: string) {
   await page.goto("/signup");
@@ -40,10 +23,19 @@ test("inscription libre : confirmation email obligatoire, renvoi possible, atter
   // trop rapproché du signUp() qui vient d'envoyer le premier email.
   await page.waitForTimeout(1100);
   await page.getByTestId("resend-confirmation-button").click();
-  await expect(page.getByText("Correo reenviado.")).toBeVisible();
+  await expect(
+    page.getByRole("alertdialog").filter({ hasText: "Correo reenviado." })
+  ).toBeVisible();
 
   const link = await latestCallbackLink(request, email);
   await page.goto(link);
+  await page.waitForURL(/\/partner$/);
+  await expect(page.getByText("Aún no tienes ningún rol asignado.")).toBeVisible();
+
+  // Garde partner_id (constat 2026-08-17) : un compte sans partner_id ne doit jamais atteindre
+  // /partner/establishment/* — jusqu'ici seule la soumission du formulaire échouait (reason
+  // `not_a_partner` de submit_establishment_creation_proposal), sans explication à l'écran.
+  await page.goto("/partner/establishment/new");
   await page.waitForURL(/\/partner$/);
   await expect(page.getByText("Aún no tienes ningún rol asignado.")).toBeVisible();
 });

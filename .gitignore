@@ -36,6 +36,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# données de test sandbox (identifiants, cartes) — jamais commitées
+mercadopago-sandbox-test-data.md
+
 # vercel
 .vercel
 

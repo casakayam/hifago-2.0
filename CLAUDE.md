@@ -243,6 +243,35 @@ l'export comptable/fiscal · fournisseur email final (Resend vs Postmark).
    page.waitForLoadState("networkidle")` juste après la navigation, avant la première interaction,
    corrige le problème — à poser systématiquement après tout `page.goto`/clic de navigation vers un
    écran client component conséquent, pas seulement pour ce formulaire précis.
+9. **`Toast.Provider` de HeroUI v3 n'est PAS un provider classique qu'on enroule autour du contenu
+   de l'app** (constaté 2026-08-17, spec 16 — notifications toast) — contrairement à `CartProvider`/
+   `ThemeProvider` etc., son prop `children` est un render-prop consommé PAR TOAST à l'intérieur de
+   `UNSTABLE_ToastRegion` (react-aria-components), jamais un slot pour le contenu de la page. Monter
+   `<Toast.Provider>{children}</Toast.Provider>` dans le layout racine fait retourner `null` à toute
+   la région — donc à toute l'app — tant qu'aucun toast n'existe (`visibleToasts.length === 0`) :
+   page blanche totale, **aucune erreur console, aucune exception**, `npm run build`/`next start`
+   compilent et démarrent sans le moindre avertissement (le bug ne se manifeste que dans un vrai
+   navigateur). Monter `<Toast.Provider placement="..." />` en SIBLING de `{children}`, jamais en
+   wrapper — comme `sonner`/`react-hot-toast`, pas comme un context provider React classique.
+10. **Un dev server Turbopack partagé (`next dev`, port 3101/3100) peut devenir instable sous
+    écritures concurrentes intenses** (constaté 2026-08-17, deux sessions actives simultanément —
+    voir `hifago/docs/journal/2026-08.md`, entrées « grille de cartes » et « notifications toast ») :
+    plusieurs redémarrages de process + lots e2e à 4 workers en parallèle d'un côté ont coïncidé avec
+    un `deadlock detected` Postgres sur `auth.sessions` et des timeouts en cascade sur des écrans non
+    touchés par l'autre session (reproduits sur des pages jamais modifiées). Symptôme distinctif
+    d'une instabilité d'environnement plutôt qu'une vraie régression : des échecs sur des écrans hors
+    du périmètre de la tâche en cours. À isoler via `next build` + `next start -p <port dédié>`
+    (jamais 3100/3101, déjà utilisés) avant de conclure à un bug de code.
+11. **Un champ `isRequired`/`required` (HeroUI `TextField`/`Input`, `type="number" min={...}`)
+    bloque silencieusement la soumission d'un `<form>` via la validation NATIVE du navigateur, avant
+    que `onSubmit` React ne s'exécute** (constaté 2026-08-17, retour direct de Jérôme après test
+    réel de spec 16 — `product-form.tsx`, champ "Precio") — ni un message inline ni un toast ne se
+    déclenchent dans ce cas, quelle que soit la qualité du code React derrière `handleSubmit` : le
+    navigateur n'appelle jamais ce handler. Invisible au typecheck/lint/build, seul un clic réel
+    dans un navigateur (ou Playwright) le révèle. `noValidate` sur la balise `<form>` élimine la
+    classe de bug entière — la validation JS déjà en place prend alors systématiquement le relais.
+    Poser `noValidate` par défaut sur tout nouveau `<form>` de ce projet dès qu'il contient un champ
+    requis, pas seulement en réaction à un bug constaté.
 
 ## 12. Curseur — dernière session
 
@@ -251,45 +280,87 @@ En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
 nouvelle entrée.
 
-*2026-08-16 — dernière entrée : spec `14-admin-transporte.md`, `type='transport'` activé dans
-`ProductForm` (suite des specs 11/12/13, même jour). Vérification V1 (« regarde ce qui existe déjà
-dans la doc et le code de l'ancien ») : transport n'y est pas une entité dédiée, juste une valeur de
-`products.type` — chaque trajet/tarif est une fiche produit distincte rattachée à un `provider_id`
-(Aeroturex, Gotravel), `capacity_default`/`schedule` toujours `NULL`/`'date'`, aucune donnée
-d'horaires structurée en base, et **LobbyPMS n'est pas lié au transport** (déjà découplé, backlog
-V1 item C2) — pas d'IP statique à prévoir ici. `products.type` autorise déjà `'transport'` depuis
-la toute première migration catalogue, jamais retiré du CHECK — **aucune migration nécessaire**,
-pure activation de gating : `isTransport` rejoint `hasLocationAndTags`/`hasPriceQtyFields` (même
-groupe que l'activité), `hasCheckInOut` inchangé (transport n'y entre pas). Décision Jérôme avant
-plan : admin seulement, pas de reconstruction de la « carte transport multi-transporteurs » groupée
-de la V1 côté `apps/web` (portail déjà générique pour tout type hors evento, zéro changement
-nécessaire là). Simplification volontaire par rapport à la V1 : les paliers de capacité de véhicule
-(« hasta 4/7 pers. », deux fiches produit séparées en V1) deviennent deux tramos de `price_tiers`
-d'un même produit — mécanisme déjà généralisé pour alojamiento/hôtel.
+*2026-08-18 (suite 6) — dernière entrée : spec 19 Tranche 1 (capture Mercado Pago) — `CheckoutForm.tsx`
+désormais BRANCHÉ de bout en bout (entrée précédente : couche DB + API livrée, UI volontairement en
+attente de vraies clés). Jérôme a créé une app sandbox Mercado Pago Colombia et fourni les
+identifiants réels au fil de la conversation — consolidés dans deux fichiers **locaux, gitignorés**
+(ligne `.gitignore` ajoutée explicitement pour le second, vérifiée par `git check-ignore`) :
+`apps/web/.env.local` (`MERCADOPAGO_ACCESS_TOKEN`) et `hifago/mercadopago-sandbox-test-data.md`
+(comptes/cartes de test, jamais lu par le code). `MERCADOPAGO_WEBHOOK_SECRET` toujours manquant —
+n'a pas bloqué le branchement de la capture.
 
-**Effet de bord trouvé en vérifiant la non-régression, sans rapport avec transport** :
-`admin-product-hotel.spec.ts` échouait par intermittence. Deux causes réelles, corrigées : (1)
-`RoomCard` (`hotel-rooms-editor.tsx`) mergeait ses champs via `{...room, champ}` sur un `room`
-capturé dans la closure du rendu au lieu d'une forme fonctionnelle — même classe de bug déjà
-corrigée pour `LocalizedTextField`/l'array-level en spec 11, généralisée ici à tous les champs de
-`RoomCard` (pas seulement les 3 handlers photo réseau) ; (2) `toggleCheckbox` (`force:true`) sur la
-case stay_rates de la chambre 0 pouvait courir contre le redimensionnement du bloc Fotos causé par
-l'apparition de la vignette juste au-dessus — corrigé en réordonnant le test (stay_rates avant la
-photo), pas en affaiblissant l'assertion. 5/5 exécutions vertes après (0/5 avant).
+**`CheckoutForm.tsx`** : `create_order` réussi enchaîne `create_payment_intent` (RPC directe) →
+`POST /api/payments/create` → `window.location.href = init_point`, redirection réelle vers Checkout
+Pro. Nouvel état `pendingOrderId`/`paymentError` avec bouton « Reintentar pago » si le paiement
+échoue APRÈS une réservation déjà réussie (cupo déjà consommé — jamais un retour silencieux à
+l'écran panier qui ferait perdre la réservation).
 
-Vérifié : typecheck/lint propres, nouveau `admin-product-transport.spec.ts` vert dès la première
-exécution (2 tramos de prix, assertions négatives prouvant l'absence de check-in/checkout, édition,
-persistance), capture navigateur réelle (390×844/1280×900) sans débordement, 77 tests Vitest verts,
-suite e2e produit complète (create/lodging/hotel/price-tiers/transport/products-list) verte en
-séquence. **Signalé sans corriger** (hors sujet de cette tâche) : `'hotel'` manquant dans
-`PRODUCT_TYPES` de `apps/admin/lib/lists/filters.ts`. Toujours en attente (inchangé depuis
-l'entrée précédente) :
-garde-fou `price_cop is null` dans `create_order` (evento+hotel, chokepoint anti-survente) ;
-Tranche 2 des specs 11/12/13 ; connecteur LobbyPMS lui-même ; correctif `waitForLoadState` sur
-`admin-camp-booking.spec.ts` ; lot 2 `LocalizedTextField` sur l'établissement ; correction
-`admin-evento-vitrine.spec.ts` ; sidebar admin non repliée sous `md` ; carte transport
-multi-transporteurs groupée côté `apps/web` (hors périmètre explicite, spec à part si un jour
-voulue).
+**11 specs e2e mises à jour** (7 `apps/web` + 4 `apps/admin`, toutes celles qui empruntaient
+`CheckoutForm.tsx`) — nouveau helper `mockMercadoPagoCheckout(page)`
+(`packages/e2e-support/src/payments.ts`) : mock UNIQUEMENT `/api/payments/create` (`create_order`/
+`create_payment_intent` restent de vrais appels RPC), jamais de vrai paiement ni de vraie navigation
+externe en CI. **2 classes de bugs trouvées EN FAISANT TOURNER les tests, pas en écrivant le code** :
+(1) race condition — `order-success` est un état transitoire que la redirection mockée (quasi
+instantanée) peut remplacer avant que Playwright ne l'observe (symptôme sans ambiguïté :
+"navigated to ..." dans l'erreur) — corrigé via `page.waitForURL(redirectUrl)` partout, course
+`checkout-error` vs `waitForURL` dans `reserve-concurrency.spec.ts` ; (2) FK manquantes dans le
+nettoyage e2e partagé `resetAvailability` (`packages/e2e-support/src/db.ts`) — `payments.order_id`
+(cette session) ET `ledger_entries.order_line_id` (Tranche 0, préexistant, jamais déclenché avant
+qu'un test tournant en boucle avec `SEED-REFACTIVE` ne le révèle) référencent `orders`/`order_lines`
+sans être purgées avant le `delete` — corrigé, plus `pms_reconciliation_entries`/
+`availability_blocks` par précaution (même risque structurel, cf. requête `pg_constraint`).
+
+Vérifié à froid : les 11 e2e passent individuellement ET en lots naturels ; un seul flake sous 4
+specs admin empilées, non reproductible isolément, symptôme déjà documenté §11 point 10 (pas une
+régression). pgTAP même baseline (6 fichiers). Typecheck/lint propres, unit tests verts (`apps/web`
+10, `apps/admin` 89, `packages/domain` 41).
+
+Détail complet (design `create_payment_intent`, wrapper SDK, route handlers, branchement UI, les 2
+classes de bugs) dans `hifago/docs/journal/2026-08.md`.
+
+Toujours en attente (fusionné avec les entrées précédentes) : `MERCADOPAGO_WEBHOOK_SECRET` manquant
+→ webhook non testable en conditions réelles (tunnel ngrok/cloudflared ou déploiement nécessaire) ;
+page de retour dédiée toujours absente (`back_urls` pointe vers l'écran checkout existant,
+suffisant pour ce périmètre) ; Tranche 2 de la spec 19 (remboursement) non commencée.
+**2026-08-18 (suite 7, spec 20) — risque `jsonb_to_recordset`/`price_tiers` désormais corrigé
+PARTOUT** : le motif signalé ci-dessus (littéral JSON `null` non gardé) a été reproduit en vrai en
+créant des données de test réelles pour Jérôme (résa logement sur `gmiro46`) puis corrigé sur
+proposition/validation explicite de Jérôme — `resolve_tier_price` + `create_order` +
+`modify_order_line` (migration `20260818240000`, mêmes signatures, 3-4 sites normalisés chacune),
+pgTAP des 4 RPC concernées rejoué (0 échec). Recherche exhaustive confirmée : plus aucune fonction
+vivante n'appelle `jsonb_to_recordset(price_tiers)` sans cette garde. Détail complet :
+`hifago/docs/journal/2026-08.md` suite 7.
+
+**2026-08-19 (spec 20) — bug de surfacturation réel corrigé : alojamiento facturait qty en double**.
+Jérôme a repéré sur la résa de démo (`gmiro46`, Alojamiento 1) une facturation à 1 600 000 au lieu de
+800 000 (4 nuits × 200 000). Root cause (bug préexistant, Tranche 2, avant cette session) :
+`create_order`/`modify_order_line` multipliaient le tarif nocturne (déjà résolu par palier
+d'occupants via `resolve_tier_price`, spec 12 §0) ENCORE une fois par `qty`(personnes) — jamais le
+même bug que la branche chambre d'hôtel (qty = lits/chambres distincts, multiplication correcte
+là-bas, non touchée). Corrigé après confirmation explicite de Jérôme — migration
+`20260818250000_fix_lodging_price_double_qty.sql`, signatures inchangées. pgTAP : 1 assertion
+obsolète corrigée (`modify_order_line.test.sql` cas L1), suite rejouée à 0 échec. Détail complet :
+`hifago/docs/journal/2026-08.md` (2026-08-19).
+
+**Ouvert, pas tranché** : job `expire_stale_payment_orders` (spec 19, ajouté 2026-08-18 par la
+session paiement) expire TOUTE réservation dont `payment_status` reste `unpaid` 30 min après
+création — or ni `create_manual_order_line` (walk-in cash) ni un `create_order` de test jamais payé
+en ligne ne passent jamais ce champ à `paid`. Constaté : 88/102 `order_lines` récentes déjà
+`expired` pour cette raison. Question posée à Jérôme sur comment exempter les résas manuelles,
+interrompue par la découverte du bug de prix ci-dessus — **à reprendre, pas corrigé**.
+Spec 20 — palette bleue par défaut de SVAR non harmonisée avec HeroUI (cosmétique), pas de refetch
+agenda au changement de vue, `modify_order_line` toujours hors périmètre créneaux horaires ;
+fragilité préexistante de `admin-reconciliation.spec.ts` (entrée seedée déjà `resolved`) ;
+`admin-home-navigation.spec.ts` sensible à l'exécution en parallèle ; activer les créneaux du jetski
+réel via `set_product_slot_capacity` (action de données) ; e2e Playwright pour les écrans créneaux
+(spec 18) ; machinerie de tri/filtre par tag catalogue client ; Tranche 4 de la spec 17 ; Tranche 2
+des specs 11/12/13 ; connecteur LobbyPMS ; correctif `waitForLoadState` sur
+`admin-camp-booking.spec.ts` ; lot 2 `LocalizedTextField` établissement ; correction
+`admin-evento-vitrine.spec.ts` (`#name-es`) ; sidebar admin non repliée sous `md` ; carte transport
+multi-transporteurs groupée `apps/web` ; volume de données accumulé cassant 6 fichiers pgTAP
+préexistants (`admin_audit_log`, `catalog_rls`, `partner_offboarding_rpc`, `product_availability_rpc`,
+`set_product_availability_socio` — assertions `audit_log` non scopées ; nettoyage périodique de
+l'instance locale de plus en plus nécessaire).
 Détail complet et historique intégral dans `hifago/docs/journal/2026-08.md` — jamais élagué,
 **jamais chargé automatiquement** en session. À ouvrir seulement pour comprendre pourquoi une
 décision passée a été prise, ou retrouver un piège déjà rencontré ailleurs qu'en §11 ci-dessus.*

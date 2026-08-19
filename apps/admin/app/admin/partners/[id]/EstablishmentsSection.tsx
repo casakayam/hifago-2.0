@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Table } from "@hifago/ui";
+import { Button, Table, toast } from "@hifago/ui";
 import { SearchableCombobox } from "@/components/searchable-combobox";
 
 type OwnEstablishment = { id: string; name: string; status: string };
@@ -20,13 +20,11 @@ export function EstablishmentsSection({
 }) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleTransfer(event: React.FormEvent) {
     event.preventDefault();
     if (!selectedId) return;
-    setError(null);
     setIsSubmitting(true);
 
     const supabase = createClient();
@@ -37,9 +35,10 @@ export function EstablishmentsSection({
 
     setIsSubmitting(false);
     if (rpcError) {
-      setError("No se pudo transferir el establecimiento.");
+      toast.danger("No se pudo transferir el establecimiento.");
       return;
     }
+    toast.success("Establecimiento transferido.");
     setSelectedId(null);
     router.refresh();
   }
@@ -78,7 +77,7 @@ export function EstablishmentsSection({
       {/* Sélecteur sur TOUT le registre (pas seulement les établissements "libres" — aucun ne
           l'est jamais, establishments.partner_id est not null) : transfer_establishment n'a qu'un
           seul chemin, premier rattachement et transfert confondus. */}
-      <form onSubmit={handleTransfer} className="flex flex-wrap items-end gap-3">
+      <form onSubmit={handleTransfer} noValidate className="flex flex-wrap items-end gap-3">
         <div className="w-72">
           <SearchableCombobox
             items={allEstablishments}
@@ -100,11 +99,6 @@ export function EstablishmentsSection({
           {isSubmitting ? "Transfiriendo…" : "Transferir"}
         </Button>
       </form>
-      {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
     </section>
   );
 }

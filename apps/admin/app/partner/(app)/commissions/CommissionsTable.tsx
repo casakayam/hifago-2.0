@@ -1,49 +1,38 @@
 "use client";
 
 import { useMemo } from "react";
+import { useTable } from "@tanstack/react-table";
 import {
-  createColumnHelper,
-  createPaginatedRowModel,
-  createSortedRowModel,
-  rowPaginationFeature,
-  rowSortingFeature,
-  sortFn_alphanumeric,
-  sortFn_basic,
-  tableFeatures,
-  useTable,
-} from "@tanstack/react-table";
-import {
-  Button,
   Chip,
-  SimpleTable,
-  SimpleTableBody,
-  SimpleTableCell,
-  SimpleTableHead,
-  SimpleTableHeader,
-  SimpleTableRow,
+  createSortablePaginatedColumnHelper,
+  SortablePaginatedTable,
+  sortablePaginatedTableFeatures,
 } from "@hifago/ui";
-import type { LedgerState } from "@/lib/commission/deriveLedgerEntry";
 import { formatCop } from "@hifago/domain";
 
+// Spec 19 §0 Tranche 0 — vocabulaire réel de ledger_entries.status (check constraint, migration
+// 20260818120000), plus « Pagada » que l'ancienne dérivation (deriveLedgerEntry) ne pouvait
+// structurellement jamais produire. Mapping direct sur l'ancien vocabulaire déjà validé
+// (cahier des charges socio §3c) pour préserver les libellés déjà vus par les référents :
+// estimated↔estimated, due↔« earned » (ganada, pas encore payée), void↔« redistributed »
+// (redirigée au prestataire — no_show/cancelled_by_client), reversed↔« voided » (annulation
+// prestataire, rien n'a été vendu).
 export type CommissionRow = {
   id: string;
   date: string;
   productName: string;
   totalCop: number;
   referrerCommissionCop: number;
-  state: LedgerState;
+  state: "estimated" | "due" | "paid" | "reversed" | "void";
 };
 
-// Vocabulaire du référent (cahier des charges socio §3c) — distinct du vocabulaire admin (feature
-// 12) pour les 4 mêmes états de deriveLedgerEntry : seul le libellé change selon qui regarde,
-// jamais la logique de dérivation (cf. plan feature 14).
 // Chip (pas Badge) : le Badge de HeroUI v3 est un indicateur d'ancrage pour Avatar/icône (dot ou
 // compteur positionné via Badge.Anchor), pas une étiquette de statut autonome dans une cellule de
 // tableau — Chip est l'équivalent direct de l'ancien Badge shadcn ici. `color` porte le sens
-// sémantique de chaque état (success = acquis, warning = réattribué ailleurs, danger = exclu,
+// sémantique de chaque état (success = acquis/payé, warning = réattribué ailleurs, danger = exclu,
 // default = encore incertain) là où l'ancien variant shadcn n'était que visuel.
 const STATE_META: Record<
-  LedgerState,
+  CommissionRow["state"],
   {
     label: string;
     variant: "primary" | "secondary" | "tertiary" | "soft";
@@ -51,35 +40,29 @@ const STATE_META: Record<
   }
 > = {
   estimated: { label: "Estimada", variant: "soft", color: "default" },
-  earned: { label: "Ganada, por pagar", variant: "primary", color: "success" },
-  redistributed: { label: "Reasignada al prestador", variant: "soft", color: "warning" },
-  voided: { label: "Excluida", variant: "soft", color: "danger" },
+  due: { label: "Ganada, por pagar", variant: "primary", color: "success" },
+  paid: { label: "Pagada", variant: "primary", color: "accent" },
+  void: { label: "Reasignada al prestador", variant: "soft", color: "warning" },
+  reversed: { label: "Excluida", variant: "soft", color: "danger" },
 };
 
-const features = tableFeatures({
-  rowSortingFeature,
-  sortedRowModel: createSortedRowModel(),
-  sortFns: { alphanumeric: sortFn_alphanumeric, basic: sortFn_basic },
-  rowPaginationFeature,
-  paginatedRowModel: createPaginatedRowModel(),
-});
-
-const columnHelper = createColumnHelper<typeof features, CommissionRow>();
+const columnHelper = createSortablePaginatedColumnHelper<CommissionRow>();
 
 export function CommissionsTable({ rows }: { rows: CommissionRow[] }) {
-  // 3 totaux agrégés, calculés à partir des lignes déjà chargées — pas une nouvelle requête (cf.
-  // plan). "Reasignada" n'est volontairement pas un 4e total : ce backlog ne définit que ces 3
-  // (estimé / acquis à payer / repris).
+  // 4 totaux agrégés, calculés à partir des lignes déjà chargées — pas une nouvelle requête.
+  // "reversed" (Excluida, annulation prestataire) reste hors totaux, comme l'ancien "voided" —
+  // rien n'est dû à personne dans ce cas, un total afficherait un montant qui n'existe pas.
   const totals = useMemo(
     () =>
       rows.reduce(
         (acc, row) => {
           if (row.state === "estimated") acc.estimated += row.referrerCommissionCop;
-          if (row.state === "earned") acc.earned += row.referrerCommissionCop;
-          if (row.state === "redistributed") acc.redistributed += row.referrerCommissionCop;
+          if (row.state === "due") acc.due += row.referrerCommissionCop;
+          if (row.state === "paid") acc.paid += row.referrerCommissionCop;
+          if (row.state === "void") acc.void += row.referrerCommissionCop;
           return acc;
         },
-        { estimated: 0, earned: 0, redistributed: 0 }
+        { estimated: 0, due: 0, paid: 0, void: 0 }
       ),
     [rows]
   );
@@ -118,7 +101,7 @@ export function CommissionsTable({ rows }: { rows: CommissionRow[] }) {
   );
 
   const table = useTable({
-    features,
+    features: sortablePaginatedTableFeatures,
     columns,
     data: rows,
     initialState: {
@@ -129,7 +112,7 @@ export function CommissionsTable({ rows }: { rows: CommissionRow[] }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-3 gap-4" data-testid="commission-totals">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4" data-testid="commission-totals">
         <div className="rounded-lg border bg-surface p-4">
           <p className="text-sm text-muted">Estimado</p>
           <p className="text-lg font-semibold" data-testid="total-estimated">
@@ -139,80 +122,30 @@ export function CommissionsTable({ rows }: { rows: CommissionRow[] }) {
         <div className="rounded-lg border bg-surface p-4">
           <p className="text-sm text-muted">Ganado, por pagar</p>
           <p className="text-lg font-semibold" data-testid="total-earned">
-            {formatCop(totals.earned)}
+            {formatCop(totals.due)}
+          </p>
+        </div>
+        <div className="rounded-lg border bg-surface p-4">
+          <p className="text-sm text-muted">Pagado</p>
+          <p className="text-lg font-semibold" data-testid="total-paid">
+            {formatCop(totals.paid)}
           </p>
         </div>
         <div className="rounded-lg border bg-surface p-4">
           <p className="text-sm text-muted">Reasignado</p>
           <p className="text-lg font-semibold" data-testid="total-redistributed">
-            {formatCop(totals.redistributed)}
+            {formatCop(totals.void)}
           </p>
         </div>
       </div>
 
-      {rows.length === 0 ? (
-        <p data-testid="no-commissions" className="text-sm text-muted">
-          Ninguna comisión todavía.
-        </p>
-      ) : (
-        <>
-          <SimpleTable>
-            <SimpleTableHeader>
-              {table.getHeaderGroups().map((group) => (
-                <SimpleTableRow key={group.id}>
-                  {group.headers.map((header) => (
-                    <SimpleTableHead key={header.id}>
-                      {header.isPlaceholder ? null : (
-                        <button
-                          type="button"
-                          className="flex items-center gap-1 disabled:cursor-default"
-                          onClick={header.column.getToggleSortingHandler()}
-                          disabled={!header.column.getCanSort()}
-                          data-testid={`sort-${header.column.id}`}
-                        >
-                          <table.FlexRender header={header} />
-                          {header.column.getIsSorted() === "asc" ? "↑" : null}
-                          {header.column.getIsSorted() === "desc" ? "↓" : null}
-                        </button>
-                      )}
-                    </SimpleTableHead>
-                  ))}
-                </SimpleTableRow>
-              ))}
-            </SimpleTableHeader>
-            <SimpleTableBody>
-              {table.getRowModel().rows.map((row) => (
-                <SimpleTableRow key={row.id} data-testid={`commission-row-${row.original.id}`}>
-                  {row.getAllCells().map((cell) => (
-                    <SimpleTableCell key={cell.id}>
-                      <table.FlexRender cell={cell} />
-                    </SimpleTableCell>
-                  ))}
-                </SimpleTableRow>
-              ))}
-            </SimpleTableBody>
-          </SimpleTable>
-
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onPress={() => table.previousPage()}
-              isDisabled={!table.getCanPreviousPage()}
-            >
-              Anterior
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onPress={() => table.nextPage()}
-              isDisabled={!table.getCanNextPage()}
-            >
-              Siguiente
-            </Button>
-          </div>
-        </>
-      )}
+      <SortablePaginatedTable
+        table={table}
+        rowCount={rows.length}
+        getRowTestId={(row) => `commission-row-${row.id}`}
+        emptyMessage="Ninguna comisión todavía."
+        emptyTestId="no-commissions"
+      />
     </div>
   );
 }

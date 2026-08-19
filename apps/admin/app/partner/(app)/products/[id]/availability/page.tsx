@@ -16,7 +16,7 @@ export default async function PartnerProductAvailabilityPage({
   // identité/propriété/capacité côté serveur), pas cette lecture.
   const { data: product } = await supabase
     .from("products")
-    .select("id, name, calendar_default_open")
+    .select("id, name, calendar_default_open, default_capacity")
     .eq("id", id)
     .maybeSingle();
 
@@ -25,8 +25,10 @@ export default async function PartnerProductAvailabilityPage({
   }
 
   // Même service que l'écran admin (feature 5/17, cf. cahier des charges socio §3d) : lecture
-  // publique de product_availability/product_calendar, pas de filtre socio nécessaire ici.
-  const [{ data: availability }, { data: calendar }] = await Promise.all([
+  // publique de product_availability/product_calendar/product_date_rates, pas de filtre socio
+  // nécessaire ici — la vraie barrière d'écriture reste set_date_rate elle-même (spec 17 §0
+  // Tranche 2, garde-fous identité/propriété/capacité côté serveur), pas cette lecture.
+  const [{ data: availability }, { data: calendar }, { data: rates }] = await Promise.all([
     supabase
       .from("product_availability")
       .select("date, capacity, booked")
@@ -34,6 +36,10 @@ export default async function PartnerProductAvailabilityPage({
     supabase
       .from("product_calendar")
       .select("date, open")
+      .eq("product_id", id),
+    supabase
+      .from("product_date_rates")
+      .select("date, price_cop")
       .eq("product_id", id),
   ]);
 
@@ -48,6 +54,8 @@ export default async function PartnerProductAvailabilityPage({
         calendarDefaultOpen={product.calendar_default_open}
         availability={availability ?? []}
         calendar={calendar ?? []}
+        rates={rates ?? []}
+        defaultCapacity={product.default_capacity}
       />
     </div>
   );

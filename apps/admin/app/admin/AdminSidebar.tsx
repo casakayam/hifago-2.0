@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { href: "/admin/invitations", label: "Invitaciones" },
   { href: "/admin/proposals", label: "Propuestas" },
   { href: "/admin/reconciliation", label: "Reconciliación" },
+  { href: "/admin/ledger", label: "Ledger" },
 ] as const;
 
 const CREATE_ITEMS = [

@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Input, Label, TextArea, TextField } from "@hifago/ui";
+import { asLocalizedField } from "@hifago/domain";
+import { Button, Input, Label, TextArea, TextField, toast } from "@hifago/ui";
+import { LocalizedTextField, buildLocalizedPayload, type LocalizedValue } from "@/components/localized-text-field";
 
 const MODERATE_ERRORS: Record<string, string> = {
   proposal_not_found: "No se encontró la propuesta.",
@@ -11,72 +14,50 @@ const MODERATE_ERRORS: Record<string, string> = {
 
 type ModerateResult = { ok: boolean; reason?: string; status?: string; reviewed_by_email?: string };
 
-// Aperçu "valeur actuelle" vide pour kind='create' (l'établissement n'existe pas encore) — espace
-// réservé explicite plutôt qu'un tableau vide silencieux (docs/specs/06-gestion-etablissement.md
-// §9). Formulaire de correction pré-rempli avec les valeurs PROPOSÉES, même patron que
-// ModerateProposalForm.tsx (produits).
+type EstablishmentFieldsPayload = {
+  name?: unknown;
+  description?: unknown;
+  address?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+};
+
+// Aperçu "valeur actuelle" vide pour kind='create' (l'établissement n'existe pas encore, donc
+// currentPayload est null) — espace réservé explicite plutôt qu'un tableau vide silencieux
+// (docs/specs/06-gestion-etablissement.md §9). Formulaire de correction pré-rempli avec les
+// valeurs PROPOSÉES, même patron que ModerateProposalForm.tsx (produits) — currentPayload/
+// proposedPayload passés tels quels depuis la ligne de requête de la page, plus de 16 props
+// scalaires dépliées à la main côté appelant.
 export function ModerateEstablishmentProposalForm({
   proposalId,
   expectedVersion,
   kind,
-  currentNameEs,
-  currentNameEn,
-  currentDescriptionEs,
-  currentDescriptionEn,
-  currentAddress,
-  currentLat,
-  currentLon,
-  proposedNameEs,
-  proposedNameEn,
-  proposedDescriptionEs,
-  proposedDescriptionEn,
-  proposedAddress,
-  proposedLat,
-  proposedLon,
+  currentPayload,
+  proposedPayload,
 }: {
   proposalId: string;
   expectedVersion: number;
   kind: "create" | "edit";
-  currentNameEs: string;
-  currentNameEn: string;
-  currentDescriptionEs: string;
-  currentDescriptionEn: string;
-  currentAddress: string;
-  currentLat: string;
-  currentLon: string;
-  proposedNameEs: string;
-  proposedNameEn: string;
-  proposedDescriptionEs: string;
-  proposedDescriptionEn: string;
-  proposedAddress: string;
-  proposedLat: string;
-  proposedLon: string;
+  currentPayload: EstablishmentFieldsPayload | null;
+  proposedPayload: EstablishmentFieldsPayload;
 }) {
-  const [nameEs, setNameEs] = useState(proposedNameEs);
-  const [nameEn, setNameEn] = useState(proposedNameEn);
-  const [descriptionEs, setDescriptionEs] = useState(proposedDescriptionEs);
-  const [descriptionEn, setDescriptionEn] = useState(proposedDescriptionEn);
-  const [address, setAddress] = useState(proposedAddress);
-  const [lat, setLat] = useState(proposedLat);
-  const [lon, setLon] = useState(proposedLon);
+  const router = useRouter();
+  const [name, setName] = useState<LocalizedValue>(() => ({ ...(asLocalizedField(proposedPayload.name) ?? {}) }));
+  const [description, setDescription] = useState<LocalizedValue>(() => ({
+    ...(asLocalizedField(proposedPayload.description) ?? {}),
+  }));
+  const [address, setAddress] = useState(proposedPayload.address ?? "");
+  const [lat, setLat] = useState(proposedPayload.lat != null ? String(proposedPayload.lat) : "");
+  const [lon, setLon] = useState(proposedPayload.lon != null ? String(proposedPayload.lon) : "");
   const [rejectionReason, setRejectionReason] = useState("");
 
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [success, setSuccess] = useState<"approved" | "rejected" | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   function buildCorrectedPayload() {
-    const name: Record<string, string> = { es: nameEs.trim() };
-    if (nameEn.trim()) name.en = nameEn.trim();
-
-    const description: Record<string, string> | null = descriptionEs.trim()
-      ? { es: descriptionEs.trim(), ...(descriptionEn.trim() ? { en: descriptionEn.trim() } : {}) }
-      : null;
-
+    const nameEsValue = name.es?.trim() ?? "";
     return {
-      name,
-      description,
+      name: buildLocalizedPayload(name) ?? { es: nameEsValue },
+      description: buildLocalizedPayload(description) ?? null,
       address: address.trim() || null,
       lat: lat.trim() ? Number(lat) : null,
       lon: lon.trim() ? Number(lon) : null,
@@ -84,15 +65,12 @@ export function ModerateEstablishmentProposalForm({
   }
 
   async function handleDecision(decision: "approve" | "reject") {
-    setError(null);
-    setNotice(null);
-
-    if (decision === "approve" && !nameEs.trim()) {
-      setError("El nombre (es) es obligatorio.");
+    if (decision === "approve" && !(name.es ?? "").trim()) {
+      toast.danger("El nombre (es) es obligatorio.");
       return;
     }
     if (decision === "reject" && !rejectionReason.trim()) {
-      setError("El motivo es obligatorio para rechazar.");
+      toast.danger("El motivo es obligatorio para rechazar.");
       return;
     }
 
@@ -112,31 +90,32 @@ export function ModerateEstablishmentProposalForm({
     const result = data as ModerateResult | null;
     if (rpcError || !result?.ok) {
       if (result?.reason === "already_handled") {
-        setNotice(
+        toast.danger(
           `Esta propuesta ya fue procesada${result.reviewed_by_email ? ` por ${result.reviewed_by_email}` : ""} (estado: ${result.status}).`,
         );
         return;
       }
-      setError(
+      toast.danger(
         MODERATE_ERRORS[result?.reason ?? ""] ?? "No se pudo procesar la propuesta. Inténtalo de nuevo.",
       );
       return;
     }
 
-    setSuccess(decision === "approve" ? "approved" : "rejected");
+    toast.success(
+      decision === "approve"
+        ? kind === "create"
+          ? "Propuesta aprobada — establecimiento creado."
+          : "Propuesta aprobada."
+        : "Propuesta rechazada.",
+    );
+    router.push("/admin/proposals");
+    router.refresh();
   }
 
-  if (success) {
-    return (
-      <p role="status" data-testid="moderation-success" className="text-sm font-medium">
-        {success === "approved"
-          ? kind === "create"
-            ? "Propuesta aprobada — el establecimiento ya existe en el registro."
-            : "Propuesta aprobada — la ficha ya refleja los valores publicados."
-          : "Propuesta rechazada."}
-      </p>
-    );
-  }
+  const currentNameField = asLocalizedField(currentPayload?.name);
+  const currentDescriptionField = asLocalizedField(currentPayload?.description);
+  const proposedNameField = asLocalizedField(proposedPayload.name);
+  const proposedDescriptionField = asLocalizedField(proposedPayload.description);
 
   return (
     <div className="flex flex-col gap-6">
@@ -151,28 +130,29 @@ export function ModerateEstablishmentProposalForm({
             <dl className="mt-2 flex flex-col gap-1 text-sm text-muted">
               <div>
                 <dt className="inline font-medium text-foreground">Nombre (es): </dt>
-                <dd className="inline">{currentNameEs || "—"}</dd>
+                <dd className="inline">{currentNameField?.es || "—"}</dd>
               </div>
               <div>
                 <dt className="inline font-medium text-foreground">Nombre (en): </dt>
-                <dd className="inline">{currentNameEn || "—"}</dd>
+                <dd className="inline">{currentNameField?.en || "—"}</dd>
               </div>
               <div>
                 <dt className="inline font-medium text-foreground">Descripción (es): </dt>
-                <dd className="inline">{currentDescriptionEs || "—"}</dd>
+                <dd className="inline">{currentDescriptionField?.es || "—"}</dd>
               </div>
               <div>
                 <dt className="inline font-medium text-foreground">Descripción (en): </dt>
-                <dd className="inline">{currentDescriptionEn || "—"}</dd>
+                <dd className="inline">{currentDescriptionField?.en || "—"}</dd>
               </div>
               <div>
                 <dt className="inline font-medium text-foreground">Dirección: </dt>
-                <dd className="inline">{currentAddress || "—"}</dd>
+                <dd className="inline">{currentPayload?.address || "—"}</dd>
               </div>
               <div>
                 <dt className="inline font-medium text-foreground">Lat/Lon: </dt>
                 <dd className="inline">
-                  {currentLat || "—"} / {currentLon || "—"}
+                  {currentPayload?.lat != null ? String(currentPayload.lat) : "—"} /{" "}
+                  {currentPayload?.lon != null ? String(currentPayload.lon) : "—"}
                 </dd>
               </div>
             </dl>
@@ -183,28 +163,29 @@ export function ModerateEstablishmentProposalForm({
           <dl className="mt-2 flex flex-col gap-1 text-sm text-muted">
             <div>
               <dt className="inline font-medium text-foreground">Nombre (es): </dt>
-              <dd className="inline">{proposedNameEs || "—"}</dd>
+              <dd className="inline">{proposedNameField?.es || "—"}</dd>
             </div>
             <div>
               <dt className="inline font-medium text-foreground">Nombre (en): </dt>
-              <dd className="inline">{proposedNameEn || "—"}</dd>
+              <dd className="inline">{proposedNameField?.en || "—"}</dd>
             </div>
             <div>
               <dt className="inline font-medium text-foreground">Descripción (es): </dt>
-              <dd className="inline">{proposedDescriptionEs || "—"}</dd>
+              <dd className="inline">{proposedDescriptionField?.es || "—"}</dd>
             </div>
             <div>
               <dt className="inline font-medium text-foreground">Descripción (en): </dt>
-              <dd className="inline">{proposedDescriptionEn || "—"}</dd>
+              <dd className="inline">{proposedDescriptionField?.en || "—"}</dd>
             </div>
             <div>
               <dt className="inline font-medium text-foreground">Dirección: </dt>
-              <dd className="inline">{proposedAddress || "—"}</dd>
+              <dd className="inline">{proposedPayload.address || "—"}</dd>
             </div>
             <div>
               <dt className="inline font-medium text-foreground">Lat/Lon: </dt>
               <dd className="inline">
-                {proposedLat || "—"} / {proposedLon || "—"}
+                {proposedPayload.lat != null ? String(proposedPayload.lat) : "—"} /{" "}
+                {proposedPayload.lon != null ? String(proposedPayload.lon) : "—"}
               </dd>
             </div>
           </dl>
@@ -212,25 +193,23 @@ export function ModerateEstablishmentProposalForm({
       </div>
 
       <div className="flex max-w-md flex-col gap-4">
-        <TextField isRequired value={nameEs} onChange={setNameEs}>
-          <Label>Nombre (es)</Label>
-          <Input id="name-es" name="name-es" />
-        </TextField>
+        <LocalizedTextField
+          label="Nombre"
+          value={name}
+          onChange={setName}
+          isRequired
+          inputName="nombre"
+          testIdPrefix="name"
+        />
 
-        <TextField value={nameEn} onChange={setNameEn}>
-          <Label>Nombre (en) — opcional</Label>
-          <Input id="name-en" name="name-en" />
-        </TextField>
-
-        <TextField value={descriptionEs} onChange={setDescriptionEs}>
-          <Label>Descripción (es) — opcional</Label>
-          <TextArea id="description-es" name="description-es" />
-        </TextField>
-
-        <TextField value={descriptionEn} onChange={setDescriptionEn}>
-          <Label>Descripción (en) — opcional</Label>
-          <TextArea id="description-en" name="description-en" />
-        </TextField>
+        <LocalizedTextField
+          label="Descripción — opcional"
+          value={description}
+          onChange={setDescription}
+          multiline
+          testIdPrefix="description"
+          fieldTestId="description-textarea"
+        />
 
         <TextField value={address} onChange={setAddress}>
           <Label>Dirección — opcional</Label>
@@ -252,17 +231,6 @@ export function ModerateEstablishmentProposalForm({
           <Label>Motivo de rechazo — obligatorio para rechazar</Label>
           <TextArea id="rejection-reason" name="rejection-reason" />
         </TextField>
-
-        {notice ? (
-          <p role="status" data-testid="moderation-notice" className="text-sm text-muted">
-            {notice}
-          </p>
-        ) : null}
-        {error ? (
-          <p role="alert" data-testid="moderation-error" className="text-sm text-danger">
-            {error}
-          </p>
-        ) : null}
 
         <div className="flex gap-2">
           <Button

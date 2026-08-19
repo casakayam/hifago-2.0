@@ -19,6 +19,7 @@ const SIDEBAR_ROUTES = [
   "/admin/invitations",
   "/admin/proposals",
   "/admin/reconciliation",
+  "/admin/ledger",
 ];
 
 test("cada route de la sidebar resuelve sin 404", async ({ page, context }) => {

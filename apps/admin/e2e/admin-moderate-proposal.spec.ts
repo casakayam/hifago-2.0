@@ -68,20 +68,24 @@ test("un admin consulte le diff d'une proposition, l'approuve avec un ajustement
   await page.getByTestId(`review-link-${proposalId}`).click();
   await expect(page).toHaveURL(new RegExp(`/admin/proposals/${proposalId}`));
 
-  // Le formulaire de correction est pré-rempli avec les valeurs PROPOSÉES, pas les actuelles.
-  await expect(page.locator('input[name="name-es"]')).toHaveValue(proposedName);
-  await expect(page.locator('input[name="price"]')).toHaveValue("65000");
+  // Le formulaire de correction est pré-rempli avec les valeurs PROPOSÉES, pas les actuelles
+  // (spec 15 bis, 2026-08-17 — ce formulaire réutilise désormais LocalizedTextField/
+  // ProductTypeFields, comme ProductForm, plus l'ancien name-es/name-en séparé).
+  await expect(page.locator('input[name="nombre"]')).toHaveValue(proposedName);
+  await expect(page.getByTestId("price-input")).toHaveValue("65000");
 
-  // La comparaison affiche bien la valeur actuelle ET la valeur proposée, côte à côte.
+  // Le bloc "Valor actual" (lecture seule) affiche bien la fiche encore publiée.
   await expect(page.getByTestId("current-values")).toContainText(originalName);
-  await expect(page.getByTestId("proposed-values")).toContainText(proposedName);
 
   // L'admin corrige le prix à une TROISIÈME valeur, différente de l'actuelle (60000) ET de la
   // proposée (65000) — preuve que la valeur qui prime est bien celle CORRIGÉE par l'admin.
-  await page.locator('input[name="price"]').fill("72000");
+  await page.getByTestId("price-input").fill("72000");
   await page.getByTestId("approve-button").click();
 
-  await expect(page.getByTestId("moderation-success")).toBeVisible();
+  // Le succès n'est plus un texte inline mais un toast (docs/specs/16-notifications-toast.md) —
+  // HeroUI rend chaque toast avec role="alertdialog", le message passé à toast.success(...)
+  // devient son titre visible.
+  await expect(page.getByRole("alertdialog").filter({ hasText: "Propuesta aprobada." })).toBeVisible();
 
   // --- La fiche publique reflète la valeur CORRIGÉE (72000), ni l'actuelle (60000) ni la
   // proposée d'origine (65000) — et le nom proposé (non corrigé) est bien repris tel quel. ---

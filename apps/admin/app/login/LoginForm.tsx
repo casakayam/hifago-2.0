@@ -1,22 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Input, Label, TextField } from "@hifago/ui";
-import { GoogleButton } from "@/components/GoogleButton";
+import { Button, Input, Label, TextField, toast } from "@hifago/ui";
+import { OAuthSection } from "@/components/GoogleButton";
 
-export function LoginForm({ next }: { next: string }) {
+export function LoginForm({ next, hasCallbackError = false }: { next: string; hasCallbackError?: boolean }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Feature 31 (docs/specs/07-connexion-inscription-complete.md §5) : /auth/callback redirige ici
+  // avec ?error= après un échec d'échange de code — un rendu serveur, donc le seul point où ce
+  // toast peut se déclencher est le montage du client côté page de destination. React StrictMode
+  // (dev uniquement) peut monter ce composant deux fois et donc déclencher ce toast deux fois —
+  // sans effet en production, accepté tel quel (cf. hifago/CLAUDE.md §11).
+  useEffect(() => {
+    if (hasCallbackError) {
+      toast.danger("El enlace no es válido o ha expirado. Inténtalo de nuevo.");
+    }
+  }, [hasCallbackError]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
     setIsSubmitting(true);
 
     const supabase = createClient();
@@ -33,7 +42,7 @@ export function LoginForm({ next }: { next: string }) {
         router.push(`/verify-email?email=${encodeURIComponent(email)}`);
         return;
       }
-      setError("Correo electrónico o contraseña incorrectos.");
+      toast.danger("Correo electrónico o contraseña incorrectos.");
       setIsSubmitting(false);
       return;
     }
@@ -44,15 +53,9 @@ export function LoginForm({ next }: { next: string }) {
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-4">
-      <GoogleButton next={next} />
+      <OAuthSection next={next} />
 
-      <div className="flex items-center gap-3 text-xs text-muted" role="separator">
-        <div className="h-px flex-1 bg-border" />
-        o
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <TextField name="email" value={email} onChange={setEmail} isRequired>
           <Label>Correo electrónico</Label>
           <Input type="email" autoComplete="email" />
@@ -64,11 +67,6 @@ export function LoginForm({ next }: { next: string }) {
         <Link href="/forgot-password" className="self-start text-xs text-muted underline">
           ¿Olvidaste tu contraseña?
         </Link>
-        {error ? (
-          <p role="alert" data-testid="login-error" className="text-sm text-danger">
-            {error}
-          </p>
-        ) : null}
         <Button type="submit" isDisabled={isSubmitting}>
           {isSubmitting ? "Iniciando…" : "Iniciar sesión"}
         </Button>

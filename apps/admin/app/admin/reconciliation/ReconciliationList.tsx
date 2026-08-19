@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button, Card, Chip } from "@hifago/ui";
+import { statusChip, type ChipStyle } from "@/components/status-chip";
 import { ResolveEntryDialog } from "./ResolveEntryDialog";
 
 export type ReconciliationEntryRow = {
@@ -24,10 +25,7 @@ const STATUS_LABELS: Record<string, string> = {
   permanently_failed: "Fallo permanente",
 };
 
-type ChipColor = "default" | "accent" | "success" | "warning" | "danger";
-type ChipVariant = "primary" | "secondary" | "tertiary" | "soft";
-
-const STATUS_CHIP_STYLE: Record<string, { color: ChipColor; variant: ChipVariant }> = {
+const STATUS_CHIP_STYLE: Record<string, ChipStyle> = {
   open: { color: "accent", variant: "primary" },
   retrying: { color: "warning", variant: "soft" },
   resolved: { color: "success", variant: "soft" },
@@ -41,7 +39,7 @@ function EntryCard({
   entry: ReconciliationEntryRow;
   onResolveClick?: (entryId: string) => void;
 }) {
-  const chipStyle = STATUS_CHIP_STYLE[entry.status] ?? { color: "default" as const, variant: "soft" as const };
+  const chipStyle = statusChip(STATUS_CHIP_STYLE, entry.status);
 
   return (
     <div

@@ -1,6 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { resetAvailability, getAvailability, countOrderLines } from "@hifago/e2e-support";
+import {
+  resetAvailability,
+  getAvailability,
+  countOrderLines,
+  mockMercadoPagoCheckout,
+} from "@hifago/e2e-support";
 
 // Le test le plus important de ce jalon (cf. plan Checkpoint B) : jusqu'ici l'invariant
 // anti-survente n'était prouvé qu'au niveau pg direct (tests/concurrency/
@@ -31,13 +36,17 @@ test("N BrowserContext isolés, chacun jusqu'à la validation finale du panier c
 }) => {
   await resetAvailability(PRODUCT_ID, LAST_SPOT_DATE, { capacity: 1, booked: 0 });
 
-  const pages: Page[] = [];
+  const pages: { page: Page; redirectUrl: string }[] = [];
   for (const email of ACCOUNTS) {
     const context = await browser.newContext();
     await loginAs(context, email, SEEDED_PASSWORD);
     const page = await context.newPage();
 
     await page.goto(PRODUCT_URL);
+    // Spec 19 §0 Tranche 1 : le gagnant enchaînera automatiquement le paiement Mercado Pago
+    // (redirection réelle) — seul l'appel SDK externe est mocké, sur chaque contexte (on ne sait
+    // pas encore lequel gagnera). Sans effet sur les perdants, qui n'atteignent jamais ce point.
+    const { redirectUrl } = await mockMercadoPagoCheckout(page);
     await page.locator(`[data-date="${LAST_SPOT_DATE}"]`).click();
     await page.getByTestId("add-to-cart-button").click();
     await expect(page.getByTestId("added-to-cart")).toBeVisible();
@@ -45,23 +54,27 @@ test("N BrowserContext isolés, chacun jusqu'à la validation finale du panier c
     await page.getByTestId("go-to-checkout-link").click();
     await page.locator('input[name="holder-name"]').fill(`Cliente Concurrencia ${email}`);
     await page.locator('input[name="holder-phone"]').fill(`+57 300 000 ${pages.length}000`);
+    await page.locator('input[name="holder-email"]').fill(email);
     // Formulaire rempli, prêt à valider — mais on ne clique PAS encore ici : tous les clics de
     // validation doivent partir dans le même tick (Promise.all ci-dessous), pas au fil d'une
     // boucle séquentielle, pour maximiser le chevauchement réel des appels create_order.
-    pages.push(page);
+    pages.push({ page, redirectUrl });
   }
 
-  await Promise.all(pages.map((page) => page.getByTestId("submit-order-button").click()));
+  await Promise.all(pages.map(({ page }) => page.getByTestId("submit-order-button").click()));
 
+  // order-success n'est qu'un état transitoire côté gagnant — la redirection Mercado Pago (mockée)
+  // peut déjà l'avoir remplacé avant que Playwright ne l'observe (race constatée en testant sur le
+  // parcours non-concurrent). Course fiable : "checkout-error visible" (perdant) contre "redirigé
+  // vers l'URL mockée" (gagnant), jamais une lecture de order-success.
   const outcomes = await Promise.all(
-    pages.map(async (page) => {
-      const success = page.getByTestId("order-success");
+    pages.map(async ({ page, redirectUrl }) => {
       const error = page.getByTestId("checkout-error");
-      await Promise.race([
-        success.waitFor({ state: "visible" }),
-        error.waitFor({ state: "visible" }),
+      const result = await Promise.race([
+        error.waitFor({ state: "visible" }).then(() => "full" as const),
+        page.waitForURL(redirectUrl).then(() => "ok" as const),
       ]);
-      return (await success.isVisible()) ? "ok" : "full";
+      return result;
     })
   );
 
@@ -77,5 +90,5 @@ test("N BrowserContext isolés, chacun jusqu'à la validation finale du panier c
   expect(availability?.booked).toBe(1);
   expect(availability?.booked).toBeLessThanOrEqual(availability?.capacity ?? 0);
 
-  await Promise.all(pages.map((page) => page.context().close()));
+  await Promise.all(pages.map(({ page }) => page.context().close()));
 });

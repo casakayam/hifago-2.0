@@ -42,7 +42,7 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex w-full max-w-sm flex-col gap-4">
+    <form onSubmit={handleSubmit} noValidate className="flex w-full max-w-sm flex-col gap-4">
       <TextField name="email" value={email} onChange={setEmail} isRequired>
         <Label>Correo electrónico</Label>
         <Input type="email" autoComplete="email" />

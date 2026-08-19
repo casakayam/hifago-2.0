@@ -1,19 +1,22 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
-import { deriveLedgerEntry } from "@/lib/commission/deriveLedgerEntry";
 import { CommissionsTable, type CommissionRow } from "./CommissionsTable";
 
-type OrderLineQueryRow = {
+// Spec 19 §0 Tranche 0 — lit désormais le vrai ledger_entries (RLS ledger_entries_select_referrer,
+// 20260818120000) au lieu de dériver un état depuis order_lines.status (deriveLedgerEntry,
+// pis-aller documenté comme tel avant que le ledger existe : « aucune colonne payée, le mécanisme
+// de paiement n'existe pas dans ce backlog »). C'est le SEUL écran capable de montrer "Pagada" —
+// un statut que la dérivation ne pouvait structurellement jamais produire.
+type LedgerEntryQueryRow = {
   id: string;
-  date: string;
+  amount_cop: number;
   status: string;
-  total_cop: number;
-  acompte_cop: number;
-  referrer_commission_cop: number;
-  app_commission_cop: number;
-  commission_case: string;
-  product: { name: unknown } | null;
+  order_line: {
+    date: string;
+    total_cop: number;
+    product: { name: unknown } | null;
+  } | null;
 };
 
 export default async function PartnerCommissionsPage() {
@@ -29,44 +32,31 @@ export default async function PartnerCommissionsPage() {
   // partner_id_for_account (même RPC que partner/products/page.tsx) — pas une jointure manuelle.
   const { data: partnerId } = await supabase.rpc("partner_id_for_account", { uid: user.id });
 
-  // Filtre explicite sur referrer_partner_id, au-delà de la RLS : order_lines_select (Tranche 3)
-  // laisserait aussi remonter les lignes que ce compte a achetées lui-même comme simple client —
-  // hors sujet ici, seules les lignes où CE partenaire est référent doivent apparaître.
-  const { data: lines } = await supabase
-    .from("order_lines")
+  // Filtre explicite sur referrer_partner_id ET beneficiary_type, au-delà de la RLS : cet écran ne
+  // montre jamais une entrée establishment_compensation (même si elle existait — ce compte n'en a
+  // structurellement pas, mais l'intention doit rester explicite, pas seulement implicite via RLS).
+  const { data: entries } = await supabase
+    .from("ledger_entries")
     .select(
-      `id, date, status, total_cop, acompte_cop, referrer_commission_cop, app_commission_cop,
-       commission_case, product:products(name)`
+      `id, amount_cop, status,
+       order_line:order_lines(date, total_cop, product:products(name))`
     )
+    .eq("beneficiary_type", "referrer")
     .eq("referrer_partner_id", partnerId ?? "")
-    .order("date", { ascending: false })
-    .returns<OrderLineQueryRow[]>();
+    .order("created_at", { ascending: false })
+    .returns<LedgerEntryQueryRow[]>();
 
-  // Colonne "part référent" affichée = le SNAPSHOT (referrer_commission_cop), pas
-  // entry.referrerDueCop : deriveLedgerEntry ramène volontairement referrerDueCop à 0 sur une
-  // ligne redistributed (c'est la valeur CORRECTE pour dire ce qui est dû aujourd'hui), mais la
-  // table doit montrer le montant snapshoté d'origine — sinon rien ne distinguerait une ligne
-  // "reprise" (part récupérée) d'une ligne "direct" (jamais de part référent du tout). Seul l'état
-  // dérivé (estimated/earned/redistributed/voided) vient de deriveLedgerEntry ici ; sur estimated
-  // et earned les deux valeurs sont de toute façon identiques (passthrough du snapshot).
-  const rows: CommissionRow[] = (lines ?? []).map((line) => {
-    const { state } = deriveLedgerEntry({
-      commissionCase: line.commission_case,
-      totalCop: line.total_cop,
-      acompteCop: line.acompte_cop,
-      referrerCommissionCop: line.referrer_commission_cop,
-      appCommissionCop: line.app_commission_cop,
-      lineStatus: line.status,
-    });
-    return {
-      id: line.id,
-      date: line.date,
-      productName: resolveLocalizedField(asLocalizedField(line.product?.name), "es") ?? "—",
-      totalCop: line.total_cop,
-      referrerCommissionCop: line.referrer_commission_cop,
-      state,
-    };
-  });
+  // amount_cop = referrer_commission_cop snapshoté à la création (create_order), jamais recalculé
+  // par les transitions ultérieures (seul status change) — la table montre donc toujours le
+  // montant d'origine, y compris sur une ligne void/reversed (« ce qui aurait été dû »), pas 0.
+  const rows: CommissionRow[] = (entries ?? []).map((entry) => ({
+    id: entry.id,
+    date: entry.order_line?.date ?? "",
+    productName: resolveLocalizedField(asLocalizedField(entry.order_line?.product?.name), "es") ?? "—",
+    totalCop: entry.order_line?.total_cop ?? 0,
+    referrerCommissionCop: entry.amount_cop,
+    state: entry.status as CommissionRow["state"],
+  }));
 
   return (
     <div className="flex flex-col gap-6">

@@ -39,31 +39,31 @@ insert into auth.users (id, email) values
 insert into partner_capabilities (account_id, role, source, status)
 values ('88910000-0000-4000-8000-000000000031', 'admin', 'migration', 'active');
 
-insert into orders (id, account_id, holder_name)
+insert into orders (id, account_id, holder_name, holder_email)
 values (
   '88910000-0000-4000-8000-000000000041', '88910000-0000-4000-8000-000000000032',
-  'Holder Reconciliation'
+  'Holder Reconciliation', 'holder-reconciliation@test.local'
 );
 -- Colonnes de snapshot commission (feature 11) renseignées avec des valeurs de remplissage
 -- neutres (commission_case='direct') — hors de portée de ce fichier.
 insert into order_lines (
-  id, order_id, account_id, product_id, date, qty, status,
+  id, order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 )
 values
   ('88910000-0000-4000-8000-000000000051', '88910000-0000-4000-8000-000000000041',
    '88910000-0000-4000-8000-000000000032', '88910000-0000-4000-8000-000000000021',
-   '2028-12-01', 1, 'reserved', 50000, 50000, 'direct', 0, 0, 0, 0, 0, 0),
+   '2028-12-01', 1, 'reserved', 'Holder Reconciliation', 50000, 50000, 'direct', 0, 0, 0, 0, 0, 0),
   ('88910000-0000-4000-8000-000000000052', '88910000-0000-4000-8000-000000000041',
    '88910000-0000-4000-8000-000000000032', '88910000-0000-4000-8000-000000000021',
-   '2028-12-02', 1, 'reserved', 50000, 50000, 'direct', 0, 0, 0, 0, 0, 0),
+   '2028-12-02', 1, 'reserved', 'Holder Reconciliation', 50000, 50000, 'direct', 0, 0, 0, 0, 0, 0),
   ('88910000-0000-4000-8000-000000000053', '88910000-0000-4000-8000-000000000041',
    '88910000-0000-4000-8000-000000000032', '88910000-0000-4000-8000-000000000021',
-   '2028-12-03', 1, 'reserved', 50000, 50000, 'direct', 0, 0, 0, 0, 0, 0),
+   '2028-12-03', 1, 'reserved', 'Holder Reconciliation', 50000, 50000, 'direct', 0, 0, 0, 0, 0, 0),
   ('88910000-0000-4000-8000-000000000054', '88910000-0000-4000-8000-000000000041',
    '88910000-0000-4000-8000-000000000032', '88910000-0000-4000-8000-000000000021',
-   '2028-12-04', 1, 'reserved', 50000, 50000, 'direct', 0, 0, 0, 0, 0, 0);
+   '2028-12-04', 1, 'reserved', 'Holder Reconciliation', 50000, 50000, 'direct', 0, 0, 0, 0, 0, 0);
 
 -- Entrée A : open, cible des cas 1/2/3 (non-admin, motif vide, appel positif final).
 insert into pms_reconciliation_entries (id, order_line_id, status, attempts) values

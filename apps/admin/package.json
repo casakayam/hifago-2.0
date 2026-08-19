@@ -20,6 +20,7 @@
     "@hifago/supabase": "*",
     "@hifago/ui": "*",
     "@supabase/ssr": "^0.12.4",
+    "@svar-ui/react-calendar": "^2.6.2",
     "@tanstack/react-table": "^9.1.2",
     "@types/qrcode": "^1.5.6",
     "next": "16.3.0",

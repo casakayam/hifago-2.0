@@ -2,9 +2,18 @@
 
 import { useState } from "react";
 import { createClient } from "@hifago/supabase/client";
+import type { Json } from "@hifago/supabase/database.types";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
-import { NO_PRODUCT_CATEGORY, PRODUCT_CATEGORIES } from "@/lib/products/categories";
-import { Button, Input, Label, ListBox, Select, TextField } from "@hifago/ui";
+import { Button, toast } from "@hifago/ui";
+import { LocalizedTextField, type LocalizedValue } from "@/components/localized-text-field";
+import { ProductTypeFields } from "@/components/product-type-fields";
+import { buildProductEditPayload } from "@/lib/products/productEditPayload";
+import {
+  payloadToFieldsInit,
+  useProductTypeFieldsState,
+  type ProductType,
+  type RawProductFieldsPayload,
+} from "@/lib/products/useProductTypeFieldsState";
 
 const SUBMIT_ERRORS: Record<string, string> = {
   product_not_found: "No se encontró la actividad.",
@@ -22,77 +31,57 @@ const WITHDRAW_ERRORS: Record<string, string> = {
 
 type PendingProposal = { id: string; payload: unknown; created_at: string } | null;
 
+// Retour direct de Jérôme (2026-08-17, même jour que la spec 15 ci-dessus) : ce formulaire était
+// resté figé à son état d'origine (feature 15 historique, 2026-08-13) — name-es/name-en séparés
+// (jamais migré vers LocalizedTextField comme le reste, spec 11) et une `category` fixe abandonnée
+// par ProductForm admin-direct depuis la spec 08 (tags). Réécrit pour réutiliser exactement les
+// mêmes briques que ProductForm/ProductTypeFields (spec 15) : parité totale avec le parcours
+// d'édition admin-direct — mêmes champs, même gating par type, jamais tags/photos/slot_rules/
+// room_types (délégués côté admin à des blocs séparés à sauvegarde immédiate, jamais couverts par
+// ce même submit là non plus, cf. migration 20260817150000).
 export function EditProposalForm({
   productId,
-  initialNameEs,
-  initialNameEn,
-  initialDescriptionEs,
-  initialDescriptionEn,
-  initialPriceCop,
-  initialCategory,
+  type,
+  currentPayload,
   pendingProposal,
 }: {
   productId: string;
-  initialNameEs: string;
-  initialNameEn: string;
-  initialDescriptionEs: string;
-  initialDescriptionEn: string;
-  initialPriceCop: number;
-  initialCategory: string | null;
+  type: ProductType;
+  currentPayload: RawProductFieldsPayload & { name?: unknown; description?: unknown };
   pendingProposal: PendingProposal;
 }) {
-  // Pré-rempli avec la fiche COMPLÈTE actuelle, pas seulement les champs à modifier (propriété de
-  // sûreté n°3, cf. plan feature 15) : un champ non retouché doit porter sa valeur actuelle dans
-  // le payload envoyé au serveur.
-  const [nameEs, setNameEs] = useState(initialNameEs);
-  const [nameEn, setNameEn] = useState(initialNameEn);
-  const [descriptionEs, setDescriptionEs] = useState(initialDescriptionEs);
-  const [descriptionEn, setDescriptionEn] = useState(initialDescriptionEn);
-  const [priceCop, setPriceCop] = useState(String(initialPriceCop));
-  const [category, setCategory] = useState(initialCategory ?? NO_PRODUCT_CATEGORY);
+  const [name, setName] = useState<LocalizedValue>(() => ({ ...(asLocalizedField(currentPayload.name) ?? {}) }));
+  const [description, setDescription] = useState<LocalizedValue>(() => ({
+    ...(asLocalizedField(currentPayload.description) ?? {}),
+  }));
+  const fields = useProductTypeFieldsState(payloadToFieldsInit(currentPayload));
 
   const [proposal, setProposal] = useState(pendingProposal);
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
 
-    const price = Number(priceCop);
-    if (!nameEs.trim() || !Number.isFinite(price) || price <= 0) {
-      setError("El nombre (es) y el precio son obligatorios.");
+    if (!(name.es ?? "").trim()) {
+      toast.danger("El nombre (es) es obligatorio.");
       return;
     }
 
     setIsSubmitting(true);
 
-    const name: Record<string, string> = { es: nameEs.trim() };
-    if (nameEn.trim()) name.en = nameEn.trim();
-
-    const description: Record<string, string> | null = descriptionEs.trim()
-      ? { es: descriptionEs.trim(), ...(descriptionEn.trim() ? { en: descriptionEn.trim() } : {}) }
-      : null;
-
-    const payload = {
-      name,
-      description,
-      price_cop: price,
-      category: category === NO_PRODUCT_CATEGORY ? null : category,
-    };
-
+    const payload = buildProductEditPayload(type, name, description, fields);
     const supabase = createClient();
     const { data, error: rpcError } = await supabase.rpc("submit_product_proposal", {
       p_product_id: productId,
-      p_payload: payload,
+      p_payload: payload as Json,
     });
 
     setIsSubmitting(false);
 
     const result = data as { ok: boolean; reason?: string; proposal_id?: string } | null;
     if (rpcError || !result?.ok) {
-      setError(
+      toast.danger(
         SUBMIT_ERRORS[result?.reason ?? ""] ?? "No se pudo enviar la propuesta. Inténtalo de nuevo."
       );
       return;
@@ -108,11 +97,11 @@ export function EditProposalForm({
         created_at: new Date().toISOString(),
       });
     }
+    toast.success("Propuesta enviada.");
   }
 
   async function handleWithdraw() {
     if (!proposal) return;
-    setError(null);
     setIsWithdrawing(true);
 
     const supabase = createClient();
@@ -124,13 +113,14 @@ export function EditProposalForm({
 
     const result = data as { ok: boolean; reason?: string } | null;
     if (rpcError || !result?.ok) {
-      setError(
+      toast.danger(
         WITHDRAW_ERRORS[result?.reason ?? ""] ?? "No se pudo retirar la propuesta. Inténtalo de nuevo."
       );
       return;
     }
 
     setProposal(null);
+    toast.success("Propuesta retirada.");
   }
 
   const proposedName = proposal
@@ -159,58 +149,26 @@ export function EditProposalForm({
         </div>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <TextField fullWidth name="name-es" value={nameEs} onChange={setNameEs} isRequired>
-          <Label>Nombre (es)</Label>
-          <Input />
-        </TextField>
-        <TextField fullWidth name="name-en" value={nameEn} onChange={setNameEn}>
-          <Label>Nombre (en) — opcional</Label>
-          <Input />
-        </TextField>
-        <TextField fullWidth name="description-es" value={descriptionEs} onChange={setDescriptionEs}>
-          <Label>Descripción (es) — opcional</Label>
-          <Input />
-        </TextField>
-        <TextField fullWidth name="description-en" value={descriptionEn} onChange={setDescriptionEn}>
-          <Label>Descripción (en) — opcional</Label>
-          <Input />
-        </TextField>
-        <TextField fullWidth name="price" value={priceCop} onChange={setPriceCop} isRequired>
-          <Label>Precio (COP)</Label>
-          <Input type="number" min={1} />
-        </TextField>
-        <Select
-          fullWidth
-          placeholder="Selecciona una categoría"
-          value={category}
-          onChange={(value) => value && setCategory(value as string)}
-        >
-          <Label>Categoría</Label>
-          <Select.Trigger data-testid="category-select">
-            <Select.Value />
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox>
-              <ListBox.Item id={NO_PRODUCT_CATEGORY} textValue="— Sin categoría —">
-                — Sin categoría —
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-              {PRODUCT_CATEGORIES.map((item) => (
-                <ListBox.Item key={item.value} id={item.value} textValue={item.label}>
-                  {item.label}
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
-        {error ? (
-          <p role="alert" data-testid="proposal-error" className="text-sm text-danger">
-            {error}
-          </p>
-        ) : null}
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+        <LocalizedTextField
+          label="Nombre"
+          value={name}
+          onChange={setName}
+          isRequired
+          inputName="nombre"
+          testIdPrefix="name"
+        />
+        <LocalizedTextField
+          label="Descripción — opcional"
+          value={description}
+          onChange={setDescription}
+          multiline
+          testIdPrefix="description"
+          fieldTestId="description-textarea"
+        />
+
+        <ProductTypeFields type={type} state={fields} />
+
         <Button type="submit" isDisabled={isSubmitting} data-testid="submit-proposal-button">
           {isSubmitting ? "Enviando…" : "Enviar propuesta"}
         </Button>

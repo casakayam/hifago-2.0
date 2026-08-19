@@ -64,6 +64,8 @@ test("un autre socio (sans capacité sur cet établissement) ne peut pas éditer
 
   // Refus métier normal (product_not_found, cf. feature 17) : un message d'erreur clair, jamais
   // un code brut, et le dialog reste ouvert (pas de succès silencieux).
-  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(
+    page.getByRole("alertdialog").filter({ hasText: "No se encontró la actividad." })
+  ).toBeVisible();
   await expect(page.locator('[role="dialog"]')).toBeVisible();
 });

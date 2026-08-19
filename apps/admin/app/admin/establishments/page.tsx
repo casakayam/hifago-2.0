@@ -43,12 +43,29 @@ export default async function AdminEstablishmentsPage({
 
   const { data: establishments, count } = await query;
 
+  // Spec 17 §0 Tranche 0 — deuxième vague dépendante des id de la page courante (même idiome
+  // qu'ailleurs, ex. photos/propositions en attente) : quels établissements de CETTE page portent
+  // au moins un camp/evento, pour conditionner le lien "Recurso compartido" (EstablishmentsList).
+  const establishmentIds = (establishments ?? []).map((e) => e.id);
+  const { data: sharedResourceProducts } =
+    establishmentIds.length > 0
+      ? await supabase
+          .from("products")
+          .select("establishment_id")
+          .in("establishment_id", establishmentIds)
+          .in("type", ["camp", "evento"])
+      : { data: [] as { establishment_id: string }[] };
+  const establishmentIdsWithSharedResource = new Set(
+    (sharedResourceProducts ?? []).map((p) => p.establishment_id)
+  );
+
   const rows: EstablishmentRow[] = (establishments ?? []).map((establishment) => ({
     id: establishment.id,
     name: resolveLocalizedField(asLocalizedField(establishment.name), "es") ?? establishment.id,
     partnerName: establishment.partner?.display_name ?? "—",
     status: establishment.status,
     activitiesCount: establishment.products?.[0]?.count ?? 0,
+    hasSharedResourceProducts: establishmentIdsWithSharedResource.has(establishment.id),
   }));
 
   return (
