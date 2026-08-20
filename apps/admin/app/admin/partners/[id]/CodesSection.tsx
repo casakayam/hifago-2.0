@@ -3,7 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Switch, Table, toast } from "@hifago/ui";
+import {
+  SimpleTable,
+  SimpleTableBody,
+  SimpleTableCell,
+  SimpleTableHead,
+  SimpleTableHeader,
+  SimpleTableRow,
+  Switch,
+  toast,
+} from "@hifago/ui";
 
 type Code = { code: string; active: boolean };
 
@@ -33,43 +42,44 @@ export function CodesSection({ codes }: { codes: Code[] }) {
     <section className="flex flex-col gap-4">
       <h2 className="text-lg font-medium">Códigos de atribución</h2>
 
-      <Table>
-        <Table.ScrollContainer>
-          <Table.Content aria-label="Códigos de atribución">
-            <Table.Header>
-              <Table.Column isRowHeader>Código</Table.Column>
-              <Table.Column>Activo</Table.Column>
-            </Table.Header>
-            <Table.Body
-              items={codes}
-              renderEmptyState={() => (
-                <p className="p-4 text-center text-sm text-muted">Ningún código todavía.</p>
-              )}
-            >
-              {(code) => (
-                <Table.Row id={code.code} data-testid={`code-row-${code.code}`}>
-                  <Table.Cell>{code.code}</Table.Cell>
-                  <Table.Cell>
-                    <Switch
-                      isSelected={code.active}
-                      isDisabled={updating === code.code}
-                      onChange={(isActive) => handleToggle(code.code, isActive)}
-                      aria-label={`Código ${code.code} activo`}
-                      data-testid={`code-active-switch-${code.code}`}
-                    >
-                      <Switch.Content>
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                      </Switch.Content>
-                    </Switch>
-                  </Table.Cell>
-                </Table.Row>
-              )}
-            </Table.Body>
-          </Table.Content>
-        </Table.ScrollContainer>
-      </Table>
+      <SimpleTable aria-label="Códigos de atribución">
+        <SimpleTableHeader>
+          <SimpleTableRow>
+            <SimpleTableHead>Código</SimpleTableHead>
+            <SimpleTableHead>Activo</SimpleTableHead>
+          </SimpleTableRow>
+        </SimpleTableHeader>
+        <SimpleTableBody>
+          {codes.length > 0 ? (
+            codes.map((code) => (
+              <SimpleTableRow key={code.code} id={code.code} data-testid={`code-row-${code.code}`}>
+                <SimpleTableCell data-label="Código">{code.code}</SimpleTableCell>
+                <SimpleTableCell data-label="Activo">
+                  <Switch
+                    isSelected={code.active}
+                    isDisabled={updating === code.code}
+                    onChange={(isActive) => handleToggle(code.code, isActive)}
+                    aria-label={`Código ${code.code} activo`}
+                    data-testid={`code-active-switch-${code.code}`}
+                  >
+                    <Switch.Content>
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                    </Switch.Content>
+                  </Switch>
+                </SimpleTableCell>
+              </SimpleTableRow>
+            ))
+          ) : (
+            <SimpleTableRow>
+              <SimpleTableCell colSpan={2} className="text-center text-muted">
+                Ningún código todavía.
+              </SimpleTableCell>
+            </SimpleTableRow>
+          )}
+        </SimpleTableBody>
+      </SimpleTable>
     </section>
   );
 }

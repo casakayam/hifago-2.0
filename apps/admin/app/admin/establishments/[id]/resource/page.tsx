@@ -3,17 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
 import { AvailabilityCalendar } from "@/components/availability-calendar";
-import { Table } from "@hifago/ui";
-
-type BlockQueryRow = {
-  id: string;
-  start_date: string;
-  end_date: string;
-  order_line: {
-    order: { holder_name: string } | null;
-    product: { name: unknown } | null;
-  } | null;
-};
+import { AvailabilityBlocksTable, type BlockQueryRow } from "./AvailabilityBlocksTable";
 
 export default async function EstablishmentResourcePage({
   params,
@@ -80,39 +70,7 @@ export default async function EstablishmentResourcePage({
 
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-medium">Causa de los bloqueos</h2>
-        <Table data-testid="availability-blocks-table">
-          <Table.ScrollContainer>
-            <Table.Content aria-label="Causa de los bloqueos">
-              <Table.Header>
-                <Table.Column isRowHeader>Plaza</Table.Column>
-                <Table.Column>Campamento</Table.Column>
-                <Table.Column>Titular</Table.Column>
-              </Table.Header>
-              <Table.Body>
-                {blocks && blocks.length > 0 ? (
-                  blocks.map((block) => (
-                    <Table.Row key={block.id} data-testid={`availability-block-row-${block.id}`}>
-                      <Table.Cell>
-                        {block.start_date} → {block.end_date}
-                      </Table.Cell>
-                      <Table.Cell>
-                        {resolveLocalizedField(asLocalizedField(block.order_line?.product?.name), "es") ??
-                          "—"}
-                      </Table.Cell>
-                      <Table.Cell>{block.order_line?.order?.holder_name ?? "—"}</Table.Cell>
-                    </Table.Row>
-                  ))
-                ) : (
-                  <Table.Row>
-                    <Table.Cell colSpan={3} className="text-center text-muted">
-                      Ningún bloqueo todavía.
-                    </Table.Cell>
-                  </Table.Row>
-                )}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+        <AvailabilityBlocksTable blocks={blocks ?? []} />
       </div>
     </div>
   );

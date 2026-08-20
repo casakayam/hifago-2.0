@@ -110,11 +110,20 @@ export function SortablePaginatedTable<TData extends RowData>({
         <SimpleTableBody>
           {table.getRowModel().rows.map((row) => (
             <SimpleTableRow key={row.id} data-testid={getRowTestId(row.original)}>
-              {row.getAllCells().map((cell) => (
-                <SimpleTableCell key={cell.id}>
-                  <table.FlexRender cell={cell} />
-                </SimpleTableCell>
-              ))}
+              {row.getAllCells().map((cell) => {
+                const header = cell.column.columnDef.header;
+                return (
+                  <SimpleTableCell
+                    key={cell.id}
+                    // Reflow mobile (SimpleTableCell, max-md:) : même solution que DataList
+                    // (col?.header ?? "") — un header défini comme fonction (render prop) plutôt
+                    // qu'une chaîne dégrade proprement vers "" (pas de libellé), jamais un crash.
+                    data-label={typeof header === "string" ? header : ""}
+                  >
+                    <table.FlexRender cell={cell} />
+                  </SimpleTableCell>
+                );
+              })}
             </SimpleTableRow>
           ))}
         </SimpleTableBody>

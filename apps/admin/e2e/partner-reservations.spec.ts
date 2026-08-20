@@ -113,6 +113,9 @@ test("un socio voit dans Mis reservas une réservation réelle sur son produit, 
   // --- Spec 19 §0 Tranche 0 : le socio marque lui-même "Cliente no vino" sur SA réservation ------
   // Élargissement d'autorisation de set_order_line_status (migration 20260818150000) : seule
   // transition que l'operator peut désormais déclencher lui-même, jamais via l'admin ici.
+  // Retour Jérôme (2026-08-20) : "Cliente no vino"/"Cancelar" retirés de la liste, ne restent que
+  // sur la fiche détail (ReservationActions.tsx) — clic ligne puis action, plus une action rapide
+  // depuis la liste.
   await loginAs(context, SEEDED_ACCOUNTS.operadorPropuestas, SEEDED_PASSWORD);
   await page.goto(`/partner/reservations?date_to=${date}`);
 
@@ -120,13 +123,16 @@ test("un socio voit dans Mis reservas une réservation réelle sur son produit, 
   await expect(reservationRow).toBeVisible();
   await expect(reservationRow.getByTestId(/^reservation-status-/)).toContainText("Reservada");
 
-  await reservationRow.getByRole("button", { name: "Cliente no vino" }).click();
+  await reservationRow.getByRole("link", { name: "Ver ficha" }).click();
+  await expect(page).toHaveURL(/\/partner\/reservations\/.+$/);
+
+  await page.getByTestId("detail-no-show-button").click();
   await page.waitForSelector('[data-testid="status-reason-input"]');
   await page.getByTestId("status-reason-input").fill("Cliente no llegó al punto de encuentro (e2e).");
   await page.getByTestId("confirm-status-button").click();
 
-  // Mise à jour d'état local (pas de router.refresh(), cf. ReservationsTable.tsx) : le statut passe
-  // à "Ausencia" et le bouton disparaît (n'est visible que sur une ligne encore 'reserved').
-  await expect(reservationRow.getByTestId(/^reservation-status-/)).toContainText("Ausencia");
-  await expect(reservationRow.getByRole("button", { name: "Cliente no vino" })).toHaveCount(0);
+  // La fiche détail reflète le nouveau statut, le bouton n'est plus visible (transition déjà faite,
+  // ReservationActions.tsx retourne null dès que status !== 'reserved').
+  await expect(page.getByTestId("reservation-detail-status")).toContainText("Ausencia");
+  await expect(page.getByTestId("detail-no-show-button")).toHaveCount(0);
 });

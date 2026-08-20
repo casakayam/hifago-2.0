@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
 import { requirePartnerOrAdmin } from "@/lib/partnerGuard";
+import { getOperatorCapability } from "@/lib/agenda/activeOperatorEstablishments";
 
 // Garde scopée à /partner/establishment (et ses enfants /new, /[id]/edit) — même patron que
 // products/layout.tsx : la vraie barrière reste la RLS (establishments_select) et les garde-fous
@@ -39,7 +40,15 @@ export default async function PartnerEstablishmentLayout({
     redirect("/login?next=/partner/establishment");
   }
 
-  await requirePartnerOrAdmin(supabase, user.id);
+  const { partnerId, isAdmin } = await requirePartnerOrAdmin(supabase, user.id);
+
+  // Refonte vue référent (2026-08-20, docs/specs/22-vue-referent-restreinte.md §3d du cahier des
+  // charges socio) : garde serveur réelle, pas un simple masquage du lien de nav — un référent pur
+  // (aucune capacité operator, quel que soit son statut) n'a rien à faire ici. L'admin n'est jamais
+  // concerné (même raison que requirePartnerOrAdmin ci-dessus, aucun partner_id).
+  if (!isAdmin && !(await getOperatorCapability(supabase, partnerId))) {
+    redirect("/partner");
+  }
 
   return children;
 }

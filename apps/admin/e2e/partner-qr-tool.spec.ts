@@ -55,7 +55,7 @@ test("un socio génère son lien/QR réel sur /partner/tools, un visiteur anonym
   expect(codeValue).toBe("SEED-REFACTIVE"); // cf. supabase/seed.sql — seul code actif de ce socio.
 
   await codeEntry.getByTestId("copy-code-button").click();
-  await expect(codeEntry.getByTestId("copy-code-button")).toHaveText("Copiado");
+  await expect(codeEntry.getByTestId("copy-code-button")).toHaveText("Copiado ✓");
   const clipboardAfterCode = await page.evaluate(() => navigator.clipboard.readText());
   expect(clipboardAfterCode).toBe(codeValue);
 
@@ -63,7 +63,7 @@ test("un socio génère son lien/QR réel sur /partner/tools, un visiteur anonym
   expect(linkValue).toBe(webReferralUrl(codeValue)); // structure confirmée par l'agent impl.
 
   await codeEntry.getByTestId("copy-link-button").click();
-  await expect(codeEntry.getByTestId("copy-link-button")).toHaveText("Copiado");
+  await expect(codeEntry.getByTestId("copy-link-button")).toHaveText("Copiado ✓");
   const clipboardAfterLink = await page.evaluate(() => navigator.clipboard.readText());
   expect(clipboardAfterLink).toBe(linkValue);
 

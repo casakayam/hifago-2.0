@@ -80,6 +80,16 @@ export const RESERVATIONS_SORT_WHITELIST: SortWhitelist = {
 };
 export const RESERVATIONS_DEFAULT_SORT = { key: "date", direction: "asc" } as const;
 
+// /partner/commissions (migré vers DataList, 2026-08-20) — base FROM ledger_entries, jamais
+// order_lines : la colonne affichée "Fecha" (order_line.date, relation embarquée) n'est pas triable
+// par .order() sans l'option foreignTable, jamais utilisée ailleurs dans ce projet (aucun
+// précédent) — created_at (colonne propre à ledger_entries) reste la seule colonne de tri, non
+// exposée en en-tête cliquable (même convention que les colonnes embarquées d'OrdersTable.tsx).
+export const COMMISSIONS_SORT_WHITELIST: SortWhitelist = {
+  created_at: "created_at",
+};
+export const COMMISSIONS_DEFAULT_SORT = { key: "created_at", direction: "desc" } as const;
+
 // Revue admin clientes (Jérôme, 2026-08-19) — client_key n'est pas une colonne stockée (calcul
 // coalesce account_id/email/phone/order_id), donc jamais une clé de tri valide ; les 3 colonnes
 // ci-dessous sont bien de vraies colonnes issues de l'agrégat côté RPC list_clients.

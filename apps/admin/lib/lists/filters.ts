@@ -4,6 +4,7 @@ import type { ChipStyle } from "@/components/status-chip";
 import { STATUS_LABELS, STATUS_CHIP_COLOR } from "@/app/admin/orders/statusLabels";
 import { AUDIENCE_LABELS, CAMPAIGN_STATUS_LABELS, CHANNEL_LABELS } from "@/app/admin/campaigns/campaignLabels";
 import { INVITATION_STATUS_LABELS, ONBOARDING_PATH_LABELS } from "@/app/admin/invitations/invitationLabels";
+import { COMMISSION_STATE_LABELS } from "@/app/partner/(app)/commissions/commissionStateLabels";
 
 // docs/specs/10-listes-standardisees-admin-socio.md §5.3 — deux jeux de définitions par liste,
 // volontairement séparés : `*_FILTER_DEFINITIONS` (packages/domain, kind text|enum|date) sert
@@ -69,6 +70,11 @@ export const PRODUCTS_FILTER_DEFINITIONS: FilterDefinition[] = [
   // champ texte est l'échappatoire pour chercher un établissement absent des 10 visibles, jamais
   // combiné avec establishment_id (l'un ou l'autre, jamais les deux — cf. page.tsx).
   { kind: "text", name: "establishment_q" },
+  // Revue admin étiquettes (Jérôme, 2026-08-20) — jamais un champ du formulaire de filtres visible
+  // (pas dans PRODUCTS_FILTERS ci-dessous, même statut que establishment_id) : posé uniquement par
+  // le lien "Ver" de /admin/tags (id exact, jamais de saisie texte donc aucune question de
+  // casse ici — cf. page.tsx pour le match par id via product_tag_assignments).
+  { kind: "text", name: "tag_id" },
 ];
 
 export const PRODUCTS_FILTERS: DataListFilter[] = [
@@ -234,20 +240,42 @@ export const PARTNER_DEFAULT_RADIUS_KM = "20";
 // connaît que la validation de forme, jamais une valeur par défaut métier). holder_email n'existe
 // comme filtre que depuis la migration 20260819180000 (order_lines.holder_email désormais exposée
 // au prestataire sur ses propres établissements).
+// Retour Jérôme (2026-08-20) — "Actividad" devient une sélection exacte (combobox avec recherche,
+// cf. ReservationsFilterBar.tsx) au lieu d'un texte libre : product_name (ilike) remplacé par
+// product_id (égalité). "Cliente"/"Email del cliente" fusionnés en un seul champ holder_q (l'un OU
+// l'autre, cf. page.tsx). Nouveau filtre status (mêmes valeurs qu'admin/orders, order_lines.status
+// est la même colonne). Toolbar entièrement custom (pas ServerFilters générique, comme
+// PartnersFilterBar) : RESERVATIONS_FILTERS n'a plus de raison d'exister, seule
+// RESERVATIONS_FILTER_DEFINITIONS reste (validation server-side des query params par
+// resolveListParams).
 export const RESERVATIONS_FILTER_DEFINITIONS: FilterDefinition[] = [
   { kind: "date", name: "date_from" },
   { kind: "date", name: "date_to" },
-  { kind: "text", name: "product_name" },
-  { kind: "text", name: "holder_name" },
-  { kind: "text", name: "holder_email" },
+  { kind: "text", name: "product_id" },
+  { kind: "text", name: "holder_q" },
+  { kind: "enum", name: "status", allowed: Object.keys(STATUS_LABELS) },
 ];
 
-export const RESERVATIONS_FILTERS: DataListFilter[] = [
+// Filtres date/état demandés par Jérôme (2026-08-20) sur /partner/commissions — seule liste
+// socio dont les filtres tiennent entièrement dans les 3 kinds natifs de ServerFilters (date/date/
+// select), contrairement à RESERVATIONS_FILTERS ci-dessus (combobox activité => toolbar custom
+// obligatoire) : COMMISSIONS_FILTERS suffit donc ici, pas de barre custom à écrire.
+export const COMMISSIONS_FILTER_DEFINITIONS: FilterDefinition[] = [
+  { kind: "date", name: "date_from" },
+  { kind: "date", name: "date_to" },
+  { kind: "enum", name: "status", allowed: Object.keys(COMMISSION_STATE_LABELS) },
+];
+
+export const COMMISSIONS_FILTERS: DataListFilter[] = [
   { kind: "date", name: "date_from", label: "Desde" },
   { kind: "date", name: "date_to", label: "Hasta" },
-  { kind: "text", name: "product_name", label: "Actividad", placeholder: "Nombre de la actividad" },
-  { kind: "text", name: "holder_name", label: "Cliente", placeholder: "Nombre del cliente" },
-  { kind: "text", name: "holder_email", label: "Email del cliente", placeholder: "Email del cliente" },
+  {
+    kind: "select",
+    name: "status",
+    label: "Estado",
+    allLabel: "Todos los estados",
+    options: Object.entries(COMMISSION_STATE_LABELS).map(([value, label]) => ({ value, label })),
+  },
 ];
 
 export const TAGS_FILTER_DEFINITIONS: FilterDefinition[] = [{ kind: "text", name: "q" }];

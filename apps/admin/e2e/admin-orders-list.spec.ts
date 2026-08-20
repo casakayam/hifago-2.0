@@ -22,6 +22,11 @@ test("admin ouvre /admin/orders, voit les commandes seedées (avec et sans réf�
   await page.goto("/admin/orders");
   await expect(page.locator('[data-testid^="order-line-row-"]').first()).toBeVisible();
 
+  // Filtres repliés par défaut (chevron) depuis la refonte responsive mobile — ServerFilters est
+  // un <form method="GET"> à soumission native (pas interceptée en JS), donc chaque clic sur
+  // "server-filters-submit" recharge réellement la page et referme le panneau : réouvrir avant
+  // CHAQUE interaction suivante, pas une seule fois en début de test.
+  await page.getByTestId("filters-toggle").click();
   await page.getByTestId("filter-date_from").fill("2026-10-01");
   await page.getByTestId("filter-date_to").fill("2026-10-02");
   await page.getByTestId("server-filters-submit").click();
@@ -41,18 +46,21 @@ test("admin ouvre /admin/orders, voit les commandes seedées (avec et sans réf�
   // choisir l'option PUIS cliquer "Buscar". Les 2 commandes seedées sont "reserved" (Reservada) —
   // visibles sous ce filtre, invisibles sous un filtre disjoint (aucune des deux n'est encore
   // "Realizada").
+  await page.getByTestId("filters-toggle").click();
   await page.getByTestId("filter-status").click();
   await page.getByRole("option", { name: "Reservada" }).click();
   await page.getByTestId("server-filters-submit").click();
   await expect(directRow).toBeVisible();
   await expect(referredRow).toBeVisible();
 
+  await page.getByTestId("filters-toggle").click();
   await page.getByTestId("filter-status").click();
   await page.getByRole("option", { name: "Realizada" }).click();
   await page.getByTestId("server-filters-submit").click();
   await expect(directRow).toHaveCount(0);
   await expect(referredRow).toHaveCount(0);
 
+  await page.getByTestId("filters-toggle").click();
   await page.getByTestId("filter-status").click();
   await page.getByRole("option", { name: "Todos los estados" }).click();
   await page.getByTestId("server-filters-submit").click();

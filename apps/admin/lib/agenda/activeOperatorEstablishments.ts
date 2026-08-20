@@ -24,6 +24,35 @@ export function selectActiveOperatorEstablishmentIds(
     .filter((id): id is string => Boolean(id));
 }
 
+// Distinct de selectActiveOperatorEstablishmentIds ci-dessus : ce prédicat sert à décider un ACCÈS
+// (nav + gardes des layouts établissement/produits/réservations, refonte vue référent 2026-08-20),
+// pas à scoper des DONNÉES — un opérateur suspendu doit toujours pouvoir consulter/comprendre sa
+// situation (établissement, réservations passées), ce n'est pas un référent pur. `status` n'est
+// donc volontairement pas filtré ici, contrairement à selectActiveOperatorEstablishmentIds.
+export function hasOperatorCapability(capabilities: PartnerCapabilityForFilter[]): boolean {
+  return capabilities.some((row) => row.role === "operator");
+}
+
+// Fetch + hasOperatorCapability en un seul appel — extrait le 2026-08-20 (refonte vue référent) :
+// `partner_capabilities.select("role, status, establishment_id").eq("partner_id", partnerId)` puis
+// hasOperatorCapability(...) étaient recopiés verbatim dans partner/(app)/layout.tsx et les 3
+// gardes establishment/products/reservations, le jour même où ce dépôt a déjà fixé une fois cette
+// exacte classe de duplication pour partnerId/isAdmin (cf. lib/partnerGuard.ts,
+// requirePartnerOrAdmin, extrait le 2026-08-18).
+export async function getOperatorCapability(
+  supabase: SupabaseClient,
+  partnerId: string | null
+): Promise<boolean> {
+  if (!partnerId) return false;
+
+  const { data: capabilities } = await supabase
+    .from("partner_capabilities")
+    .select("role, status, establishment_id")
+    .eq("partner_id", partnerId);
+
+  return hasOperatorCapability(capabilities ?? []);
+}
+
 // reservations/page.tsx n'a besoin QUE des établissements opérés (jamais des lignes non filtrées) —
 // requête filtrée côté serveur directement, même règle métier que
 // selectActiveOperatorEstablishmentIds ci-dessus, traduite en `.eq(...)` plutôt qu'un filtre JS

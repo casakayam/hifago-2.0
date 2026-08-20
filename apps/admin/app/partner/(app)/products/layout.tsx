@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
 import { requirePartnerOrAdmin } from "@/lib/partnerGuard";
+import { getOperatorCapability } from "@/lib/agenda/activeOperatorEstablishments";
 
 // Garde scopée à /partner/products (et ses enfants /new, /[id]/edit) — jamais au segment /partner
 // en entier, qui contient aussi /partner/join, volontairement accessible à un visiteur non
@@ -32,7 +33,15 @@ export default async function PartnerProductsLayout({
     redirect("/login?next=/partner/products");
   }
 
-  await requirePartnerOrAdmin(supabase, user.id);
+  const { partnerId, isAdmin } = await requirePartnerOrAdmin(supabase, user.id);
+
+  // Refonte vue référent (2026-08-20, docs/specs/22-vue-referent-restreinte.md) — même garde
+  // qu'establishment/layout.tsx : /partner/products/new redirige déjà vers /partner/establishment
+  // (products/page.tsx), mais les sous-routes /[id]/edit et *-availability restent atteignables
+  // directement par URL sans cette garde.
+  if (!isAdmin && !(await getOperatorCapability(supabase, partnerId))) {
+    redirect("/partner");
+  }
 
   return children;
 }

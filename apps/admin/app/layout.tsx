@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toast } from "@hifago/ui";
 import "./globals.css";
@@ -15,6 +15,15 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Hifago",
+};
+
+// viewport-fit=cover : sans lui, env(safe-area-inset-*) (déjà utilisé par le Toast ci-dessous et
+// par la nouvelle barre de nav mobile sticky) n'a aucun inset non nul à lire sur iOS à encoche —
+// Next pose son propre défaut sans ce flag tant qu'aucun export `viewport` n'existe.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function AppLayout({ children }: LayoutProps<"/">) {

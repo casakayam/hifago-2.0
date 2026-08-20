@@ -1,44 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
-import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
-import { deriveLedgerEntry, type LedgerState } from "@/lib/commission/deriveLedgerEntry";
-import { Chip, Table } from "@hifago/ui";
-import { formatCop } from "@hifago/domain";
-import { STATUS_LABELS, STATUS_CHIP_COLOR } from "../statusLabels";
-
-// Vocabulaire de deriveLedgerEntry (feature 12) — distinct du statut de ligne (feature 8) : un
-// chip pour CE QUI S'EST PASSÉ (reserved/fulfilled/...), un second pour CE QUE ÇA IMPLIQUE POUR LA
-// COMMISSION (estimated/earned/redistributed/voided), jamais confondus dans une seule colonne.
-const LEDGER_STATE_LABELS: Record<LedgerState, string> = {
-  estimated: "Estimado",
-  earned: "Ganado",
-  redistributed: "Redistribuido",
-  voided: "Anulado",
-};
-
-const LEDGER_STATE_CHIP_COLOR: Record<
-  LedgerState,
-  "default" | "accent" | "success" | "warning" | "danger"
-> = {
-  estimated: "default",
-  earned: "accent",
-  redistributed: "warning",
-  voided: "danger",
-};
-
-type OrderLineQueryRow = {
-  id: string;
-  date: string;
-  qty: number;
-  status: string;
-  total_cop: number;
-  acompte_cop: number;
-  referrer_commission_cop: number;
-  app_commission_cop: number;
-  commission_case: string;
-  product: { name: unknown } | null;
-};
+import { LedgerLinesTable, type OrderLineQueryRow } from "./LedgerLinesTable";
 
 export default async function AdminOrderDetailPage({
   params,
@@ -109,74 +72,7 @@ export default async function AdminOrderDetailPage({
         ) : null}
       </div>
 
-      <Table data-testid="ledger-table">
-        <Table.ScrollContainer>
-          <Table.Content aria-label="Detalle de la comisión por línea">
-            <Table.Header>
-              <Table.Column>Producto</Table.Column>
-              <Table.Column>Fecha</Table.Column>
-              <Table.Column>Cantidad</Table.Column>
-              <Table.Column>Estado</Table.Column>
-              <Table.Column>Parte app</Table.Column>
-              <Table.Column>Parte referente</Table.Column>
-              <Table.Column>Parte prestador</Table.Column>
-              <Table.Column>Estado de comisión</Table.Column>
-            </Table.Header>
-            <Table.Body>
-              {lines && lines.length > 0 ? (
-                lines.map((line) => {
-                  const entry = deriveLedgerEntry({
-                    commissionCase: line.commission_case,
-                    totalCop: line.total_cop,
-                    acompteCop: line.acompte_cop,
-                    referrerCommissionCop: line.referrer_commission_cop,
-                    appCommissionCop: line.app_commission_cop,
-                    lineStatus: line.status,
-                  });
-                  return (
-                    <Table.Row key={line.id} id={line.id} data-testid={`ledger-line-${line.id}`}>
-                      <Table.Cell>
-                        {resolveLocalizedField(asLocalizedField(line.product?.name), "es") ?? "—"}
-                      </Table.Cell>
-                      <Table.Cell>{line.date}</Table.Cell>
-                      <Table.Cell>{line.qty}</Table.Cell>
-                      <Table.Cell>
-                        <Chip variant="soft" color={STATUS_CHIP_COLOR[line.status] ?? "default"}>
-                          {STATUS_LABELS[line.status] ?? line.status}
-                        </Chip>
-                      </Table.Cell>
-                      <Table.Cell data-testid={`app-due-${line.id}`}>
-                        {formatCop(entry.appDueCop)}
-                      </Table.Cell>
-                      <Table.Cell data-testid={`referrer-due-${line.id}`}>
-                        {formatCop(entry.referrerDueCop)}
-                      </Table.Cell>
-                      <Table.Cell data-testid={`provider-due-${line.id}`}>
-                        {formatCop(entry.providerDueCop)}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Chip
-                          variant="soft"
-                          color={LEDGER_STATE_CHIP_COLOR[entry.state]}
-                          data-testid={`ledger-state-${line.id}`}
-                        >
-                          {LEDGER_STATE_LABELS[entry.state]}
-                        </Chip>
-                      </Table.Cell>
-                    </Table.Row>
-                  );
-                })
-              ) : (
-                <Table.Row id="empty">
-                  <Table.Cell colSpan={8} className="text-center text-muted">
-                    Ninguna línea en este pedido.
-                  </Table.Cell>
-                </Table.Row>
-              )}
-            </Table.Body>
-          </Table.Content>
-        </Table.ScrollContainer>
-      </Table>
+      <LedgerLinesTable lines={lines ?? []} />
     </div>
   );
 }

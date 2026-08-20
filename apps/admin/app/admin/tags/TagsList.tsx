@@ -1,6 +1,6 @@
 "use client";
 
-import { DataList, type DataListAction, type DataListColumn, type DataListSort, viewAction } from "@hifago/ui";
+import { DataList, type DataListAction, type DataListColumn, type DataListSort } from "@hifago/ui";
 import { RenameTagButton } from "./RenameTagButton";
 import { TAGS_FILTERS } from "@/lib/lists/filters";
 
@@ -22,7 +22,15 @@ export type TagsListProps = {
 };
 
 // docs/specs/10-listes-standardisees-admin-socio.md §5.3 — pas d'Eliminar sur la liste (décision
-// Jérôme) : DeleteTagButton reste exclusivement sur la fiche /admin/tags/[id].
+// Jérôme) : DeleteTagButton reste exclusivement sur la fiche /admin/tags/[id] (qui, elle, supprime
+// bien la étiquette de TOUTES les activités — product_tag_assignments.tag_id est en
+// "on delete cascade", vérifié empiriquement contre l'instance locale).
+// Revue admin étiquettes (Jérôme, 2026-08-20) — "Ver" ne pointe plus vers /admin/tags/[id] : il
+// envoie directement au catalogue filtré par ce tag (?tag_id=). Un 1er essai avait laissé la fiche
+// détail atteignable UNIQUEMENT via le lien "furtif" par défaut de la ligne (rowHref) — invisible,
+// donc Eliminar était de facto injoignable pour Jérôme. Corrigé : action "Detalle" explicite
+// ci-dessous, seul chemin visible vers Eliminar désormais (le clic sur la ligne reste un raccourci
+// silencieux vers la même page, jamais retiré, mais plus le seul).
 export function TagsList({
   rows,
   page,
@@ -44,11 +52,22 @@ export function TagsList({
   ];
 
   const actions: DataListAction<TagRow>[] = [
-    viewAction("/admin/tags", "tag"),
+    {
+      id: "view",
+      label: "Ver",
+      href: (row) => `/admin/products?tag_id=${row.id}`,
+      testId: (row) => `tag-catalog-link-${row.id}`,
+    },
     {
       id: "edit",
       label: "Editar",
       render: (row) => <RenameTagButton tagId={row.id} currentLabel={row.label} />,
+    },
+    {
+      id: "detail",
+      label: "Detalle",
+      href: (row) => `/admin/tags/${row.id}`,
+      testId: (row) => `tag-detail-link-${row.id}`,
     },
   ];
 

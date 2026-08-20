@@ -100,6 +100,9 @@ test("la recherche unifiée de la liste établissements trouve un établissement
   // (jamais touché par cet autre spec) et on vérifie la ligne par testid stable (l'id, pas le nom) :
   // preuve que list_establishments_admin cherche bien sur les deux colonnes (un .or() PostgREST ne
   // le permettait pas, cf. migration 20260819190000), sans dépendre d'un nom mutable par ailleurs.
+  // Filtres repliés par défaut (chevron) depuis la refonte responsive mobile — ouvrir avant d'y
+  // interagir, sinon les champs sont `hidden` (Disclosure, packages/ui/data-list.tsx).
+  await page.getByTestId("filters-toggle").click();
   await page.getByTestId("filter-q").fill("Prestador Propuestas");
   await page.getByTestId("server-filters-submit").click();
 

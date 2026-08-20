@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
-import { Button, buttonVariants, Card, Input, Label } from "@hifago/ui";
+import { Button, buttonVariants, Card, cn, Input, Label } from "@hifago/ui";
 import { buildWhatsAppLink, SUPPORT_WHATSAPP_NUMBER } from "@/lib/whatsapp";
 
 export function PartnerCodeEntry({ code, link }: { code: string; link: string }) {
@@ -14,16 +14,19 @@ export function PartnerCodeEntry({ code, link }: { code: string; link: string })
   // Génération du QR CÔTÉ CLIENT (cahier des charges socio §3h) : SVG (vectoriel, impression) via
   // QRCode.toString + PNG (raster, web/WhatsApp) rendu sur un <canvas> via QRCode.toCanvas — les
   // deux formats sont exigés, pas un choix entre les deux. Le QR encode `link` (l'URL de
-  // redirection /[locale]/r/[code]), jamais une URL finale construite à la main.
+  // redirection /[locale]/r/[code]), jamais une URL finale construite à la main. width=240 explicite
+  // (retour Jérôme, 2026-08-20 : présentation trop pauvre) — sans lui, la lib retombe sur une taille
+  // "naturelle" liée au nombre de modules, trop petite pour rester lisible une fois posée dans une
+  // carte avec du texte autour.
   useEffect(() => {
     if (!link) return;
     let cancelled = false;
 
-    QRCode.toString(link, { type: "svg", margin: 1 }).then((svg) => {
+    QRCode.toString(link, { type: "svg", margin: 1, width: 240 }).then((svg) => {
       if (!cancelled) setSvgMarkup(svg);
     });
     if (canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, link, { margin: 1 });
+      QRCode.toCanvas(canvasRef.current, link, { margin: 1, width: 240 });
     }
 
     return () => {
@@ -71,78 +74,104 @@ export function PartnerCodeEntry({ code, link }: { code: string; link: string })
   const whatsappHref = buildWhatsAppLink(SUPPORT_WHATSAPP_NUMBER, whatsappMessage);
 
   return (
-    <Card data-testid="partner-code-entry">
-      <Card.Header>
-        <Card.Title>{code}</Card.Title>
+    <Card data-testid="partner-code-entry" className="w-full overflow-hidden">
+      <Card.Header className="border-b border-border bg-surface-secondary/40">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted">
+              Código de referido
+            </span>
+            <Card.Title className="text-2xl font-bold tracking-tight">{code}</Card.Title>
+          </div>
+        </div>
       </Card.Header>
-      <Card.Content className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`code-${code}`}>Código</Label>
-          <div className="flex gap-2">
-            <Input id={`code-${code}`} readOnly value={code} data-testid="partner-code-value" />
-            <Button
-              type="button"
-              variant="outline"
-              onPress={handleCopyCode}
-              data-testid="copy-code-button"
-            >
-              {copiedCode ? "Copiado" : "Copiar"}
-            </Button>
-          </div>
-        </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`link-${code}`}>Enlace atribuido</Label>
-          <div className="flex gap-2">
-            <Input
-              id={`link-${code}`}
-              readOnly
-              value={link}
-              data-testid="partner-link-value"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onPress={handleCopyLink}
-              data-testid="copy-link-button"
-            >
-              {copiedLink ? "Copiado" : "Copiar"}
-            </Button>
+      <Card.Content className="flex flex-col gap-6 p-6 sm:flex-row sm:items-start sm:gap-8">
+        {/* QR bien encadré, marge blanche généreuse (lisibilité + zone de silence pour le scan) */}
+        <div className="flex flex-col items-center gap-3 sm:shrink-0">
+          <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+            <canvas ref={canvasRef} className="block" />
           </div>
-        </div>
-
-        <div className="flex flex-col items-start gap-3">
-          <Label>Código QR</Label>
-          <canvas ref={canvasRef} className="rounded-lg border bg-surface" />
           <div className="flex gap-2">
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onPress={handleDownloadSvg}
               data-testid="download-svg-button"
             >
-              Descargar SVG
+              SVG
             </Button>
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onPress={handleDownloadPng}
               data-testid="download-png-button"
             >
-              Descargar PNG
+              PNG
             </Button>
           </div>
         </div>
 
-        <a
-          href={whatsappHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          data-testid="whatsapp-support-button"
-          className={buttonVariants({ variant: "outline" })}
-        >
-          Soporte por WhatsApp
-        </a>
+        <div className="flex flex-1 flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`code-${code}`}>Código</Label>
+            <div className="flex gap-2">
+              <Input
+                id={`code-${code}`}
+                readOnly
+                fullWidth
+                value={code}
+                className="flex-1 font-mono"
+                data-testid="partner-code-value"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onPress={handleCopyCode}
+                data-testid="copy-code-button"
+              >
+                {copiedCode ? "Copiado ✓" : "Copiar"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`link-${code}`}>Enlace atribuido</Label>
+            <div className="flex gap-2">
+              <Input
+                id={`link-${code}`}
+                readOnly
+                fullWidth
+                value={link}
+                className="flex-1 font-mono text-sm"
+                data-testid="partner-link-value"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onPress={handleCopyLink}
+                data-testid="copy-link-button"
+              >
+                {copiedLink ? "Copiado ✓" : "Copiar"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-auto flex flex-col gap-1.5 border-t border-border pt-4">
+            <p className="text-sm text-muted">¿Problemas con tu enlace o QR?</p>
+            <a
+              href={whatsappHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="whatsapp-support-button"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-full justify-center")}
+            >
+              Soporte por WhatsApp
+            </a>
+          </div>
+        </div>
       </Card.Content>
     </Card>
   );

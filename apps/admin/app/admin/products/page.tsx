@@ -11,6 +11,7 @@ type ProductQueryRow = {
   price_cop: number | null;
   sellable: boolean;
   establishments: { name: unknown } | null;
+  product_tag_assignments?: { tag_id: string }[];
 };
 
 // docs/specs/02-admin-accueil-et-navigation.md §5.5 — la liste manquait, seuls
@@ -44,23 +45,42 @@ export default async function AdminProductsPage({
   // d'agrégat "les plus utilisés" non demandé), complété par un champ texte `establishment_q` en
   // échappatoire pour chercher un établissement absent des 10 visibles. Les deux ne se combinent
   // jamais : establishment_id (dropdown) prioritaire s'il est posé, sinon establishment_q (texte).
-  const { data: establishments } = await supabase
-    .from("establishments")
-    .select("id, name")
-    .order("name->>es", { ascending: true })
-    .limit(10);
+  // Les deux ne dépendent que du filtre "établissement" respectif, jamais l'un de l'autre —
+  // lancées en concurrence (même idiome que la fiche client, [client_key]/page.tsx).
+  const [{ data: establishments }, { data: tags }] = await Promise.all([
+    supabase.from("establishments").select("id, name").order("name->>es", { ascending: true }).limit(10),
+    // Revue admin étiquettes (Jérôme, 2026-08-20) — pas de plafond ni d'échappatoire texte
+    // (contrairement à établissement, cf. commentaire ci-dessous) : catalog_tags est une
+    // taxonomie curée par l'admin (dizaines attendues), pas une collection qui grossit à chaque
+    // création d'établissement — un <select> simple suffit, même famille que "Tipo"/"Estado".
+    supabase.from("catalog_tags").select("id, label").order("label->>es", { ascending: true }),
+  ]);
   const establishmentOptions = (establishments ?? []).map((establishment) => ({
     value: establishment.id,
     label: resolveLocalizedField(asLocalizedField(establishment.name), "es") ?? establishment.id,
+  }));
+  const tagOptions = (tags ?? []).map((tag) => ({
+    value: tag.id,
+    label: resolveLocalizedField(asLocalizedField(tag.label), "es") ?? tag.id,
   }));
 
   // establishments!inner (pas le embed par défaut) : establishment_id est not null sur products,
   // donc ça ne change jamais l'ensemble de résultats — juste ce qui permet d'appliquer un .ilike()
   // sur establishments.name (colonne d'une relation embarquée) sans RPC, tant que ce n'est jamais
   // combiné à une autre condition via .or() (limite déjà documentée pour établissements/clientes).
+  // product_tag_assignments!inner : ajouté au select UNIQUEMENT si tag_id est actif (chaîne
+  // construite dynamiquement) — jamais structurel comme establishments!inner, sinon tout produit
+  // sans aucune étiquette disparaîtrait de la liste par défaut (même piège LEFT JOIN vs INNER JOIN
+  // déjà documenté pour list_partners_admin). (product_id, tag_id) est la clé primaire de la table
+  // : filtrer sur un tag_id précis ne peut jamais dupliquer une ligne produit.
+  let selectColumns = "id, name, type, price_cop, sellable, establishments!inner(name)";
+  if (filters.tag_id) {
+    selectColumns += ", product_tag_assignments!inner(tag_id)";
+  }
+
   let query = supabase
     .from("products")
-    .select("id, name, type, price_cop, sellable, establishments!inner(name)", { count: "exact" })
+    .select(selectColumns, { count: "exact" })
     .order(sort.column, { ascending: sort.direction === "asc" })
     .range(from, to);
 
@@ -77,6 +97,9 @@ export default async function AdminProductsPage({
     query = query.eq("establishment_id", filters.establishment_id);
   } else if (filters.establishment_q) {
     query = query.ilike("establishments.name->>es", `%${filters.establishment_q}%`);
+  }
+  if (filters.tag_id) {
+    query = query.eq("product_tag_assignments.tag_id", filters.tag_id);
   }
 
   const { data: products, count } = await query.returns<ProductQueryRow[]>();
@@ -103,6 +126,7 @@ export default async function AdminProductsPage({
         filterValues={filters}
         extraParams={extraParams}
         establishmentOptions={establishmentOptions}
+        tagOptions={tagOptions}
       />
     </div>
   );

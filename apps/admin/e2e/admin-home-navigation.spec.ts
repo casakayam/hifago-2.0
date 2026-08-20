@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
+import { createSignedInClient } from "@hifago/e2e-support";
+import { getAdminNavItems } from "../app/admin/nav-items";
 
 // Feature 27 (docs/specs/02-admin-accueil-et-navigation.md) — jusqu'ici /admin ne faisait qu'une
 // redirection vide et aucune sidebar n'existait : plusieurs écrans étaient injoignables sans
@@ -7,20 +9,9 @@ import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 // route inexistante — testé ici par navigation directe (pas .click()) sur chaque href, un flake
 // de clic déjà documenté ailleurs dans ce repo (hifago/CLAUDE.md §11) ne doit pas polluer ce test
 // précis, dont le seul objet est l'existence de la route.
-const SIDEBAR_ROUTES = [
-  "/admin",
-  "/admin/partners",
-  "/admin/establishments",
-  "/admin/orders",
-  "/admin/clients",
-  "/admin/products",
-  "/admin/tags",
-  "/admin/campaigns",
-  "/admin/invitations",
-  "/admin/proposals",
-  "/admin/reconciliation",
-  "/admin/ledger",
-];
+// Dérivé de getAdminNavItems (source unique, cf. admin-mobile-nav.spec.ts) plutôt que recopié en
+// dur — sinon un renommage/ajout de lien passe ce test sans jamais le faire échouer.
+const SIDEBAR_ROUTES = getAdminNavItems(0).map((item) => item.href);
 
 test("cada route de la sidebar resuelve sin 404", async ({ page, context }) => {
   await loginAs(context, SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
@@ -41,6 +32,46 @@ test("la sidebar surligne el enlace activo y un clic navega de verdad", async ({
   await page.getByTestId("sidebar-link--admin-clients").click();
   await expect(page).toHaveURL(/\/admin\/clients$/);
   await expect(page.getByTestId("sidebar-link--admin-clients")).toHaveAttribute("aria-current", "page");
+});
+
+// Revue admin (Jérôme, 2026-08-20) — pastille "à faire" sur "Propuestas", même total que le
+// bandeau AdminAlerts (product_proposals + establishment_proposals, status='pending'). Lu en base
+// plutôt que fixturé (RPC-only en écriture, cf. layout.tsx — pas de moyen simple de forcer un
+// total précis sans passer par le vrai flux socio de proposition) : robuste à l'état réel de
+// l'instance locale partagée, jamais un nombre en dur.
+test("la sidebar affiche une pastille avec le total de propuestas pendientes", async ({
+  page,
+  context,
+}) => {
+  const adminClient = await createSignedInClient(SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
+  const [{ count: productPending }, { count: establishmentPending }] = await Promise.all([
+    adminClient.from("product_proposals").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    adminClient
+      .from("establishment_proposals")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending"),
+  ]);
+  const expectedCount = (productPending ?? 0) + (establishmentPending ?? 0);
+
+  await loginAs(context, SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
+  await page.goto("/admin");
+
+  if (expectedCount === 0) {
+    await expect(page.getByTestId("sidebar-proposals-badge")).toHaveCount(0);
+    return;
+  }
+
+  const badge = page.getByTestId("sidebar-proposals-badge");
+  await expect(badge).toHaveText(String(expectedCount));
+  // Depuis /admin (lien "Propuestas" inactif) : couleurs normales (NavBadge, inverted=false).
+  await expect(badge).toHaveClass(/bg-danger/);
+
+  // Retour Jérôme — sur la page portée par ce lien (/admin/proposals ou une fiche /admin/proposals/
+  // [id]), la pastille inverse ses couleurs (fond blanc/texte rouge) : testé sur les deux formes de
+  // route, isActive() (AdminSidebar.tsx) doit matcher l'une comme l'autre.
+  await page.goto("/admin/proposals");
+  await expect(page.getByTestId("sidebar-proposals-badge")).toHaveClass(/bg-white/);
+  await expect(page.getByTestId("sidebar-proposals-badge")).not.toHaveClass(/bg-danger\b/);
 });
 
 test("inicio muestra los KPIs, las alertas y los 4 gráficos", async ({ page, context }) => {
@@ -83,6 +114,9 @@ test("clientes: filtro unifié nom/email, pagination, clic vers la fiche détail
   // Revue admin clientes (Jérôme, 2026-08-19) — migré du Table brut fait main vers DataList/
   // ServerFilters (comme établissements) : plus de champ "email" séparé, un seul champ q cherche
   // déjà nom ET email côté RPC (list_clients).
+  // Filtres repliés par défaut (chevron) depuis la refonte responsive mobile — ouvrir avant d'y
+  // interagir, sinon les champs sont `hidden` (Disclosure, packages/ui/data-list.tsx).
+  await page.getByTestId("filters-toggle").click();
   await page.getByTestId("filter-q").fill("Cliente Referido");
   await page.getByTestId("server-filters-submit").click();
   await expect(page).toHaveURL(/\?q=Cliente\+Referido/);
@@ -98,6 +132,19 @@ test("clientes: filtro unifié nom/email, pagination, clic vers la fiche détail
   await expect(page.getByRole("heading", { name: "Cliente Referido Seed" })).toBeVisible();
   await expect(page.locator('[data-testid^="client-order-"]').first()).toBeVisible();
   await expect(page.locator('[data-testid^="payment-status-"]').first()).toBeVisible();
+
+  // Revue admin clientes (Jérôme, 2026-08-20) — présent en V1 (le clic sur un client y ouvrait
+  // directement un fil WhatsApp), manquait sur cette fiche V2. ContactClientButton.tsx est déjà
+  // testé/utilisé côté socio (ReservationActions.tsx) — ici on vérifie seulement le branchement
+  // (bon téléphone/email seedés, cf. seed.sql "Cliente Referido Seed"), pas sa logique interne.
+  await expect(page.getByTestId("contact-client-whatsapp")).toHaveAttribute(
+    "href",
+    /^https:\/\/wa\.me\/573000000002\?text=/,
+  );
+  await expect(page.getByTestId("contact-client-email")).toHaveAttribute(
+    "href",
+    "mailto:cliente.referido.seed@test.local",
+  );
 
   // Filtre "sin resultados" avec un texte sans correspondance → état vide explicite, pas un
   // tableau resté sur l'ancien résultat (cas limite §9 de la spec, comportement conservé).

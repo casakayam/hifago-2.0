@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
 import { requirePartnerOrAdmin } from "@/lib/partnerGuard";
+import { getOperatorCapability } from "@/lib/agenda/activeOperatorEstablishments";
 
 // Garde scopée à /partner/reservations — même patron que products/layout.tsx (spec 15) et
 // establishment/layout.tsx : garde serveur, jamais un simple masquage client. La vraie barrière de
@@ -19,7 +20,14 @@ export default async function PartnerReservationsLayout({
     redirect("/login?next=/partner/reservations");
   }
 
-  await requirePartnerOrAdmin(supabase, user.id);
+  const { partnerId, isAdmin } = await requirePartnerOrAdmin(supabase, user.id);
+
+  // Refonte vue référent (2026-08-20, docs/specs/22-vue-referent-restreinte.md) — même garde
+  // qu'establishment/layout.tsx : un référent pur n'a rien à faire ici, ses ventes attribuées
+  // vivent sur /partner/commissions.
+  if (!isAdmin && !(await getOperatorCapability(supabase, partnerId))) {
+    redirect("/partner");
+  }
 
   return children;
 }

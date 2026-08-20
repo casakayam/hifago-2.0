@@ -3,7 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Table, toast } from "@hifago/ui";
+import {
+  Button,
+  SimpleTable,
+  SimpleTableBody,
+  SimpleTableCell,
+  SimpleTableHead,
+  SimpleTableHeader,
+  SimpleTableRow,
+  toast,
+} from "@hifago/ui";
 import { SearchableCombobox } from "@/components/searchable-combobox";
 
 type OwnEstablishment = { id: string; name: string; status: string };
@@ -47,32 +56,34 @@ export function EstablishmentsSection({
     <section className="flex flex-col gap-4">
       <h2 className="text-lg font-medium">Establecimientos</h2>
 
-      <Table data-testid="own-establishments-table">
-        <Table.ScrollContainer>
-          <Table.Content aria-label="Establecimientos propios">
-            <Table.Header>
-              <Table.Column isRowHeader>Nombre</Table.Column>
-              <Table.Column>Estado</Table.Column>
-            </Table.Header>
-            <Table.Body
-              items={ownEstablishments}
-              renderEmptyState={() => (
-                <p className="p-4 text-center text-sm text-muted">Ningún establecimiento todavía.</p>
-              )}
-            >
-              {(establishment) => (
-                <Table.Row
-                  id={establishment.id}
-                  data-testid={`own-establishment-row-${establishment.id}`}
-                >
-                  <Table.Cell>{establishment.name}</Table.Cell>
-                  <Table.Cell>{establishment.status}</Table.Cell>
-                </Table.Row>
-              )}
-            </Table.Body>
-          </Table.Content>
-        </Table.ScrollContainer>
-      </Table>
+      <SimpleTable data-testid="own-establishments-table" aria-label="Establecimientos propios">
+        <SimpleTableHeader>
+          <SimpleTableRow>
+            <SimpleTableHead>Nombre</SimpleTableHead>
+            <SimpleTableHead>Estado</SimpleTableHead>
+          </SimpleTableRow>
+        </SimpleTableHeader>
+        <SimpleTableBody>
+          {ownEstablishments.length > 0 ? (
+            ownEstablishments.map((establishment) => (
+              <SimpleTableRow
+                key={establishment.id}
+                id={establishment.id}
+                data-testid={`own-establishment-row-${establishment.id}`}
+              >
+                <SimpleTableCell data-label="Nombre">{establishment.name}</SimpleTableCell>
+                <SimpleTableCell data-label="Estado">{establishment.status}</SimpleTableCell>
+              </SimpleTableRow>
+            ))
+          ) : (
+            <SimpleTableRow>
+              <SimpleTableCell colSpan={2} className="text-center text-muted">
+                Ningún establecimiento todavía.
+              </SimpleTableCell>
+            </SimpleTableRow>
+          )}
+        </SimpleTableBody>
+      </SimpleTable>
 
       {/* Sélecteur sur TOUT le registre (pas seulement les établissements "libres" — aucun ne
           l'est jamais, establishments.partner_id est not null) : transfer_establishment n'a qu'un

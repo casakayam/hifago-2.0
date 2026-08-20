@@ -2,12 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
-import { formatCop } from "@hifago/domain";
-import { Table } from "@hifago/ui";
 import { EstablishmentPhotosBlock } from "./EstablishmentPhotosBlock";
 import { EstablishmentEditBlock } from "./EstablishmentEditBlock";
 import { EstablishmentPmsBlock } from "./EstablishmentPmsBlock";
 import { EstablishmentStatusBlock } from "./EstablishmentStatusBlock";
+import { EstablishmentProductsTable } from "./EstablishmentProductsTable";
 
 export default async function AdminEstablishmentDetailPage({
   params,
@@ -98,44 +97,7 @@ export default async function AdminEstablishmentDetailPage({
 
       <EstablishmentPhotosBlock establishmentId={establishment.id} initialPhotos={photos} />
 
-      <Table>
-        <Table.ScrollContainer>
-          <Table.Content aria-label="Actividades del establecimiento">
-            <Table.Header>
-              <Table.Column isRowHeader>Nombre</Table.Column>
-              <Table.Column>Precio</Table.Column>
-              <Table.Column>Estado</Table.Column>
-            </Table.Header>
-            <Table.Body>
-              {products && products.length > 0 ? (
-                products.map((product) => (
-                  <Table.Row key={product.id}>
-                    <Table.Cell>
-                      <Link href={`/admin/products/${product.id}/edit`} className="hover:underline">
-                        {resolveLocalizedField(asLocalizedField(product.name), "es") ?? product.id}
-                      </Link>
-                    </Table.Cell>
-                    <Table.Cell>
-                      {/* price_cop nullable depuis la feature 21 (evento vitrine, prix en texte
-                          libre via price_label) — "—" plutôt qu'un format COP sur null. */}
-                      {product.price_cop === null ? "—" : formatCop(product.price_cop)}
-                    </Table.Cell>
-                    <Table.Cell data-testid={`product-status-${product.id}`}>
-                      {product.sellable ? "Vendible" : "No vendible"}
-                    </Table.Cell>
-                  </Table.Row>
-                ))
-              ) : (
-                <Table.Row>
-                  <Table.Cell colSpan={3} className="text-center text-muted">
-                    Ninguna actividad todavía.
-                  </Table.Cell>
-                </Table.Row>
-              )}
-            </Table.Body>
-          </Table.Content>
-        </Table.ScrollContainer>
-      </Table>
+      <EstablishmentProductsTable products={products ?? []} />
     </div>
   );
 }

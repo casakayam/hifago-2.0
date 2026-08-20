@@ -1,6 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { selectValue, switchInput, toggleSwitch } from "@hifago/e2e-support";
+import {
+  createActiveOperatorEstablishment,
+  createSignedInClient,
+  selectValue,
+  switchInput,
+  toggleSwitch,
+} from "@hifago/e2e-support";
 
 test("admin gère le registre d'un partenaire : capacité, statut, transfert, code", async ({
   page,
@@ -19,8 +25,16 @@ test("admin gère le registre d'un partenaire : capacité, statut, transfert, co
   await page.getByTestId("create-establishment-button").click();
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
-  // Ouvre la fiche de "Référent Actif Org" — capacité referrer seule au départ (seedée).
+  // Ouvre la fiche de "Référent Actif Org" — capacité referrer seule au départ (seedée). Filtré
+  // par nom (pas une simple recherche dans la 1re page) : 33 partenaires accumulés localement sans
+  // reset entre runs poussent ce partenaire seedé ancien hors de la 1re page (20 par défaut),
+  // aléa déjà documenté ailleurs dans ce projet pour d'autres listes (accumulation de données).
   await page.goto("/admin/partners");
+  // Filtres repliés par défaut (chevron) depuis la refonte responsive mobile — ouvrir avant d'y
+  // interagir, sinon les champs sont `hidden` (Disclosure, packages/ui/data-list.tsx).
+  await page.getByTestId("filters-toggle").click();
+  await page.getByTestId("filter-q").fill("Référent Actif Org");
+  await page.getByTestId("server-filters-submit").click();
   const partnerRow = page.locator("tr", { hasText: "Référent Actif Org" });
   await partnerRow.getByRole("link", { name: "Ver" }).click();
   await expect(page).toHaveURL(/\/admin\/partners\/.+/);
@@ -76,4 +90,48 @@ test("admin gère le registre d'un partenaire : capacité, statut, transfert, co
   } else {
     await expect(codeSwitch).toBeChecked({ timeout: 10000 });
   }
+});
+
+// Refonte responsive mobile (SimpleTable, packages/ui) — test dédié plutôt qu'un ajout en fin du
+// test ci-dessus : celui-ci dépend du sélecteur "transfer-establishment-search"
+// (SearchableCombobox), déjà flaky indépendamment de ce lot ("element was detached from the DOM",
+// reproduit 3/3 tentatives, jamais touché par cette refonte — apps/admin/components/
+// searchable-combobox.tsx intact). Fixture via createActiveOperatorEstablishment (RPC, même
+// chemin que partner-establishment-proposals.spec.ts) plutôt que le flux UI de transfert — isole
+// la seule chose à vérifier ici : le reflow carte de capabilities-table à 390×844
+// (.claude/skills/hifago-ui/SKILL.md) et l'opérabilité réelle du <Select> de statut dans une
+// cellule repliée (pas seulement visible, un changement réel de valeur).
+test("à 390×844, capabilities-table reflow en cartes et le Select de statut reste opérable", async ({
+  page,
+  context,
+}) => {
+  const adminClient = await createSignedInClient(SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
+  const establishmentName = `Establecimiento Mobile Reflow Test ${Date.now()}`;
+  // "b0000000-0000-4000-8000-000000000003" : même partenaire seedé déjà utilisé pour ce besoin par
+  // partner-establishment-proposals.spec.ts (fixture dédiée, jamais partagée avec un autre test).
+  const establishmentId = await createActiveOperatorEstablishment(
+    adminClient,
+    "b0000000-0000-4000-8000-000000000003",
+    establishmentName
+  );
+  const { data: capability } = await adminClient
+    .from("partner_capabilities")
+    .select("id, partner_id")
+    .eq("establishment_id", establishmentId)
+    .eq("role", "operator")
+    .single();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAs(context, SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
+  await page.goto(`/admin/partners/${capability!.partner_id}`);
+
+  const capabilitiesTable = page.getByTestId("capabilities-table");
+  await expect(capabilitiesTable.locator('[data-slot="table-header"]')).not.toBeVisible();
+  const operatorRow = capabilitiesTable.locator("tr", { hasText: establishmentName });
+  await expect(operatorRow).toBeVisible();
+  await expect(operatorRow).toContainText("operator");
+
+  await operatorRow.getByTestId(/^capability-status-select-/).click();
+  await page.getByRole("option", { name: "suspended" }).click();
+  await expect(selectValue(operatorRow)).toContainText("suspended");
 });

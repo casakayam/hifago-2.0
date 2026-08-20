@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
-import { AdminSidebar } from "./AdminSidebar";
+import { AdminNav } from "./AdminNav";
 
 // Premier écran de cette app (feature 1) — garde posée une fois ici, héritée automatiquement par
 // toutes les routes admin futures. Garde serveur, jamais un simple masquage côté client : un
@@ -33,10 +33,22 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
     redirect("/login?next=/admin");
   }
 
+  // Revue admin (Jérôme, 2026-08-20) — pastille "à faire" sur le lien "Propuestas" de la sidebar,
+  // même 2 tables que /admin/proposals/page.tsx (product_proposals + establishment_proposals,
+  // status='pending'), mais en count-only (head: true, jamais les lignes) — chargé sur CHAQUE page
+  // admin (ce layout les enveloppe toutes), même posture que AdminAlerts.tsx : "chargées seulement
+  // au rendu de la page, sans polling/Realtime" (spec §10), pas un état à part à synchroniser.
+  const [{ count: productProposalsPending }, { count: establishmentProposalsPending }] =
+    await Promise.all([
+      supabase.from("product_proposals").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      supabase.from("establishment_proposals").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    ]);
+  const pendingProposalsCount = (productProposalsPending ?? 0) + (establishmentProposalsPending ?? 0);
+
   return (
-    <div className="flex min-h-screen w-full">
-      <AdminSidebar />
-      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-8">{children}</div>
+    <div className="flex min-h-screen w-full flex-col md:flex-row">
+      <AdminNav pendingProposalsCount={pendingProposalsCount} />
+      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 md:p-8">{children}</div>
     </div>
   );
 }

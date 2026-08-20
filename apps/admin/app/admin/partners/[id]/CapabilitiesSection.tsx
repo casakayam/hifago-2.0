@@ -3,7 +3,19 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Label, ListBox, Select, Table, toast } from "@hifago/ui";
+import {
+  Button,
+  Label,
+  ListBox,
+  Select,
+  SimpleTable,
+  SimpleTableBody,
+  SimpleTableCell,
+  SimpleTableHead,
+  SimpleTableHeader,
+  SimpleTableRow,
+  toast,
+} from "@hifago/ui";
 
 type Capability = {
   id: string;
@@ -76,62 +88,65 @@ export function CapabilitiesSection({
     <section className="flex flex-col gap-4">
       <h2 className="text-lg font-medium">Capacidades</h2>
 
-      <Table data-testid="capabilities-table">
-        <Table.ScrollContainer>
-          <Table.Content aria-label="Capacidades">
-            <Table.Header>
-              <Table.Column isRowHeader>Rol</Table.Column>
-              <Table.Column>Establecimiento</Table.Column>
-              <Table.Column>Contrato aceptado</Table.Column>
-              <Table.Column>Estado</Table.Column>
-            </Table.Header>
-            <Table.Body
-              items={capabilities}
-              renderEmptyState={() => (
-                <p className="p-4 text-center text-sm text-muted">Ninguna capacidad todavía.</p>
-              )}
-            >
-              {(capability) => (
-                <Table.Row id={capability.id} data-testid={`capability-row-${capability.id}`}>
-                  <Table.Cell>{capability.role}</Table.Cell>
-                  <Table.Cell>{capability.establishmentName ?? "—"}</Table.Cell>
-                  <Table.Cell>
-                    {capability.agreementAccepted === null
-                      ? "Sin registro"
-                      : capability.agreementAccepted
-                        ? "Sí"
-                        : "No"}
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Select
-                      className="w-40"
-                      aria-label={`Estado de la capacidad ${capability.role}`}
-                      value={capability.status}
-                      isDisabled={statusUpdating === capability.id}
-                      onChange={(value) => value && handleStatusChange(capability.id, value as string)}
-                    >
-                      <Select.Trigger data-testid={`capability-status-select-${capability.id}`}>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          {STATUSES.map((status) => (
-                            <ListBox.Item key={status} id={status} textValue={status}>
-                              {status}
-                              <ListBox.ItemIndicator />
-                            </ListBox.Item>
-                          ))}
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                  </Table.Cell>
-                </Table.Row>
-              )}
-            </Table.Body>
-          </Table.Content>
-        </Table.ScrollContainer>
-      </Table>
+      <SimpleTable data-testid="capabilities-table" aria-label="Capacidades">
+        <SimpleTableHeader>
+          <SimpleTableRow>
+            <SimpleTableHead>Rol</SimpleTableHead>
+            <SimpleTableHead>Establecimiento</SimpleTableHead>
+            <SimpleTableHead>Contrato aceptado</SimpleTableHead>
+            <SimpleTableHead>Estado</SimpleTableHead>
+          </SimpleTableRow>
+        </SimpleTableHeader>
+        <SimpleTableBody>
+          {capabilities.length > 0 ? (
+            capabilities.map((capability) => (
+              <SimpleTableRow key={capability.id} id={capability.id} data-testid={`capability-row-${capability.id}`}>
+                <SimpleTableCell data-label="Rol">{capability.role}</SimpleTableCell>
+                <SimpleTableCell data-label="Establecimiento">
+                  {capability.establishmentName ?? "—"}
+                </SimpleTableCell>
+                <SimpleTableCell data-label="Contrato aceptado">
+                  {capability.agreementAccepted === null
+                    ? "Sin registro"
+                    : capability.agreementAccepted
+                      ? "Sí"
+                      : "No"}
+                </SimpleTableCell>
+                <SimpleTableCell data-label="Estado">
+                  <Select
+                    className="w-40"
+                    aria-label={`Estado de la capacidad ${capability.role}`}
+                    value={capability.status}
+                    isDisabled={statusUpdating === capability.id}
+                    onChange={(value) => value && handleStatusChange(capability.id, value as string)}
+                  >
+                    <Select.Trigger data-testid={`capability-status-select-${capability.id}`}>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {STATUSES.map((status) => (
+                          <ListBox.Item key={status} id={status} textValue={status}>
+                            {status}
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </SimpleTableCell>
+              </SimpleTableRow>
+            ))
+          ) : (
+            <SimpleTableRow>
+              <SimpleTableCell colSpan={4} className="text-center text-muted">
+                Ninguna capacidad todavía.
+              </SimpleTableCell>
+            </SimpleTableRow>
+          )}
+        </SimpleTableBody>
+      </SimpleTable>
 
       <form onSubmit={handleGrant} noValidate className="flex flex-wrap items-end gap-3">
         <Select

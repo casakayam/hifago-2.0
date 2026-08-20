@@ -60,7 +60,7 @@ export function PartnerAgenda({
         </Button>
       </div>
       <Willow>
-        <div style={{ height: 700 }}>
+        <div className="h-[70vh] min-h-[420px] md:h-[700px]">
           <Calendar
             ref={apiRef}
             events={events}

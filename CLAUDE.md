@@ -325,6 +325,26 @@ l'export comptable/fiscal · fournisseur email final (Resend vs Postmark).
     Component ne fait plus que fetch + résoudre les champs jsonb localisés et passe des props déjà
     sérialisables — jamais un `<SimpleTable>`/`<StatusChip>` construit inline dans un fichier sans
     `"use client"` en tête.
+16. **Le piège du point 15 ne demande PAS que le Server Component nesting un `Chip`/composant
+    client — importer N'IMPORTE QUEL nom depuis `@hifago/ui` suffit dès que le barrel
+    (`packages/ui/src/index.ts`) exporte AUSSI un composant plus lourd** (constaté 2026-08-20,
+    refonte responsive mobile — ajout d'`AppNavShell`, qui importe `lucide-react` +
+    `Modal`/`useOverlayState` de react-aria-components, au barrel) : `import { SimpleTable } from
+    "@hifago/ui"` directement dans un `page.tsx`/`layout.tsx` (Server Component) s'est mis à
+    planter au build (`next build`, « Collecting page data », `(0, g.createContext) is not a
+    function`) sur DEUX routes où ce même import fonctionnait auparavant (`establishments/[id]`,
+    `establishments/[id]/resource`) — sans aucun `Chip` imbriqué, juste l'import lui-même.
+    `export * from "@heroui/react"`/tout export local dans `packages/ui/src/index.ts` tire
+    l'ENSEMBLE du graphe de modules du barrel pour n'importe quel consommateur, même celui qui n'a
+    besoin que d'une seule primitive légère. Correctif identique au point 15 (extraire dans un
+    sous-composant `"use client"` dédié, ex. `EstablishmentProductsTable.tsx`), mais le déclencheur
+    est différent : ce n'est pas la structure du JSX qui compte, c'est la composition du barrel au
+    moment du build. **Règle pratique retenue** : ne plus jamais `import ... from "@hifago/ui"`
+    directement dans un `layout.tsx`/`page.tsx` (Server Component) de ce repo, quel que soit
+    l'import demandé — toujours passer par un fichier `"use client"` dédié, même pour un composant
+    a priori "sans état" comme `SimpleTable`. Racine exacte non creusée plus loin (lequel des
+    nouveaux imports du barrel est en cause précisément) — seul le correctif est vérifié
+    empiriquement, à re-tester si `app-nav-shell.tsx` est un jour retiré du barrel.
 
 ## 12. Curseur — dernière session
 
@@ -333,39 +353,21 @@ En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
 nouvelle entrée.
 
-*2026-08-20 — dernière entrée : nettoyage complet des statuts "publication/activation" (capacités,
-établissements, activités, partenaires), suite directe du retrait d'`onboarding` la veille (suite
-14). Jérôme a posé le modèle cible complet : capacité issue d'une invitation → active dès la
-création (suspension = seul geste admin explicite) ; établissement/activité approuvés → actif ET
-publié tout de suite, dépublication = geste admin séparé. 5 migrations
-(`20260820010000`→`20260820050000`) : **A** `partner_capabilities` 3→2 valeurs
-(`pending_review`/`active`/`suspended` → `active`/`suspended`, réactivation en masse assumée des
-~50 lignes `pending_review` restantes) ; **B** nouvelle RPC `set_establishment_status` (lever
-publier/dépublier manquant, création déjà correcte) ; **C** revirement assumé d'une décision de la
-veille (2026-08-18) — `create_product_from_proposal` repasse à `sellable=true` direct, modale
-"¿Publicar ahora?" retirée de `ModerateProductCreationProposalForm.tsx` ; **D** retrait complet de
-`include_incomplete` (RPC + colonne `comm_campaigns` + case à cocher), devenu un no-op silencieux
-après A ; **E** `partners.status` retiré entièrement (aucun levier construit, contrairement à
-establishments — pas de besoin métier décrit). **Chantier E en collision assumée** avec le travail
-non commité de suite 15 (écran admin "Partenaires" tout juste fini) — proposé à Jérôme via
-AskUserQuestion (différer vs le faire quand même), qui a choisi de le faire quand même : réécrit
-`list_partners_admin`, `PartnersTable.tsx`, `filters.ts`/`sortable-columns.ts`, fiche détail
-partenaire, et le test e2e `admin-partners-list-filters.spec.ts` de suite 15 (1 test entier retiré,
-2 assertions résiduelles ailleurs) + son pgTAP. **2 erreurs personnelles corrigées en cours de
-route avant d'agir** : `commercial_status` annoncé mort à tort (je n'avais vérifié que la lecture,
-pas `NewPartnerForm.tsx` qui l'écrit à la création) ; `partners.status`/`establishments.status`
-annoncés morts à tort au 1er passage (filtrés/triés réellement dans les 2 RPC admin, juste jamais
-transitionnés — pas la même chose). **Effet de bord trouvé en balayant tout le code, corrigé** :
-l'alerte dashboard "Capacidades de prestador en revisión" (`AdminAlerts.tsx`) comptait
-`status='pending_review'`, retombée à zéro pour toujours — retirée entièrement plutôt que laissée
-morte. **Aléas de concurrence consignés, pas causés par ce lot** : `catalog_rls.test.sql` (jamais
-touché) échoue sur 2 comptages absolus (pollution `audit_log`/`product_calendar` déjà documentée
-suite 12) ; `partner_registry_rpc.test.sql` flaky 1 fois sur 4 (tie-break manquant sur
-`order by created_at`, confirmé pré-existant, 3/3 en isolation). **Vérifié** : pgTAP ciblé 9
-fichiers/165 assertions vertes, typecheck/lint `apps/admin` propres. **Non fait, signalé plutôt
-que faussement affirmé** : pas de clic navigateur — ≥2 `next dev` déjà actifs (ports 3100/3101,
-autres sessions), risque de perturber leur travail en cours sur la même base locale partagée.
-Détail complet : `hifago/docs/journal/2026-08.md` (2026-08-20).
+*2026-08-20 (suite 7) — dernière entrée : fond de page plus clair partout sauf l'aside/la nav
+(demande Jérôme). `packages/ui/src/styles/globals.css` (`[data-theme="admin"]`) : l'ancienne
+valeur de `--background` (`oklch(92.2% 0.005 34.3)`, taupe-200, piste "Argile" du 2026-08-15) est
+renommée `--sidebar-background` et réservée à l'aside/nav (jamais supprimée, juste réassignée à un
+seul usage) ; `--background` prend une nouvelle valeur quasi blanche
+(`oklch(97.3% 0.003 40)`, "taupe-75") — un cran sous `--surface` (98.6%) pour que les
+cartes/panneaux restent distincts de la page derrière eux, pas la même teinte plate.
+`AppNavShell` (`packages/ui/src/components/app-nav-shell.tsx`, seul composant du repo qui rendait
+`bg-background` en dehors du `body` lui-même, vérifié par grep) : sidebar desktop + barre mobile
+passent à `bg-[var(--sidebar-background)]`. **Vérifié** : typecheck/lint/`next build` propres.
+Pas de navigateur disponible dans cet environnement (même limite que les sessions précédentes) —
+changement de valeurs CSS pures raisonné depuis le code, à confirmer visuellement par Jérôme.
+Aucun test concerné (pas d'assertion de couleur dans ce repo), aucune migration. **Rien commité**
+— en attente d'une demande explicite de push. Détail complet (dont les 6 entrées précédentes du
+jour) : `hifago/docs/journal/2026-08.md` (2026-08-20, suite 2/3/4/5/6/7).
 
 *2026-08-19 (suite 2) — connecteur LobbyPMS (spec 21), Tranche 1 complète
 implémentée (8 phases : schéma, `create_order` étendu, module `packages/domain/src/pms/`, Route

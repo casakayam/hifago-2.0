@@ -16,6 +16,9 @@ test("admin ouvre /admin/partners, filtre par nom, voit la ligne attendue", asyn
   await page.goto("/admin/partners");
   await expect(page.locator('[data-testid^="partner-row-"]').first()).toBeVisible();
 
+  // Filtres repliés par défaut (chevron) depuis la refonte responsive mobile — ouvrir avant d'y
+  // interagir, sinon les champs sont `hidden` (Disclosure, packages/ui/data-list.tsx).
+  await page.getByTestId("filters-toggle").click();
   await page.getByTestId("filter-q").fill("Prestador Propuestas");
   await page.getByTestId("server-filters-submit").click();
 

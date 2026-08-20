@@ -36,7 +36,12 @@
        2026-08-15 (docs/specs/09-design-system-admin.md, artifact de comparaison des 3 pistes) —
        PAS une réinterprétation. Un essai de chroma remontée (2026-08-15, même journée) a été fait
        puis explicitement rejeté par Jérôme : à ne pas reproduire sans qu'il le redemande. */
-    --background: oklch(92.2% 0.005 34.3); /* taupe-200 */
+    /* Retour Jérôme (2026-08-20) : fond de page plus clair partout SAUF l'aside/la nav, qui garde
+       ce taupe-200 d'origine (--sidebar-background, consommé par AppNavShell) — --background
+       lui-même passe à un ton quasi blanc (taupe-50 légèrement plus sombre que --surface, pour
+       que les cartes/panneaux qui utilisent --surface restent visuellement distincts de la page). */
+    --sidebar-background: oklch(92.2% 0.005 34.3); /* taupe-200 — ancien --background, réservé à l'aside/nav */
+    --background: oklch(97.3% 0.003 40); /* taupe-75, quasi blanc mais pas blanc */
     --foreground: oklch(21.4% 0.009 43.1); /* taupe-900 */
 
     --surface: oklch(98.6% 0.002 67.8); /* taupe-50 */

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
+import { ContactClientButton } from "@/components/ContactClientButton";
 import { ClientOrderCard, type ClientOrderLineRow } from "./ClientOrderCard";
 
 type OrderLineQueryRow = {
@@ -113,6 +114,16 @@ export default async function AdminClientDetailPage({
           {identity.holder_email ?? "—"} · {identity.holder_phone ?? "—"} · {orders.length}{" "}
           {orders.length === 1 ? "pedido" : "pedidos"}
         </p>
+        {/* Revue admin clientes (Jérôme, 2026-08-20) — présent en V1 (le clic sur un client y
+            ouvrait directement un fil WhatsApp), absent jusqu'ici de cette fiche V2. Composant déjà
+            existant, réutilisé tel quel (jamais dupliqué) : même bouton que côté socio
+            (ReservationActions.tsx), même normalisation de téléphone/filtre email sentinelle,
+            cf. lib/whatsapp.ts. */}
+        <ContactClientButton
+          holderName={identity.holder_name}
+          holderPhone={identity.holder_phone}
+          holderEmail={identity.holder_email}
+        />
       </div>
 
       <div className="flex flex-col gap-6">

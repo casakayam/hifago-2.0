@@ -3,6 +3,7 @@
 export * from "@heroui/react";
 
 export { cn } from "./lib/utils";
+export * from "./components/app-nav-shell";
 export * from "./components/simple-table";
 export * from "./components/legacy-calendar";
 export * from "./components/pagination";

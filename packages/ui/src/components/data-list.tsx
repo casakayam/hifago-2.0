@@ -8,7 +8,7 @@ import {
   tableFeatures,
   useTable,
 } from "@tanstack/react-table";
-import { buttonVariants } from "@heroui/react";
+import { buttonVariants, Disclosure } from "@heroui/react";
 import { cn } from "../lib/utils";
 import { ServerPagination } from "./pagination";
 import { ServerFilters } from "./server-filters";
@@ -86,8 +86,12 @@ export type DataListProps<Row> = {
   actions?: DataListAction<Row>[];
   // Défaut (si absent) : `${basePath}/${getRowId(row)}` — ne fournir explicitement que lorsque la
   // route de détail ne correspond pas à cette forme (ex. OrdersTable, dont l'id de ligne est celui
-  // de la order_line mais la fiche est celle de la commande, `orderId`).
-  rowHref?: (row: Row) => string;
+  // de la order_line mais la fiche est celle de la commande, `orderId`). Retourner `undefined`
+  // pour une ligne donnée désactive le stretched-link sur CETTE ligne (1re colonne rendue en texte
+  // brut) — échappatoire pour une liste sans fiche détail réelle à offrir, plutôt que forcer une
+  // page de fiche minimale n'affichant aucune donnée de plus que la ligne elle-même (déjà constaté
+  // deux fois : admin/tags/[id]/page.tsx, partner/commissions/[id]/page.tsx).
+  rowHref?: (row: Row) => string | undefined;
   basePath: string;
   page: number;
   pageSize: number;
@@ -191,7 +195,10 @@ export function DataList<Row>(props: DataListProps<Row>): React.ReactElement {
           // clic-milieu, copier-lien restent utilisables). La <tr> porte `relative` plus bas pour
           // que ce `::after` (absolute + inset-0) s'ancre dessus.
           if (index === 0) {
-            return <a href={rowHref(row)} className="after:absolute after:inset-0">{content}</a>;
+            const href = rowHref(row);
+            if (href) {
+              return <a href={href} className="after:absolute after:inset-0">{content}</a>;
+            }
           }
           return content;
         },
@@ -256,20 +263,41 @@ export function DataList<Row>(props: DataListProps<Row>): React.ReactElement {
     },
   });
 
+  const hasFilters = Boolean(toolbar) || Boolean(filters && filters.length > 0);
+
   return (
     <div className="flex w-full flex-col gap-4">
-      {toolbar}
-
-      {filters && filters.length > 0 ? (
-        <ServerFilters
-          basePath={basePath}
-          filters={filters}
-          values={filterValues}
-          // Préserve le tri actif à la soumission du formulaire de filtres — jamais "page" (tout
-          // changement de filtre revient implicitement à la page 1, en l'omettant, même règle que
-          // buildSortHref ci-dessus).
-          hiddenParams={{ sort: sort.key, dir: sort.direction }}
-        />
+      {hasFilters ? (
+        // Repliés par défaut (Jérôme, 2026-08-20) — un formulaire de filtres complet prenait toute
+        // la hauteur visible sur mobile avant même d'atteindre la liste. `Disclosure` (HeroUI v3,
+        // déjà dans le barrel) plutôt qu'un état local réinventé : chevron + rotation + transition
+        // hauteur/opacité déjà fournis par packages/ui/../disclosure.css, jamais utilisé ailleurs
+        // dans ce repo jusqu'ici.
+        <Disclosure defaultExpanded={false}>
+          <Disclosure.Trigger
+            data-testid="filters-toggle"
+            className="flex items-center gap-2 text-sm font-medium text-muted transition-colors hover:text-foreground"
+          >
+            Filtros
+            <Disclosure.Indicator />
+          </Disclosure.Trigger>
+          <Disclosure.Content>
+            <Disclosure.Body className="flex flex-col gap-4 p-0 pt-3">
+              {toolbar}
+              {filters && filters.length > 0 ? (
+                <ServerFilters
+                  basePath={basePath}
+                  filters={filters}
+                  values={filterValues}
+                  // Préserve le tri actif à la soumission du formulaire de filtres — jamais "page"
+                  // (tout changement de filtre revient implicitement à la page 1, en l'omettant,
+                  // même règle que buildSortHref ci-dessus).
+                  hiddenParams={{ sort: sort.key, dir: sort.direction }}
+                />
+              ) : null}
+            </Disclosure.Body>
+          </Disclosure.Content>
+        </Disclosure>
       ) : null}
 
       <SimpleTable aria-label={ariaLabel}>

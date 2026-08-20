@@ -32,6 +32,9 @@ export type ProductsListProps = {
   // Revue admin catalogo (Jérôme, 2026-08-19) — construit côté page.tsx (établissements
   // dynamiques, jamais une liste fermée écrite en dur dans filters.ts comme type/sellable).
   establishmentOptions: { value: string; label: string }[];
+  // Revue admin étiquettes (Jérôme, 2026-08-20) — même raison que establishmentOptions (construit
+  // côté page.tsx), mais pas de plafond/échappatoire texte : cf. commentaire page.tsx.
+  tagOptions: { value: string; label: string }[];
 };
 
 // docs/specs/10-listes-standardisees-admin-socio.md §5.3 — écran pilote (2e) : 1er vrai passage
@@ -47,6 +50,7 @@ export function ProductsList({
   filterValues,
   extraParams,
   establishmentOptions,
+  tagOptions,
 }: ProductsListProps) {
   const filters: DataListFilter[] = [
     ...PRODUCTS_FILTERS,
@@ -66,6 +70,16 @@ export function ProductsList({
       name: "establishment_q",
       label: "Establecimiento (si no aparece en la lista)",
       placeholder: "Buscar por nombre",
+    },
+    // Revue admin étiquettes (Jérôme, 2026-08-20) — filtre par tag, préréempli quand on arrive via
+    // "Ver" depuis /admin/tags (?tag_id=…, cf. TagsList.tsx) mais aussi utilisable directement ici,
+    // même famille que "Tipo"/"Estado" (liste fermée, pas de plafond/échappatoire — cf. page.tsx).
+    {
+      kind: "select",
+      name: "tag_id",
+      label: "Etiqueta",
+      allLabel: "Todas las etiquetas",
+      options: tagOptions,
     },
   ];
 

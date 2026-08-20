@@ -28,8 +28,9 @@ function isoPlusDays(iso: string, days: number): string {
 }
 
 // Spec 17 §0 Tranche 1 — « Mis Reservas ». Refonte vue prestataire (2026-08-19) : migration vers
-// resolveListParams/DataList (pagination+tri serveur, filtres date/activité/nom/email), à la place
-// de l'ancien .limit(100) sans filtre. La RLS (order_lines_select_operator, migration 20260817170000)
+// resolveListParams/DataList (pagination+tri serveur, filtres date/activité/client ou email/statut,
+// ces 2 derniers retravaillés le 2026-08-20 — cf. ReservationsFilterBar.tsx), à la place de
+// l'ancien .limit(100) sans filtre. La RLS (order_lines_select_operator, migration 20260817170000)
 // suffirait seule à restreindre les lignes visibles, mais un filtre explicite sur les
 // établissements réellement opérés par CE partenaire reste nécessaire (même raisonnement que
 // commissions/page.tsx sur referrer_partner_id) : order_lines_select (Tranche 3, additive) laisse
@@ -72,9 +73,11 @@ export default async function PartnerReservationsPage({
 
   const establishmentIds = await getActiveOperatorEstablishmentIds(supabase, partnerId);
 
-  // product:products!inner(...) : inner join nécessaire pour que le filtre sur la colonne
-  // embarquée establishment_id (et product.name pour product_name) fonctionne (PostgREST), même
-  // exigence que order:orders!inner(...) dans admin/orders/page.tsx.
+  // product:products!inner(...) : inner join nécessaire pour que le filtre sur la colonne embarquée
+  // establishment_id (scope de visibilité, pas un filtre choisi par l'utilisateur) fonctionne
+  // (PostgREST), même exigence que order:orders!inner(...) dans admin/orders/page.tsx — et pour
+  // afficher product.name/establishment.name dans chaque ligne. product_id (filtre activité) est
+  // lui une colonne de base d'order_lines, filtré directement, indépendamment de cette relation.
   let query =
     establishmentIds.length > 0
       ? supabase
@@ -91,13 +94,34 @@ export default async function PartnerReservationsPage({
 
   if (query && dateFrom) query = query.gte("date", dateFrom);
   if (query && dateTo) query = query.lte("date", dateTo);
-  if (query && filters.product_name) query = query.ilike("product.name->>es", `%${filters.product_name}%`);
-  if (query && filters.holder_name) query = query.ilike("holder_name", `%${filters.holder_name}%`);
-  if (query && filters.holder_email) query = query.ilike("holder_email", `%${filters.holder_email}%`);
+  if (query && filters.product_id) query = query.eq("product_id", filters.product_id);
+  // holder_q : un seul champ pour nom OU email (retour Jérôme, 2026-08-20) — colonnes de base sur
+  // order_lines, jamais de relation embarquée impliquée ici, donc .or() fonctionne sans le piège
+  // PostgREST déjà rencontré ailleurs (établissements/partenaires, colonne de base + relation).
+  if (query && filters.holder_q) {
+    query = query.or(`holder_name.ilike.%${filters.holder_q}%,holder_email.ilike.%${filters.holder_q}%`);
+  }
+  if (query && filters.status) query = query.eq("status", filters.status);
 
   const { data: lines, count } = query
     ? await query.returns<OrderLineQueryRow[]>()
     : { data: [] as OrderLineQueryRow[], count: 0 };
+
+  // Activités du prestataire pour le combobox de filtre (retour Jérôme, 2026-08-20) — même
+  // établissements que la requête principale, jamais reposé sur products.sellable (une réservation
+  // existante peut porter sur une activité entre-temps dépubliée, elle doit rester filtrable).
+  const { data: productOptionsRaw } =
+    establishmentIds.length > 0
+      ? await supabase
+          .from("products")
+          .select("id, name")
+          .in("establishment_id", establishmentIds)
+          .order("name->>es", { ascending: true })
+      : { data: [] as { id: string; name: unknown }[] };
+  const productOptions = (productOptionsRaw ?? []).map((product) => ({
+    id: product.id,
+    name: resolveLocalizedField(asLocalizedField(product.name), "es") ?? product.id,
+  }));
 
   const rows: ReservationRow[] = (lines ?? []).map((line) => ({
     id: line.id,
@@ -124,6 +148,7 @@ export default async function PartnerReservationsPage({
         sort={sort}
         filterValues={filterValues}
         extraParams={effectiveExtraParams}
+        products={productOptions}
       />
     </div>
   );

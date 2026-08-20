@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
-import { PartnerNav } from "./PartnerNav";
-import { PartnerMobileNav } from "./PartnerMobileNav";
+import { getOperatorCapability } from "@/lib/agenda/activeOperatorEstablishments";
+import { PartnerAppNav } from "./PartnerAppNav";
 
 // Feature 29 (docs/specs/05-invitations-onboarding-dashboard-partenaire.md) : première garde et
 // première nav communes à /partner — jusqu'ici chaque écran (commissions/products/tools)
@@ -24,10 +24,17 @@ export default async function PartnerAppLayout({ children }: LayoutProps<"/partn
   // Feature 31 (docs/specs/07-connexion-inscription-complete.md §8) : 2FA rendu optionnel le
   // 2026-08-15 (décision Jérôme) — plus de redirection forcée depuis ce layout.
 
+  // Refonte vue référent (2026-08-20, docs/specs/22-vue-referent-restreinte.md) : la nav elle-même
+  // décide quoi montrer, pas seulement les layouts enfants (§ci-dessous n'existe pas encore ici —
+  // cf. establishment/products/reservations layout.tsx pour la garde serveur réelle). Un admin
+  // (jamais de partner_id) obtient hasOperatorCapability=false par construction — sans effet pour
+  // lui, il ne passe jamais par la nav socio en pratique.
+  const { data: partnerId } = await supabase.rpc("partner_id_for_account", { uid: user.id });
+  const canOperate = await getOperatorCapability(supabase, partnerId);
+
   return (
     <div className="flex min-h-screen w-full flex-col md:flex-row">
-      <PartnerMobileNav />
-      <PartnerNav />
+      <PartnerAppNav hasOperatorCapability={canOperate} />
       <div className="mx-auto flex w-full flex-1 flex-col gap-6 p-4 md:p-8">{children}</div>
     </div>
   );
