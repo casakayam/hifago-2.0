@@ -37,11 +37,28 @@ type PlacesLibrary = {
   PlaceAutocompleteElement: new () => PlaceAutocompleteElementLike;
 };
 
+type GeocoderResultLike = {
+  formatted_address: string;
+  geometry: { location: LatLngLike };
+};
+type GeocoderLike = {
+  geocode: (
+    request: { address: string; componentRestrictions?: { country: string } },
+    callback: (results: GeocoderResultLike[] | null, status: string) => void,
+  ) => void;
+};
+type GeocodingLibrary = {
+  Geocoder: new () => GeocoderLike;
+};
+
 declare global {
   interface Window {
     google?: {
       maps: {
-        importLibrary: (name: "places") => Promise<PlacesLibrary>;
+        importLibrary: {
+          (name: "places"): Promise<PlacesLibrary>;
+          (name: "geocoding"): Promise<GeocodingLibrary>;
+        };
       };
     };
   }
@@ -127,4 +144,43 @@ export function mountAddressAutocomplete(
     if (element && handler) element.removeEventListener("gmp-select", handler);
     element?.remove();
   };
+}
+
+export type GeocodeResult = { formattedAddress: string; lat: number; lon: number };
+
+// Revue admin partenaires (Jérôme, 2026-08-19) — géocodage texte→coordonnées pour le filtre
+// "Buscar ubicación" de /admin/partners. Même clé publique déjà chargée pour Places ci-dessus
+// (aucune clé serveur n'existe dans ce projet, cf. hifago/CLAUDE.md §8 — jamais réutiliser une clé
+// pour un nouvel usage sans validation de Jérôme ; celle-ci reste un usage client identique,
+// pas un nouveau produit Google). Même restriction pays que le widget Places ci-dessus et que le
+// précédent V1 (public/admin.js:817-834, `new google.maps.Geocoder(); geocoder.geocode({address,
+// componentRestrictions:{country:'CO'}})`) — reproduit ici, pas une invention. Jamais un throw :
+// même posture "no-op silencieux" que `mountAddressAutocomplete` — un géocodage manqué ne doit
+// jamais bloquer la recherche, seulement dégrader (voir PartnersFilterBar.tsx, qui poursuit sans
+// lat/lon si ceci renvoie null).
+export async function geocodeAddress(query: string): Promise<GeocodeResult | null> {
+  if (!query.trim()) return null;
+  try {
+    await loadGoogleMapsScript();
+    const geocoding = await window.google?.maps.importLibrary("geocoding");
+    if (!geocoding) return null;
+    const geocoder = new geocoding.Geocoder();
+    return await new Promise<GeocodeResult | null>((resolve) => {
+      geocoder.geocode({ address: query, componentRestrictions: { country: "co" } }, (results, status) => {
+        if (status !== "OK" || !results || results.length === 0) {
+          resolve(null);
+          return;
+        }
+        const [first] = results;
+        resolve({
+          formattedAddress: first.formatted_address,
+          lat: first.geometry.location.lat(),
+          lon: first.geometry.location.lng(),
+        });
+      });
+    });
+  } catch (err) {
+    console.warn("[address-autocomplete] geocodeAddress impossible :", err);
+    return null;
+  }
 }

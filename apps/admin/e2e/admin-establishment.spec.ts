@@ -84,3 +84,26 @@ test("la recherche partenaire filtre réellement le registre", async ({ page, co
   await page.getByRole("option", { name: /Opérateur Actif/ }).click();
   await expect(search).toHaveValue(/Opérateur Actif/);
 });
+
+test("la recherche unifiée de la liste établissements trouve un établissement par le nom de son partenaire", async ({
+  page,
+  context,
+}) => {
+  await loginAs(context, SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
+
+  await page.goto("/admin/establishments");
+
+  // L'établissement de "Prestador Propuestas Org" (seed.sql, id b0000000-…-000000000004) est
+  // aussi la cible fixe de admin-establishment-edit.spec.ts, qui renomme son nom affiché
+  // (`Hostal Editado ${Date.now()}`) — jamais sélectionner un enregistrement seedé PARTAGÉ par son
+  // nom affiché (AGENTS-PARALLELES.md §5, déjà arrivé). On cherche donc par le nom du PARTENAIRE
+  // (jamais touché par cet autre spec) et on vérifie la ligne par testid stable (l'id, pas le nom) :
+  // preuve que list_establishments_admin cherche bien sur les deux colonnes (un .or() PostgREST ne
+  // le permettait pas, cf. migration 20260819190000), sans dépendre d'un nom mutable par ailleurs.
+  await page.getByTestId("filter-q").fill("Prestador Propuestas");
+  await page.getByTestId("server-filters-submit").click();
+
+  const row = page.getByTestId("establishment-row-b0000000-0000-4000-8000-000000000004");
+  await expect(row).toBeVisible();
+  await expect(row).toContainText("Prestador Propuestas Org");
+});

@@ -157,6 +157,7 @@ async function AdminEstablishmentProposalDetail({ id }: { id: string }) {
     address?: string | null;
     lat?: number | null;
     lon?: number | null;
+    photos?: { storage_path: string }[];
   };
 
   const currentName = proposal.establishment

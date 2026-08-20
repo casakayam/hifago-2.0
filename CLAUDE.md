@@ -272,6 +272,59 @@ l'export comptable/fiscal · fournisseur email final (Resend vs Postmark).
     classe de bug entière — la validation JS déjà en place prend alors systématiquement le relais.
     Poser `noValidate` par défaut sur tout nouveau `<form>` de ce projet dès qu'il contient un champ
     requis, pas seulement en réaction à un bug constaté.
+12. **`npx supabase db reset` ne suffit PAS à appliquer un changement dans les sections `[auth]`/
+    `[auth.email]`/`[auth.external.*]` de `supabase/config.toml`** (constaté 2026-08-19, Feature 31
+    révision — bascule `enable_signup=false`) — `db reset` ne fait que drop/recréer/migrer/seed la
+    base Postgres ; le conteneur GoTrue (auth), lui, lit ces clés comme variables d'environnement
+    injectées **au démarrage du conteneur**, jamais relues à chaud. Symptôme trompeur : un test qui
+    appelle directement `POST /auth/v1/signup` après un simple `db reset` continue de réussir
+    (`ok()`/`user.id` présent) comme si `enable_signup=false` n'existait pas — aucune erreur, aucun
+    avertissement, facile à confondre avec un flag mal posé ou un bug de test. Toujours `npx
+    supabase stop` puis `npx supabase start` (redémarre réellement tous les conteneurs avec la
+    config à jour) après avoir touché ces sections précises — un simple `db reset` reste suffisant
+    pour tout le reste (migrations, seed).
+13. **`[auth.email].enable_signup` ne veut PAS dire ce que son commentaire dit** (constaté
+    2026-08-19, même session que le piège précédent — révélé en faisant tourner les e2e existants,
+    pas en écrivant le code) : le commentaire du template Supabase CLI (« Allow/disallow new user
+    signups via email ») laisse penser à un simple filtre sur les *nouvelles* inscriptions, symétrique
+    de `[auth].enable_signup`. En réalité cette clé active/désactive le provider email **tout
+    entier** côté GoTrue — connexion ET inscription confondues. Le passer à `false` (pour renforcer
+    `[auth].enable_signup=false`, par souci de cohérence apparente) a cassé la CONNEXION de tous les
+    comptes email/mot de passe déjà existants (`admin@hifago.test` y compris), avec un message qui
+    ne mentionne même pas "signup" : `"Email logins are disabled"` — symptôme qui pointe vers un
+    mauvais suspect si on ne se souvient pas d'avoir touché cette clé précise. `[auth].enable_signup`
+    (racine, global, tous providers) est le SEUL verrou correct pour bloquer uniquement la création
+    de nouveaux comptes sans toucher aux connexions existantes — ne jamais dupliquer la valeur dans
+    `[auth.email]` "pour être sûr".
+14. **Un flag GoTrue global (`enable_signup`, ou tout autre réglage serveur-wide) ne sait pas voir
+    un jeton d'invitation valide dans l'URL** (constaté 2026-08-19, même session — `enable_signup=
+    false` posé pour bloquer l'auto-inscription sur `/login`/`/signup` cassait AUSSI la
+    consommation d'invitation via Google sur `/partner/join?token=...`, un chemin légitime :
+    l'invitation vit uniquement côté frontend, jamais transmise à GoTrue pendant l'échange OAuth,
+    et `consume_partner_invitation` ne s'exécute qu'après coup — GoTrue rejette la création avant
+    même d'atteindre ce point). Confirmé en testant en conditions réelles par Jérôme, pas en CI.
+    Un `before_user_created` Auth Hook ne résout pas ça non plus : il ne reçoit que l'objet `user`
+    (email, `app_metadata.provider`), jamais le contexte de requête (query params, `redirect_to`).
+    **Leçon générale** : quand le vrai besoin est « ne pas laisser un visiteur ordinaire croire
+    qu'il peut s'auto-inscrire » (un problème d'ÉCRAN), préférer retirer le point d'entrée UI
+    (bouton/lien) sur les écrans concernés plutôt que poser un verrou serveur global — un verrou
+    global ne distingue jamais un contexte légitime (jeton, session déjà autorisée) d'un contexte
+    anonyme, contrairement à une garde posée écran par écran.
+15. **Un Server Component qui construit lui-même un `<SimpleTable>` (packages/ui) imbriquant des
+    enfants `"use client"` (ex. `<StatusChip>`/`<Chip>`) plante à l'évaluation du module** (constaté
+    2026-08-19, revue admin clientes — fiche détail client) : `TypeError: createContext is not a
+    function`, reproduit uniquement par `next build` (« Collecting page data »), **invisible au
+    typecheck/lint et même en dev tant que la route n'est pas réellement visitée**. Même classe de
+    piège que le point 6 ci-dessus (Recharts) mais avec `SimpleTable` — jusqu'ici ses seuls
+    consommateurs du repo étaient déjà `"use client"` (`room-availability-grid.tsx`,
+    `slot-availability-grid.tsx`), jamais un Server Component ; `Chip`/`Table` (HeroUI) directement
+    depuis un Server Component fonctionnent, eux, déjà ailleurs (`orders/[id]/page.tsx`) — la
+    différence précise de root cause entre les deux cas n'a pas été creusée plus loin, seul le
+    correctif a été vérifié empiriquement. Correctif : extraire tout le bloc qui CONSTRUIT le
+    `<SimpleTable>` dans un composant `"use client"` dédié (ex. `ClientOrderCard.tsx`), le Server
+    Component ne fait plus que fetch + résoudre les champs jsonb localisés et passe des props déjà
+    sérialisables — jamais un `<SimpleTable>`/`<StatusChip>` construit inline dans un fichier sans
+    `"use client"` en tête.
 
 ## 12. Curseur — dernière session
 
@@ -280,7 +333,86 @@ En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
 nouvelle entrée.
 
-*2026-08-18 (suite 6) — dernière entrée : spec 19 Tranche 1 (capture Mercado Pago) — `CheckoutForm.tsx`
+*2026-08-20 — dernière entrée : nettoyage complet des statuts "publication/activation" (capacités,
+établissements, activités, partenaires), suite directe du retrait d'`onboarding` la veille (suite
+14). Jérôme a posé le modèle cible complet : capacité issue d'une invitation → active dès la
+création (suspension = seul geste admin explicite) ; établissement/activité approuvés → actif ET
+publié tout de suite, dépublication = geste admin séparé. 5 migrations
+(`20260820010000`→`20260820050000`) : **A** `partner_capabilities` 3→2 valeurs
+(`pending_review`/`active`/`suspended` → `active`/`suspended`, réactivation en masse assumée des
+~50 lignes `pending_review` restantes) ; **B** nouvelle RPC `set_establishment_status` (lever
+publier/dépublier manquant, création déjà correcte) ; **C** revirement assumé d'une décision de la
+veille (2026-08-18) — `create_product_from_proposal` repasse à `sellable=true` direct, modale
+"¿Publicar ahora?" retirée de `ModerateProductCreationProposalForm.tsx` ; **D** retrait complet de
+`include_incomplete` (RPC + colonne `comm_campaigns` + case à cocher), devenu un no-op silencieux
+après A ; **E** `partners.status` retiré entièrement (aucun levier construit, contrairement à
+establishments — pas de besoin métier décrit). **Chantier E en collision assumée** avec le travail
+non commité de suite 15 (écran admin "Partenaires" tout juste fini) — proposé à Jérôme via
+AskUserQuestion (différer vs le faire quand même), qui a choisi de le faire quand même : réécrit
+`list_partners_admin`, `PartnersTable.tsx`, `filters.ts`/`sortable-columns.ts`, fiche détail
+partenaire, et le test e2e `admin-partners-list-filters.spec.ts` de suite 15 (1 test entier retiré,
+2 assertions résiduelles ailleurs) + son pgTAP. **2 erreurs personnelles corrigées en cours de
+route avant d'agir** : `commercial_status` annoncé mort à tort (je n'avais vérifié que la lecture,
+pas `NewPartnerForm.tsx` qui l'écrit à la création) ; `partners.status`/`establishments.status`
+annoncés morts à tort au 1er passage (filtrés/triés réellement dans les 2 RPC admin, juste jamais
+transitionnés — pas la même chose). **Effet de bord trouvé en balayant tout le code, corrigé** :
+l'alerte dashboard "Capacidades de prestador en revisión" (`AdminAlerts.tsx`) comptait
+`status='pending_review'`, retombée à zéro pour toujours — retirée entièrement plutôt que laissée
+morte. **Aléas de concurrence consignés, pas causés par ce lot** : `catalog_rls.test.sql` (jamais
+touché) échoue sur 2 comptages absolus (pollution `audit_log`/`product_calendar` déjà documentée
+suite 12) ; `partner_registry_rpc.test.sql` flaky 1 fois sur 4 (tie-break manquant sur
+`order by created_at`, confirmé pré-existant, 3/3 en isolation). **Vérifié** : pgTAP ciblé 9
+fichiers/165 assertions vertes, typecheck/lint `apps/admin` propres. **Non fait, signalé plutôt
+que faussement affirmé** : pas de clic navigateur — ≥2 `next dev` déjà actifs (ports 3100/3101,
+autres sessions), risque de perturber leur travail en cours sur la même base locale partagée.
+Détail complet : `hifago/docs/journal/2026-08.md` (2026-08-20).
+
+*2026-08-19 (suite 2) — connecteur LobbyPMS (spec 21), Tranche 1 complète
+implémentée (8 phases : schéma, `create_order` étendu, module `packages/domain/src/pms/`, Route
+Handlers, branchement `CheckoutForm.tsx`, **deux premières Edge Functions jamais écrites dans ce
+dépôt** + `pg_cron`/`pg_net`/Vault, UI admin, seed/fixtures/tests). Décisions Jérôme : périmètre
+complet, `lobby_api_token` texte RPC-only (jamais chiffré), poll 15 min/lot 20. Test local du point
+dur (`pg_net` émet un vrai appel HTTP depuis Postgres, invisible à tout mock JS) résolu et VÉRIFIÉ
+empiriquement : `supabase/functions/.env` pointe `LOBBY_API_BASE_URL` vers un serveur de fixtures
+`node:http` local (`packages/e2e-support/src/pmsFixtureServer.ts`), nouveau
+`npm run test:pms-integration` (`tests/pms-integration/`) confirme la vraie Edge Function locale de
+bout en bout. Tout vert : pgTAP (691 tests), Vitest (domain/web/admin), 4 e2e Playwright admin
+(séquentiel — workers>1 fait échouer le login TOTP partagé, aléa consigné ci-dessous), typecheck/
+lint propres. **2 bugs trouvés en faisant tourner les tests, pas en écrivant le code** : (1)
+régression introduite par cette session — le `REVOKE`/`GRANT` colonne sur `establishments` (cacher
+`lobby_api_token`) cassait `update_establishment` préexistante (`select *`, security invoker) →
+403 sur TOUTE édition d'établissement — corrigé (migration `20260819150000`, colonnes explicites) ;
+(2) bug **pré-existant, sans lien**, confirmé dans le commit HEAD avant cette session —
+`productTypeGating` importé depuis un fichier `"use client"` par un Server Component cassait 500
+l'édition de N'IMPORTE QUEL produit — corrigé (extraction `productTypeGating.ts` sans `"use
+client"`) en mode autonome, **à faire valider par Jérôme a posteriori**. **Gap connu, signalé, pas
+implémenté** : aucune route ne lit la disponibilité Lobby pour l'affichage client (calendrier de
+dates) — seule l'écriture (après `create_order`) consulte réellement Lobby ; anti-survente intacte
+(Lobby reste juge final au booking), mais l'expérience "voir les dates dispo avant de réserver"
+manque pour un établissement PMS-backed — à raffiner dans une future spec. Détail complet
+(SQL/TS exacts, plan d'implémentation) : `hifago/docs/journal/2026-08.md` (2026-08-19, suite),
+spec 21 §13.
+
+*2026-08-19 (suite) — feature "Mi cuenta" — écran de réglages de compte socio
+(`/partner/account`, jusqu'ici inexistant) + logout (jusqu'ici absent de tout `apps/admin`).
+Décision reprise en cours de session après échange avec Jérôme : nom/WhatsApp vivent sur des
+colonnes individuelles neuves `partner_accounts.full_name`/`phone` (RPC `security definer`
+`update_my_account_profile`), PAS sur `partners.display_name`/`phone` (organisation, potentiellement
+partagée par plusieurs comptes de connexion — mauvais niveau pour un écran "mon compte"). Email de
+connexion (`auth.updateUser({email})`, double confirmation déjà configurée) et mot de passe (même
+pattern que `ResetPasswordForm.tsx`) inclus dès cette v1. `LogoutButton.tsx` partagé
+(`apps/admin/components/`) posé à deux endroits (nav + page compte, demande explicite). Migration
+`20260819100000_partner_account_self_profile.sql`. 1 test e2e chemin heureux vert, typecheck/lint
+propres. Hors périmètre signalé (pas corrigé) : `partners` porte toujours un `grant update` +
+policy RLS trop permissive (n'importe quelle colonne, y compris `status`), jamais consommée par
+aucun code — cette feature ne l'utilise plus du tout, mais la porte reste ouverte pour qui voudra
+un jour l'exploiter. **Aléa de concurrence rencontré** : `partner-commissions.spec.ts` échoue
+désormais (partenaire seedé `operadorPropuestas` sans plus aucune ligne `ledger_entries`, partenaire
+`b0000000-…-0003` disparu de `partners`) — confirmé sans rapport avec cette session (aucun fichier
+touché ici ne référence ces tables), une autre session a fait évoluer la base locale partagée
+entre-temps. Détail complet dans `hifago/docs/journal/2026-08.md`.
+
+**2026-08-18 (suite 6)** — spec 19 Tranche 1 (capture Mercado Pago) — `CheckoutForm.tsx`
 désormais BRANCHÉ de bout en bout (entrée précédente : couche DB + API livrée, UI volontairement en
 attente de vraies clés). Jérôme a créé une app sandbox Mercado Pago Colombia et fourni les
 identifiants réels au fil de la conversation — consolidés dans deux fichiers **locaux, gitignorés**

@@ -7,6 +7,12 @@ import { asLocalizedField } from "@hifago/domain";
 import { Button, Input, Label, TextArea, TextField, toast } from "@hifago/ui";
 import { LocalizedTextField, buildLocalizedPayload, type LocalizedValue } from "@/components/localized-text-field";
 
+// storage_path résolu en URL publique côté client (bucket "catalog-media" public en lecture,
+// aucun aller-retour réseau) — même idiome que ModerateProductCreationProposalForm.tsx.
+function resolvePhotoUrl(storagePath: string): string {
+  return createClient().storage.from("catalog-media").getPublicUrl(storagePath).data.publicUrl;
+}
+
 const MODERATE_ERRORS: Record<string, string> = {
   proposal_not_found: "No se encontró la propuesta.",
   version_conflict: "Esta propuesta fue modificada por otra persona. Recarga la página.",
@@ -20,6 +26,7 @@ type EstablishmentFieldsPayload = {
   address?: string | null;
   lat?: number | null;
   lon?: number | null;
+  photos?: { storage_path: string }[];
 };
 
 // Aperçu "valeur actuelle" vide pour kind='create' (l'établissement n'existe pas encore, donc
@@ -210,6 +217,28 @@ export function ModerateEstablishmentProposalForm({
           testIdPrefix="description"
           fieldTestId="description-textarea"
         />
+
+        {/* Lecture seule : ce formulaire n'édite jamais les photos (même invariant que
+            ModerateProductCreationProposalForm.tsx) — toujours rattachées telles que proposées par
+            le socio, jamais via p_corrected_payload. Uniquement pour kind='create' (une proposition
+            d'édition n'en porte jamais, cf. submit_establishment_edit_proposal). */}
+        {kind === "create" && proposedPayload.photos && proposedPayload.photos.length > 0 ? (
+          <div className="flex flex-col gap-1.5">
+            <Label>Fotos propuestas</Label>
+            <div className="flex flex-wrap gap-2" data-testid="proposed-photos">
+              {proposedPayload.photos.map((photo, index) => (
+                // eslint-disable-next-line @next/next/no-img-element -- aperçu de modération, pas une image de contenu (next/image inutile ici)
+                <img
+                  key={photo.storage_path}
+                  src={resolvePhotoUrl(photo.storage_path)}
+                  alt=""
+                  data-testid={`proposed-photo-${index}`}
+                  className="h-20 w-20 rounded object-cover"
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <TextField value={address} onChange={setAddress}>
           <Label>Dirección — opcional</Label>

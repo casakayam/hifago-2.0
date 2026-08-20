@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
-import { Button, Checkbox, Label, TextField, TextArea, Select, ListBox, toast } from "@hifago/ui";
+import { Button, Label, TextField, TextArea, Select, ListBox, toast } from "@hifago/ui";
 
 type Audience = "clients" | "referrers" | "providers" | "partners" | "all";
 type Channel = "whatsapp" | "email";
@@ -26,7 +26,6 @@ export function NewCampaignForm() {
   const [audience, setAudience] = useState<Audience>("clients");
   const [channel, setChannel] = useState<Channel>("whatsapp");
   const [messageTemplate, setMessageTemplate] = useState("");
-  const [includeIncomplete, setIncludeIncomplete] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const showHabeasDataWarning = AUDIENCES_WITH_CLIENT_WARNING.includes(audience);
@@ -45,7 +44,6 @@ export function NewCampaignForm() {
       p_audience: audience,
       p_channel: channel,
       p_message_template: messageTemplate.trim(),
-      p_include_incomplete: includeIncomplete,
     });
 
     setIsSubmitting(false);
@@ -108,19 +106,6 @@ export function NewCampaignForm() {
         <Label>Mensaje</Label>
         <TextArea data-testid="message-template-input" />
       </TextField>
-
-      <Checkbox
-        data-testid="include-incomplete-checkbox"
-        isSelected={includeIncomplete}
-        onChange={setIncludeIncomplete}
-      >
-        <Checkbox.Content>
-          <Checkbox.Control>
-            <Checkbox.Indicator />
-          </Checkbox.Control>
-          Incluir identidades aún no completamente activas (onboarding / en revisión)
-        </Checkbox.Content>
-      </Checkbox>
 
       {showHabeasDataWarning ? (
         <p

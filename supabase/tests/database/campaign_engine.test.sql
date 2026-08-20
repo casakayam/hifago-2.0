@@ -1,7 +1,7 @@
 -- Feature 25 (Admin : audiences serveur + moteur de campagne, envoi simulé) —
 -- list_audience_members, create_campaign, process_campaign_batch.
 begin;
-select plan(33);
+select plan(29);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -9,13 +9,15 @@ $$;
 
 -- Fixtures ---------------------------------------------------------------------------------------
 -- Partenaires : référent seul (actif) ; opérateur+référent (operator actif — preuve d'exclusion
--- mutuelle) ; référent onboarding ; référent pending_review ; référent à suspendre plus bas (test
--- process_campaign_batch, inéligibilité survenue entre création et traitement).
+-- mutuelle) ; référent à suspendre plus bas (test process_campaign_batch, inéligibilité survenue
+-- entre création et traitement). Fixtures "référent onboarding" et "référent pending_review"
+-- retirées (2026-08-20, migration 20260820010000_partner_capabilities_active_by_default.sql) :
+-- partner_capabilities.status n'a plus que 2 valeurs (active/suspended), plus d'état "incomplet" à
+-- couvrir — include_incomplete lui-même retiré de list_audience_members/create_campaign
+-- (20260820040000_campaign_drop_include_incomplete.sql), plus rien de spécifique à tester ici.
 insert into partners (id, display_name) values
   ('dd110000-0000-4000-8000-000000000001', 'Campaign Test Referrer Only'),
   ('dd110000-0000-4000-8000-000000000002', 'Campaign Test Operator And Referrer'),
-  ('dd110000-0000-4000-8000-000000000003', 'Campaign Test Referrer Onboarding'),
-  ('dd110000-0000-4000-8000-000000000004', 'Campaign Test Referrer Pending'),
   ('dd110000-0000-4000-8000-000000000005', 'Campaign Test Referrer To Suspend');
 
 -- referrer AVANT operator pour dd...0002 : le trigger enforce_operator_implies_referrer exige que
@@ -24,8 +26,6 @@ insert into partner_capabilities (partner_id, role, source, status) values
   ('dd110000-0000-4000-8000-000000000001', 'referrer', 'migration', 'active'),
   ('dd110000-0000-4000-8000-000000000002', 'referrer', 'migration', 'active'),
   ('dd110000-0000-4000-8000-000000000002', 'operator', 'migration', 'active'),
-  ('dd110000-0000-4000-8000-000000000003', 'referrer', 'migration', 'onboarding'),
-  ('dd110000-0000-4000-8000-000000000004', 'referrer', 'migration', 'pending_review'),
   ('dd110000-0000-4000-8000-000000000005', 'referrer', 'migration', 'active');
 
 -- Comptes. ACC_CLIENT_UNREACHABLE : email/phone tous deux null (autorisé, is_nullable=YES sur les
@@ -33,8 +33,6 @@ insert into partner_capabilities (partner_id, role, source, status) values
 insert into auth.users (id, email) values
   ('dd110000-0000-4000-8000-000000000021', 'campaign-referrer-only@test.local'),
   ('dd110000-0000-4000-8000-000000000022', 'campaign-op-and-ref@test.local'),
-  ('dd110000-0000-4000-8000-000000000023', 'campaign-ref-onboarding@test.local'),
-  ('dd110000-0000-4000-8000-000000000024', 'campaign-ref-pending@test.local'),
   ('dd110000-0000-4000-8000-000000000025', 'campaign-ref-to-suspend@test.local'),
   ('dd110000-0000-4000-8000-000000000026', 'campaign-client-consent@test.local'),
   ('dd110000-0000-4000-8000-000000000027', 'campaign-client-no-consent@test.local'),
@@ -47,10 +45,6 @@ update partner_accounts set partner_id = 'dd110000-0000-4000-8000-000000000001'
  where id = 'dd110000-0000-4000-8000-000000000021';
 update partner_accounts set partner_id = 'dd110000-0000-4000-8000-000000000002'
  where id = 'dd110000-0000-4000-8000-000000000022';
-update partner_accounts set partner_id = 'dd110000-0000-4000-8000-000000000003'
- where id = 'dd110000-0000-4000-8000-000000000023';
-update partner_accounts set partner_id = 'dd110000-0000-4000-8000-000000000004'
- where id = 'dd110000-0000-4000-8000-000000000024';
 update partner_accounts set partner_id = 'dd110000-0000-4000-8000-000000000005'
  where id = 'dd110000-0000-4000-8000-000000000025';
 -- 021/026/027/028/029 restent sans partner_id : clients ou comptes sans aucune relation.
@@ -130,32 +124,6 @@ select is(
     where account_id = 'dd110000-0000-4000-8000-000000000021')::int,
   0,
   'clients : un référent sans commande N''apparaît PAS'
-);
-
--- include_incomplete : onboarding/pending_review apparaissent/disparaissent correctement --------
-select is(
-  (select count(*) from list_audience_members('referrers', false)
-    where account_id = 'dd110000-0000-4000-8000-000000000023')::int,
-  0,
-  'referrers, include_incomplete=false : onboarding absent'
-);
-select is(
-  (select count(*) from list_audience_members('referrers', true)
-    where account_id = 'dd110000-0000-4000-8000-000000000023')::int,
-  1,
-  'referrers, include_incomplete=true : onboarding apparaît'
-);
-select is(
-  (select count(*) from list_audience_members('referrers', false)
-    where account_id = 'dd110000-0000-4000-8000-000000000024')::int,
-  0,
-  'referrers, include_incomplete=false : pending_review absent'
-);
-select is(
-  (select count(*) from list_audience_members('referrers', true)
-    where account_id = 'dd110000-0000-4000-8000-000000000024')::int,
-  1,
-  'referrers, include_incomplete=true : pending_review apparaît'
 );
 
 -- all : n''importe quel compte, même sans aucune relation ----------------------------------------

@@ -76,8 +76,8 @@ seule et même expérience — pas deux portails séparés.
 - **Portail client** : consomme en lecture ce que ce portail a fait approuver (produits, photos,
   grille tarifaire) — jamais l'inverse. Un socio ne publie jamais directement sur le catalogue
   public ; il **propose**, l'admin **modère**.
-- **`/admin`** : décide des capacités et de leur statut (onboarding/en revue/suspendu/actif),
-  approuve ou rejette les propositions, rattache un prestataire à une fiche du registre.
+- **`/admin`** : décide des capacités et de leur statut (actif/suspendu), approuve ou
+  rejette les propositions, rattache un prestataire à une fiche du registre.
   Authentification totalement distincte (mot de passe admin unique) — pas de session partagée
   entre l'accès admin d'un établissement et le compte socio de son responsable, même si la même
   personne détient les deux.
@@ -202,9 +202,12 @@ total agrégé de ce que ce prestataire a effectivement généré. Dans la cible
 **résumé de ses ventes/revenus**, symétrique de ce qu'un référent voit déjà pour ses commissions —
 cohérent avec la demande de départ (« les presta qui peuvent... voir ce qu'ils gagnent »).
 
-**Statuts d'une capacité** : une capacité porte un statut propre — en préparation / en revue /
-suspendue / active — qui gouverne ce qui est accessible, indépendamment de la capacité elle-même
-(avoir la capacité ne suffit pas si elle est suspendue).
+**Statuts d'une capacité** : une capacité porte un statut propre — active / suspendue — qui
+gouverne ce qui est accessible, indépendamment de la capacité elle-même (avoir la capacité ne
+suffit pas si elle est suspendue). **Décision (2026-08-20)** : une capacité est **active dès sa
+création**, quel que soit le chemin (invitation avec rôle déjà choisi par l'admin, proposition
+d'établissement approuvée, octroi direct admin) — les trois sont déjà un geste admin, aucun
+palier intermédiaire n'a de sens. Seule la suspension est un geste admin explicite et distinct.
 
 **Décision (2026-08-11)** : le statut existe pour **les deux capacités**, pas seulement
 Prestataire — un référent peut aussi être suspendu (ex. abus de code partenaire), sans supprimer son
@@ -220,14 +223,23 @@ plusieurs codes distincts et qu'un seul est en cause.
 **Invariant à conserver** : les capacités ne sont jamais une barrière côté interface seulement —
 chaque action sensible revalide la capacité et son statut côté serveur, à chaque appel.
 
-**Décision (2026-08-11) — acceptation de contrat obligatoire par rôle** : aujourd'hui,
-l'emplacement de contrat est **inerte** (« disponible próximamente ») pour les deux capacités —
-aucune acceptation n'est jamais réellement demandée. Dans la cible, une capacité (référent et/ou
-prestataire) ne devient **pleinement active** qu'après acceptation explicite et horodatée des
-conditions de ce rôle. **Précision (2026-08-11)** : une simple **acceptation électronique en un
-clic** (« J'accepte », horodatée, avec la version du texte acceptée) suffit — pas une signature
-électronique certifiée ni un document à uploader, disproportionné pour ce cas. Tant que non
-acceptée, la capacité reste au statut « en préparation » (§3a), pas « active ».
+**Décision (2026-08-11) — acceptation de contrat obligatoire par rôle, ABANDONNÉE le 2026-08-19** :
+aujourd'hui, l'emplacement de contrat est **inerte** (« disponible próximamente ») pour les deux
+capacités — aucune acceptation n'est jamais réellement demandée. La cible envisagée ici (une
+capacité ne devient pleinement active qu'après acceptation explicite et horodatée des conditions de
+ce rôle, via un statut intermédiaire « en préparation ») n'a **jamais été implémentée** : le statut
+« en préparation » posait bien un défaut à la création de toute capacité, mais rien ne le faisait
+jamais évoluer automatiquement vers « active » — `role_agreements` s'insère à l'inscription sans
+déclencher ce passage. **Décision (2026-08-19)** : le statut « en préparation » est retiré
+(migration `20260819230000_partner_capabilities_remove_onboarding_status.sql`) plutôt que câblé —
+il ne se distinguait de « en revue » par aucun comportement réel, remplacé par « en revue » comme
+défaut. **Décision (2026-08-20), un cran plus loin** : « en revue » lui-même retiré à son tour
+(migration `20260820010000_partner_capabilities_active_by_default.sql`) — même diagnostic, aucun
+chemin de création n'étant jamais autre chose qu'un geste déjà admin. Les capacités démarrent
+désormais directement à « active », débloquées de toute suspension uniquement par une action admin
+explicite (`set_capability_status`), sans étape d'acceptation de contrat automatisée. Si une
+acceptation de contrat devient nécessaire un jour, elle sera à reconstruire depuis zéro (pas de
+statut dédié à réactiver).
 
 *Traçabilité : `docs/2-reference/02-app-partner.md` § Rôle, § Module Prestador ; `docs/2-reference/05-data-model.md`
 (`partner_capabilities`, invariant `operator ⇒ referrer`).*

@@ -1,6 +1,7 @@
 import type { FilterDefinition } from "@hifago/domain";
 import type { DataListFilter } from "@hifago/ui";
-import { STATUS_LABELS } from "@/app/admin/orders/statusLabels";
+import type { ChipStyle } from "@/components/status-chip";
+import { STATUS_LABELS, STATUS_CHIP_COLOR } from "@/app/admin/orders/statusLabels";
 import { AUDIENCE_LABELS, CAMPAIGN_STATUS_LABELS, CHANNEL_LABELS } from "@/app/admin/campaigns/campaignLabels";
 import { INVITATION_STATUS_LABELS, ONBOARDING_PATH_LABELS } from "@/app/admin/invitations/invitationLabels";
 
@@ -42,10 +43,32 @@ export const ORDERS_FILTERS: DataListFilter[] = [
 // la même convention plutôt que d'inventer une traduction non tranchée.
 const PRODUCT_TYPES = ["lodging", "activity", "transport", "hotel", "camp", "evento"] as const;
 
+// Revue admin catalogo (Jérôme, 2026-08-19) — labels/couleur extraits en constantes partagées
+// (déjà utilisés en texte brut dans ProductsList.tsx: product.sellable ? "Publicado" : "Borrador")
+// pour StatusChip, même convention que ESTABLISHMENT_STATUS_CHIP_STYLE/CLIENT_STAGE_CHIP_STYLE.
+export const PRODUCT_SELLABLE_LABELS: Record<string, string> = {
+  true: "Publicado",
+  false: "Borrador",
+};
+
+export const PRODUCT_SELLABLE_CHIP_STYLE: Record<string, ChipStyle> = {
+  true: { color: "success", variant: "soft" },
+  false: { color: "default", variant: "soft" },
+};
+
 export const PRODUCTS_FILTER_DEFINITIONS: FilterDefinition[] = [
   { kind: "text", name: "q" },
   { kind: "enum", name: "type", allowed: PRODUCT_TYPES },
   { kind: "enum", name: "sellable", allowed: ["true", "false"] },
+  // établissement — jamais une liste fermée à écrire en dur ici (contrairement à type/sellable) :
+  // validé comme texte libre (un uuid), les options réelles du <select> sont construites à la
+  // volée côté page.tsx (fetch de tous les établissements), pas dans ce fichier de constantes.
+  { kind: "text", name: "establishment_id" },
+  // Revue admin catalogo (Jérôme, 2026-08-19) — le dropdown ci-dessus reste plafonné à 10
+  // établissements (les plus pertinents), donc pas exhaustif dès que le catalogue grandit : ce
+  // champ texte est l'échappatoire pour chercher un établissement absent des 10 visibles, jamais
+  // combiné avec establishment_id (l'un ou l'autre, jamais les deux — cf. page.tsx).
+  { kind: "text", name: "establishment_q" },
 ];
 
 export const PRODUCTS_FILTERS: DataListFilter[] = [
@@ -62,11 +85,7 @@ export const PRODUCTS_FILTERS: DataListFilter[] = [
     name: "sellable",
     label: "Estado",
     allLabel: "Todos los estados",
-    // Labels déjà en place dans la liste actuelle (product.sellable ? "Publicado" : "Borrador").
-    options: [
-      { value: "true", label: "Publicado" },
-      { value: "false", label: "Borrador" },
-    ],
+    options: Object.entries(PRODUCT_SELLABLE_LABELS).map(([value, label]) => ({ value, label })),
   },
 ];
 
@@ -110,30 +129,38 @@ export const ESTABLISHMENT_STATUS_LABELS: Record<string, string> = {
   archived: "Archivado",
 };
 
+// Revue admin établissements (Jérôme, 2026-08-19) — couleur du StatusChip principal de la liste,
+// cohérent avec le mapping déjà en place côté socio (EstablishmentsGrid.tsx). Les 2 indicateurs
+// additionnels (proposition en attente / partenaire non opérationnel) ont leur propre couleur
+// fixe (warning/danger) posée directement dans EstablishmentStatusCell — pas de nouvelle valeur
+// de statut, ce sont des signaux calculés, pas des états de establishments.status.
+export const ESTABLISHMENT_STATUS_CHIP_STYLE: Record<string, ChipStyle> = {
+  active: { color: "success", variant: "soft" },
+  archived: { color: "default", variant: "soft" },
+};
+
 export const ESTABLISHMENTS_FILTER_DEFINITIONS: FilterDefinition[] = [
   { kind: "text", name: "q" },
   { kind: "enum", name: "status", allowed: Object.keys(ESTABLISHMENT_STATUS_LABELS) },
-  { kind: "enum", name: "operated_directly", allowed: ["true", "false"] },
 ];
 
+// "Operado directamente" retiré (Jérôme, 2026-08-19) — jamais un filtre existant en V1 non plus,
+// aucune fonctionnalité perdue. Recherche élargie au nom du partenaire (list_establishments_admin
+// RPC, cf. page.tsx) : un or=() PostgREST ne peut pas combiner une colonne de la table de base
+// avec une colonne d'une relation embarquée, d'où la RPC dédiée plutôt qu'un simple .ilike().
 export const ESTABLISHMENTS_FILTERS: DataListFilter[] = [
-  { kind: "text", name: "q", label: "Buscar por nombre", placeholder: "Nombre del establecimiento" },
+  {
+    kind: "text",
+    name: "q",
+    label: "Buscar por nombre o partner",
+    placeholder: "Nombre del establecimiento o del partner",
+  },
   {
     kind: "select",
     name: "status",
     label: "Estado",
     allLabel: "Todos los estados",
     options: Object.entries(ESTABLISHMENT_STATUS_LABELS).map(([value, label]) => ({ value, label })),
-  },
-  {
-    kind: "select",
-    name: "operated_directly",
-    label: "Operado directamente",
-    allLabel: "Todos",
-    options: [
-      { value: "true", label: "Sí" },
-      { value: "false", label: "No" },
-    ],
   },
 ];
 
@@ -161,19 +188,6 @@ export const INVITATIONS_FILTERS: DataListFilter[] = [
   },
 ];
 
-// partners.status ('active'|'suspended'|'archived') — vocabulaire propre à cette colonne, distinct
-// du statut de capacité affiché sur le dashboard socio (partner/(app)/page.tsx).
-const PARTNER_STATUS_LABELS: Record<string, string> = {
-  active: "Activo",
-  suspended: "Suspendido",
-  archived: "Archivado",
-};
-
-const ENTITY_TYPE_LABELS: Record<string, string> = {
-  person: "Persona",
-  organization: "Organización",
-};
-
 // partner_capabilities.role ('referrer'|'operator'|'admin') — mêmes libellés Referente/Prestador
 // déjà en place sur le dashboard socio (partner/(app)/page.tsx, ROLE_LABELS) ; "admin" n'y figure
 // pas (rôle jamais affiché côté socio), ajouté ici pour ce filtre admin uniquement.
@@ -183,30 +197,24 @@ const PARTNER_ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
 };
 
+// lat/lon/radius_km/location_label : jamais rendus par ServerFilters générique (packages/ui) —
+// gérés à la main par PartnersFilterBar.tsx, qui géocode côté client avant de naviguer. Présents
+// ici uniquement pour que resolveFilterParams les valide/les laisse traverser vers la RPC.
+// location_label ne va jamais à la RPC (lat/lon suffisent) : sert seulement à réafficher le texte
+// tapé dans "Buscar ubicación" après un aller-retour serveur, que lat/lon seuls ne permettent pas
+// de reconstruire.
 export const PARTNERS_FILTER_DEFINITIONS: FilterDefinition[] = [
   { kind: "text", name: "q" },
-  { kind: "enum", name: "status", allowed: Object.keys(PARTNER_STATUS_LABELS) },
-  { kind: "enum", name: "entity_type", allowed: Object.keys(ENTITY_TYPE_LABELS) },
   { kind: "enum", name: "role", allowed: Object.keys(PARTNER_ROLE_LABELS) },
   { kind: "text", name: "city" },
+  { kind: "text", name: "lat" },
+  { kind: "text", name: "lon" },
+  { kind: "enum", name: "radius_km", allowed: ["5", "10", "20", "50"] },
+  { kind: "text", name: "location_label" },
 ];
 
 export const PARTNERS_FILTERS: DataListFilter[] = [
   { kind: "text", name: "q", label: "Buscar por nombre o email", placeholder: "Nombre o email" },
-  {
-    kind: "select",
-    name: "status",
-    label: "Estado",
-    allLabel: "Todos los estados",
-    options: Object.entries(PARTNER_STATUS_LABELS).map(([value, label]) => ({ value, label })),
-  },
-  {
-    kind: "select",
-    name: "entity_type",
-    label: "Tipo",
-    allLabel: "Todos los tipos",
-    options: Object.entries(ENTITY_TYPE_LABELS).map(([value, label]) => ({ value, label })),
-  },
   {
     kind: "select",
     name: "role",
@@ -217,8 +225,78 @@ export const PARTNERS_FILTERS: DataListFilter[] = [
   { kind: "text", name: "city", label: "Ciudad", placeholder: "Ciudad" },
 ];
 
+// Paliers de rayon proposés pour "Buscar ubicación" (PartnersFilterBar.tsx) — 20km par défaut.
+export const PARTNER_RADIUS_KM_OPTIONS = ["5", "10", "20", "50"] as const;
+export const PARTNER_DEFAULT_RADIUS_KM = "20";
+
+// order_lines (vue "Mis reservas" prestataire, refonte 2026-08-19) — date_from/date_to reçoivent un
+// défaut "semaine à venir" côté page.tsx quand absents de l'URL (pas ici : resolveFilterParams ne
+// connaît que la validation de forme, jamais une valeur par défaut métier). holder_email n'existe
+// comme filtre que depuis la migration 20260819180000 (order_lines.holder_email désormais exposée
+// au prestataire sur ses propres établissements).
+export const RESERVATIONS_FILTER_DEFINITIONS: FilterDefinition[] = [
+  { kind: "date", name: "date_from" },
+  { kind: "date", name: "date_to" },
+  { kind: "text", name: "product_name" },
+  { kind: "text", name: "holder_name" },
+  { kind: "text", name: "holder_email" },
+];
+
+export const RESERVATIONS_FILTERS: DataListFilter[] = [
+  { kind: "date", name: "date_from", label: "Desde" },
+  { kind: "date", name: "date_to", label: "Hasta" },
+  { kind: "text", name: "product_name", label: "Actividad", placeholder: "Nombre de la actividad" },
+  { kind: "text", name: "holder_name", label: "Cliente", placeholder: "Nombre del cliente" },
+  { kind: "text", name: "holder_email", label: "Email del cliente", placeholder: "Email del cliente" },
+];
+
 export const TAGS_FILTER_DEFINITIONS: FilterDefinition[] = [{ kind: "text", name: "q" }];
 
 export const TAGS_FILTERS: DataListFilter[] = [
   { kind: "text", name: "q", label: "Buscar por nombre", placeholder: "Nombre de la etiqueta" },
+];
+
+// Revue admin clientes (Jérôme, 2026-08-19) — order_lines.status en ChipStyle, dérivé de
+// STATUS_CHIP_COLOR (orders/statusLabels.ts) plutôt que redéfini à la main : toute évolution de la
+// couleur de référence se propage automatiquement, zéro valeur dupliquée.
+export const ORDER_LINE_STATUS_CHIP_STYLE: Record<string, ChipStyle> = Object.fromEntries(
+  Object.entries(STATUS_CHIP_COLOR).map(([status, color]) => [status, { color, variant: "soft" as const }])
+);
+
+// client_stage — état DÉRIVÉ par client (pas order_lines.status brut), calculé par la RPC
+// list_clients : un client agrège plusieurs commandes à statuts potentiellement différents, filtrer
+// sur "au moins une ligne dans cet état" n'aurait pas de sens intuitif à ce niveau (même travers que
+// le filtre date/activité déjà écarté par Jérôme pour cette liste). Le stade le plus "actif" présent
+// l'emporte — même concept que le `stageOf` du back-office V1 (jamais exposé comme un vrai filtre
+// là-bas, juste un badge d'affichage).
+export const CLIENT_STAGE_LABELS: Record<string, string> = {
+  proxima: "Próxima",
+  en_casa: "En casa",
+  pasada: "Pasada",
+  cancelada: "Cancelada",
+};
+
+export const CLIENT_STAGE_CHIP_STYLE: Record<string, ChipStyle> = {
+  proxima: { color: "accent", variant: "soft" },
+  en_casa: { color: "success", variant: "soft" },
+  pasada: { color: "default", variant: "soft" },
+  cancelada: { color: "danger", variant: "soft" },
+};
+
+export const CLIENTS_FILTER_DEFINITIONS: FilterDefinition[] = [
+  { kind: "text", name: "q" },
+  { kind: "enum", name: "status", allowed: Object.keys(CLIENT_STAGE_LABELS) },
+];
+
+// Champ "email" séparé retiré (Jérôme, 2026-08-19) : q cherche déjà nom ET email (list_clients),
+// la demande explicite était un seul champ combiné — le second champ était redondant.
+export const CLIENTS_FILTERS: DataListFilter[] = [
+  { kind: "text", name: "q", label: "Buscar por nombre o email", placeholder: "Nombre o email" },
+  {
+    kind: "select",
+    name: "status",
+    label: "Estado",
+    allLabel: "Todos los estados",
+    options: Object.entries(CLIENT_STAGE_LABELS).map(([value, label]) => ({ value, label })),
+  },
 ];

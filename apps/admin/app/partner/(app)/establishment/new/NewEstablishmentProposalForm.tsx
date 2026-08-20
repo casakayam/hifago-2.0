@@ -5,15 +5,18 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { Button, Input, Label, TextArea, TextField, cn, toast } from "@hifago/ui";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
+import { StagedEstablishmentPhotos, type StagedPhoto } from "@/components/establishment-photos-staged";
 
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 type DescriptionLang = "es" | "en";
 
+// pending_creation_exists retiré (2026-08-19, migration
+// 20260819220000_establishment_creation_no_pending_cap.sql) : la RPC ne renvoie plus jamais cette
+// raison, plusieurs propositions de création peuvent désormais coexister en attente.
 const SUBMIT_ERRORS: Record<string, string> = {
   not_authenticated: "No se pudo verificar tu sesión. Vuelve a intentarlo.",
   not_a_partner: "Tu cuenta no está asociada a ningún partner.",
   name_required: "El nombre es obligatorio.",
-  pending_creation_exists: "Ya tienes una propuesta de creación pendiente de revisión.",
 };
 
 // docs/specs/06-gestion-etablissement.md §5.2 — jamais operated_directly (classification métier/
@@ -29,6 +32,7 @@ export function NewEstablishmentProposalForm() {
   const [address, setAddress] = useState("");
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
+  const [stagedPhotos, setStagedPhotos] = useState<StagedPhoto[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -72,6 +76,7 @@ export function NewEstablishmentProposalForm() {
       address: address.trim() || null,
       lat: lat.trim() ? Number(lat) : null,
       lon: lon.trim() ? Number(lon) : null,
+      photos: stagedPhotos.map((photo) => ({ storage_path: photo.path })) as Json,
     };
 
     const supabase = createClient();
@@ -172,6 +177,11 @@ export function NewEstablishmentProposalForm() {
             data-testid="proposal-lon-input"
           />
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>Fotos — opcional</Label>
+        <StagedEstablishmentPhotos photos={stagedPhotos} onChange={setStagedPhotos} />
       </div>
 
       <Button type="submit" isDisabled={isSubmitting} data-testid="submit-establishment-proposal-button">

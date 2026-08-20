@@ -1,100 +1,64 @@
 import { createClient } from "@hifago/supabase/server";
-import { resolvePageParams } from "@hifago/domain";
-import { Input, Label, ServerPagination, Table } from "@hifago/ui";
+import { resolveListParams } from "@hifago/domain";
+import { ClientsList, type ClientRow } from "./ClientsList";
+import { CLIENTS_FILTER_DEFINITIONS } from "@/lib/lists/filters";
+import { CLIENTS_DEFAULT_SORT, CLIENTS_SORT_WHITELIST } from "@/lib/lists/sortable-columns";
 
-// docs/specs/02-admin-accueil-et-navigation.md §5.3 — construite sur orders dédupliquées (RPC
+// Revue admin clientes (Jérôme, 2026-08-19) — migré du Table brut fait main (seul écran admin
+// resté en dehors du pattern DataList/ServerFilters) vers le même pattern standardisé que
+// établissements/produits/commandes/partenaires. Construite sur `orders` dédupliquées (RPC
 // list_clients), pas sur auth.users/partner_accounts (exclurait tout client invité). "Nom
-// complet" seul, jamais prénom/nom séparés (constat 2 de la spec : orders.holder_name est un
-// texte libre unique). Filtre texte (nom+email combinés dans le champ de recherche local, pattern
-// legacy) + filtre séparé par email, pagination serveur.
+// complet" seul, jamais prénom/nom séparés (orders.holder_name est un texte libre unique).
 export default async function AdminClientsPage({
   searchParams,
 }: PageProps<"/admin/clients">) {
   const resolvedSearchParams = await searchParams;
-  const searchParam = resolvedSearchParams?.q;
-  const emailParam = resolvedSearchParams?.email;
-  const search = typeof searchParam === "string" && searchParam.trim() ? searchParam.trim() : null;
-  const email = typeof emailParam === "string" && emailParam.trim() ? emailParam.trim() : null;
-
-  const { page, pageSize, from } = resolvePageParams(resolvedSearchParams);
+  const { page, pageSize, from, sort, filters, extraParams } = resolveListParams(
+    resolvedSearchParams,
+    {
+      sortWhitelist: CLIENTS_SORT_WHITELIST,
+      defaultSort: CLIENTS_DEFAULT_SORT,
+      filters: CLIENTS_FILTER_DEFINITIONS,
+    }
+  );
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("list_clients", {
-    p_search: search ?? undefined,
-    p_email: email ?? undefined,
+
+  const { data: rpcRows, error } = await supabase.rpc("list_clients", {
+    p_search: filters.q ?? null,
+    p_status: filters.status ?? null,
+    p_sort_key: sort.key,
+    p_sort_desc: sort.direction === "desc",
     p_limit: pageSize,
     p_offset: from,
   });
-
-  const clients = error ? [] : (data ?? []);
+  const clients = error ? [] : (rpcRows ?? []);
   const totalCount = clients[0]?.total_count ?? 0;
 
-  const extraParams: Record<string, string> = {};
-  if (search) extraParams.q = search;
-  if (email) extraParams.email = email;
+  // encodeURIComponent : client_key n'est pas un uuid systématique (email en minuscule ou numéro
+  // de téléphone en repli, cf. client_key_for_order) — un caractère non trivial dans l'un ou
+  // l'autre ne doit jamais casser le lien vers la fiche détail. Décodé une seule fois côté
+  // [client_key]/page.tsx.
+  const rows: ClientRow[] = clients.map((client) => ({
+    id: encodeURIComponent(client.client_key),
+    name: client.display_name,
+    email: client.email,
+    phone: client.phone,
+    stage: client.client_stage,
+    ordersCount: client.orders_count,
+    lastOrderAt: client.last_order_at,
+  }));
 
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Clientes</h1>
-
-      <form method="GET" className="flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="q">Buscar por nombre o email</Label>
-          <Input id="q" name="q" defaultValue={search ?? ""} data-testid="clients-search-input" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">Filtrar por email</Label>
-          <Input id="email" name="email" type="email" defaultValue={email ?? ""} data-testid="clients-email-input" />
-        </div>
-        <button
-          type="submit"
-          className="rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-surface-secondary"
-          data-testid="clients-search-submit"
-        >
-          Buscar
-        </button>
-      </form>
-
-      <Table>
-        <Table.ScrollContainer>
-          <Table.Content aria-label="Clientes">
-            <Table.Header>
-              <Table.Column isRowHeader>Nombre</Table.Column>
-              <Table.Column>Email</Table.Column>
-              <Table.Column>Teléfono</Table.Column>
-              <Table.Column>Pedidos</Table.Column>
-              <Table.Column>Último pedido</Table.Column>
-            </Table.Header>
-            <Table.Body>
-              {clients.length > 0 ? (
-                clients.map((client) => (
-                  <Table.Row key={client.client_key} data-testid={`client-row-${client.client_key}`}>
-                    <Table.Cell>{client.display_name}</Table.Cell>
-                    <Table.Cell>{client.email ?? "—"}</Table.Cell>
-                    <Table.Cell>{client.phone ?? "—"}</Table.Cell>
-                    <Table.Cell>{client.orders_count}</Table.Cell>
-                    <Table.Cell>
-                      {client.last_order_at ? new Date(client.last_order_at).toLocaleDateString("es") : "—"}
-                    </Table.Cell>
-                  </Table.Row>
-                ))
-              ) : (
-                <Table.Row>
-                  <Table.Cell colSpan={5} className="text-center text-muted">
-                    Ningún cliente encontrado.
-                  </Table.Cell>
-                </Table.Row>
-              )}
-            </Table.Body>
-          </Table.Content>
-        </Table.ScrollContainer>
-      </Table>
-
-      <ServerPagination
+      <ClientsList
+        rows={rows}
         page={page}
         pageSize={pageSize}
         totalCount={totalCount}
-        basePath="/admin/clients"
+        sort={sort}
+        filterValues={filters}
         extraParams={extraParams}
       />
     </div>

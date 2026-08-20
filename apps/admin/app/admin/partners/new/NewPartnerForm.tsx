@@ -16,7 +16,6 @@ import {
 } from "@hifago/ui";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
 
-type EntityType = "organization" | "person";
 type BankMethod = "none" | "bancolombia" | "nequi";
 type CommercialStatus = "prospecto" | "activo" | "inactivo" | "pausa";
 // Miroir local du type Json généré par Supabase (packages/supabase/src/database.types.ts) — pas
@@ -43,7 +42,6 @@ export function NewPartnerForm() {
 
   // Identidad
   const [displayName, setDisplayName] = useState("");
-  const [entityType, setEntityType] = useState<EntityType>("organization");
   const [legalName, setLegalName] = useState("");
   const [identificationType, setIdentificationType] = useState("");
   const [identificationNumber, setIdentificationNumber] = useState("");
@@ -166,7 +164,6 @@ export function NewPartnerForm() {
     const supabase = createClient();
     const { data, error: rpcError } = await supabase.rpc("create_partner_direct", {
       p_display_name: displayName.trim(),
-      p_entity_type: entityType,
       p_roles: roles,
       p_legal_name: legalName.trim() || undefined,
       p_identification_type: identificationType.trim() || undefined,
@@ -239,30 +236,6 @@ export function NewPartnerForm() {
             data-testid="display-name-input"
           />
         </div>
-
-        <Select
-          fullWidth
-          value={entityType}
-          onChange={(value) => value && setEntityType(value as EntityType)}
-        >
-          <Label>Tipo de entidad</Label>
-          <Select.Trigger data-testid="entity-type-select">
-            <Select.Value />
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox>
-              <ListBox.Item id="organization" textValue="Organización">
-                Organización
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-              <ListBox.Item id="person" textValue="Persona">
-                Persona
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-            </ListBox>
-          </Select.Popover>
-        </Select>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="legal-name">Razón social — opcional</Label>

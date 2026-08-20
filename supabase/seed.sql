@@ -347,6 +347,16 @@ insert into order_lines (
   80000, 160000, 'external_referrer', 0.17, 0.10, 0.07, 27200, 16000, 11200
 );
 
+-- Revue admin clientes (Jérôme, 2026-08-19) — payments n'avait jusqu'ici AUCUNE ligne dans ce
+-- seed (table posée par 20260818200000, jamais alimentée) : premier consommateur réel de cette
+-- table côté affichage (fiche détail client), sans ligne le bloc paiement resterait vide de tout
+-- premier chargement local/e2e. amount_cop = l'acompte de cette commande (27200, cf. ligne
+-- au-dessus), jamais le total (cahier des charges §3f).
+insert into payments (order_id, mp_payment_id, status, amount_cop, payer_email) values (
+  'c0000000-0000-4000-8000-000000000002', 'SEED-MP-PAYMENT-001', 'approved', 27200,
+  'cliente.referido.seed@test.local'
+);
+
 -- Feature 12 (ledger) : commande DÉDIÉE (pas les 2 ci-dessus, "Cliente Directo Seed"/"Cliente
 -- Referido Seed" — e2e/admin-orders-list.spec.ts scope ses locators par nom de titulaire et
 -- s'attend à ce que "Cliente Referido Seed" reste ABSENT du filtre "Realizada", une ligne fulfilled
@@ -468,3 +478,38 @@ insert into orders (id, account_id, holder_name, holder_email, marketing_consent
    'Cliente Campaign Consent Seed', 'campaign-client-consent-seed@test.local', true),
   ('c0000000-0000-4000-8000-000000000005', 'd0000000-0000-4000-8000-000000000002',
    'Cliente Campaign No Consent Seed', 'campaign-client-no-consent-seed@test.local', false);
+
+-- Spec 21 (connecteur LobbyPMS) — établissement PMS-backed de démonstration. Réutilise "Casa Kayam
+-- Guatapé" (b0000000-...-0002), déjà l'établissement seedé de référence (feature 22 ci-dessus) —
+-- cohérent avec la réalité du projet, Casa Kayam étant le seul établissement réellement PMS-backed
+-- (jamais un établissement synthétique séparé qui fragmenterait la donnée de démo). Jeton FACTICE
+-- (jamais un vrai jeton dans le seed, cf. hifago/CLAUDE.md §8.2) — un appel réel échouerait en 401,
+-- comportement attendu et déjà documenté (401 local = normal, aucune IP whitelistée hors Fly/relais
+-- réseau). category_id 9631 repris du legacy (VIDPOVO) pour la continuité narrative, sans lien réel
+-- avec un compte Lobby existant.
+update establishments
+   set lobby_connector_active = true, lobby_api_token = 'seed-fake-token'
+ where id = 'b0000000-0000-4000-8000-000000000002';
+
+insert into products (
+  id, partner_id, establishment_id, type, name, description, price_cop, unit, schedule, qty_unit,
+  sellable, slug, lobby_category_id
+)
+values (
+  'b0000000-0000-4000-8000-000000000007',
+  (select partner_id from partner_accounts where id = 'a0000000-0000-4000-8000-000000000003'),
+  'b0000000-0000-4000-8000-000000000002',
+  'lodging',
+  jsonb_build_object('es', 'Alojamiento PMS-backed (demo)', 'en', 'PMS-backed lodging (demo)'),
+  jsonb_build_object(
+    'es', 'Dormitorio de demostración, disponibilité gérée par LobbyPMS (connecteur, spec 21).',
+    'en', 'Demo dorm, availability managed by LobbyPMS (connector, spec 21).'
+  ),
+  100000,
+  'per_person',
+  'date',
+  'qty',
+  true,
+  'alojamiento-pms-backed-demo',
+  9631
+);

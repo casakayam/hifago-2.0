@@ -77,7 +77,7 @@ test("admin déroule les 4 étapes d'offboarding d'un partenaire, ses activités
   await page.waitForLoadState("networkidle");
   await page.getByRole("link", { name: productName }).click();
   await expect(page).toHaveURL(/\/admin\/products\/.+\/edit$/);
-  await page.getByTestId("toggle-sellable-button").click();
+  // Déjà publié à la création (sellable=true par défaut, retour Jérôme 2026-08-20).
   await expect(page.getByTestId("product-status-badge")).toHaveText("Vendible");
 
   const slug = slugify(productName);

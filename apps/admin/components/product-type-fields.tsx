@@ -47,6 +47,7 @@ export function ProductTypeFields({
   allowCreateTags,
   hidePhotosInHotelRooms,
   availableTags,
+  showLobbyFields,
 }: {
   type: ProductType;
   state: ProductTypeFieldsState;
@@ -61,6 +62,10 @@ export function ProductTypeFields({
   allowCreateTags?: boolean;
   hidePhotosInHotelRooms?: boolean;
   availableTags?: TagOption[];
+  // Spec 21 (connecteur LobbyPMS) — admin-only, même patron que allowCreateTags (ProductForm passe
+  // `variant === "admin"`) : un socio qui propose une création ne voit jamais ce mapping, classé
+  // décision plateforme comme operated_directly côté établissement.
+  showLobbyFields?: boolean;
 }) {
   const {
     isEvento, isCamp, isActivity, isLodging, isHotel,
@@ -208,6 +213,26 @@ export function ProductTypeFields({
       ) : null}
 
       {isLodging ? <StayRatesEditor value={state.stayRates} onChange={state.setStayRates} /> : null}
+
+      {/* Spec 21 (connecteur LobbyPMS) — lobby_category_id (alojamiento) et lobby_product_id
+          (activité reflétée) vivent tous deux sur `products`, mais s'appliquent à des TYPES
+          distincts et mutuellement exclusifs (isPmsBacked = lodging + lobby_category_id ; miroir
+          d'activité = activity + lobby_product_id, cf. packages/domain/src/pms/isPmsBacked.ts et
+          apps/web/app/api/pms/reserve-nights/route.ts) — jamais les deux champs sur le même
+          formulaire. */}
+      {isLodging && showLobbyFields ? (
+        <TextField fullWidth name="lobby-category-id" value={state.lobbyCategoryId} onChange={state.setLobbyCategoryId}>
+          <Label>LobbyPMS category_id — opcional</Label>
+          <Input type="number" min={1} data-testid="lobby-category-id-input" />
+        </TextField>
+      ) : null}
+
+      {isActivity && showLobbyFields ? (
+        <TextField fullWidth name="lobby-product-id" value={state.lobbyProductId} onChange={state.setLobbyProductId}>
+          <Label>LobbyPMS product_id (actividad reflejada en el establecimiento PMS) — opcional</Label>
+          <Input type="number" min={1} data-testid="lobby-product-id-input" />
+        </TextField>
+      ) : null}
 
       {showHotelRoomsEditor && isHotel ? (
         <div className="flex flex-col gap-1.5">

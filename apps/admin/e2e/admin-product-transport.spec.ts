@@ -77,11 +77,12 @@ test("admin crée un transport (prix par tramos de capacidad de vehículo), l'é
   await expect(page).toHaveURL(/\/admin\/establishments$/);
   await expect(row).toContainText("1 actividades");
 
-  // sellable=false à la création — même garde-fou que pour les autres types.
+  // sellable=true à la création (retour Jérôme, 2026-08-20) — même garde-fou que pour les autres
+  // types.
   await context.clearCookies();
   const slug = slugify(nameEs);
   const publicResponse = await page.goto(webProductUrl(slug));
-  expect(publicResponse?.status()).toBe(404);
+  expect(publicResponse?.status()).toBe(200);
 
   const adminClient = await createSignedInClient(SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
   const { data: created } = await adminClient

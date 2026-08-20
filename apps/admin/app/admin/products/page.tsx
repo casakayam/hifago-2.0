@@ -31,9 +31,36 @@ export default async function AdminProductsPage({
   );
 
   const supabase = await createClient();
+
+  // Revue admin catalogo (Jérôme, 2026-08-19) — options du filtre "Establecimiento" construites à
+  // la volée (établissements dynamiques, jamais une liste fermée écrite en dur dans filters.ts,
+  // contrairement à type/sellable). establishment_id est une vraie colonne FK sur products — un
+  // simple .eq() suffit, pas besoin de RPC ni de contourner une limite PostgREST comme pour la
+  // recherche établissement/partenaire (aucun .or() ici, aucune combinaison colonne de base +
+  // colonne de relation embarquée).
+  //
+  // Retour Jérôme : le dropdown seul ne passe pas à l'échelle (établissements dynamiques, en
+  // croissance continue) — plafonné à 10 (ordre alphabétique, le plus prévisible sans introduire
+  // d'agrégat "les plus utilisés" non demandé), complété par un champ texte `establishment_q` en
+  // échappatoire pour chercher un établissement absent des 10 visibles. Les deux ne se combinent
+  // jamais : establishment_id (dropdown) prioritaire s'il est posé, sinon establishment_q (texte).
+  const { data: establishments } = await supabase
+    .from("establishments")
+    .select("id, name")
+    .order("name->>es", { ascending: true })
+    .limit(10);
+  const establishmentOptions = (establishments ?? []).map((establishment) => ({
+    value: establishment.id,
+    label: resolveLocalizedField(asLocalizedField(establishment.name), "es") ?? establishment.id,
+  }));
+
+  // establishments!inner (pas le embed par défaut) : establishment_id est not null sur products,
+  // donc ça ne change jamais l'ensemble de résultats — juste ce qui permet d'appliquer un .ilike()
+  // sur establishments.name (colonne d'une relation embarquée) sans RPC, tant que ce n'est jamais
+  // combiné à une autre condition via .or() (limite déjà documentée pour établissements/clientes).
   let query = supabase
     .from("products")
-    .select("id, name, type, price_cop, sellable, establishments(name)", { count: "exact" })
+    .select("id, name, type, price_cop, sellable, establishments!inner(name)", { count: "exact" })
     .order(sort.column, { ascending: sort.direction === "asc" })
     .range(from, to);
 
@@ -45,6 +72,11 @@ export default async function AdminProductsPage({
   }
   if (filters.sellable) {
     query = query.eq("sellable", filters.sellable === "true");
+  }
+  if (filters.establishment_id) {
+    query = query.eq("establishment_id", filters.establishment_id);
+  } else if (filters.establishment_q) {
+    query = query.ilike("establishments.name->>es", `%${filters.establishment_q}%`);
   }
 
   const { data: products, count } = await query.returns<ProductQueryRow[]>();
@@ -70,6 +102,7 @@ export default async function AdminProductsPage({
         sort={sort}
         filterValues={filters}
         extraParams={extraParams}
+        establishmentOptions={establishmentOptions}
       />
     </div>
   );

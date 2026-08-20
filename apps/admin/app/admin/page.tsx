@@ -36,7 +36,6 @@ export default async function AdminHomePage({
     windowLinesRes,
     proposalsPendingRes,
     reconciliationOpenRes,
-    operatorPendingRes,
     recentPartnersRes,
     recentEstablishmentsRes,
     catalogSellableRes,
@@ -68,11 +67,6 @@ export default async function AdminHomePage({
       .from("pms_reconciliation_entries")
       .select("id", { count: "exact", head: true })
       .in("status", ["open", "retrying"]),
-    supabase
-      .from("partner_capabilities")
-      .select("id", { count: "exact", head: true })
-      .eq("role", "operator")
-      .in("status", ["onboarding", "pending_review"]),
     supabase.from("partners").select("id, display_name").order("created_at", { ascending: false }).limit(5),
     supabase
       .from("establishments")
@@ -199,7 +193,6 @@ export default async function AdminHomePage({
       <AdminAlerts
         proposalsPending={proposalsPendingRes.count ?? 0}
         reconciliationOpen={reconciliationOpenRes.count ?? 0}
-        operatorPending={operatorPendingRes.count ?? 0}
       />
 
       <div className="flex items-center gap-2 text-sm">

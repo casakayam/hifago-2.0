@@ -2,14 +2,21 @@
 
 import { DataList, type DataListAction, type DataListColumn, type DataListSort, viewAction } from "@hifago/ui";
 import { ESTABLISHMENTS_FILTERS } from "@/lib/lists/filters";
+import { EstablishmentStatusCell } from "./EstablishmentStatusCell";
 
 export type EstablishmentRow = {
   id: string;
   name: string;
+  partnerId: string;
   partnerName: string;
   status: string;
   activitiesCount: number;
   hasSharedResourceProducts: boolean;
+  // Revue admin établissements (Jérôme, 2026-08-19) — calculés par list_establishments_admin,
+  // rendus par EstablishmentStatusCell dans la cellule "Estado", jamais une nouvelle valeur de
+  // establishments.status.
+  pendingProposal: { id: string; kind: "edit" | "photos" } | null;
+  operatorInactive: boolean;
 };
 
 export type EstablishmentsListProps = {
@@ -36,7 +43,7 @@ export function EstablishmentsList({
   const columns: DataListColumn<EstablishmentRow>[] = [
     { id: "name", header: "Nombre", sortable: true },
     { id: "partnerName", header: "Partner" },
-    { id: "status", header: "Estado", sortable: true },
+    { id: "status", header: "Estado", sortable: true, cell: (row) => <EstablishmentStatusCell row={row} /> },
     {
       id: "activitiesCount",
       header: "Actividades",

@@ -64,7 +64,7 @@ test("un compte admin crea un partner prestador con código, perfil comercial e 
   await expect(page.getByTestId("invitation-link")).toHaveValue(/\/partner\/join\?token=.+/);
 
   // Le partner créé apparaît bien dans le registre (la colonne "capacidades activas" de la liste
-  // ne montre que le statut active — les capacités créées ici démarrent onboarding par design,
+  // ne montre que le statut active — les capacités créées ici démarrent pending_review par design,
   // spec §10 — donc la vérification des rôles se fait sur la fiche détail, pas la liste).
   await page.goto("/admin/partners");
   const partnerRow = page.locator("tr", { hasText: displayName });

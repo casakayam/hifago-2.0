@@ -8,7 +8,7 @@
 -- Feature 1 — RPC create_establishment : capacité operator en attente liée (pas dupliquée),
 -- nouvelle ligne operator pour un partenaire ayant déjà un établissement, appel non-admin refusé.
 begin;
-select plan(14);
+select plan(20);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -93,11 +93,14 @@ insert into partners (id, display_name) values
   ('a9990001-0000-4000-8000-000000000001', 'Pending Operator Partner'),
   ('a9990002-0000-4000-8000-000000000002', 'Established Operator Partner');
 
--- Partenaire "pending" : referrer actif + operator en attente (establishment_id null), exactement
--- ce que consume_partner_invitation produit aujourd'hui pour un onboarding_path='provider'.
+-- Partenaire "pending" : referrer actif + operator active MAIS sans établissement encore rattaché
+-- (establishment_id null), exactement ce que consume_partner_invitation produit aujourd'hui pour un
+-- onboarding_path='provider' (statut 'active' par défaut de la colonne depuis
+-- 20260820010000_partner_capabilities_active_by_default.sql — "pending" ici qualifie l'absence
+-- d'établissement, plus un statut de capacité intermédiaire, retiré ce jour-là).
 insert into partner_capabilities (partner_id, role, source, status) values
   ('a9990001-0000-4000-8000-000000000001', 'referrer', 'newp', 'active'),
-  ('a9990001-0000-4000-8000-000000000001', 'operator', 'newp', 'onboarding');
+  ('a9990001-0000-4000-8000-000000000001', 'operator', 'newp', 'active');
 
 -- Partenaire "established" : referrer actif + operator déjà rattaché à un établissement existant.
 insert into partner_capabilities (partner_id, role, source, status) values
@@ -156,6 +159,47 @@ select throws_ok(
 select is(
   (select count(*) from establishments where name = jsonb_build_object('es', 'Forge'))::int, 0,
   'aucun établissement créé par l''appel non-admin refusé'
+);
+
+-- set_establishment_status (2026-08-20, migration 20260820020000_establishment_publish_toggle.sql)
+-- — même patron que set_product_sellable (catalog_rls.test.sql) : security invoker, RLS
+-- establishments_write_admin gate déjà l'UPDATE, message générique "introuvable ou non autorisé"
+-- pour un non-admin comme pour un id inexistant. Toujours connecté '...002' (owner, non-admin) à
+-- ce stade.
+select throws_ok(
+  $$ select set_establishment_status('c1111111-1111-1111-1111-111111111111', 'archived') $$,
+  'P0001'::char(5), 'establecimiento introuvable ou non autorisé',
+  'set_establishment_status refuse un appelant non-admin (même propriétaire de l''établissement)'
+);
+select is(
+  (select status from establishments where id = 'c1111111-1111-1111-1111-111111111111'),
+  'active',
+  'status inchangé après un appel set_establishment_status refusé'
+);
+
+reset role;
+set local role authenticated;
+select test_login('99990000-0000-4000-8000-000000000001'); -- admin
+
+select lives_ok(
+  $$ select set_establishment_status('c1111111-1111-1111-1111-111111111111', 'archived', 'prueba') $$,
+  'set_establishment_status réussit pour l''admin'
+);
+select is(
+  (select status from establishments where id = 'c1111111-1111-1111-1111-111111111111'),
+  'archived',
+  'status mis à jour par l''appel admin'
+);
+select is(
+  (select count(*) from audit_log
+    where entity_id = 'c1111111-1111-1111-1111-111111111111' and action = 'establishment.unpublish')::int,
+  1,
+  'une ligne audit_log establishment.unpublish créée par l''appel admin réussi'
+);
+select throws_ok(
+  $$ select set_establishment_status('c1111111-1111-1111-1111-111111111111', 'bogus') $$,
+  'P0001'::char(5), null,
+  'set_establishment_status refuse un statut invalide'
 );
 
 select * from finish();

@@ -3,13 +3,14 @@ import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 import { webProductUrl } from "@hifago/e2e-support";
 import { slugify } from "../lib/utils";
 
-test("admin publie puis dépublie une activité, visible/invisible côté public en conséquence", async ({
+test("admin dépublie puis republie une activité, invisible/visible côté public en conséquence", async ({
   page,
   context,
 }) => {
   await loginAs(context, SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
 
-  // Établissement + activité dédiés à ce test — sellable=false à la création (feature 2).
+  // Établissement + activité dédiés à ce test — sellable=true à la création (retour Jérôme,
+  // 2026-08-20 : product-form.tsx n'écrase plus le défaut colonne).
   const establishmentName = `Establecimiento E2E Publish ${Date.now()}`;
   await page.goto("/admin/establishments/new");
   await page.locator('input[name="nombre"]').fill(establishmentName);
@@ -46,10 +47,6 @@ test("admin publie puis dépublie une activité, visible/invisible côté public
 
   const statusBadge = page.getByTestId("product-status-badge");
   const toggleButton = page.getByTestId("toggle-sellable-button");
-  await expect(statusBadge).toHaveText("No vendible");
-
-  // Publier -----------------------------------------------------------------------------------
-  await toggleButton.click();
   await expect(statusBadge).toHaveText("Vendible");
 
   const slug = slugify(productName);
@@ -69,4 +66,16 @@ test("admin publie puis dépublie une activité, visible/invisible côté public
   await context.clearCookies();
   const unpublishedResponse = await page.goto(webProductUrl(slug));
   expect(unpublishedResponse?.status()).toBe(404);
+
+  // Republier — prouve le sens inverse du bascule, pas seulement dépublier une fois -------------
+  await loginAs(context, SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
+  await page.goto(editUrl);
+  await expect(statusBadge).toHaveText("No vendible");
+
+  await toggleButton.click();
+  await expect(statusBadge).toHaveText("Vendible");
+
+  await context.clearCookies();
+  const republishedResponse = await page.goto(webProductUrl(slug));
+  expect(republishedResponse?.status()).toBe(200);
 });

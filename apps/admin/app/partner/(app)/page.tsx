@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
 import { Card, Chip } from "@hifago/ui";
+import { EmptyStateCta } from "@/components/EmptyStateCta";
 import { positionOrderLines, type OrderLineForAgenda, type SlotDuration } from "@/lib/agenda/positionOrderLines";
 import { selectActiveOperatorEstablishmentIds } from "@/lib/agenda/activeOperatorEstablishments";
 import { MANUAL_ORDER_INELIGIBLE_TYPES } from "@/lib/products/manualOrderEligibility";
@@ -16,15 +17,11 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  onboarding: "En preparación",
-  pending_review: "En revisión",
   active: "Activo",
   suspended: "Suspendido",
 };
 
 const STATUS_CHIP_COLOR: Record<string, "default" | "success" | "warning" | "danger"> = {
-  onboarding: "default",
-  pending_review: "warning",
   active: "success",
   suspended: "danger",
 };
@@ -72,8 +69,7 @@ function agendaWindow(): { from: string; to: string } {
 // principale du socio, façon Google Calendar). La carte de statut (feature 29,
 // docs/specs/05-invitations-onboarding-dashboard-partenaire.md §5.1) est conservée mais rendue
 // conditionnelle : bandeau compact si toutes les capacités sont déjà actives, carte complète sinon
-// — un partenaire encore en onboarding/pending_review ne doit jamais atterrir sur un agenda vide
-// sans comprendre pourquoi.
+// — un partenaire suspendu ne doit jamais atterrir sur un agenda vide sans comprendre pourquoi.
 export default async function PartnerHomePage() {
   const supabase = await createClient();
 
@@ -102,6 +98,23 @@ export default async function PartnerHomePage() {
   // "active"), extraite dans lib/agenda/activeOperatorEstablishments plutôt que refiltrée ici en
   // JS avec un second littéral.
   const establishmentIds = selectActiveOperatorEstablishmentIds(rows);
+
+  // Simplification demandée par Jérôme (refonte vue prestataire, 2026-08-19) : quand rien n'est
+  // encore configuré côté PRESTATAIRE (une capacité operator fraîchement créée, sans établissement
+  // ni statut à signaler), un seul message "créer un établissement" remplace la carte détaillée
+  // "Tus roles". Scopé précisément à la capacité operator (pas juste "aucun établissement actif" —
+  // un pur référent n'a par construction jamais d'établissement et ne doit jamais se voir proposer
+  // d'en créer un, cf. partner-join.spec.ts). Seul suspended exclut ce cas (signal explicite d'une
+  // action admin, à afficher) — 'active' EST le statut par défaut d'une capacité operator
+  // fraîchement créée depuis le 2026-08-20 (invitation, proposition approuvée ou octroi admin
+  // direct sont tous les trois déjà un geste admin, cf.
+  // 20260820010000_partner_capabilities_active_by_default.sql), aucune raison de le masquer
+  // derrière la carte détaillée.
+  const operatorCapability = rows.find((row) => row.role === "operator");
+  const needsFirstEstablishment =
+    operatorCapability !== undefined &&
+    operatorCapability.establishment_id === null &&
+    operatorCapability.status !== "suspended";
 
   let events: ReturnType<typeof positionOrderLines> = [];
   let productOptions: ProductOption[] = [];
@@ -197,6 +210,19 @@ export default async function PartnerHomePage() {
             Mi establecimiento
           </Link>
         </div>
+      ) : needsFirstEstablishment ? (
+        // Remplace l'ancienne double carte ("Tus roles" détaillée par rôle + bloc "agenda vide/
+        // Crear producto" en dessous, redondant — "créer un produit" n'a jamais été la bonne
+        // action avant d'avoir un établissement) par un seul message actionnable. testId conservé
+        // identique à l'ancien sous-message ("partner-establishment-pending") : même contrat e2e
+        // (admin-invitations.spec.ts), la fiche établissement n'a pas encore d'id à ce stade.
+        <EmptyStateCta
+          title="Aún no tienes ningún establecimiento"
+          description="Añade tu establecimiento para empezar a publicar actividades y recibir reservas."
+          actionHref="/partner/establishment/new"
+          actionLabel="Añadir establecimiento"
+          testId="partner-establishment-pending"
+        />
       ) : (
         <Card data-testid="partner-status-card">
           <Card.Header>
@@ -236,24 +262,12 @@ export default async function PartnerHomePage() {
         </Card>
       )}
 
-      {establishmentIds.length === 0 ? (
-        <Card>
-          <Card.Content className="flex flex-col items-start gap-2">
-            <p className="text-sm text-muted" data-testid="partner-agenda-empty">
-              Todavía no tienes ninguna actividad vendible — tu agenda aparecerá aquí en cuanto
-              tengas al menos un producto.
-            </p>
-            <Link href="/partner/products/new" className="text-sm font-medium hover:underline">
-              Crear producto →
-            </Link>
-          </Card.Content>
-        </Card>
-      ) : (
+      {establishmentIds.length > 0 ? (
         <>
           <h1 className="text-2xl font-semibold">Agenda</h1>
           <PartnerAgenda events={events} productOptions={productOptions} />
         </>
-      )}
+      ) : null}
     </div>
   );
 }

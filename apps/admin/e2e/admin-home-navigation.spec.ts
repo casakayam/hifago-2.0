@@ -71,23 +71,38 @@ test("ventana de 90 días cambia la URL y sigue renderizando los gráficos", asy
   await expect(page.getByTestId("chart-sales")).toBeVisible();
 });
 
-test("clientes: filtro por texto y por email, paginación presente", async ({ page, context }) => {
+test("clientes: filtro unifié nom/email, pagination, clic vers la fiche détail", async ({
+  page,
+  context,
+}) => {
   await loginAs(context, SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
   await page.goto("/admin/clients");
 
   await expect(page.getByTestId("pagination")).toBeVisible();
 
-  await page.getByTestId("clients-search-input").fill("Cliente Referido");
-  await page.getByTestId("clients-search-submit").click();
+  // Revue admin clientes (Jérôme, 2026-08-19) — migré du Table brut fait main vers DataList/
+  // ServerFilters (comme établissements) : plus de champ "email" séparé, un seul champ q cherche
+  // déjà nom ET email côté RPC (list_clients).
+  await page.getByTestId("filter-q").fill("Cliente Referido");
+  await page.getByTestId("server-filters-submit").click();
   await expect(page).toHaveURL(/\?q=Cliente\+Referido/);
   const rows = page.locator('[data-testid^="client-row-"]');
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Cliente Referido Seed");
 
-  // Filtre email sans résultat → état vide explicite, pas un tableau resté sur l'ancien résultat
-  // (cas limite §9 de la spec).
-  await page.goto("/admin/clients?email=no-existe-en-absoluto@example.com");
-  await expect(page.getByText("Ningún cliente encontrado.")).toBeVisible();
+  // Un clic depuis la liste amène sur UNE page qui consolide infos personnelles + infos de
+  // paiement + activités rattachées — jamais construit avant ce lot (objectif central de la
+  // refonte, ni en V1 ni en V2 il n'existait de fiche détail client).
+  await page.getByTestId(/^client-detail-link-/).click();
+  await expect(page).toHaveURL(/\/admin\/clients\/[^/]+$/);
+  await expect(page.getByRole("heading", { name: "Cliente Referido Seed" })).toBeVisible();
+  await expect(page.locator('[data-testid^="client-order-"]').first()).toBeVisible();
+  await expect(page.locator('[data-testid^="payment-status-"]').first()).toBeVisible();
+
+  // Filtre "sin resultados" avec un texte sans correspondance → état vide explicite, pas un
+  // tableau resté sur l'ancien résultat (cas limite §9 de la spec, comportement conservé).
+  await page.goto("/admin/clients?q=no-existe-en-absoluto-1787199999999");
+  await expect(page.getByText("Ningún cliente todavía.")).toBeVisible();
 });
 
 test("las listas paginadas ya existentes tienen los controles de paginación", async ({
@@ -96,7 +111,7 @@ test("las listas paginadas ya existentes tienen los controles de paginación", a
 }) => {
   await loginAs(context, SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
 
-  for (const route of ["/admin/partners", "/admin/establishments", "/admin/orders", "/admin/products"]) {
+  for (const route of ["/admin/partners", "/admin/establishments", "/admin/orders", "/admin/products", "/admin/clients"]) {
     await page.goto(route);
     await expect(page.getByTestId("pagination"), `${route} debería paginar`).toBeVisible();
   }

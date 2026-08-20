@@ -2,11 +2,11 @@ import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 import { WEB_APP_URL } from "@hifago/e2e-support";
 
-// Feature 21 (Admin : créer une fiche evento, vitrine) — parcours complet : création, publication
-// (set_product_sellable, feature 4, réutilisée telle quelle), fiche publique. La logique des
-// contraintes elle-même (fin de récurrence mutuellement exclusive, price_cop conditionnel) est
-// déjà entièrement couverte par pgTAP (supabase/tests/database/products_evento.test.sql), pas
-// re-prouvée ici.
+// Feature 21 (Admin : créer une fiche evento, vitrine) — parcours complet : création (publiée
+// direct depuis le 2026-08-20, retour Jérôme — product-form.tsx n'écrase plus le défaut colonne
+// sellable), fiche publique. La logique des contraintes elle-même (fin de récurrence mutuellement
+// exclusive, price_cop conditionnel) est déjà entièrement couverte par pgTAP
+// (supabase/tests/database/products_evento.test.sql), pas re-prouvée ici.
 const ESTABLISHMENT_ID = "b0000000-0000-4000-8000-000000000002"; // Casa Kayam Guatapé (seed.sql)
 
 test("admin crée un evento récurrent vitrine, le publie, la fiche publique affiche l'occurrence et le lien externe — jamais de bouton d'ajout au panier", async ({
@@ -40,14 +40,14 @@ test("admin crée un evento récurrent vitrine, le publie, la fiche publique aff
   await page.getByTestId("create-product-button").click();
   await page.waitForURL(/\/admin\/establishments$/);
 
-  // Publier — set_product_sellable (feature 4), réutilisée telle quelle, aucune RPC nouvelle ici.
+  // Déjà publié à la création (sellable=true par défaut) — set_product_sellable reste le levier de
+  // dépublication, pas exercé ici.
   await page.goto(`/admin/establishments/${ESTABLISHMENT_ID}`);
   const row = page.locator("tr", { hasText: productName });
   await expect(row).toBeVisible();
   await expect(row.locator("td").nth(1)).toHaveText("—"); // price_cop null → "—", pas un montant COP
   await row.locator("a").first().click();
   await page.waitForURL(/\/admin\/products\/.+\/edit/);
-  await page.getByTestId("toggle-sellable-button").click();
   await expect(page.getByTestId("product-status-badge")).toHaveText("Vendible");
 
   // Fiche publique — navigation réelle depuis le catalogue (le slug n'est jamais connu à l'avance

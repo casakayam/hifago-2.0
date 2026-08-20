@@ -7,7 +7,13 @@ import { createClient } from "@hifago/supabase/client";
 import { Button, Input, Label, TextField, toast } from "@hifago/ui";
 import { OAuthSection } from "@/components/GoogleButton";
 
-export function LoginForm({ next, hasCallbackError = false }: { next: string; hasCallbackError?: boolean }) {
+export function LoginForm({
+  next,
+  callbackError,
+}: {
+  next: string;
+  callbackError?: "auth_callback_failed" | "google_signup_blocked";
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,11 +24,18 @@ export function LoginForm({ next, hasCallbackError = false }: { next: string; ha
   // toast peut se déclencher est le montage du client côté page de destination. React StrictMode
   // (dev uniquement) peut monter ce composant deux fois et donc déclencher ce toast deux fois —
   // sans effet en production, accepté tel quel (cf. hifago/CLAUDE.md §11).
+  // "google_signup_blocked" (3e passe, même journée) : route.ts vient de supprimer un compte
+  // fraîchement créé par Google en dehors du contexte /partner/join — message spécifique, jamais
+  // le générique "lien invalide" qui ne veut rien dire ici (aucun lien/jeton n'était en jeu).
   useEffect(() => {
-    if (hasCallbackError) {
+    if (callbackError === "google_signup_blocked") {
+      toast.danger(
+        "Ese Gmail no tiene cuenta todavía. Usa tu enlace de invitación para crear una, o inicia sesión con tu contraseña."
+      );
+    } else if (callbackError === "auth_callback_failed") {
       toast.danger("El enlace no es válido o ha expirado. Inténtalo de nuevo.");
     }
-  }, [hasCallbackError]);
+  }, [callbackError]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -53,6 +66,12 @@ export function LoginForm({ next, hasCallbackError = false }: { next: string; ha
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-4">
+      {/* Feature 31 — révision 2026-08-19 (3e passe) : bouton Google restauré ici. Un compte
+          fraîchement créé par ce bouton hors contexte d'invitation est nettoyé après coup côté
+          serveur (app/auth/callback/route.ts, "google_signup_blocked") plutôt que bloqué en amont
+          — Google reste donc utilisable pour un retour de connexion (compte déjà existant, y
+          compris un compte accepté via Google sur /partner/join), sans jamais rouvrir
+          l'auto-inscription libre que ce bouton permettait avant. */}
       <OAuthSection next={next} />
 
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
@@ -71,13 +90,6 @@ export function LoginForm({ next, hasCallbackError = false }: { next: string; ha
           {isSubmitting ? "Iniciando…" : "Iniciar sesión"}
         </Button>
       </form>
-
-      <p className="text-center text-sm text-muted">
-        ¿No tienes cuenta?{" "}
-        <Link href="/signup" className="underline">
-          Crear cuenta
-        </Link>
-      </p>
     </div>
   );
 }

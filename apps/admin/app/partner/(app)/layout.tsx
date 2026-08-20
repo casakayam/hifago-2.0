@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
 import { PartnerNav } from "./PartnerNav";
+import { PartnerMobileNav } from "./PartnerMobileNav";
 
 // Feature 29 (docs/specs/05-invitations-onboarding-dashboard-partenaire.md) : première garde et
 // première nav communes à /partner — jusqu'ici chaque écran (commissions/products/tools)
@@ -24,9 +25,10 @@ export default async function PartnerAppLayout({ children }: LayoutProps<"/partn
   // 2026-08-15 (décision Jérôme) — plus de redirection forcée depuis ce layout.
 
   return (
-    <div className="flex min-h-screen w-full">
+    <div className="flex min-h-screen w-full flex-col md:flex-row">
+      <PartnerMobileNav />
       <PartnerNav />
-      <div className="mx-auto flex w-full flex-1 flex-col gap-6 p-8">{children}</div>
+      <div className="mx-auto flex w-full flex-1 flex-col gap-6 p-4 md:p-8">{children}</div>
     </div>
   );
 }

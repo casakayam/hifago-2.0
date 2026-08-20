@@ -6,6 +6,7 @@ import { buttonVariants } from "@hifago/ui";
 import { CapabilitiesSection } from "./CapabilitiesSection";
 import { EstablishmentsSection } from "./EstablishmentsSection";
 import { CodesSection } from "./CodesSection";
+import { PartnerLocationBlock } from "./PartnerLocationBlock";
 
 export default async function AdminPartnerDetailPage({
   params,
@@ -15,7 +16,7 @@ export default async function AdminPartnerDetailPage({
 
   const { data: partner } = await supabase
     .from("partners")
-    .select("id, display_name, status")
+    .select("id, display_name")
     .eq("id", id)
     .maybeSingle();
 
@@ -35,6 +36,7 @@ export default async function AdminPartnerDetailPage({
     { data: ownEstablishments },
     { data: allEstablishments },
     { data: codes },
+    { data: crmProfile },
   ] = await Promise.all([
     supabase
       .from("partner_capabilities")
@@ -60,6 +62,11 @@ export default async function AdminPartnerDetailPage({
       .select("code, active")
       .eq("partner_id", id)
       .order("code"),
+    // Revue admin partenaires (Jérôme, 2026-08-19) — lecture directe RLS (pas RPC) : seule
+    // l'écriture de partner_crm_profile est RPC-only (set_partner_location), la policy
+    // partner_crm_profile_select autorise déjà l'admin en lecture. maybeSingle : 31/32 partenaires
+    // n'ont aujourd'hui aucune ligne (jamais géocodés), pas un cas d'erreur.
+    supabase.from("partner_crm_profile").select("address, lat, lon").eq("partner_id", id).maybeSingle(),
   ]);
 
   // Dernier accord par rôle (accepted_at desc ci-dessus, donc le premier trouvé par rôle est le
@@ -79,10 +86,7 @@ export default async function AdminPartnerDetailPage({
   return (
     <div className="flex flex-col gap-8">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{partner.display_name}</h1>
-          <p className="text-sm text-muted">Estado: {partner.status}</p>
-        </div>
+        <h1 className="text-2xl font-semibold">{partner.display_name}</h1>
         <Link
           href={`/admin/partners/${partner.id}/offboarding`}
           className={buttonVariants({ variant: "outline", size: "sm" })}
@@ -91,6 +95,13 @@ export default async function AdminPartnerDetailPage({
           Offboarding
         </Link>
       </div>
+
+      <PartnerLocationBlock
+        partnerId={partner.id}
+        initialAddress={crmProfile?.address ?? ""}
+        initialLat={crmProfile?.lat != null ? String(crmProfile.lat) : ""}
+        initialLon={crmProfile?.lon != null ? String(crmProfile.lon) : ""}
+      />
 
       <CapabilitiesSection
         partnerId={partner.id}

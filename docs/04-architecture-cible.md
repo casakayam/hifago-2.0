@@ -799,10 +799,17 @@ Jérôme a explicitement demandé une vraie séparation préprod/prod (pas seule
   tests instables), assertion d'exactement 1 succès sur N tentatives concurrentes visant la
   dernière place. pgTAP reste l'outil de référence pour tout le reste (policies RLS, contraintes,
   logique séquentielle), juste pas pour cet invariant précis.
-- **Connecteur LobbyPMS** : fixtures enregistrées (Nock/MSW) couvrant les cas fragiles déjà
-  documentés dans l'audit (catégorie non réservable, forme de réponse divergente) pour des tests
-  rapides et déterministes à chaque PR, complétées par un job **nocturne séparé** (pas bloquant
-  pour les PR) qui frappe le vrai sandbox LobbyPMS pour détecter une dérive de contrat API.
+- **Connecteur LobbyPMS** — **corrigé (spec 21, implémentation) : aucun sandbox LobbyPMS n'existe**
+  (LobbyPMS ne propose qu'un essai commercial de 15 jours, pas de bac à sable API pérenne — prémisse
+  initiale de ce paragraphe invalidée par une recherche menée avant l'implémentation). Stratégie
+  retenue : un petit serveur de fixtures HTTP local (`packages/e2e-support/src/pmsFixtureServer.ts`,
+  `node:http` natif, ni Nock ni MSW réellement installés dans ce monorepo) couvrant les cas fragiles
+  déjà documentés (catégorie non réservable, forme de réponse divergente, booking annulé) pour des
+  tests rapides et déterministes à chaque PR — y compris pour l'Edge Function `pms-poll-bookings`
+  via `LOBBY_API_BASE_URL` (le seul mécanisme capable d'intercepter un appel `pg_net` émis depuis
+  Postgres, cf. `tests/pms-integration/`) — complétés par un job **nocturne séparé** (pas bloquant
+  pour les PR) qui frappe le **compte réel Casa Kayam en lecture seule** pour détecter une dérive de
+  contrat API, jamais un environnement de test dédié.
 - **Pipeline GitHub Actions** (ordre) : lint/typecheck/unitaire en jobs parallèles → intégration
   (RPC/RLS contre la stack Supabase locale du runner, migrations versionnées faisant foi) →
   build → déploiement preview → E2E Playwright contre le **vrai** déploiement preview Vercel

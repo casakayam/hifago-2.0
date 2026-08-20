@@ -255,12 +255,14 @@ select is(
   'true',
   'approbation de la création activity réussit'
 );
+-- sellable=true (revirement 2026-08-20, migration 20260820030000_product_publish_on_approval.sql :
+-- publication immédiate à l'approbation, geste de publication séparée du 2026-08-18 abandonné).
 select is(
   (select jsonb_build_object('type', p.type, 'sellable', p.sellable, 'establishment_id', p.establishment_id)
      from product_proposals pp join products p on p.id = pp.product_id
     where pp.id = (select id from tmp_activity)),
-  jsonb_build_object('type', 'activity', 'sellable', false, 'establishment_id', '88880000-0000-4000-8000-000000000011'),
-  'products créé avec type=activity, sellable=false, rattaché au bon établissement'
+  jsonb_build_object('type', 'activity', 'sellable', true, 'establishment_id', '88880000-0000-4000-8000-000000000011'),
+  'products créé avec type=activity, sellable=true (publié direct), rattaché au bon établissement'
 );
 select is(
   (select count(*) from product_tag_assignments pta join product_proposals pp on pp.product_id = pta.product_id

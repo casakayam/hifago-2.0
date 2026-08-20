@@ -1,13 +1,15 @@
 import { Card } from "@hifago/ui";
 
 // Alertas en lectura, cargadas solo al renderizar la página (sin polling/Realtime, spec §10) —
-// cahier des charges admin §2 "notifications proactives". El aviso de prestador no es el mecanismo
-// exacto de "zona no cubierta" del cahier des charges socio (que no existe todavía en hifago, spec
-// constat 3) — es un proxy más genérico, nombrado como tal.
+// cahier des charges admin §2 "notifications proactives".
+//
+// "Capacidades de prestador en revisión" retirada (2026-08-20, migration
+// 20260820010000_partner_capabilities_active_by_default.sql) : partner_capabilities.status ne
+// vaut plus jamais 'pending_review' (toute capacité démarre 'active'), cette alerte n'aurait plus
+// jamais eu de raison de s'afficher.
 export type AdminAlertsProps = {
   proposalsPending: number;
   reconciliationOpen: number;
-  operatorPending: number;
 };
 
 function AlertRow({ count, label, href, testId }: { count: number; label: string; href: string; testId: string }) {
@@ -24,8 +26,8 @@ function AlertRow({ count, label, href, testId }: { count: number; label: string
   );
 }
 
-export function AdminAlerts({ proposalsPending, reconciliationOpen, operatorPending }: AdminAlertsProps) {
-  const hasAny = proposalsPending > 0 || reconciliationOpen > 0 || operatorPending > 0;
+export function AdminAlerts({ proposalsPending, reconciliationOpen }: AdminAlertsProps) {
+  const hasAny = proposalsPending > 0 || reconciliationOpen > 0;
   if (!hasAny) return null;
 
   return (
@@ -45,12 +47,6 @@ export function AdminAlerts({ proposalsPending, reconciliationOpen, operatorPend
           label="Excepciones de reconciliación"
           href="/admin/reconciliation"
           testId="alert-reconciliation"
-        />
-        <AlertRow
-          count={operatorPending}
-          label="Capacidades de prestador en revisión"
-          href="/admin/invitations"
-          testId="alert-operator-pending"
         />
       </Card.Content>
     </Card>

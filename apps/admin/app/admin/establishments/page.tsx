@@ -11,7 +11,7 @@ export default async function AdminEstablishmentsPage({
   searchParams,
 }: PageProps<"/admin/establishments">) {
   const resolvedSearchParams = await searchParams;
-  const { page, pageSize, from, to, sort, filters, extraParams } = resolveListParams(
+  const { page, pageSize, from, sort, filters, extraParams } = resolveListParams(
     resolvedSearchParams,
     {
       sortWhitelist: ESTABLISHMENTS_SORT_WHITELIST,
@@ -22,31 +22,29 @@ export default async function AdminEstablishmentsPage({
 
   const supabase = await createClient();
 
-  // RLS (establishments_select) : l'admin voit tous les établissements, pas seulement les siens.
-  // products(count) : agrégation embarquée PostgREST sur la FK products.establishment_id (feature
-  // 2) — un compteur, pas une vraie liste produits (hors périmètre de cette feature, cf. plan).
-  let query = supabase
-    .from("establishments")
-    .select("id, name, status, partner:partners(display_name), products(count)", { count: "exact" })
-    .order(sort.column, { ascending: sort.direction === "asc" })
-    .range(from, to);
-
-  if (filters.q) {
-    query = query.ilike("name->>es", `%${filters.q}%`);
-  }
-  if (filters.status) {
-    query = query.eq("status", filters.status);
-  }
-  if (filters.operated_directly) {
-    query = query.eq("operated_directly", filters.operated_directly === "true");
-  }
-
-  const { data: establishments, count } = await query;
+  // Revue admin établissements (Jérôme, 2026-08-19) — RPC list_establishments_admin remplace la
+  // query .from("establishments") : recherche unifiée nom établissement + nom partenaire (un
+  // or=() PostgREST ne peut pas combiner une colonne de la table de base avec une colonne d'une
+  // relation embarquée), + establishments a perdu son GRANT SELECT table-large depuis
+  // 20260819110000 (count(*) over() en dépend), + jointures propositions en attente/capacité
+  // operator active. Lecture cross-partenaires de toute façon RPC-only par nature
+  // (hifago/CLAUDE.md §3 critère 1). sort.key (pas sort.column) : la RPC fait son propre mapping
+  // clé→colonne en interne (CASE statique), cf. migration.
+  const { data: rpcRows, error } = await supabase.rpc("list_establishments_admin", {
+    p_search: filters.q ?? null,
+    p_status: filters.status ?? null,
+    p_sort_key: sort.key,
+    p_sort_desc: sort.direction === "desc",
+    p_limit: pageSize,
+    p_offset: from,
+  });
+  const establishments = error ? [] : (rpcRows ?? []);
+  const count = establishments[0]?.total_count ?? 0;
 
   // Spec 17 §0 Tranche 0 — deuxième vague dépendante des id de la page courante (même idiome
   // qu'ailleurs, ex. photos/propositions en attente) : quels établissements de CETTE page portent
   // au moins un camp/evento, pour conditionner le lien "Recurso compartido" (EstablishmentsList).
-  const establishmentIds = (establishments ?? []).map((e) => e.id);
+  const establishmentIds = establishments.map((e) => e.id);
   const { data: sharedResourceProducts } =
     establishmentIds.length > 0
       ? await supabase
@@ -59,13 +57,21 @@ export default async function AdminEstablishmentsPage({
     (sharedResourceProducts ?? []).map((p) => p.establishment_id)
   );
 
-  const rows: EstablishmentRow[] = (establishments ?? []).map((establishment) => ({
+  const rows: EstablishmentRow[] = establishments.map((establishment) => ({
     id: establishment.id,
     name: resolveLocalizedField(asLocalizedField(establishment.name), "es") ?? establishment.id,
-    partnerName: establishment.partner?.display_name ?? "—",
+    partnerId: establishment.partner_id,
+    partnerName: establishment.partner_display_name ?? "—",
     status: establishment.status,
-    activitiesCount: establishment.products?.[0]?.count ?? 0,
+    activitiesCount: establishment.activities_count ?? 0,
     hasSharedResourceProducts: establishmentIdsWithSharedResource.has(establishment.id),
+    pendingProposal: establishment.pending_proposal_id
+      ? {
+          id: establishment.pending_proposal_id,
+          kind: establishment.pending_proposal_kind as "edit" | "photos",
+        }
+      : null,
+    operatorInactive: establishment.operator_inactive ?? false,
   }));
 
   return (

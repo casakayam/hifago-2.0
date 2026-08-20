@@ -196,6 +196,19 @@ enable_refresh_token_rotation = true
 # Allows refresh tokens to be reused after expiry, up to the specified interval in seconds.
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
+# Feature 31 — révision 2026-08-19, PUIS RE-RÉVISÉ le même jour (docs/specs/07-connexion-
+# inscription-complete.md §10) : `enable_signup=false` a été essayé ici en premier (décision
+# initiale de Jérôme après test réel sur gmiro46@gmail.com) mais ABANDONNÉ dans l'heure — retour
+# réel de Jérôme en testant une vraie invitation : ce flag est global (GoTrue ne peut pas
+# distinguer "Google depuis /login, personne inconnue" de "Google depuis /partner/join, jeton
+# d'invitation valide dans l'URL" — le jeton ne vit que côté frontend, jamais transmis à GoTrue),
+# donc il cassait aussi la consommation d'invitation via Google, un chemin légitime que le jeton
+# autorise déjà. Verrou déplacé au niveau UI à la place (`/signup` neutralisé, bouton Google retiré
+# de `/login` uniquement — LoginForm.tsx, SignupForm supprimé) : `/partner/join` garde son bouton
+# Google intact, seul écran où la création via Google reste offerte. Reste un gap accepté (déjà le
+# cas avant tout ce lot, spec 07 §1 : un compte auto-inscrit n'obtient jamais de capacité) :
+# `POST /auth/v1/signup` brut reste techniquement joignable hors UI — sans conséquence, un compte
+# ainsi créé reste structurellement sans rôle/établissement/produit (RLS/RPC-only, inchangé).
 # Allow/disallow new user signups to your project.
 enable_signup = true
 # Allow/disallow anonymous sign-ins to your project.
@@ -241,6 +254,13 @@ web3 = 30
 # secret = ""
 
 [auth.email]
+# Feature 31 — révision 2026-08-19 : NE PAS mettre `false` ici malgré le libellé qui y ressemble —
+# constaté en faisant tourner les e2e (admin@hifago.test rejeté avec "Email logins are disabled") :
+# cette clé, contrairement à [auth].enable_signup ci-dessus (qui EST le bon verrou, global, tous
+# providers confondus), active/désactive le provider email TOUT ENTIER côté GoTrue (connexion ET
+# inscription), pas seulement les nouvelles inscriptions comme le donne à penser son commentaire —
+# la passer à false aurait aussi bloqué la connexion de tout compte email/mot de passe déjà
+# existant. `[auth].enable_signup=false` seul suffit et ne bloque, lui, que la création.
 # Allow/disallow new user signups via email to your project.
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email

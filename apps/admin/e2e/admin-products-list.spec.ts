@@ -39,4 +39,38 @@ test("admin ouvre /admin/products, filtre par nom et par tipo, voit Ver/Editar (
   await page.getByTestId("server-filters-submit").click();
   await expect(row).toBeVisible();
   await expect(page.getByTestId("filter-q")).toHaveValue("Tour en lancha");
+
+  // Revue admin catalogo (Jérôme, 2026-08-19) — état en tag coloré (pas de texte brut) : ce
+  // produit est sellable=true dans le seed.
+  await expect(page.getByTestId(`product-sellable-${PRODUCT_ID}`)).toContainText("Publicado");
+});
+
+test("catalogo: filtre par establecimiento retrouve le produit rattaché", async ({ page }) => {
+  await loginAs(page.context(), SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
+  await page.goto("/admin/products");
+
+  // "Tour en lancha por el Embalse de Guatapé" appartient à "Casa Kayam Guatapé" (seed.sql) —
+  // filtre nouveau (jamais présent avant ce lot), jamais un filtre texte sur le nom d'établissement
+  // : establishment_id est une vraie colonne FK sur products, filtrée par un simple .eq() côté
+  // page.tsx, pas de RPC ni de contournement PostgREST nécessaire ici.
+  await page.getByTestId("filter-establishment_id").click();
+  await page.getByRole("option", { name: "Casa Kayam Guatapé" }).click();
+  await page.getByTestId("server-filters-submit").click();
+
+  await expect(page.getByTestId(`product-row-${PRODUCT_ID}`)).toBeVisible();
+});
+
+test("catalogo: le champ texte establecimiento retrouve un établissement absent du dropdown plafonné à 10", async ({
+  page,
+}) => {
+  await loginAs(page.context(), SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
+
+  // Navigation directe par URL (pas d'interaction dropdown) : preuve indépendante de la requête
+  // .ilike() côté serveur, sans dépendre de si "Casa Kayam Guatapé" figure ou non parmi les 10
+  // établissements affichés dans le dropdown au moment du run (liste dynamique, en croissance
+  // continue sur cette instance locale — cf. aléa déjà consigné suite 12).
+  await page.goto("/admin/products?establishment_q=Casa+Kayam");
+
+  await expect(page.getByTestId(`product-row-${PRODUCT_ID}`)).toBeVisible();
+  await expect(page.getByTestId("filter-establishment_q")).toHaveValue("Casa Kayam");
 });

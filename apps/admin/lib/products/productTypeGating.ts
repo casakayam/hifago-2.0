@@ -1,0 +1,73 @@
+// Correctif — bug PRÉ-EXISTANT trouvé en vérifiant la spec 21 (connecteur LobbyPMS), SANS LIEN
+// avec elle : confirmé présent dans le dernier commit (bb254e9, avant toute modification de cette
+// session) via `git show HEAD:apps/admin/app/admin/products/[id]/edit/page.tsx`. Jamais corrigé en
+// silence (hifago/CLAUDE.md, avant-la-spec.md §7) — signalé explicitement dans le rapport de fin de
+// session.
+//
+// Root cause : productTypeGating/ProductType vivaient dans useProductTypeFieldsState.ts, qui porte
+// "use client" (nécessaire pour son hook React). app/admin/products/[id]/edit/page.tsx (Server
+// Component) importait productTypeGating depuis ce fichier — Next.js App Router traite TOUT export
+// d'un module "use client" comme une référence client sérialisée, même une fonction pure sans
+// aucun hook : « Attempted to call productTypeGating() from the server but productTypeGating is on
+// the client » (erreur 500 constatée en faisant tourner admin-product-lodging.spec.ts et
+// admin-product-create.spec.ts). Correctif : extraire la logique de gating, purement synchrone et
+// sans state, dans CE fichier SANS "use client" — utilisable aussi bien depuis un Server Component
+// que depuis un Client Component. useProductTypeFieldsState.ts réexporte ce module pour ne casser
+// aucun import existant côté client.
+export type ProductType = "activity" | "evento" | "camp" | "lodging" | "hotel" | "transport";
+
+// Gating par type — miroir exact de ProductForm (spec 11/12/13/14), la SEULE définition de ces 3
+// booléens dans tout le projet : ProductForm, ProductTypeFields et
+// ModerateProductCreationProposalForm l'importent tous d'ici plutôt que de la recalculer chacun de
+// leur côté (risque de divergence déjà rencontré à chaque évolution de gating, specs 11→14).
+export function productTypeGating(type: ProductType) {
+  const isEvento = type === "evento";
+  const isCamp = type === "camp";
+  const isActivity = type === "activity";
+  const isLodging = type === "lodging";
+  const isHotel = type === "hotel";
+  const isTransport = type === "transport";
+  return {
+    isEvento,
+    isCamp,
+    isActivity,
+    isLodging,
+    isHotel,
+    isTransport,
+    hasLocationAndTags: isActivity || isLodging || isHotel || isTransport,
+    // Retour Jérôme (2026-08-18) : un camp a aussi des "servicios incluidos" (desayuno, transporte,
+    // guía…) qui doivent être des tags comme pour les autres types, pour pouvoir un jour trier/
+    // filtrer dessus — camp n'a en revanche pas besoin d'adresse propre (déjà celle de son
+    // établissement), d'où un booléen SÉPARÉ de hasLocationAndTags plutôt qu'un ajout à ce dernier
+    // (qui aurait aussi fait apparaître les champs adresse/lat/lon, jamais demandés pour camp).
+    hasTags: isActivity || isLodging || isHotel || isTransport || isCamp,
+    hasPriceQtyFields: isActivity || isLodging || isTransport,
+    hasCheckInOut: isLodging || isHotel,
+    // Types qui matérialisent product_availability à date unique (create_order /
+    // modify_order_line) — seuls ceux-là peuvent porter un cupo par défaut. evento : pas encore
+    // réellement réservable côté client. lodging/hotel : ont déjà leurs propres modèles de
+    // capacité (capacity/couchage, room_type_availability) — hors périmètre.
+    hasDefaultCapacity: isActivity || isCamp || isTransport,
+  };
+}
+
+// Quel(s) écran(s) de cupos/disponibilité afficher pour un produit, à partir de son type et de la
+// présence d'au moins une règle de créneaux (product_slot_rules) — SEULE définition de ce gating
+// dans tout le projet (avant cette extraction, dupliqué ad hoc entre
+// apps/admin/app/admin/products/[id]/edit/page.tsx — showAvailabilityLink/isHotel/isActivity &&
+// slotRulesRaw.length > 0 — et apps/admin/app/partner/(app)/products/ProductsGrid.tsx, qui se
+// contentait de commenter "même gating de type que .../edit/page.tsx" sans jamais rien importer).
+// 'slot' N'EXCLUT PAS 'generic' : une activité qui porte des règles de créneaux garde son lien
+// générique product_availability (cupo/estado par jour) EN PLUS du lien horaires×dates dédié — les
+// deux calendriers sont indépendants, jamais l'un à la place de l'autre. Les appelants traitent
+// donc 'slot' comme "afficher le lien générique ET le lien créneaux", pas comme un remplacement
+// (cf. leur propre commentaire au point d'appel).
+export function availabilityScreenFor(
+  type: ProductType,
+  hasSlotRules: boolean,
+): "generic" | "room" | "slot" | "none" {
+  if (type === "hotel") return "room";
+  if (type === "evento") return "none";
+  if (type === "activity" && hasSlotRules) return "slot";
+  return "generic";
+}

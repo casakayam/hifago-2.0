@@ -21,7 +21,7 @@ const FIXTURE_PHOTO = path.join(__dirname, "fixtures/test-photo.jpg");
 // AGENTS-PARALLELES.md point 5 / CLAUDE.md §11.7). Établissement DÉDIÉ créé ici, même chemin que
 // partner-establishment-proposals.spec.ts (2e test) : create_establishment + set_capability_status
 // plutôt qu'un insert brut, pour rester fidèle au parcours réel.
-test("un socio propone la creación de una actividad con foto, publicada (no vendible) solo tras aprobación admin", async ({
+test("un socio propone la creación de una actividad con foto, publicada y vendible tras aprobación admin", async ({
   page,
   context,
 }) => {
@@ -56,10 +56,17 @@ test("un socio propone la creación de una actividad con foto, publicada (no ven
 
   await page.getByTestId("submit-product-proposal-button").click();
 
-  await expect(page).toHaveURL(/\/partner\/products$/);
-  await expect(page.getByTestId("pending-product-creations")).toBeVisible();
-  await expect(page.getByTestId("pending-product-creations")).toContainText(proposedName);
-  await expect(page.getByTestId("pending-product-creations")).toContainText("Actividad");
+  // Refonte vue prestataire (2026-08-19) : "Mis actividades" fusionnée dans
+  // "/partner/establishment" (product-form.tsx pousse désormais directement vers cette URL) ;
+  // PendingProductCreationsList disparaît en tant que section séparée — la proposition apparaît
+  // comme une carte normale (testid pending-product-creation-<id>, id inconnu ici) dans la grille
+  // d'activités de l'établissement, avec le tag "Pendiente de revisión" (demande explicite de
+  // Jérôme : jamais une liste séparée, juste un tag bien évident sur la carte).
+  await expect(page).toHaveURL(/\/partner\/establishment$/);
+  const pendingCard = page.locator('[data-testid^="pending-product-creation-"]', { hasText: proposedName });
+  await expect(pendingCard).toBeVisible();
+  await expect(pendingCard).toContainText("Pendiente de revisión");
+  await expect(pendingCard).toContainText("Actividad");
 
   // --- Admin : la proposition apparaît marquée "Creación", formulaire pré-rempli, foto visible en aperçu ---
   await loginAs(context, SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
@@ -84,7 +91,8 @@ test("un socio propone la creación de una actividad con foto, publicada (no ven
   // devient son titre visible.
   await expect(page.getByRole("alertdialog").filter({ hasText: "Propuesta aprobada." })).toBeVisible();
 
-  // --- La fiche existe désormais réellement, non vendable, avec sa photo rattachée en base ---
+  // --- La fiche existe désormais réellement, vendable (revirement 2026-08-20, publication
+  // immédiate à l'approbation), avec sa photo rattachée en base ---
   await page.goto(`/admin/establishments/${establishmentId}`);
   await expect(page.getByText(proposedName)).toBeVisible();
 
@@ -100,21 +108,21 @@ test("un socio propone la creación de una actividad con foto, publicada (no ven
   if (mediaError) throw new Error(`e2e verify: lecture product_media a échoué : ${mediaError.message}`);
   expect(media).toHaveLength(1);
 
-  // --- Le socio ne voit plus CETTE proposition en attente, la fiche apparaît "No publicada" ---
+  // --- Le socio ne voit plus CETTE proposition en attente, la fiche apparaît "Publicada" ---
   // Assertion scopée au nom précis de cette proposition, jamais un simple toHaveCount(0) global :
   // la base locale n'est pas remise à zéro entre deux exécutions e2e (même remarque que
   // partner-establishment-proposals.spec.ts, 3e test) — une proposition non liée, encore pending
   // d'un run antérieur (ex. interrompu), ne doit pas faire échouer CE test.
   await loginAs(context, SEEDED_ACCOUNTS.operadorPropuestas, SEEDED_PASSWORD);
-  await page.goto("/partner/products");
-  // Scopé au texte plutôt qu'un .not.toContainText() sur le conteneur : PendingProductCreationsList
-  // ne rend rien du tout (pas même un conteneur vide) quand il n'y a plus aucune proposition
-  // pending pour ce partenaire — un .not.toContainText() sur un testid absent du DOM échoue
-  // ("element(s) not found") au lieu de passer trivialement.
+  await page.goto("/partner/establishment");
+  // Scopé au texte plutôt qu'un .not.toContainText() sur un conteneur dédié (EstablishmentActivities
+  // ne rend plus de conteneur séparé pour les propositions en attente, fusionnées dans la grille
+  // normale, cf. commentaire plus haut) : la carte "pending-product-creation-*" portant ce nom
+  // précis ne doit simplement plus exister une fois approuvée.
   await expect(
-    page.locator('[data-testid="pending-product-creations"]', { hasText: proposedName }),
+    page.locator('[data-testid^="pending-product-creation-"]', { hasText: proposedName }),
   ).toHaveCount(0);
   const publishedRow = page.locator('[data-testid^="product-row-"]', { hasText: proposedName });
   await expect(publishedRow).toBeVisible();
-  await expect(publishedRow).toContainText("No publicada");
+  await expect(publishedRow).toContainText("Publicada");
 });

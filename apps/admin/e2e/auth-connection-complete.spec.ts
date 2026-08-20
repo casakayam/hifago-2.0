@@ -1,48 +1,65 @@
-import { test, expect, type Page } from "@playwright/test";
-import { generateTotp, withDb, latestCallbackLink } from "@hifago/e2e-support";
+import { test, expect } from "@playwright/test";
+import {
+  generateTotp,
+  withDb,
+  latestCallbackLink,
+  createTestUser,
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+} from "@hifago/e2e-support";
 
-async function signUp(page: Page, email: string, password: string) {
+// Feature 31 — révision 2026-08-19, 3e passe (docs/specs/07-connexion-inscription-complete.md
+// §10) : inscription libre neutralisée au niveau UI (`/signup` redirige vers `/login`, aucun lien
+// « Crear cuenta ») mais le bouton Google, lui, RESTE proposé sur `/login` (et `/partner/join`,
+// cf. partner-join.spec.ts) — un blocage global (`enable_signup=false`, 2e passe) cassait aussi
+// l'acceptation d'invitation via Google (retour réel de Jérôme), abandonné. À la place,
+// `app/auth/callback/route.ts` nettoie a posteriori tout compte fraîchement créé (Google OU
+// confirmation email `type=signup`) qui n'arrive pas via `/partner/join` — testé ci-dessous via le
+// chemin email (`POST /auth/v1/signup` brut + lien de confirmation Mailpit réel), qui partage
+// exactement la même logique de nettoyage que Google (jamais piloté en e2e, hifago/CLAUDE.md §6
+// point 2).
+test("/signup redirige et le lien « Crear cuenta » disparaît de /login ; le bouton Google, lui, reste proposé", async ({
+  page,
+}) => {
   await page.goto("/signup");
-  await page.locator('input[name="email"]').fill(email);
-  await page.locator('input[name="password"]').fill(password);
-  await page.locator('input[name="confirm-password"]').fill(password);
-  await page.getByTestId("signup-submit-button").click();
-  await page.waitForURL(/\/verify-email/);
-}
+  await page.waitForURL(/\/login/);
 
-test("inscription libre : confirmation email obligatoire, renvoi possible, atterrit sur /partner", async ({
+  await expect(page.locator('a[href="/signup"]')).toHaveCount(0);
+  await expect(page.getByTestId("google-signin-button")).toBeVisible();
+});
+
+test("un compte fraîchement créé hors contexte d'invitation est supprimé au retour du callback, avec message clair", async ({
   page,
   request,
 }) => {
-  const email = `e2e-signup-${Date.now()}@test.local`;
-  await signUp(page, email, "SignupE2E1234!");
-  await expect(page.getByText(email)).toBeVisible();
+  const email = `e2e-fresh-outside-invite-${Date.now()}@test.local`;
+  const signupResponse = await request.post(`${SUPABASE_URL}/auth/v1/signup`, {
+    headers: { apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+    data: { email, password: "FreshOutside1234!" },
+  });
+  expect(signupResponse.ok()).toBe(true);
 
-  // Renvoi : un deuxième email doit arriver (pas seulement le bouton qui se désactive). Attente
-  // > 1s (config.toml [auth.email] max_frequency) : sans elle, Supabase rejette ce renvoi comme
-  // trop rapproché du signUp() qui vient d'envoyer le premier email.
-  await page.waitForTimeout(1100);
-  await page.getByTestId("resend-confirmation-button").click();
-  await expect(
-    page.getByRole("alertdialog").filter({ hasText: "Correo reenviado." })
-  ).toBeVisible();
+  // Le template confirmation.html pointe vers next=/partner (destination normale d'une
+  // inscription libre réussie, cf. app/page.tsx) — jamais /partner/join, donc bien traité comme
+  // "hors invitation" par la route de nettoyage, quel que soit ce `next`.
+  const confirmLink = await latestCallbackLink(request, email);
+  await page.goto(confirmLink);
+  await page.waitForURL(/\/login\?error=google_signup_blocked/);
+  // .first() : React StrictMode (dev) peut monter LoginForm deux fois et donc déclencher ce toast
+  // deux fois — comportement déjà documenté et accepté (hifago/CLAUDE.md §11), sans effet en
+  // production ; on vérifie juste qu'au moins une occurrence est visible.
+  await expect(page.getByText(/no tiene cuenta todavía/).first()).toBeVisible();
 
-  const link = await latestCallbackLink(request, email);
-  await page.goto(link);
-  await page.waitForURL(/\/partner$/);
-  await expect(page.getByText("Aún no tienes ningún rol asignado.")).toBeVisible();
-
-  // Garde partner_id (constat 2026-08-17) : un compte sans partner_id ne doit jamais atteindre
-  // /partner/establishment/* — jusqu'ici seule la soumission du formulaire échouait (reason
-  // `not_a_partner` de submit_establishment_creation_proposal), sans explication à l'écran.
-  await page.goto("/partner/establishment/new");
-  await page.waitForURL(/\/partner$/);
-  await expect(page.getByText("Aún no tienes ningún rol asignado.")).toBeVisible();
+  const stillExists = await withDb(async (client) => {
+    const { rows } = await client.query("select 1 from auth.users where email = $1", [email]);
+    return rows.length > 0;
+  });
+  expect(stillExists).toBe(false);
 });
 
 test("connexion sur un compte non confirmé redirige vers /verify-email", async ({ page }) => {
   const email = `e2e-unconfirmed-${Date.now()}@test.local`;
-  await signUp(page, email, "UnconfirmedE2E1234!");
+  await createTestUser(email, "UnconfirmedE2E1234!", { confirmed: false });
 
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(email);
@@ -58,10 +75,7 @@ test("mot de passe oublié : email générique, lien réel, reconnexion avec le 
   context,
 }) => {
   const email = `e2e-forgot-${Date.now()}@test.local`;
-  await signUp(page, email, "OldPassword123!");
-  await page.goto(await latestCallbackLink(request, email));
-  await page.waitForURL(/\/partner$/);
-  await context.clearCookies();
+  await createTestUser(email, "OldPassword123!");
 
   await page.goto("/forgot-password");
   await page.locator('input[name="email"]').fill(email);
@@ -84,16 +98,8 @@ test("mot de passe oublié : email générique, lien réel, reconnexion avec le 
   await page.waitForURL(/\/partner$/);
 });
 
-test("/login et /signup affichent le bouton Google", async ({ page }) => {
-  await page.goto("/login");
-  await expect(page.getByTestId("google-signin-button")).toBeVisible();
-  await page.goto("/signup");
-  await expect(page.getByTestId("google-signin-button")).toBeVisible();
-});
-
 test("2FA admin : optionnel (pas de redirection forcée), enrôlement volontaire fonctionnel, puis vérification à la session suivante", async ({
   page,
-  request,
   context,
 }) => {
   // Rendu optionnel le 2026-08-15 (décision Jérôme, après un bug d'enrôlement ayant bloqué un
@@ -106,9 +112,7 @@ test("2FA admin : optionnel (pas de redirection forcée), enrôlement volontaire
   // (même idiome que setPartnerCodeActive/resetAvailability, packages/e2e-support/src/db.ts), pas
   // via un flux d'invitation qui n'existe pas pour ce rôle.
   const email = `e2e-2fa-admin-${Date.now()}@test.local`;
-  await signUp(page, email, "TwoFaAdmin1234!");
-  await page.goto(await latestCallbackLink(request, email));
-  await page.waitForURL(/\/partner$/);
+  await createTestUser(email, "TwoFaAdmin1234!");
 
   await withDb(async (client) => {
     await client.query(
@@ -118,7 +122,6 @@ test("2FA admin : optionnel (pas de redirection forcée), enrôlement volontaire
     );
   });
 
-  await context.clearCookies();
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill("TwoFaAdmin1234!");

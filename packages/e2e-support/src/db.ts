@@ -295,6 +295,38 @@ export async function createHotelRoomFixture(
   return { productId, roomId };
 }
 
+/**
+ * Feature 31 — révision 2026-08-19 : crée un compte email/mot de passe directement en base
+ * (même patron que supabase/seed.sql, `crypt(password, gen_salt('bf'))`), indépendant de
+ * l'endpoint public GoTrue (`supabase.auth.signUp`) — nécessaire depuis que
+ * supabase/config.toml a `enable_signup=false` (inscription libre bloquée), qui fait échouer tout
+ * appel signUp() y compris depuis un test e2e. Remplace l'ancien helper local `signUp()` de
+ * auth-connection-complete.spec.ts, qui pilotait le formulaire /signup désormais neutralisé.
+ * `handle_new_auth_user` (trigger sur auth.users) provisionne automatiquement la ligne
+ * partner_accounts correspondante, comme pour tout autre insert dans auth.users.
+ */
+export async function createTestUser(
+  email: string,
+  password: string,
+  { confirmed = true }: { confirmed?: boolean } = {}
+): Promise<string> {
+  const id = randomUUID();
+  await withDb((client) =>
+    client.query(
+      `insert into auth.users (
+         instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+         created_at, updated_at, raw_app_meta_data, raw_user_meta_data
+       ) values (
+         '00000000-0000-0000-0000-000000000000', $1, 'authenticated', 'authenticated',
+         $2, crypt($3, gen_salt('bf')), case when $4 then now() else null end, now(), now(),
+         '{"provider":"email","providers":["email"]}', '{}'
+       )`,
+      [id, email, password, confirmed]
+    )
+  );
+  return id;
+}
+
 export async function getOrderLinesForPhone(phone: string) {
   return withDb(async (client) => {
     const { rows } = await client.query(

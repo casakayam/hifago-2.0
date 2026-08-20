@@ -25,14 +25,20 @@ export default async function LoginPage({
     typeof nextParam === "string" && nextParam.startsWith("/") ? nextParam : "/";
 
   // Feature 31 (docs/specs/07-connexion-inscription-complete.md §5) : /auth/callback redirige ici
-  // avec ?error= en cas d'échec (code OAuth/token_hash invalide ou expiré) — message générique,
-  // jamais le détail technique.
-  const hasCallbackError = resolvedSearchParams?.error === "auth_callback_failed";
+  // avec ?error= en cas d'échec (code OAuth/token_hash invalide ou expiré, ou compte fraîchement
+  // créé hors contexte d'invitation — cf. route.ts, "google_signup_blocked") — message générique
+  // par type d'erreur, jamais le détail technique.
+  const callbackError =
+    resolvedSearchParams?.error === "google_signup_blocked"
+      ? "google_signup_blocked"
+      : resolvedSearchParams?.error === "auth_callback_failed"
+        ? "auth_callback_failed"
+        : undefined;
 
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
       <h1 className="text-2xl font-semibold">Iniciar sesión</h1>
-      <LoginForm next={next} hasCallbackError={hasCallbackError} />
+      <LoginForm next={next} callbackError={callbackError} />
     </main>
   );
 }

@@ -216,6 +216,15 @@ export function CheckoutForm({
     clear();
     const orderId = result.order_id ?? "";
     setPendingOrderId(orderId);
+    // Spec 21 — miroir LobbyPMS fire-and-forget : jamais attendu, jamais bloquant pour l'affichage
+    // order-success ni le paiement. Un échec PMS ne défait jamais une réservation déjà confirmée
+    // (statut d'intégration séparé du statut métier, cf. spec 21 §8) — suivi exclusivement via la
+    // file de réconciliation admin (feature 22), aucune UI dédiée ici.
+    void fetch("/api/pms/reserve-nights", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId }),
+    }).catch(() => {});
     void startPayment(orderId);
   }
 

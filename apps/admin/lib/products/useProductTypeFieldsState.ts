@@ -6,66 +6,15 @@ import { emptyStayRates, stayRatesFromColumn, type DraftStayRates } from "@/lib/
 import { slotRulesFromColumn, type DraftSlotRule } from "@/lib/products/slotRules";
 import { roomTypesFromColumn, type DraftRoomType } from "@/lib/products/hotelRooms";
 
-export type ProductType = "activity" | "evento" | "camp" | "lodging" | "hotel" | "transport";
+// Correctif (spec 21, trouvé en vérifiant, sans lien avec elle — cf. productTypeGating.ts) :
+// productTypeGating/ProductType/availabilityScreenFor vivent désormais dans un module SANS
+// "use client" (ce fichier-ci le porte, pour son hook React) — un Server Component peut les
+// importer directement. Réexportés ici pour ne casser aucun import client existant.
+export { productTypeGating, availabilityScreenFor, type ProductType } from "@/lib/products/productTypeGating";
+
 export type OccurrenceType = "once" | "recurring";
 export type RecurrenceEndKind = "date" | "count" | "none";
 export type PriceMode = "simple" | "tiers";
-
-// Gating par type — miroir exact de ProductForm (spec 11/12/13/14), la SEULE définition de ces 3
-// booléens dans tout le projet : ProductForm, ProductTypeFields et
-// ModerateProductCreationProposalForm l'importent tous d'ici plutôt que de la recalculer chacun de
-// leur côté (risque de divergence déjà rencontré à chaque évolution de gating, specs 11→14).
-export function productTypeGating(type: ProductType) {
-  const isEvento = type === "evento";
-  const isCamp = type === "camp";
-  const isActivity = type === "activity";
-  const isLodging = type === "lodging";
-  const isHotel = type === "hotel";
-  const isTransport = type === "transport";
-  return {
-    isEvento,
-    isCamp,
-    isActivity,
-    isLodging,
-    isHotel,
-    isTransport,
-    hasLocationAndTags: isActivity || isLodging || isHotel || isTransport,
-    // Retour Jérôme (2026-08-18) : un camp a aussi des "servicios incluidos" (desayuno, transporte,
-    // guía…) qui doivent être des tags comme pour les autres types, pour pouvoir un jour trier/
-    // filtrer dessus — camp n'a en revanche pas besoin d'adresse propre (déjà celle de son
-    // établissement), d'où un booléen SÉPARÉ de hasLocationAndTags plutôt qu'un ajout à ce dernier
-    // (qui aurait aussi fait apparaître les champs adresse/lat/lon, jamais demandés pour camp).
-    hasTags: isActivity || isLodging || isHotel || isTransport || isCamp,
-    hasPriceQtyFields: isActivity || isLodging || isTransport,
-    hasCheckInOut: isLodging || isHotel,
-    // Types qui matérialisent product_availability à date unique (create_order /
-    // modify_order_line) — seuls ceux-là peuvent porter un cupo par défaut. evento : pas encore
-    // réellement réservable côté client. lodging/hotel : ont déjà leurs propres modèles de
-    // capacité (capacity/couchage, room_type_availability) — hors périmètre.
-    hasDefaultCapacity: isActivity || isCamp || isTransport,
-  };
-}
-
-// Quel(s) écran(s) de cupos/disponibilité afficher pour un produit, à partir de son type et de la
-// présence d'au moins une règle de créneaux (product_slot_rules) — SEULE définition de ce gating
-// dans tout le projet (avant cette extraction, dupliqué ad hoc entre
-// apps/admin/app/admin/products/[id]/edit/page.tsx — showAvailabilityLink/isHotel/isActivity &&
-// slotRulesRaw.length > 0 — et apps/admin/app/partner/(app)/products/ProductsGrid.tsx, qui se
-// contentait de commenter "même gating de type que .../edit/page.tsx" sans jamais rien importer).
-// 'slot' N'EXCLUT PAS 'generic' : une activité qui porte des règles de créneaux garde son lien
-// générique product_availability (cupo/estado par jour) EN PLUS du lien horaires×dates dédié — les
-// deux calendriers sont indépendants, jamais l'un à la place de l'autre. Les appelants traitent
-// donc 'slot' comme "afficher le lien générique ET le lien créneaux", pas comme un remplacement
-// (cf. leur propre commentaire au point d'appel).
-export function availabilityScreenFor(
-  type: ProductType,
-  hasSlotRules: boolean,
-): "generic" | "room" | "slot" | "none" {
-  if (type === "hotel") return "room";
-  if (type === "evento") return "none";
-  if (type === "activity" && hasSlotRules) return "slot";
-  return "generic";
-}
 
 // "HH:MM:SS" (sérialisation Postgres d'une colonne time, ou payload d'une proposition qui la
 // reprend telle quelle) → "HH:MM" (valeur attendue par <Input type="time">).
@@ -103,6 +52,11 @@ export type ProductTypeFieldsInit = {
   startTime?: string | null;
   durationMinutes?: number | null;
   externalBookingUrl?: string | null;
+  // Spec 21 (connecteur LobbyPMS) — admin-only, jamais dans RawProductFieldsPayload/
+  // payloadToFieldsInit (jamais exposé au payload d'une proposition socio, même traitement que
+  // operated_directly côté établissement) : ProductForm seul les lit/écrit directement.
+  lobbyCategoryId?: number | null;
+  lobbyProductId?: number | null;
 };
 
 // Extrait de ProductForm (spec 15) pour être consommé par deux rendus distincts du même gating par
@@ -153,6 +107,12 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
     init.durationMinutes != null ? String(init.durationMinutes) : "",
   );
   const [externalBookingUrl, setExternalBookingUrl] = useState(init.externalBookingUrl ?? "");
+  const [lobbyCategoryId, setLobbyCategoryId] = useState(
+    init.lobbyCategoryId != null ? String(init.lobbyCategoryId) : "",
+  );
+  const [lobbyProductId, setLobbyProductId] = useState(
+    init.lobbyProductId != null ? String(init.lobbyProductId) : "",
+  );
 
   return {
     address, setAddress, lat, setLat, lon, setLon,
@@ -174,6 +134,7 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
     startTime, setStartTime,
     durationMinutes, setDurationMinutes,
     externalBookingUrl, setExternalBookingUrl,
+    lobbyCategoryId, setLobbyCategoryId, lobbyProductId, setLobbyProductId,
   };
 }
 

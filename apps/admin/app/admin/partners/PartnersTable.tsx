@@ -1,12 +1,11 @@
 "use client";
 
 import { DataList, type DataListAction, type DataListColumn, type DataListSort, viewAction } from "@hifago/ui";
-import { PARTNERS_FILTERS } from "@/lib/lists/filters";
+import { PartnersFilterBar } from "./PartnersFilterBar";
 
 export type PartnerRow = {
   id: string;
   displayName: string;
-  status: string;
   activeRoles: string;
   establishmentsCount: number;
 };
@@ -35,7 +34,6 @@ export function PartnersTable({
 }: PartnersTableProps) {
   const columns: DataListColumn<PartnerRow>[] = [
     { id: "display_name", header: "Nombre", sortable: true, cell: (row) => row.displayName },
-    { id: "status", header: "Estado", sortable: true },
     { id: "activeRoles", header: "Capacidades activas", cell: (row) => row.activeRoles || "—" },
     { id: "establishmentsCount", header: "Establecimientos" },
   ];
@@ -53,8 +51,7 @@ export function PartnersTable({
       pageSize={pageSize}
       totalCount={totalCount}
       sort={sort}
-      filters={PARTNERS_FILTERS}
-      filterValues={filterValues}
+      toolbar={<PartnersFilterBar values={filterValues} hiddenParams={{ sort: sort.key, dir: sort.direction }} />}
       extraParams={extraParams}
       ariaLabel="Partners"
       rowTestIdPrefix="partner"

@@ -14,7 +14,7 @@ type Capability = {
 };
 type Establishment = { id: string; name: string };
 
-const STATUSES = ["onboarding", "pending_review", "active", "suspended"] as const;
+const STATUSES = ["active", "suspended"] as const;
 const NO_ESTABLISHMENT = "__pending__";
 
 export function CapabilitiesSection({

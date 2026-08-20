@@ -84,7 +84,7 @@ export function ServerFilters({ basePath, filters, values, hiddenParams }: Serve
 
       <button
         type="submit"
-        className={buttonVariants({ variant: "outline", size: "sm" })}
+        className={buttonVariants()}
         data-testid="server-filters-submit"
       >
         Buscar

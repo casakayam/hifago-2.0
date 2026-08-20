@@ -1,8 +1,16 @@
 "use client";
 
-import { DataList, type DataListAction, type DataListColumn, type DataListSort, viewAction } from "@hifago/ui";
+import {
+  DataList,
+  type DataListAction,
+  type DataListColumn,
+  type DataListFilter,
+  type DataListSort,
+  viewAction,
+} from "@hifago/ui";
 import { formatCop } from "@hifago/domain";
-import { PRODUCTS_FILTERS } from "@/lib/lists/filters";
+import { StatusChip } from "@/components/status-chip";
+import { PRODUCTS_FILTERS, PRODUCT_SELLABLE_CHIP_STYLE, PRODUCT_SELLABLE_LABELS } from "@/lib/lists/filters";
 
 export type ProductRow = {
   id: string;
@@ -21,6 +29,9 @@ export type ProductsListProps = {
   sort: DataListSort;
   filterValues: Record<string, string>;
   extraParams: Record<string, string>;
+  // Revue admin catalogo (Jérôme, 2026-08-19) — construit côté page.tsx (établissements
+  // dynamiques, jamais une liste fermée écrite en dur dans filters.ts comme type/sellable).
+  establishmentOptions: { value: string; label: string }[];
 };
 
 // docs/specs/10-listes-standardisees-admin-socio.md §5.3 — écran pilote (2e) : 1er vrai passage
@@ -35,7 +46,29 @@ export function ProductsList({
   sort,
   filterValues,
   extraParams,
+  establishmentOptions,
 }: ProductsListProps) {
+  const filters: DataListFilter[] = [
+    ...PRODUCTS_FILTERS,
+    {
+      kind: "select",
+      name: "establishment_id",
+      label: "Establecimiento",
+      allLabel: "Todos los establecimientos",
+      options: establishmentOptions,
+    },
+    // Retour Jérôme (2026-08-19) : le dropdown ci-dessus reste plafonné à 10 (cf. page.tsx) — ce
+    // champ est l'échappatoire pour chercher un établissement absent de la liste visible. Jamais
+    // combiné au dropdown côté requête (l'un ou l'autre, cf. page.tsx) : si les deux sont postés,
+    // establishment_id (dropdown) gagne toujours.
+    {
+      kind: "text",
+      name: "establishment_q",
+      label: "Establecimiento (si no aparece en la lista)",
+      placeholder: "Buscar por nombre",
+    },
+  ];
+
   const columns: DataListColumn<ProductRow>[] = [
     { id: "name", header: "Nombre", sortable: true },
     { id: "establishmentName", header: "Establecimiento" },
@@ -50,7 +83,14 @@ export function ProductsList({
     {
       id: "sellable",
       header: "Estado",
-      cell: (row) => (row.sellable ? "Publicado" : "Borrador"),
+      cell: (row) => (
+        <StatusChip
+          status={row.sellable ? "true" : "false"}
+          map={PRODUCT_SELLABLE_CHIP_STYLE}
+          labels={PRODUCT_SELLABLE_LABELS}
+          testId={`product-sellable-${row.id}`}
+        />
+      ),
     },
   ];
 
@@ -75,7 +115,7 @@ export function ProductsList({
       pageSize={pageSize}
       totalCount={totalCount}
       sort={sort}
-      filters={PRODUCTS_FILTERS}
+      filters={filters}
       filterValues={filterValues}
       extraParams={extraParams}
       ariaLabel="Catálogo"

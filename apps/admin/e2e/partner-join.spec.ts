@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { latestCallbackLink } from "@hifago/e2e-support";
+import { createTestUser } from "@hifago/e2e-support";
 
 // Les deux tests qui créent une invitation admin partagent le même compte admin seedé, dont le
 // facteur TOTP a montré une contention sous exécution parallèle (constaté 2026-08-17, cf. entrée
@@ -46,6 +46,14 @@ test("un admin crée une invitation, un nouveau visiteur la consomme et atterrit
 
   await visitorPage.goto(`/partner/join?token=${token}`);
 
+  // Feature 31 — révision 2026-08-19, 2e passe : contrairement à /login et /signup, le bouton
+  // Google reste PROPOSÉ ici pour un visiteur neuf — le jeton d'invitation dans l'URL est la
+  // preuve d'autorisation, la case n'a pas à être retirée sur cet écran précis (retour réel de
+  // Jérôme après un premier blocage global trop large, cf. supabase/config.toml). Assertion
+  // volontairement scopée à ça seul — piloter le vrai écran Google OAuth reste hors e2e
+  // (hifago/CLAUDE.md §6 point 2).
+  await expect(visitorPage.getByTestId("google-signin-button")).toBeVisible();
+
   // Les conditions sont consultables sans cocher la case au passage (signalé par Jérôme, ajouté
   // le 2026-08-15) — ouvrir/fermer la modale ne doit jamais basculer la case toute seule, un
   // bouton imbriqué dans Checkbox.Content déclencherait ce bug (cf. commentaire JoinForm.tsx).
@@ -76,13 +84,13 @@ test("un admin crée une invitation, un nouveau visiteur la consomme et atterrit
 // session existante) sautait tout le formulaire créateur de compte — consume_partner_invitation
 // ne s'appuie que sur auth.uid(), jamais sur le mode de connexion (cf. JoinForm.tsx). Piloter le
 // vrai écran Google OAuth n'est pas testable en e2e (jamais le vrai écran Google, cf.
-// hifago/CLAUDE.md §6 point 2) : ce test établit une session par inscription libre + confirmation
-// Mailpit réelle (même chemin que auth-connection-complete.spec.ts) puis rouvre /partner/join avec
-// cette session déjà active — exactement l'état dans lequel /auth/callback dépose un visiteur venu
-// de Google, seule la provenance de la session diffère.
+// hifago/CLAUDE.md §6 point 2) : ce test établit une session sur un compte créé directement en
+// base (createTestUser, Feature 31 — révision 2026-08-19, inscription libre désormais bloquée,
+// supabase/config.toml enable_signup=false) puis rouvre /partner/join avec cette session déjà
+// active — exactement l'état dans lequel /auth/callback dépose un visiteur venu de Google, seule
+// la provenance de la session diffère.
 test("un visiteur déjà authentifié consomme l'invitation sans recréer de compte", async ({
   browser,
-  request,
 }) => {
   const code = `E2E-JOIN-CONNECTED-${Date.now()}`;
 
@@ -104,21 +112,14 @@ test("un visiteur déjà authentifié consomme l'invitation sans recréer de com
 
   await adminContext.close();
 
-  // --- Visiteur : compte confirmé et déjà connecté (inscription libre, hors chemin invitation) ---
-  const visitorContext = await browser.newContext();
-  const visitorPage = await visitorContext.newPage();
+  // --- Visiteur : compte confirmé et déjà connecté (créé directement en base, hors chemin
+  // invitation) ---
   const email = `e2e-join-connected-${Date.now()}@test.local`;
+  await createTestUser(email, "JoinConnected1234!");
 
-  await visitorPage.goto("/signup");
-  await visitorPage.locator('input[name="email"]').fill(email);
-  await visitorPage.locator('input[name="password"]').fill("JoinConnected1234!");
-  await visitorPage.locator('input[name="confirm-password"]').fill("JoinConnected1234!");
-  await visitorPage.getByTestId("signup-submit-button").click();
-  await visitorPage.waitForURL(/\/verify-email/);
-
-  const confirmLink = await latestCallbackLink(request, email);
-  await visitorPage.goto(confirmLink);
-  await visitorPage.waitForURL(/\/partner$/);
+  const visitorContext = await browser.newContext();
+  await loginAs(visitorContext, email, "JoinConnected1234!");
+  const visitorPage = await visitorContext.newPage();
 
   // --- Le même visiteur, déjà connecté, ouvre le lien d'invitation ---
   await visitorPage.goto(`/partner/join?token=${token}`);

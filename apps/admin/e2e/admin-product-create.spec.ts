@@ -101,13 +101,14 @@ test("admin crée une actividad avec tous les champs (i18n, lieu, foto, tramos, 
   await expect(page).toHaveURL(/\/admin\/establishments$/);
   await expect(row).toContainText("1 actividades");
 
-  // sellable=false à la création (feature 4 publiera plus tard) : la fiche publique ne doit pas
-  // l'exposer tant qu'elle n'est pas publiée. Session admin effacée avant cette vérification (RLS
-  // products_select_public autorise aussi is_admin(), sinon faux positif).
+  // sellable=true à la création (retour Jérôme, 2026-08-20 : product-form.tsx n'écrase plus le
+  // défaut colonne — même principe que create_establishment) : la fiche publique doit l'exposer
+  // tout de suite, sans geste de publication séparé. Session admin effacée avant cette vérification
+  // (RLS products_select_public autorise aussi is_admin(), sinon faux positif).
   await context.clearCookies();
   const slug = slugify(nameEs);
   const publicResponse = await page.goto(webProductUrl(slug));
-  expect(publicResponse?.status()).toBe(404);
+  expect(publicResponse?.status()).toBe(200);
 
   // Récupère l'id créé pour naviguer directement vers l'édition — plus robuste qu'un clic-through
   // par la liste établissement.

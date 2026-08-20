@@ -5,7 +5,7 @@ theme: specs
 public: [ia, dev, jerome]
 langue: fr
 statut: implemente
-maj: 2026-08-15
+maj: 2026-08-19
 resume: >
   Parcours de connexion/inscription complet pour hifago, sur Supabase Auth : Google OAuth,
   inscription email/mot de passe avec vérification par email, mot de passe oublié/réinitialisation,
@@ -40,6 +40,35 @@ repond_a:
 > (`redirect("/partner/join")` pour un compte sans aucun rôle) — invisible avant cette feature
 > puisqu'aucun compte sans rôle ne pouvait exister avant l'inscription libre ; corrigé vers
 > `redirect("/partner")`.
+>
+> **Révisée le 2026-08-19** : l'inscription libre (§2, §4, §5 `/signup`) a été **bloquée**
+> globalement (`supabase/config.toml enable_signup=false`) — décision Jérôme après test réel sur
+> son propre compte (`gmiro46@gmail.com`, connexion Google) : un compte créé ainsi ne reçoit jamais
+> de rôle/capacité automatiquement, et aucun formulaire de demande n'existe pour rattraper ça
+> (explicitement hors périmètre pour l'instant) — ce parcours est donc jugé inutile en pratique.
+> Détail : §8 (nouvel invariant), §9 (cas limite `/partner/join` + Google), §10 (décision datée).
+> Le reste de cette spec (2FA, mot de passe oublié, `/partner/join`) est inchangé.
+>
+> **Re-révisée le 2026-08-19 (même jour, quelques heures plus tard)** : `enable_signup=false`
+> **abandonné**, remplacé par un blocage au niveau UI seulement — retour réel de Jérôme en testant
+> une vraie invitation avec son propre compte Google (« l'admin a créé un lien, je dois pouvoir me
+> connecter avec Google aussi ! ») : le flag est global, GoTrue ne peut pas distinguer « Google
+> depuis `/login`, personne inconnue » de « Google depuis `/partner/join`, jeton d'invitation
+> valide dans l'URL » (le jeton ne vit que côté frontend, jamais transmis à GoTrue) — bloquait donc
+> aussi la consommation d'invitation via Google, un chemin légitime que le jeton autorise déjà.
+> Nouvelle décision, définitive : `enable_signup` repassé à `true`, bouton Google retiré de
+> `/login` seulement (`/partner/join` le garde). Détail : §8, §9, §10 mis à jour en conséquence.
+>
+> **3e révision le 2026-08-19 (même jour)** : Jérôme a fait remarquer, à raison, qu'un partenaire
+> ayant accepté une invitation via Google (donc sans jamais poser de mot de passe) n'aurait plus eu
+> aucun moyen normal de revenir se connecter sur `/login` (« comment un partenaire se reco ?! »).
+> Solution retenue, plus fine que les deux précédentes : `app/auth/callback/route.ts` reçoit déjà
+> `next` en query param (posé par `GoogleButton.tsx` avant même de partir vers Google) — cette
+> route PEUT donc, elle, distinguer après coup un contexte d'invitation (`next` commence par
+> `/partner/join`) d'un contexte ordinaire, alors que GoTrue ne le peut pas au moment de la
+> création. Le bouton Google est **restauré sur `/login`** ; un compte fraîchement créé (Google ou
+> confirmation email) hors contexte d'invitation est supprimé a posteriori plutôt que sa création
+> bloquée en amont. Détail : §5, §8, §9, §10.
 
 ## Sommaire et statut
 
@@ -101,7 +130,8 @@ Supabase, est une bonne pratique standard, pas une réinvention).
 
 **In** :
 - Google OAuth (config back-end pour les deux apps ; écrans côté `apps/admin` seulement ce lot).
-- Inscription libre email/mot de passe + vérification par email (idem).
+- ~~Inscription libre email/mot de passe + vérification par email (idem).~~ — **bloquée le
+  2026-08-19** (§8, §10) : conservée ici pour l'historique de ce qui a été construit, plus active.
 - Mot de passe oublié / réinitialisation (idem).
 - 2FA TOTP obligatoire pour le rôle admin : enrôlement forcé si absent, vérification à chaque
   connexion qui aboutit à un compte admin.
@@ -159,9 +189,10 @@ Ne pas rouvrir :
 **Connexion** : `/login` → email/mot de passe ou Google → succès → next (ou `/mfa/verify` si compte
 admin sans AAL2) ; échec pour cause de compte non confirmé → `/verify-email`.
 
-**Inscription libre** : `/signup` → email/mot de passe (+confirmation) ou Google → pas de session
+~~**Inscription libre** : `/signup` → email/mot de passe (+confirmation) ou Google → pas de session
 (confirmation requise pour email/mot de passe) → `/verify-email` → clic sur le lien reçu →
-`/auth/callback` (`verifyOtp`) → session établie → next.
+`/auth/callback` (`verifyOtp`) → session établie → next.~~ — **bloquée le 2026-08-19** : `/signup`
+redirige désormais vers `/login` (§5, §8, §10).
 
 **Mot de passe oublié** : `/forgot-password` → email → toujours un message générique → lien reçu →
 `/auth/callback` (session de récupération) → `/reset-password` → nouveau mot de passe → reconnexion.
@@ -179,10 +210,17 @@ service_role) → `consume_partner_invitation` → redirection `/partner`, insta
 Tous dans `apps/admin`, sauf mention contraire.
 
 - **`/login`** (étendu) : bouton « Continuar con Google » → séparateur → formulaire email/mdp
-  existant → lien « ¿Olvidaste tu contraseña? » → lien « Crear cuenta ». `signInWithPassword` en
-  échec pour cause de compte non confirmé → redirection `/verify-email`.
-- **`/signup`** (nouveau) : même bouton Google + formulaire email/mdp (+ confirmation du mdp) →
-  `signUp()` côté client. Pas de session (confirmation requise) → redirection `/verify-email`.
+  existant → lien « ¿Olvidaste tu contraseña? » → ~~lien « Crear cuenta »~~. `signInWithPassword` en
+  échec pour cause de compte non confirmé → redirection `/verify-email`. **Lien « Crear cuenta »
+  retiré le 2026-08-19 (2e passe)**, cf. §10 — un simple compte auto-inscrit n'a toujours aucune
+  utilité. **Bouton Google retiré en 2e passe, puis restauré en 3e passe le même jour** (§8, §10) :
+  un compte fraîchement créé par ce bouton hors contexte d'invitation est désormais nettoyé a
+  posteriori côté serveur (`app/auth/callback/route.ts`) plutôt que bloqué en amont — Google
+  fonctionne donc normalement ici pour un retour de connexion sur un compte déjà existant.
+- ~~**`/signup`** (nouveau) : même bouton Google + formulaire email/mdp (+ confirmation du mdp) →
+  `signUp()` côté client. Pas de session (confirmation requise) → redirection `/verify-email`.~~ —
+  **bloqué le 2026-08-19** : route conservée (pas de 404) mais redirige immédiatement vers
+  `/login`, `SignupForm.tsx` supprimé (§8, §10).
 - **`/verify-email`** (nouveau) : « Revisa tu correo (adresse) », bouton « Reenviar correo »
   (`auth.resend({type:'signup', email})`, cooldown anti-abus), lien retour connexion.
 - **`/forgot-password`** (nouveau) : email → `resetPasswordForEmail()`, message générique toujours
@@ -272,6 +310,19 @@ Templates email confirmation/recovery pointant vers
   vrai dès que le point ouvert §10 est refermé.
 - Jamais de fuite d'information sur l'existence d'un compte (signup, forgot-password) — réponse
   générique dans tous les cas.
+- ~~**Ajouté le 2026-08-19** : aucun nouveau compte ne peut se créer sans passer par une invitation
+  (`/partner/join`) — `supabase/config.toml enable_signup=false` bloque toute création publique de
+  compte, email/mot de passe ET Google, pour un tout nouveau visiteur.~~ — **abandonné le
+  2026-08-19, même jour** : cassait aussi la consommation d'invitation via Google (§9). Remplacé
+  par la 2e passe : `/signup` redirige vers `/login`, bouton Google retiré de `/login` uniquement.
+  ~~2e passe elle-même incomplète~~ — cassait le retour de connexion d'un futur partenaire
+  Google-only (§9). **3e passe, définitive** : `enable_signup` reste `true` côté GoTrue ; le bouton
+  Google est restauré sur `/login` (§5) ; `app/auth/callback/route.ts` supprime a posteriori tout
+  compte fraîchement créé (Google OU confirmation email `type=signup`, `last_sign_in_at` à moins de
+  5s de `created_at`) dont le `next` ne pointe pas vers `/partner/join` — session fermée, redirigé
+  vers `/login?error=google_signup_blocked` avec un message dédié. Ferme aussi le dernier gap
+  accepté : `POST /auth/v1/signup` brut reste techniquement joignable, mais tout compte ainsi créé
+  est supprimé dès sa première tentative de confirmation, sauf via une invitation.
 
 ## 9. Cas limites
 
@@ -284,6 +335,31 @@ Templates email confirmation/recovery pointant vers
 - Invitation consommée par quelqu'un d'autre entre le pré-contrôle du Route Handler et l'appel RPC
   (fenêtre de concurrence résiduelle) → compte créé mais sans rôle — cas rare, non dangereux (aucune
   capacité accordée), documenté plutôt que masqué.
+- ~~**Ajouté le 2026-08-19** : un tout nouveau prospect (jamais eu de compte) cliquant « Continuar
+  con Google » depuis `/partner/join?token=...` est désormais rejeté par GoTrue avant même que le
+  jeton soit vérifié (`enable_signup=false` — la vérification du jeton n'a lieu qu'après coup, via
+  `consume_partner_invitation`, cf. §4).~~ — **constaté en pratique le jour même par Jérôme** (lien
+  d'invitation réel, compte Google jamais recréé depuis) : rejeté avec `/login?error=
+  auth_callback_failed#error=access_denied&error_code=signup_disabled`, jeton perdu. Jugé
+  inacceptable — le jeton dans l'URL EST la preuve d'autorisation, `/partner/join` ne doit pas être
+  amputé de Google. `enable_signup` repassé à `true` (§8) : le bouton Google de `/partner/join`
+  fonctionne à nouveau normalement pour un tout nouveau prospect, sans changement de code sur cet
+  écran précis (jamais touché par aucune des deux passes).
+- ~~**Ajouté le 2026-08-19 (2e passe)** : un visiteur qui clique « Continuar con Google » depuis
+  `/login` (pas `/partner/join`) ne le peut plus — bouton retiré de cet écran.~~ — **signalé par
+  Jérôme le jour même, corrigé en 3e passe** : un partenaire ayant accepté une invitation via
+  Google (compte sans mot de passe) n'aurait plus eu aucun moyen normal de revenir se connecter.
+  Bouton Google restauré sur `/login` (§5, §8) — un retour de connexion sur un compte déjà existant
+  fonctionne à nouveau normalement, quel que soit son mode de création d'origine.
+- **Ajouté le 2026-08-19 (3e passe)** : un visiteur qui clique « Continuar con Google » depuis
+  `/login` SANS avoir de compte existant se voit désormais créer puis immédiatement supprimer son
+  compte côté serveur (`app/auth/callback/route.ts`, §8) — atterrit sur `/login?error=
+  google_signup_blocked` avec un message explicite ("Ese Gmail no tiene cuenta todavía..."), jamais
+  un compte fantôme qui traîne. Détection : `last_sign_in_at` à moins de 5 secondes de
+  `created_at` (première connexion de ce compte, quel que soit le délai réel écoulé depuis sa
+  création — robuste à un email de confirmation reçu en retard) ET `next` ne pointe pas vers
+  `/partner/join`. Testé via le chemin email (`type=signup`, même logique exacte que Google) plutôt
+  que Google réel (jamais piloté en e2e, `hifago/CLAUDE.md` §6.2).
 
 ## 10. Décisions tranchées / points ouverts
 
@@ -300,6 +376,43 @@ Templates email confirmation/recovery pointant vers
   conditions réelles (pas seulement via l'automatisation, qui n'a jamais reproduit le problème) ;
   les écrans `/mfa/enroll`/`/mfa/verify` restent fonctionnels en usage volontaire. **Point ouvert à
   rouvrir**, pas une décision définitive.
+- ~~**Inscription libre — bloquée le 2026-08-19**~~ (contredit la décision initiale §2/§4/§5,
+  historique conservé, pas écrasé — voir aussi le chapeau du document) : première tentative de
+  Jérôme après test réel sur son propre compte de test (`gmiro46@gmail.com`, connexion Google) — le
+  compte s'est créé sans problème mais est resté sans établissement/produits/rôle, aucune capacité
+  ne s'accordant jamais automatiquement à l'inscription (déjà correctement verrouillé côté RLS/RPC,
+  cf. §1). Un formulaire de demande de rôle a été envisagé en alternative puis explicitement écarté
+  pour l'instant (hors périmètre, à reconsidérer plus tard). Implémentation initiale :
+  `supabase/config.toml` `[auth]` `enable_signup=false` (racine seulement — **pas** `[auth.email]`,
+  qui désactive le provider email en entier, connexion comprise, malgré un commentaire trompeur qui
+  donne à penser le contraire ; constaté en cassant temporairement la connexion de
+  `admin@hifago.test` en faisant tourner les e2e, corrigé en route, cf. `hifago/CLAUDE.md` §11.13).
+  **Abandonnée le jour même** (§9, entrée ci-dessous) — remplacée par la décision suivante.
+- ~~**Inscription libre — blocage UI seul, décision définitive du 2026-08-19 (2e passe)**~~ : Jérôme
+  a testé une vraie invitation avec son compte Google et s'est retrouvé bloqué sur `/partner/join`
+  (`error_code=signup_disabled`) — a jugé ça à raison comme un bug, pas le comportement voulu : le
+  jeton d'invitation dans l'URL est la preuve d'autorisation, `enable_signup=false` étant global,
+  GoTrue ne peut pas distinguer ce contexte légitime d'un inconnu sur `/login`. `enable_signup`
+  repassé à `true`. Le bouton Google a d'abord été retiré de `/login` **seulement**, `/partner/join`
+  gardant le sien intact (aucun changement de code sur cet écran, dans aucune des 3 passes). **Point
+  ouvert immédiatement soulevé par Jérôme le jour même** : le retour-connexion d'un futur partenaire
+  Google-only créé via `/partner/join` — sans bouton Google sur `/login`, il n'aurait plus eu aucun
+  moyen normal de revenir se connecter. Résolu en 3e passe ci-dessous.
+- **Inscription libre — nettoyage a posteriori, décision définitive et finale du 2026-08-19
+  (3e passe)** : plutôt que de retirer le bouton Google de `/login` (2e passe, incomplète), le
+  blocage est déplacé dans `app/auth/callback/route.ts`, seul endroit qui reçoit à la fois le
+  résultat de l'authentification ET le contexte (`next`, posé par `GoogleButton.tsx` avant même de
+  partir vers Google — GoTrue le restitue tel quel au retour, alors qu'il ne le voit jamais
+  lui-même pendant la création). Un compte fraîchement créé (Google ou confirmation email
+  `type=signup`) dont `next` ne pointe pas vers `/partner/join` est supprimé après coup
+  (`service.auth.admin.deleteUser`), la session fermée, redirection `/login?error=
+  google_signup_blocked` avec un message dédié. Bouton Google restauré sur `/login`. `/signup`
+  reste neutralisé (redirection `/login`, `SignupForm.tsx` supprimé, lien « Crear cuenta » retiré)
+  — ça, ça reste voulu, un simple compte auto-inscrit n'a toujours aucun intérêt, mais désormais un
+  compte fraîchement créé ne survit plus assez longtemps pour poser la question. Gap des passes
+  précédentes fermé : `POST /auth/v1/signup` brut reste techniquement joignable hors UI, mais tout
+  compte ainsi créé est supprimé dès sa première tentative de confirmation, sauf via une
+  invitation. Plus aucun point ouvert connu sur ce sujet.
 
 ## 11. Annexe — traçabilité code→règle
 
@@ -326,7 +439,7 @@ Templates email confirmation/recovery pointant vers
 | Bouton Google | `hifago/apps/admin/components/GoogleButton.tsx` |
 | Callback OAuth + email | `hifago/apps/admin/app/auth/callback/route.ts` |
 | `/login` (étendu) | `hifago/apps/admin/app/login/{page,LoginForm}.tsx` |
-| `/signup` | `hifago/apps/admin/app/signup/{page,SignupForm}.tsx` |
+| `/signup` (bloqué le 2026-08-19, `SignupForm.tsx` supprimé) | `hifago/apps/admin/app/signup/page.tsx` |
 | `/verify-email` | `hifago/apps/admin/app/verify-email/{page,ResendConfirmationForm}.tsx` |
 | `/forgot-password` | `hifago/apps/admin/app/forgot-password/{page,ForgotPasswordForm}.tsx` |
 | `/reset-password` | `hifago/apps/admin/app/reset-password/{page,ResetPasswordForm}.tsx` |

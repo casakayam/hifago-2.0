@@ -187,7 +187,6 @@ export type Database = {
           created_at: string
           created_by: string
           id: string
-          include_incomplete: boolean
           message_template: string
           status: string
         }
@@ -197,7 +196,6 @@ export type Database = {
           created_at?: string
           created_by: string
           id?: string
-          include_incomplete?: boolean
           message_template: string
           status?: string
         }
@@ -207,7 +205,6 @@ export type Database = {
           created_at?: string
           created_by?: string
           id?: string
-          include_incomplete?: boolean
           message_template?: string
           status?: string
         }
@@ -363,6 +360,10 @@ export type Database = {
           description: Json | null
           id: string
           lat: number | null
+          lobby_api_token: string | null
+          lobby_connector_active: boolean
+          lobby_has_token: boolean | null
+          lobby_last_synced_at: string | null
           lon: number | null
           name: Json
           operated_directly: boolean
@@ -376,6 +377,10 @@ export type Database = {
           description?: Json | null
           id?: string
           lat?: number | null
+          lobby_api_token?: string | null
+          lobby_connector_active?: boolean
+          lobby_has_token?: boolean | null
+          lobby_last_synced_at?: string | null
           lon?: number | null
           name: Json
           operated_directly?: boolean
@@ -389,6 +394,10 @@ export type Database = {
           description?: Json | null
           id?: string
           lat?: number | null
+          lobby_api_token?: string | null
+          lobby_connector_active?: boolean
+          lobby_has_token?: boolean | null
+          lobby_last_synced_at?: string | null
           lon?: number | null
           name?: Json
           operated_directly?: boolean
@@ -484,9 +493,13 @@ export type Database = {
           created_at: string
           date: string
           end_date: string | null
+          holder_email: string | null
           holder_name: string
+          holder_phone: string | null
           id: string
           order_id: string
+          pms_booking_id: string | null
+          pms_last_polled_at: string | null
           price_cop: number
           product_id: string
           qty: number
@@ -509,9 +522,13 @@ export type Database = {
           created_at?: string
           date: string
           end_date?: string | null
+          holder_email?: string | null
           holder_name: string
+          holder_phone?: string | null
           id?: string
           order_id: string
+          pms_booking_id?: string | null
+          pms_last_polled_at?: string | null
           price_cop: number
           product_id: string
           qty: number
@@ -534,9 +551,13 @@ export type Database = {
           created_at?: string
           date?: string
           end_date?: string | null
+          holder_email?: string | null
           holder_name?: string
+          holder_phone?: string | null
           id?: string
           order_id?: string
+          pms_booking_id?: string | null
+          pms_last_polled_at?: string | null
           price_cop?: number
           product_id?: string
           qty?: number
@@ -664,22 +685,28 @@ export type Database = {
       partner_accounts: {
         Row: {
           created_at: string
+          full_name: string | null
           id: string
           partner_id: string | null
+          phone: string | null
           saved_attribution_code: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
+          full_name?: string | null
           id: string
           partner_id?: string | null
+          phone?: string | null
           saved_attribution_code?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
+          full_name?: string | null
           id?: string
           partner_id?: string | null
+          phone?: string | null
           saved_attribution_code?: string | null
           updated_at?: string
         }
@@ -706,7 +733,6 @@ export type Database = {
           created_at: string
           establishment_id: string | null
           id: string
-          onboarding_completed_at: string | null
           partner_id: string | null
           role: string
           source: string
@@ -718,7 +744,6 @@ export type Database = {
           created_at?: string
           establishment_id?: string | null
           id?: string
-          onboarding_completed_at?: string | null
           partner_id?: string | null
           role: string
           source: string
@@ -730,7 +755,6 @@ export type Database = {
           created_at?: string
           establishment_id?: string | null
           id?: string
-          onboarding_completed_at?: string | null
           partner_id?: string | null
           role?: string
           source?: string
@@ -1015,42 +1039,36 @@ export type Database = {
           created_at: string
           display_name: string
           email: string | null
-          entity_type: string
           id: string
           identification_number: string | null
           identification_type: string | null
           legal_name: string | null
           partner_city: string | null
           phone: string | null
-          status: string
           updated_at: string
         }
         Insert: {
           created_at?: string
           display_name: string
           email?: string | null
-          entity_type?: string
           id?: string
           identification_number?: string | null
           identification_type?: string | null
           legal_name?: string | null
           partner_city?: string | null
           phone?: string | null
-          status?: string
           updated_at?: string
         }
         Update: {
           created_at?: string
           display_name?: string
           email?: string | null
-          entity_type?: string
           id?: string
           identification_number?: string | null
           identification_type?: string | null
           legal_name?: string | null
           partner_city?: string | null
           phone?: string | null
-          status?: string
           updated_at?: string
         }
         Relationships: []
@@ -1954,6 +1972,10 @@ export type Database = {
         }
         Returns: string
       }
+      apply_order_line_ledger_transition: {
+        Args: { p_new_status: string; p_order_line_ids: string[] }
+        Returns: undefined
+      }
       apply_payment_webhook: {
         Args: {
           p_external_reference: string
@@ -1965,6 +1987,24 @@ export type Database = {
       }
       cancel_order: { Args: { p_order_id: string }; Returns: Json }
       check_partner_invitation: { Args: { p_token: string }; Returns: Json }
+      claim_pms_poll_batch: {
+        Args: { p_limit?: number }
+        Returns: {
+          establishment_id: string
+          lobby_api_token: string
+          order_line_id: string
+          pms_booking_id: string
+        }[]
+      }
+      client_key_for_order: {
+        Args: {
+          p_account_id: string
+          p_holder_email: string
+          p_holder_phone: string
+          p_order_id: string
+        }
+        Returns: string
+      }
       consume_partner_invitation: {
         Args: {
           p_document_version: string
@@ -1979,7 +2019,6 @@ export type Database = {
         Args: {
           p_audience: string
           p_channel: string
-          p_include_incomplete?: boolean
           p_message_template: string
         }
         Returns: Json
@@ -2027,7 +2066,6 @@ export type Database = {
           p_crm_profile?: Json
           p_display_name: string
           p_email?: string
-          p_entity_type: string
           p_establishment_id?: string
           p_identification_number?: string
           p_identification_type?: string
@@ -2096,9 +2134,15 @@ export type Database = {
         Args: { p_establishment_id?: string; p_role: string; uid: string }
         Returns: boolean
       }
+      haversine_km: {
+        Args: { p_lat1: number; p_lat2: number; p_lon1: number; p_lon2: number }
+        Returns: number
+      }
+      invoke_pms_nightly_contract_check: { Args: never; Returns: undefined }
+      invoke_pms_poll_bookings: { Args: never; Returns: undefined }
       is_admin: { Args: { uid: string }; Returns: boolean }
       list_audience_members: {
-        Args: { p_audience: string; p_include_incomplete?: boolean }
+        Args: { p_audience: string }
         Returns: {
           account_id: string
           email: string
@@ -2106,20 +2150,79 @@ export type Database = {
           reachable: boolean
         }[]
       }
+      list_client_orders: {
+        Args: { p_client_key: string }
+        Returns: {
+          created_at: string
+          holder_email: string
+          holder_name: string
+          holder_phone: string
+          order_id: string
+          payment_status: string
+          referrer_display_name: string
+          referrer_partner_id: string
+        }[]
+      }
       list_clients: {
         Args: {
-          p_email?: string
           p_limit?: number
           p_offset?: number
           p_search?: string
+          p_sort_desc?: boolean
+          p_sort_key?: string
+          p_status?: string
         }
         Returns: {
           client_key: string
+          client_stage: string
           display_name: string
           email: string
           last_order_at: string
           orders_count: number
           phone: string
+          total_count: number
+        }[]
+      }
+      list_establishments_admin: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_sort_desc?: boolean
+          p_sort_key?: string
+          p_status?: string
+        }
+        Returns: {
+          activities_count: number
+          id: string
+          name: Json
+          operator_inactive: boolean
+          partner_display_name: string
+          partner_id: string
+          pending_proposal_id: string
+          pending_proposal_kind: string
+          status: string
+          total_count: number
+        }[]
+      }
+      list_partners_admin: {
+        Args: {
+          p_city?: string
+          p_lat?: number
+          p_limit?: number
+          p_lon?: number
+          p_offset?: number
+          p_radius_km?: number
+          p_role?: string
+          p_search?: string
+          p_sort_desc?: boolean
+          p_sort_key?: string
+        }
+        Returns: {
+          active_roles: string
+          display_name: string
+          establishments_count: number
+          id: string
           total_count: number
         }[]
       }
@@ -2172,6 +2275,7 @@ export type Database = {
         }
         Returns: Json
       }
+      normalize_price_tiers: { Args: { p_price_tiers: Json }; Returns: Json }
       offboarding_attest_payments: {
         Args: { p_note: string; p_offboarding_id: string }
         Returns: Json
@@ -2202,6 +2306,7 @@ export type Database = {
           p_date: string
           p_product_id: string
           p_room_type_id: string
+          p_stay_rates: Json
           p_tier_base_price_cop: number
         }
         Returns: number
@@ -2240,6 +2345,19 @@ export type Database = {
         Args: { p_bank: Json; p_establishment_id: string; p_reason: string }
         Returns: Json
       }
+      set_establishment_pms_connector: {
+        Args: {
+          p_connector_active?: boolean
+          p_establishment_id: string
+          p_lobby_api_token?: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
+      set_establishment_status: {
+        Args: { p_establishment_id: string; p_note?: string; p_status: string }
+        Returns: Json
+      }
       set_order_line_status: {
         Args: {
           p_new_status: string
@@ -2250,6 +2368,15 @@ export type Database = {
       }
       set_partner_code_active: {
         Args: { p_active: boolean; p_code: string; p_note?: string }
+        Returns: Json
+      }
+      set_partner_location: {
+        Args: {
+          p_address?: string
+          p_lat?: number
+          p_lon?: number
+          p_partner_id: string
+        }
         Returns: Json
       }
       set_product_availability: {
@@ -2339,6 +2466,10 @@ export type Database = {
           p_note?: string
           p_operated_directly?: boolean
         }
+        Returns: Json
+      }
+      update_my_account_profile: {
+        Args: { p_full_name: string; p_phone?: string }
         Returns: Json
       }
       withdraw_establishment_proposal: {

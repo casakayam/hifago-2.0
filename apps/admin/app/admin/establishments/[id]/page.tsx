@@ -6,6 +6,8 @@ import { formatCop } from "@hifago/domain";
 import { Table } from "@hifago/ui";
 import { EstablishmentPhotosBlock } from "./EstablishmentPhotosBlock";
 import { EstablishmentEditBlock } from "./EstablishmentEditBlock";
+import { EstablishmentPmsBlock } from "./EstablishmentPmsBlock";
+import { EstablishmentStatusBlock } from "./EstablishmentStatusBlock";
 
 export default async function AdminEstablishmentDetailPage({
   params,
@@ -16,9 +18,14 @@ export default async function AdminEstablishmentDetailPage({
   // RLS (establishments_select) : l'admin voit n'importe quel établissement. Tous les champs de
   // présentation sont désormais éditables ici (docs/specs/06-gestion-etablissement.md §5.1) —
   // avant cette feature, seul `name` était lu (titre de page, lecture seule).
+  // lobby_api_token n'est jamais lu (illisible même pour l'admin via PostgREST, cf. migration
+  // 20260819110000_pms_connector_schema.sql) — lobby_has_token (dérivée, non secrète) suffit à
+  // piloter l'affichage "token configurado".
   const { data: establishment } = await supabase
     .from("establishments")
-    .select("id, name, description, address, lat, lon, operated_directly")
+    .select(
+      "id, name, description, address, lat, lon, operated_directly, status, lobby_connector_active, lobby_has_token, lobby_last_synced_at",
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -68,6 +75,8 @@ export default async function AdminEstablishmentDetailPage({
         </h1>
       </div>
 
+      <EstablishmentStatusBlock establishmentId={establishment.id} initialStatus={establishment.status} />
+
       <EstablishmentEditBlock
         establishmentId={establishment.id}
         initialNameEs={asLocalizedField(establishment.name)?.es ?? ""}
@@ -78,6 +87,13 @@ export default async function AdminEstablishmentDetailPage({
         initialLon={establishment.lon !== null ? String(establishment.lon) : ""}
         initialOperatedDirectly={establishment.operated_directly}
         pendingEditProposalId={pendingEditProposal?.id ?? null}
+      />
+
+      <EstablishmentPmsBlock
+        establishmentId={establishment.id}
+        initialConnectorActive={establishment.lobby_connector_active}
+        initialHasToken={establishment.lobby_has_token ?? false}
+        initialLastSyncedAt={establishment.lobby_last_synced_at}
       />
 
       <EstablishmentPhotosBlock establishmentId={establishment.id} initialPhotos={photos} />

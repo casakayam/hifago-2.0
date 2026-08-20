@@ -141,8 +141,8 @@ instantané) est acté, le détail ne l'est pas encore.
   foi, cf. client §5).
 
 **Registre des identités partenaires :**
-- Accorder une capacité (référent et/ou prestataire), changer son statut (en préparation / en
-  revue / suspendue / active).
+- Accorder une capacité (référent et/ou prestataire), changer son statut (active / suspendue —
+  active dès la création, décision Jérôme 2026-08-20).
 - Rattacher (ou transférer) un établissement à une identité partenaire.
 
 **Décision (2026-08-11) — accès total et gestion de tous les comptes** : l'admin peut **éditer
@@ -362,7 +362,7 @@ aujourd'hui du schéma (`start_date`/`end_date` seuls).
 pour relancer, il ne re-décide pas ce que le serveur a déjà tranché.
 
 **Gestion des capacités** : accorder une capacité (référent et/ou prestataire), changer son
-statut (en préparation / en revue / suspendue / active) — pour **les deux** capacités
+statut (active / suspendue) — pour **les deux** capacités
 symétriquement (socio §3a, la suspension du référent existe aussi dans la cible). Accorder la
 capacité prestataire accorde toujours la capacité référent avec (invariant à conserver).
 
@@ -480,7 +480,7 @@ du décompte.
 
 **Identités pas encore pleinement actives** : une case explicite permet de les inclure quand
 même dans une audience (marquées comme telles), décochée par défaut — jamais une audience qui
-varie en silence selon un état d'onboarding invisible à l'écran.
+varie en silence selon un statut de capacité invisible à l'écran.
 
 **Décision (2026-08-11) — contrainte de canal, pas symétrique entre WhatsApp et email** :
 WhatsApp reste soumis à des **modèles pré-approuvés** (contrainte de la plateforme de

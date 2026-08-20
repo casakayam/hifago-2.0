@@ -4,7 +4,7 @@ import { useState } from "react";
 import { createClient } from "@hifago/supabase/client";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
 import { Button, toast } from "@hifago/ui";
-import { CatalogCard, CatalogCardGrid } from "@/components/catalog-card";
+import { CatalogCard } from "@/components/catalog-card";
 
 const WITHDRAW_ERRORS: Record<string, string> = {
   proposal_not_found: "No se encontró la propuesta.",
@@ -17,8 +17,9 @@ type PendingCreation = { id: string; payload: unknown; created_at: string };
 // Rendu en CatalogCard comme le reste de /partner/establishment (retour Jérôme : une proposition
 // en attente reste une carte normale, seul le tag de statut la distingue) — jamais deux tags
 // empilés, "Pendiente de revisión" REMPLACE le tag activo/archivado qui n'existe pas encore ici.
-// CatalogCardGrid même pour une seule carte : garde la même largeur de colonne que le reste de la
-// grille en dessous, plutôt qu'une carte qui s'étire sur toute la largeur de la page.
+// layout="horizontal", rendue seule (jamais dans CatalogCardGrid) : même traitement pleine largeur
+// qu'un établissement déjà approuvé (EstablishmentStack.tsx) — un établissement en attente ne doit
+// jamais retomber sur l'ancienne mise en page en grille (retour Jérôme, 2026-08-19).
 export function PendingCreationBanner({ proposal: initialProposal }: { proposal: PendingCreation }) {
   const [proposal, setProposal] = useState<PendingCreation | null>(initialProposal);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
@@ -48,33 +49,34 @@ export function PendingCreationBanner({ proposal: initialProposal }: { proposal:
 
   if (!proposal) return null;
 
-  const proposedName = resolveLocalizedField(
-    asLocalizedField((proposal.payload as { name?: unknown })?.name),
-    "es",
-  );
+  const payload = proposal.payload as { name?: unknown; photos?: { storage_path: string }[] };
+  const proposedName = resolveLocalizedField(asLocalizedField(payload?.name), "es");
+  const supabase = createClient();
+  const photos = (payload?.photos ?? []).map((photo, index) => ({
+    id: `${proposal.id}-${index}`,
+    url: supabase.storage.from("catalog-media").getPublicUrl(photo.storage_path).data.publicUrl,
+    alt: proposedName ?? proposal.id,
+  }));
 
   return (
-    <CatalogCardGrid>
-      <CatalogCard
-        testId="pending-creation-banner"
-        photos={[]}
-        title={proposedName ?? proposal.id}
-        statusChips={[{ label: "Pendiente de revisión", color: "warning" }]}
-        footer={
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              isDisabled={isWithdrawing}
-              onPress={handleWithdraw}
-              data-testid="withdraw-creation-proposal-button"
-            >
-              {isWithdrawing ? "Retirando…" : "Retirar"}
-            </Button>
-          </>
-        }
-      />
-    </CatalogCardGrid>
+    <CatalogCard
+      testId="pending-creation-banner"
+      layout="horizontal"
+      photos={photos}
+      title={proposedName ?? proposal.id}
+      statusChips={[{ label: "Pendiente de revisión", color: "warning" }]}
+      footer={
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          isDisabled={isWithdrawing}
+          onPress={handleWithdraw}
+          data-testid="withdraw-creation-proposal-button"
+        >
+          {isWithdrawing ? "Retirando…" : "Retirar"}
+        </Button>
+      }
+    />
   );
 }

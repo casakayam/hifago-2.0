@@ -43,7 +43,7 @@ export default async function AdminInvitationDetailPage({
   const resolvedPartnerId = resolvedPartnerByInvitation.get(invitation.id) ?? null;
   const missingEstablishment = missingEstablishmentByInvitation.has(invitation.id);
 
-  const hint = invitation.partner_hint as { display_name?: string; entity_type?: string; partner_city?: string } | null;
+  const hint = invitation.partner_hint as { display_name?: string; partner_city?: string } | null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -86,7 +86,6 @@ export default async function AdminInvitationDetailPage({
             <dt className="text-muted">Sugerencia al crear</dt>
             <dd>
               {hint.display_name ?? "—"}
-              {hint.entity_type ? ` · ${hint.entity_type}` : ""}
               {hint.partner_city ? ` · ${hint.partner_city}` : ""}
             </dd>
           </div>

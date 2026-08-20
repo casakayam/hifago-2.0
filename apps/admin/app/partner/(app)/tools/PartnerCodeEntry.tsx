@@ -3,12 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { Button, buttonVariants, Card, Input, Label } from "@hifago/ui";
-
-// wa.me deep-link — mécanisme de contact WhatsApp déjà utilisé ailleurs dans l'app (public/app.js
-// `setupSupportLink`, public/reservar.js `waLink`/`WHATSAPP_NUMBER`) : même numéro, même schéma
-// d'URL (`https://wa.me/<digits>?text=<message pré-rempli>`), aucun nouveau canal de configuration
-// introduit ici (pas de variable d'env, pas de second numéro).
-const SUPPORT_WHATSAPP_NUMBER = "573215764841";
+import { buildWhatsAppLink, SUPPORT_WHATSAPP_NUMBER } from "@/lib/whatsapp";
 
 export function PartnerCodeEntry({ code, link }: { code: string; link: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -73,7 +68,7 @@ export function PartnerCodeEntry({ code, link }: { code: string; link: string })
   }
 
   const whatsappMessage = `Hola Jérome, soy "${code}", tengo un problema con mi enlace/QR de venta. Me puedes ayudar porfa?`;
-  const whatsappHref = `https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappMessage)}`;
+  const whatsappHref = buildWhatsAppLink(SUPPORT_WHATSAPP_NUMBER, whatsappMessage);
 
   return (
     <Card data-testid="partner-code-entry">

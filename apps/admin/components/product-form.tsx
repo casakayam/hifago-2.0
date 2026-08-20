@@ -46,6 +46,9 @@ export type EditableProduct = {
   stay_rates: unknown;
   type: string;
   establishment_id: string;
+  // Spec 21 (connecteur LobbyPMS) — admin-only (cf. product-type-fields.tsx showLobbyFields).
+  lobby_category_id: number | null;
+  lobby_product_id: number | null;
 };
 
 // Spec 15 — variant "socio-proposal" : un socio ne peut jamais écrire products directement (RLS
@@ -125,6 +128,8 @@ export function ProductForm({
           capacity: product.capacity,
           defaultCapacity: product.default_capacity,
           stayRates: product.stay_rates,
+          lobbyCategoryId: product.lobby_category_id,
+          lobbyProductId: product.lobby_product_id,
         }
       : undefined,
   );
@@ -256,7 +261,11 @@ export function ProductForm({
             ? {
                 capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
                 stay_rates: toStayRatesColumn(fields.stayRates),
+                lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
               }
+            : {}),
+          ...(isActivity
+            ? { lobby_product_id: fields.lobbyProductId.trim() ? Number(fields.lobbyProductId) : null }
             : {}),
           ...(hasDefaultCapacity
             ? { default_capacity: fields.defaultCapacity.trim() ? Number(fields.defaultCapacity) : null }
@@ -297,7 +306,10 @@ export function ProductForm({
       }
 
       toast.success("Propuesta enviada.");
-      router.push("/partner/products");
+      // Refonte vue prestataire (2026-08-19) : "Mis actividades" fusionnée dans
+      // "/partner/establishment" — cible directe plutôt que "/partner/products" (qui redirige
+      // désormais ici, un hop de moins).
+      router.push("/partner/establishment");
       router.refresh();
       return;
     }
@@ -311,9 +323,10 @@ export function ProductForm({
         name: nameJson,
         description: descriptionJson,
         slug: slugify(nombreEs),
-        // Explicitement false à la création (pas la valeur par défaut true de la colonne) : créer
-        // un produit ne le rend pas vendable immédiatement (feature 4, bloc séparé).
-        sellable: false,
+        // sellable non précisé, hérite du défaut colonne (true) : un produit créé directement par
+        // l'admin est publié tout de suite, même principe que create_establishment/
+        // create_product_from_proposal (retour Jérôme, 2026-08-20) — l'ancien geste de publication
+        // séparée (feature 4) est abandonné pour toute création déjà initiée par un admin.
         price_cop: isEvento || isHotel ? null : price,
         duration_days: isCamp ? Number(fields.durationDays) : null,
         ...(isEvento
@@ -358,7 +371,11 @@ export function ProductForm({
           ? {
               capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
               stay_rates: toStayRatesColumn(fields.stayRates),
+              lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
             }
+          : {}),
+        ...(isActivity
+          ? { lobby_product_id: fields.lobbyProductId.trim() ? Number(fields.lobbyProductId) : null }
           : {}),
         ...(hasDefaultCapacity
           ? { default_capacity: fields.defaultCapacity.trim() ? Number(fields.defaultCapacity) : null }
@@ -556,6 +573,7 @@ export function ProductForm({
         showHotelRoomsEditor={!isEditing}
         showSlotRulesEditor={!isEditing}
         allowCreateTags={variant === "admin"}
+        showLobbyFields={variant === "admin"}
         // Retour Jérôme (2026-08-18) : les chambres/dortoires doivent pouvoir avoir des photos
         // aussi côté socio — les masquer ici était la seule raison pour laquelle elles ne
         // pouvaient jamais en avoir (buildProductCreationPayload transporte désormais ces photos,

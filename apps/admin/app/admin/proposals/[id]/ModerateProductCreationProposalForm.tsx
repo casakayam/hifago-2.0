@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
 import type { Json } from "@hifago/supabase/database.types";
-import { Button, Label, Modal, TextArea, TextField, toast } from "@hifago/ui";
+import { Button, Label, TextArea, TextField, toast } from "@hifago/ui";
 import { LocalizedTextField, type LocalizedValue } from "@/components/localized-text-field";
 import { ProductTypeFields } from "@/components/product-type-fields";
 import type { TagOption } from "@/components/tags-multiselect";
@@ -27,7 +27,6 @@ type ModerateResult = {
   reason?: string;
   status?: string;
   reviewed_by_email?: string;
-  product_id?: string;
 };
 
 // name/description/photos : jamais couverts par RawProductFieldsPayload/payloadToFieldsInit
@@ -74,13 +73,6 @@ export function ModerateProductCreationProposalForm({
   }));
   const fields = useProductTypeFieldsState(payloadToFieldsInit(proposedPayload));
   const [rejectionReason, setRejectionReason] = useState("");
-  // Retour Jérôme (2026-08-18) : create_product_from_proposal crée toujours le produit
-  // sellable=false (geste de publication volontairement séparé, feature 4) — sans cette invite,
-  // l'admin devait re-naviguer manuellement vers la fiche pour la publier après coup. Affichée
-  // seulement après une approbation réussie, jamais bloquante (fermer = rester non publié, comme
-  // avant ce correctif).
-  const [publishPrompt, setPublishPrompt] = useState<{ productId: string } | null>(null);
-  const [isPublishing, setIsPublishing] = useState(false);
 
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -88,34 +80,6 @@ export function ModerateProductCreationProposalForm({
   function goToProposalsList() {
     router.push("/admin/proposals");
     router.refresh();
-  }
-
-  async function handlePublishChoice(publish: boolean) {
-    if (!publishPrompt) return;
-    if (!publish) {
-      setPublishPrompt(null);
-      goToProposalsList();
-      return;
-    }
-
-    setIsPublishing(true);
-    const supabase = createClient();
-    const { error: rpcError } = await supabase.rpc("set_product_sellable", {
-      p_product_id: publishPrompt.productId,
-      p_sellable: true,
-    });
-    setIsPublishing(false);
-
-    if (rpcError) {
-      toast.danger("No se pudo publicar la ficha. Puedes hacerlo luego desde su edición.");
-      setPublishPrompt(null);
-      goToProposalsList();
-      return;
-    }
-
-    toast.success("Ficha publicada.");
-    setPublishPrompt(null);
-    goToProposalsList();
   }
 
   async function handleDecision(decision: "approve" | "reject") {
@@ -157,17 +121,11 @@ export function ModerateProductCreationProposalForm({
       return;
     }
 
-    toast.success(decision === "approve" ? "Propuesta aprobada." : "Propuesta rechazada.");
-
-    // Une approbation crée toujours un produit sellable=false (create_product_from_proposal) — sauf
-    // si le résultat n'expose exceptionnellement aucun product_id (défense en profondeur, ne
-    // devrait jamais arriver pour decision="approve" sur kind='create'), proposer de publier tout
-    // de suite plutôt que de renvoyer vers la liste des propositions.
-    if (decision === "approve" && result.product_id) {
-      setPublishPrompt({ productId: result.product_id });
-      return;
-    }
-
+    // Retour Jérôme (2026-08-20) : create_product_from_proposal publie désormais directement
+    // (sellable=true) à l'approbation — revirement du geste de publication séparée du 2026-08-18,
+    // plus besoin de proposer "¿Publicar ahora?" ici. set_product_sellable reste disponible depuis
+    // la fiche produit pour dépublier après coup.
+    toast.success(decision === "approve" ? "Propuesta aprobada y publicada." : "Propuesta rechazada.");
     goToProposalsList();
   }
 
@@ -246,49 +204,6 @@ export function ModerateProductCreationProposalForm({
           {isSubmitting ? "Procesando…" : "Rechazar"}
         </Button>
       </div>
-
-      <Modal>
-        <Modal.Backdrop
-          isOpen={publishPrompt !== null}
-          onOpenChange={(open) => {
-            if (!open) handlePublishChoice(false);
-          }}
-        >
-          <Modal.Container>
-            <Modal.Dialog>
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>¿Publicar esta ficha ahora?</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
-                <p className="text-sm text-muted">
-                  La propuesta fue aprobada, pero la ficha todavía no está publicada (no vendible).
-                  Puedes publicarla ahora mismo o dejarla para más tarde desde su edición.
-                </p>
-              </Modal.Body>
-              <div className="flex justify-end gap-2 p-4 pt-0">
-                <Button
-                  type="button"
-                  variant="outline"
-                  isDisabled={isPublishing}
-                  onPress={() => handlePublishChoice(false)}
-                  data-testid="skip-publish-button"
-                >
-                  Más tarde
-                </Button>
-                <Button
-                  type="button"
-                  isDisabled={isPublishing}
-                  onPress={() => handlePublishChoice(true)}
-                  data-testid="confirm-publish-button"
-                >
-                  {isPublishing ? "Publicando…" : "Publicar ahora"}
-                </Button>
-              </div>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
     </div>
   );
 }

@@ -60,14 +60,35 @@ export const INVITATIONS_DEFAULT_SORT = { key: "created_at", direction: "desc" }
 export const PARTNERS_SORT_WHITELIST: SortWhitelist = {
   created_at: "created_at",
   display_name: "display_name",
-  status: "status",
-  entity_type: "entity_type",
   partner_city: "partner_city",
   updated_at: "updated_at",
 };
 // Remplace l'ancien défaut display_name asc (alphabétique) — même règle générale que orders/
 // products/etc (décision Jérôme 2026-08-15) ; l'ordre alphabétique reste accessible en un clic.
 export const PARTNERS_DEFAULT_SORT = { key: "created_at", direction: "desc" } as const;
+
+// order_lines (vue "Mis reservas" prestataire) — tri par défaut date ASC (pas le "plus récent en
+// premier" habituel du 2026-08-15, cf. ORDERS_DEFAULT_SORT) : une liste de réservations À VENIR se
+// lit chronologiquement, la plus proche en premier — demande explicite de Jérôme (refonte vue
+// prestataire, 2026-08-19), combinée au filtre par défaut "semaine à venir" posé côté page.tsx.
+export const RESERVATIONS_SORT_WHITELIST: SortWhitelist = {
+  date: "date",
+  created_at: "created_at",
+  qty: "qty",
+  status: "status",
+  total_cop: "total_cop",
+};
+export const RESERVATIONS_DEFAULT_SORT = { key: "date", direction: "asc" } as const;
+
+// Revue admin clientes (Jérôme, 2026-08-19) — client_key n'est pas une colonne stockée (calcul
+// coalesce account_id/email/phone/order_id), donc jamais une clé de tri valide ; les 3 colonnes
+// ci-dessous sont bien de vraies colonnes issues de l'agrégat côté RPC list_clients.
+export const CLIENTS_SORT_WHITELIST: SortWhitelist = {
+  display_name: "display_name",
+  last_order_at: "last_order_at",
+  orders_count: "orders_count",
+};
+export const CLIENTS_DEFAULT_SORT = { key: "last_order_at", direction: "desc" } as const;
 
 // catalog_tags n'a pas de updated_at (20260815210000_catalog_tags.sql) — created_at/slug/label
 // seules colonnes disponibles.

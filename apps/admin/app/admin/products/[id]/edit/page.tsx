@@ -4,11 +4,14 @@ import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
 import { buttonVariants } from "@hifago/ui";
 import { ProductForm } from "@/components/product-form";
+// Correctif (spec 21, bug pré-existant sans lien avec elle) : jamais importer productTypeGating/
+// availabilityScreenFor depuis useProductTypeFieldsState.ts ("use client") depuis un Server
+// Component — cf. apps/admin/lib/products/productTypeGating.ts pour l'explication complète.
 import {
   productTypeGating,
   availabilityScreenFor,
   type ProductType,
-} from "@/lib/products/useProductTypeFieldsState";
+} from "@/lib/products/productTypeGating";
 import type { DraftSlotRule } from "@/lib/products/slotRules";
 import type { DraftRoomType } from "@/lib/products/hotelRooms";
 import { tiersFromColumn } from "@/lib/products/priceTiers";
@@ -35,7 +38,7 @@ export default async function EditProductPage({
   const { data: product } = await supabase
     .from("products")
     .select(
-      "id, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, default_capacity, stay_rates, category, type, establishment_id, sellable",
+      "id, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, default_capacity, stay_rates, category, type, establishment_id, sellable, lobby_category_id, lobby_product_id",
     )
     .eq("id", id)
     .maybeSingle();

@@ -1,0 +1,204 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { createClient } from "@hifago/supabase/client";
+import { asLocalizedField, resolveLocalizedField, formatCop } from "@hifago/domain";
+import { Button, buttonVariants, toast } from "@hifago/ui";
+import { CatalogCard, CatalogCardGrid, type CatalogCardStatus } from "@/components/catalog-card";
+import { EmptyStateCta } from "@/components/EmptyStateCta";
+import { availabilityScreenFor, type ProductType } from "@/lib/products/useProductTypeFieldsState";
+
+export type ProductCardRow = {
+  id: string;
+  type: string;
+  name: string;
+  priceCop: number | null;
+  sellable: boolean;
+  tags: string[];
+  photos: { id: string; url: string; alt: string }[];
+  pendingEdit: boolean;
+  hasSlotRules: boolean;
+};
+
+export type PendingProductCreationRow = {
+  id: string;
+  type: string | null;
+  payload: unknown;
+  created_at: string;
+};
+
+const WITHDRAW_ERRORS: Record<string, string> = {
+  proposal_not_found: "No se encontró la propuesta.",
+  not_pending: "Esta propuesta ya fue procesada.",
+  not_authenticated: "No se pudo verificar tu sesión. Vuelve a intentarlo.",
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  activity: "Actividad",
+  evento: "Evento",
+  camp: "Campamento",
+  lodging: "Alojamiento",
+  hotel: "Hotel",
+  transport: "Transporte",
+};
+
+// Fusion de ProductsGrid.tsx + PendingProductCreationsList.tsx (refonte vue prestataire,
+// 2026-08-19) — UNE seule CatalogCardGrid par établissement, propositions de création ET activités
+// publiées mélangées, chacune avec son propre tag de statut ("Pendiente de revisión" pour une
+// proposition, "Publicada"/"No publicada" sinon) : demande explicite de Jérôme, jamais deux listes
+// séparées ("ça doit être dans la vue juste avec un tag bien évident de l'état de l'activité").
+export function EstablishmentActivities({
+  establishmentId,
+  products,
+  pendingCreations: initialPendingCreations,
+}: {
+  establishmentId: string;
+  products: ProductCardRow[];
+  pendingCreations: PendingProductCreationRow[];
+}) {
+  const [pendingCreations, setPendingCreations] = useState(initialPendingCreations);
+  const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
+  // Un seul client, réutilisé pour la soumission et pour résoudre l'URL publique de chaque photo
+  // proposée — même optimisation que PendingProductCreationsList.tsx (évite un createClient() par
+  // photo à chaque rendu).
+  const supabase = createClient();
+
+  async function handleWithdraw(proposalId: string) {
+    setWithdrawingId(proposalId);
+
+    const { data, error: rpcError } = await supabase.rpc("withdraw_product_proposal", {
+      p_proposal_id: proposalId,
+    });
+
+    setWithdrawingId(null);
+
+    const result = data as { ok: boolean; reason?: string } | null;
+    if (rpcError || !result?.ok) {
+      toast.danger(
+        WITHDRAW_ERRORS[result?.reason ?? ""] ?? "No se pudo retirar la propuesta. Inténtalo de nuevo."
+      );
+      return;
+    }
+
+    setPendingCreations((prev) => prev.filter((p) => p.id !== proposalId));
+    toast.success("Propuesta retirada.");
+  }
+
+  if (products.length === 0 && pendingCreations.length === 0) {
+    return (
+      <EmptyStateCta
+        title="Aún no tienes actividades en este establecimiento"
+        description="Añade tu primera actividad para empezar a recibir reservas."
+        actionHref="/partner/products/new"
+        actionLabel="Añadir actividad"
+        testId={`empty-activities-${establishmentId}`}
+      />
+    );
+  }
+
+  return (
+    <CatalogCardGrid>
+      {pendingCreations.map((proposal) => {
+        const payload = (proposal.payload ?? {}) as {
+          name?: unknown;
+          photos?: { storage_path: string }[];
+        };
+        const proposedName = resolveLocalizedField(asLocalizedField(payload.name), "es");
+        const photos = (Array.isArray(payload.photos) ? payload.photos : []).map((photo, index) => ({
+          id: `${proposal.id}-${index}`,
+          url: supabase.storage.from("catalog-media").getPublicUrl(photo.storage_path).data.publicUrl,
+          alt: proposedName ?? proposal.id,
+        }));
+
+        return (
+          <CatalogCard
+            key={proposal.id}
+            testId={`pending-product-creation-${proposal.id}`}
+            photos={photos}
+            title={proposedName ?? proposal.id}
+            meta={TYPE_LABELS[proposal.type ?? ""] ?? proposal.type ?? undefined}
+            statusChips={[{ label: "Pendiente de revisión", color: "warning" }]}
+            footer={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                isDisabled={withdrawingId === proposal.id}
+                onPress={() => handleWithdraw(proposal.id)}
+                data-testid={`withdraw-product-creation-${proposal.id}`}
+              >
+                {withdrawingId === proposal.id ? "Retirando…" : "Retirar"}
+              </Button>
+            }
+          />
+        );
+      })}
+
+      {products.map((product) => {
+        // Un tag de statut à la fois, jamais deux empilés : "en révision" prend le pas sur
+        // publié/brouillon plutôt que s'y ajouter — pattern déjà en place (ProductsGrid.tsx),
+        // repris tel quel.
+        const statusChips: CatalogCardStatus[] = product.pendingEdit
+          ? [{ label: "Edición pendiente de revisión", color: "warning" }]
+          : [
+              product.sellable
+                ? { label: "Publicada", color: "success" }
+                : { label: "No publicada", color: "default" },
+            ];
+
+        const availabilityScreen = availabilityScreenFor(product.type as ProductType, product.hasSlotRules);
+
+        return (
+          <CatalogCard
+            key={product.id}
+            testId={`product-row-${product.id}`}
+            photos={product.photos}
+            title={product.name}
+            tags={product.tags}
+            statusChips={statusChips}
+            meta={product.priceCop === null ? undefined : formatCop(product.priceCop)}
+            footer={
+              <>
+                <Link
+                  href={`/partner/products/${product.id}/edit`}
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                  data-testid={`edit-link-${product.id}`}
+                >
+                  Proponer edición
+                </Link>
+                {availabilityScreen === "generic" || availabilityScreen === "slot" ? (
+                  <Link
+                    href={`/partner/products/${product.id}/availability`}
+                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                    data-testid={`availability-link-${product.id}`}
+                  >
+                    Calendario
+                  </Link>
+                ) : null}
+                {availabilityScreen === "room" ? (
+                  <Link
+                    href={`/partner/products/${product.id}/room-availability`}
+                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                    data-testid={`room-availability-link-${product.id}`}
+                  >
+                    Cupos por habitación
+                  </Link>
+                ) : null}
+                {availabilityScreen === "slot" ? (
+                  <Link
+                    href={`/partner/products/${product.id}/slot-availability`}
+                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                    data-testid={`slot-availability-link-${product.id}`}
+                  >
+                    Cupos por horario
+                  </Link>
+                ) : null}
+              </>
+            }
+          />
+        );
+      })}
+    </CatalogCardGrid>
+  );
+}

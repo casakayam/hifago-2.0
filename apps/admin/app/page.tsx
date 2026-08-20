@@ -31,7 +31,10 @@ export default async function RootPage() {
     p_role: "operator",
   });
   if (isOperator) {
-    redirect("/partner/products");
+    // Refonte vue prestataire (2026-08-19) : "Mis actividades" fusionnée dans
+    // "/partner/establishment" — évite un double redirect (/partner/products lui-même redirige
+    // désormais vers /partner/establishment).
+    redirect("/partner/establishment");
   }
 
   const { data: isReferrer } = await supabase.rpc("has_capability", {
@@ -42,11 +45,13 @@ export default async function RootPage() {
     redirect("/partner/commissions");
   }
 
-  // Feature 31 : jusqu'ici inatteignable en pratique (aucun compte n'existait sans rôle — la seule
-  // création de compte passait par /partner/join, qui accorde toujours au moins `referrer`).
-  // L'inscription libre change ça : un compte fraîchement créé sans capacité doit atterrir sur son
-  // dashboard (qui affiche déjà cet état, cf. /partner/(app)/page.tsx « Aún no tienes ningún rol
-  // asignado »), jamais sur /partner/join sans jeton — cet écran attend un `?token=` et affiche
-  // sinon une erreur d'invitation invalide, un faux message pour ce cas.
+  // Feature 31 — révision 2026-08-19 : redevenu rare (inscription libre bloquée,
+  // supabase/config.toml enable_signup=false) — ne concerne plus que les comptes créés PENDANT
+  // la fenêtre où l'inscription libre était active (ex. gmiro46@gmail.com, connecté via Google
+  // avant ce changement) ou provisionnés autrement sans capacité. Code défensif conservé tel
+  // quel : ce compte doit atterrir sur son dashboard (qui affiche déjà cet état, cf.
+  // /partner/(app)/page.tsx « Aún no tienes ningún rol asignado »), jamais sur /partner/join sans
+  // jeton — cet écran attend un `?token=` et affiche sinon une erreur d'invitation invalide, un
+  // faux message pour ce cas.
   redirect("/partner");
 }

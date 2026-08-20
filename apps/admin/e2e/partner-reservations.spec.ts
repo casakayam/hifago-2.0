@@ -19,7 +19,7 @@ function nextMonthMidDate(): string {
   return d.toISOString().slice(0, 10);
 }
 
-test("un socio voit dans Mis reservas une réservation réelle sur son produit, sans le téléphone du client ; l'admin y accède aussi depuis le calendrier", async ({
+test("un socio voit dans Mis reservas une réservation réelle sur son produit, avec le téléphone du client visible ; l'admin y accède aussi depuis le calendrier", async ({
   page,
   context,
 }) => {
@@ -78,14 +78,22 @@ test("un socio voit dans Mis reservas une réservation réelle sur son produit, 
   await page.getByTestId("submit-order-button").click();
   await page.waitForURL(redirectUrl);
 
-  // --- Socio operator : voit la réservation dans Mis reservas, jamais le téléphone --------------
+  // --- Socio operator : voit la réservation dans Mis reservas, téléphone du client visible -------
+  // Décision Jérôme (2026-08-19, refonte vue prestataire) : lève la restriction "PII minimale"
+  // documentée en 20260817180000 (order_lines.holder_phone/holder_email désormais exposés au
+  // prestataire sur ses propres établissements, cf. migration 20260819180000). Inversion de
+  // l'assertion précédente ("sans le téléphone du client").
+  // Sans filtre explicite, "Mis reservas" s'ouvre par défaut sur la semaine à venir (demande
+  // Jérôme, refonte vue prestataire 2026-08-19) — `date` (15 du mois suivant) en est délibérément
+  // hors bornes (cf. commentaire de nextMonthMidDate()), donc `date_to` explicite ici pour inclure
+  // la réservation sans dépendre de la date d'exécution du test.
   await loginAs(context, SEEDED_ACCOUNTS.operadorPropuestas, SEEDED_PASSWORD);
-  await page.goto("/partner/reservations");
+  await page.goto(`/partner/reservations?date_to=${date}`);
 
   const row = page.locator("tr", { hasText: holderName });
   await expect(row).toBeVisible();
   await expect(row).toContainText(productName);
-  await expect(page.getByText(holderPhone)).toHaveCount(0);
+  await expect(row).toContainText(holderPhone);
 
   // --- Admin : le calendrier produit lie vers les réservations de ce jour précisément -----------
   await loginAs(context, SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
@@ -106,7 +114,7 @@ test("un socio voit dans Mis reservas une réservation réelle sur son produit, 
   // Élargissement d'autorisation de set_order_line_status (migration 20260818150000) : seule
   // transition que l'operator peut désormais déclencher lui-même, jamais via l'admin ici.
   await loginAs(context, SEEDED_ACCOUNTS.operadorPropuestas, SEEDED_PASSWORD);
-  await page.goto("/partner/reservations");
+  await page.goto(`/partner/reservations?date_to=${date}`);
 
   const reservationRow = page.locator("tr", { hasText: holderName });
   await expect(reservationRow).toBeVisible();

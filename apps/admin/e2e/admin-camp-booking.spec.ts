@@ -89,9 +89,8 @@ test("admin crée un camp, configure la ressource partagée et la capacité prop
   const productId = page.url().match(/\/admin\/products\/([^/]+)\/edit/)?.[1];
   if (!productId) throw new Error("productId introuvable dans l'URL d'édition");
 
-  // Publier le camp (sellable=false à la création, feature 4) — sans ça, products_select_public
-  // le cacherait à un visiteur anonyme plus bas.
-  await page.getByTestId("toggle-sellable-button").click();
+  // sellable=true dès la création (retour Jérôme, 2026-08-20) : plus besoin de publier
+  // explicitement avant que products_select_public l'expose à un visiteur anonyme plus bas.
   await expect(page.getByTestId("product-status-badge")).toHaveText("Vendible");
 
   // 3. Capacité PROPRE du camp (product_availability, feature 5, inchangée) — départ = jour 1,
