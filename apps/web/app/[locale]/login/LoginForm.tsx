@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import { Link } from "@/i18n/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { Button, Input, Label, TextField } from "@hifago/ui";
 
@@ -53,6 +54,18 @@ export function LoginForm({ next }: { next: string }) {
       <Button type="submit" isDisabled={isSubmitting}>
         {isSubmitting ? t("submitting") : t("submit")}
       </Button>
+
+      {/* Un client n'a besoin d'aucune capacité pour exister (contrairement à admin, où le
+          point d'entrée self-service a été retiré le 2026-08-19 — décision propre à ce
+          contexte-là, sans rapport ici) — lien discret vers l'inscription, jamais mis en avant. */}
+      <p className="text-center text-sm text-muted">
+        <Link
+          href={next !== "/" ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}
+          className="underline"
+        >
+          {t("signupLink")}
+        </Link>
+      </p>
     </form>
   );
 }

@@ -4,7 +4,20 @@
   },
   "HomePage": {
     "title": "Hifago",
-    "description": "Actividades y experiencias en Guatapé."
+    "description": "Actividades y experiencias en Guatapé.",
+    "searchLabel": "Buscar",
+    "searchPlaceholder": "Nombre del producto…",
+    "typeFilterLabel": "Tipo",
+    "typeFilterAllLabel": "Todos los tipos",
+    "noResults": "No encontramos productos con esos criterios.",
+    "types": {
+      "lodging": "Alojamiento",
+      "activity": "Actividad",
+      "transport": "Transporte",
+      "camp": "Camp",
+      "evento": "Evento",
+      "hotel": "Hotel"
+    }
   },
   "Login": {
     "title": "Iniciar sesión",
@@ -12,7 +25,30 @@
     "password": "Contraseña",
     "submit": "Iniciar sesión",
     "submitting": "Conectando…",
-    "error": "Correo o contraseña incorrectos."
+    "error": "Correo o contraseña incorrectos.",
+    "signupLink": "¿No tienes cuenta? Crear una"
+  },
+  "Signup": {
+    "title": "Crear cuenta",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "confirmPassword": "Confirmar contraseña",
+    "submit": "Crear cuenta",
+    "submitting": "Creando…",
+    "passwordMismatch": "Las contraseñas no coinciden.",
+    "genericError": "No se pudo crear la cuenta. Verifica los datos e inténtalo de nuevo.",
+    "loginLink": "¿Ya tienes cuenta?",
+    "loginLinkAction": "Iniciar sesión"
+  },
+  "VerifyEmail": {
+    "title": "Revisa tu correo",
+    "bodyWithEmail": "Te enviamos un enlace de confirmación a {email}. Haz clic en el enlace para activar tu cuenta.",
+    "bodyGeneric": "Te enviamos un enlace de confirmación por correo. Haz clic en el enlace para activar tu cuenta.",
+    "resend": "Reenviar correo",
+    "resendCooldown": "Reenviar correo ({seconds}s)",
+    "resent": "Correo reenviado.",
+    "resendError": "No se pudo reenviar el correo. Inténtalo de nuevo en unos segundos.",
+    "backToLogin": "Volver a iniciar sesión"
   },
   "Common": {
     "cancellationPolicy": "Una cancelación o una ausencia de tu parte nunca es reembolsada."
@@ -42,6 +78,7 @@
     "nightsCount": "{count, plural, one {# noche} other {# noches}}",
     "rangeUnavailable": "Alguna noche de este rango ya no está disponible.",
     "estimatedTotal": "Total estimado",
+    "establishmentTitle": "Sobre el establecimiento",
     "occurrence": {
       "recurringUntilDate": "Cada {days} días, hasta el {date}.",
       "recurringForCount": "Cada {days} días, durante {count} repeticiones.",

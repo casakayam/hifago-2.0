@@ -21,10 +21,36 @@ export default async function CheckoutPage({
   const cookieStore = await cookies();
   const attributionCode = cookieStore.get("hifago_ref")?.value;
 
+  // Feature 32 — pré-remplissage pour un client connecté (cahier des charges client §2 point 6) :
+  // l'email vient toujours du compte auth (garanti dès l'inscription email/mot de passe), nom/
+  // téléphone viennent de la commande la plus récente du compte s'il en existe une (aucune table
+  // profil séparée). RLS déjà scopée à account_id = auth.uid() (même garde que /account/orders) —
+  // un champ pré-rempli reste éditable, jamais un verrou (CheckoutForm.tsx).
+  let initialHolderName = "";
+  let initialHolderPhone = "";
+  const initialHolderEmail = user?.email ?? "";
+  if (user) {
+    const { data: lastOrder } = await supabase
+      .from("orders")
+      .select("holder_name, holder_phone")
+      .eq("account_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    initialHolderName = lastOrder?.holder_name ?? "";
+    initialHolderPhone = lastOrder?.holder_phone ?? "";
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-8">
       <h1 className="text-2xl font-semibold">{t("title")}</h1>
-      <CheckoutForm isAuthenticated={Boolean(user)} attributionCode={attributionCode} />
+      <CheckoutForm
+        isAuthenticated={Boolean(user)}
+        attributionCode={attributionCode}
+        initialHolderName={initialHolderName}
+        initialHolderPhone={initialHolderPhone}
+        initialHolderEmail={initialHolderEmail}
+      />
     </main>
   );
 }

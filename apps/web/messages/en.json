@@ -4,7 +4,20 @@
   },
   "HomePage": {
     "title": "Hifago",
-    "description": "Activities and experiences in Guatapé."
+    "description": "Activities and experiences in Guatapé.",
+    "searchLabel": "Search",
+    "searchPlaceholder": "Product name…",
+    "typeFilterLabel": "Type",
+    "typeFilterAllLabel": "All types",
+    "noResults": "No products match these criteria.",
+    "types": {
+      "lodging": "Lodging",
+      "activity": "Activity",
+      "transport": "Transport",
+      "camp": "Camp",
+      "evento": "Event",
+      "hotel": "Hotel"
+    }
   },
   "Login": {
     "title": "Sign in",
@@ -12,7 +25,30 @@
     "password": "Password",
     "submit": "Sign in",
     "submitting": "Signing in…",
-    "error": "Incorrect email or password."
+    "error": "Incorrect email or password.",
+    "signupLink": "Don't have an account? Create one"
+  },
+  "Signup": {
+    "title": "Create account",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm password",
+    "submit": "Create account",
+    "submitting": "Creating…",
+    "passwordMismatch": "Passwords don't match.",
+    "genericError": "Could not create the account. Check the details and try again.",
+    "loginLink": "Already have an account?",
+    "loginLinkAction": "Sign in"
+  },
+  "VerifyEmail": {
+    "title": "Check your email",
+    "bodyWithEmail": "We sent a confirmation link to {email}. Click the link to activate your account.",
+    "bodyGeneric": "We sent a confirmation link by email. Click the link to activate your account.",
+    "resend": "Resend email",
+    "resendCooldown": "Resend email ({seconds}s)",
+    "resent": "Email resent.",
+    "resendError": "Could not resend the email. Try again in a few seconds.",
+    "backToLogin": "Back to sign in"
   },
   "Common": {
     "cancellationPolicy": "A cancellation or a no-show on your part is never refunded."
@@ -42,6 +78,7 @@
     "nightsCount": "{count, plural, one {# night} other {# nights}}",
     "rangeUnavailable": "Some night in this range is no longer available.",
     "estimatedTotal": "Estimated total",
+    "establishmentTitle": "About the establishment",
     "occurrence": {
       "recurringUntilDate": "Every {days} days, until {date}.",
       "recurringForCount": "Every {days} days, for {count} occurrences.",

@@ -1,4 +1,5 @@
 import { createServiceRoleClient } from "@hifago/supabase/service";
+import { resolveOrigin } from "@hifago/domain";
 import { createCheckoutPreference } from "@/lib/mercadopago/client";
 
 // Spec 19 §0 Tranche 1 — création de la préférence Checkout Pro. Le CLIENT appelle d'abord
@@ -46,7 +47,17 @@ export async function POST(request: Request) {
   // identifiant sandbox réel n'est disponible pour tester en conditions réelles). `es` en dur : le
   // locale du panier n'est pas conservé sur `orders`/`payments` aujourd'hui — à revisiter si un
   // jour le retour doit respecter la langue d'origine du client.
-  const origin = new URL(request.url).origin;
+  // Feature 32 — bug réel trouvé en testant via tunnel (docs/journal/2026-08.md, 2026-08-21) :
+  // `new URL(request.url).origin` seul retombe sur l'adresse locale du serveur dès que la requête
+  // traverse un reverse proxy/tunnel qui ne réécrit pas request.url lui-même — `back_urls`/
+  // `notification_url` construits dessus pointaient vers une adresse injoignable depuis Mercado
+  // Pago, silencieusement. Extrait dans @hifago/domain (packages/domain/src/http/resolveOrigin.ts) :
+  // le même besoin existe ailleurs (apps/web/app/auth/callback/route.ts).
+  const origin = resolveOrigin({
+    requestUrl: request.url,
+    forwardedHost: request.headers.get("x-forwarded-host"),
+    forwardedProto: request.headers.get("x-forwarded-proto"),
+  });
   const returnUrl = `${origin}/es/checkout`;
 
   try {

@@ -6,6 +6,7 @@ import {
   createTestUser,
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
+  ADMIN_APP_URL,
 } from "@hifago/e2e-support";
 
 // Feature 31 — révision 2026-08-19, 3e passe (docs/specs/07-connexion-inscription-complete.md
@@ -33,15 +34,24 @@ test("un compte fraîchement créé hors contexte d'invitation est supprimé au 
   request,
 }) => {
   const email = `e2e-fresh-outside-invite-${Date.now()}@test.local`;
-  const signupResponse = await request.post(`${SUPABASE_URL}/auth/v1/signup`, {
-    headers: { apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
-    data: { email, password: "FreshOutside1234!" },
-  });
+  // Feature 32 : confirmation.html construit désormais son lien depuis {{ .RedirectTo }}
+  // (dynamique, apps/web a aussi son propre /auth/callback depuis cette feature) plutôt qu'un
+  // localhost:3101/auth/callback?...&next=/partner codé en dur — un appel signup SANS redirect_to
+  // retomberait sur site_url nu (sans query string), un lien cassé. `redirect_to` passé
+  // explicitement ici (paramètre de requête brut, cf. GoTrueClient.js) pour reproduire exactement
+  // l'ancien comportement testé : next=/partner, jamais /partner/join, donc bien traité comme
+  // "hors invitation" par la route de nettoyage.
+  const redirectTo = new URL("/auth/callback", ADMIN_APP_URL);
+  redirectTo.searchParams.set("next", "/partner");
+  const signupResponse = await request.post(
+    `${SUPABASE_URL}/auth/v1/signup?redirect_to=${encodeURIComponent(redirectTo.toString())}`,
+    {
+      headers: { apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+      data: { email, password: "FreshOutside1234!" },
+    }
+  );
   expect(signupResponse.ok()).toBe(true);
 
-  // Le template confirmation.html pointe vers next=/partner (destination normale d'une
-  // inscription libre réussie, cf. app/page.tsx) — jamais /partner/join, donc bien traité comme
-  // "hors invitation" par la route de nettoyage, quel que soit ce `next`.
   const confirmLink = await latestCallbackLink(request, email);
   await page.goto(confirmLink);
   await page.waitForURL(/\/login\?error=google_signup_blocked/);

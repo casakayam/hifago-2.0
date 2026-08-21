@@ -7,20 +7,18 @@ import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
 import { formatOccurrenceLabel } from "@/lib/products/formatOccurrenceLabel";
 import { formatCop } from "@hifago/domain";
-import { Link } from "@/i18n/navigation";
-import { Card, buttonVariants } from "@hifago/ui";
-import { ReservationForm } from "./ReservationForm";
-import { HotelReservationForm } from "./HotelReservationForm";
-import { LodgingReservationForm } from "./LodgingReservationForm";
-import { SlotReservationForm } from "./SlotReservationForm";
-import { ProductPhotos } from "./ProductPhotos";
+import { ProductDetailView } from "./ProductDetailView";
 
 // Template literal sans interpolation (pas une concaténation "a" + "b"), une seule ligne : Supabase-js
 // infère le type de retour de .select() en analysant le TYPE littéral de la chaîne au niveau
 // TypeScript — une concaténation par + l'élargirait en simple `string`, perdant l'info nécessaire
 // au parsing statique (constaté : tombe alors sur le type de repli GenericStringError). Une seule
 // ligne, aussi, pour ne pas envoyer de retours à la ligne dans le paramètre select de PostgREST.
-const PRODUCT_COLUMNS = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, establishment:establishments(name)`;
+// establishment(description, address) : feature 32, jamais photo_urls (colonne absente du GRANT
+// SELECT public — supabase/migrations/20260819110000_pms_connector_schema.sql — la sélectionner
+// ferait échouer toute la requête). Photo d'établissement : establishment_media (public, RLS
+// héritée), requêtée séparément ci-dessous comme product_media l'est déjà pour les produits.
+const PRODUCT_COLUMNS = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, establishment:establishments(id, name, description, address)`;
 
 const getProduct = cache(async (slug: string) => {
   const supabase = await createClient();
@@ -71,9 +69,13 @@ export default async function ProductPage({
 }: PageProps<"/[locale]/products/[slug]">) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
+  // Le rendu JSX vit désormais dans ProductDetailView.tsx ("use client"), qui appelle
+  // useTranslations lui-même — une fonction traducteur next-intl obtenue côté serveur
+  // (getTranslations) n'est pas sérialisable à travers la frontière Server → Client Component.
+  // `t`/`tOccurrence` restent nécessaires ICI uniquement pour composer des chaînes déjà
+  // finalisées (hotelPriceLabel, occurrenceLabel) avant de les passer en props.
   const t = await getTranslations("ProductPage");
   const tOccurrence = await getTranslations("ProductPage.occurrence");
-  const tCommon = await getTranslations("Common");
 
   const supabase = await createClient();
   const product = await getProduct(slug);
@@ -169,6 +171,7 @@ export default async function ProductPage({
     { data: roomTypesRaw },
     { data: productDateRates },
     { data: media },
+    { data: establishmentMedia },
   ] = await Promise.all([
     fetchAvailability(),
     fetchSlotRulesCount(),
@@ -178,6 +181,11 @@ export default async function ProductPage({
       .from("product_media")
       .select("id, storage_path")
       .eq("product_id", product.id)
+      .order("sort", { ascending: true }),
+    supabase
+      .from("establishment_media")
+      .select("id, storage_path")
+      .eq("establishment_id", product.establishment?.id ?? "")
       .order("sort", { ascending: true }),
   ]);
 
@@ -227,6 +235,11 @@ export default async function ProductPage({
   const description = resolveLocalizedField(asLocalizedField(product.description), locale);
   const establishmentName =
     resolveLocalizedField(asLocalizedField(product.establishment?.name), locale) ?? "";
+  const establishmentDescription = resolveLocalizedField(
+    asLocalizedField(product.establishment?.description),
+    locale
+  );
+  const establishmentAddress = product.establishment?.address ?? null;
 
   // price_label affiché tel quel pour un evento (texte libre, admin §3c) — jamais formaté en COP,
   // à la différence de price_cop pour tous les autres types. Un hôtel n'a pas de price_cop propre
@@ -269,103 +282,49 @@ export default async function ProductPage({
     url: supabase.storage.from("catalog-media").getPublicUrl(m.storage_path).data.publicUrl,
   }));
 
+  const establishmentPhotoSlides = (establishmentMedia ?? []).map((m) => ({
+    id: m.id,
+    alt: establishmentName,
+    url: supabase.storage.from("catalog-media").getPublicUrl(m.storage_path).data.publicUrl,
+  }));
+
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 p-8">
-      <Link href="/" className="text-sm text-muted hover:underline">
-        {t("backToCatalog")}
-      </Link>
-      <Card>
-        <Card.Header>
-          <Card.Title className="text-2xl" data-testid="product-name">
-            {name}
-          </Card.Title>
-          {description ? <Card.Description>{description}</Card.Description> : null}
-        </Card.Header>
-        <Card.Content className="flex flex-col gap-6">
-          <ProductPhotos slides={photoSlides} />
-
-          <p className="text-lg font-medium" data-testid="product-price">
-            {priceDisplay}
-            {reservationMode !== "evento" && product.unit === "per_person" ? (
-              <span className="ml-1 text-sm font-normal text-muted">
-                {t("perPerson")}
-              </span>
-            ) : null}
-          </p>
-
-          {reservationMode === "evento" ? (
-            <div className="flex flex-col gap-3">
-              {occurrenceLabel ? (
-                <p data-testid="evento-occurrence" className="text-sm text-muted">
-                  {occurrenceLabel}
-                </p>
-              ) : null}
-              {product.external_booking_url ? (
-                <a
-                  href={product.external_booking_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  data-testid="evento-reserve-link"
-                  className={buttonVariants({ variant: "primary" })}
-                >
-                  {t("reserveExternal")}
-                </a>
-              ) : null}
-            </div>
-          ) : reservationMode === "hotel" ? (
-            <HotelReservationForm
-              productId={product.id}
-              productName={name}
-              establishmentName={establishmentName}
-              roomTypes={(roomTypesRaw ?? []).map((room) => ({
-                id: room.id,
-                name: resolveLocalizedField(asLocalizedField(room.name), locale) ?? room.id,
-                kind: room.kind as "dorm" | "private",
-                capacity: room.capacity,
-                priceCop: room.price_cop,
-                priceTiers: room.price_tiers as
-                  | { min_qty: number; max_qty: number; price_cop: number }[]
-                  | null,
-                minQty: room.min_qty ?? 1,
-                maxQty: room.max_qty ?? 20,
-              }))}
-              availability={roomAvailability ?? []}
-              rates={roomRates ?? []}
-            />
-          ) : reservationMode === "lodging" ? (
-            <LodgingReservationForm
-              productId={product.id}
-              productName={name}
-              establishmentName={establishmentName}
-              priceCop={product.price_cop ?? 0}
-              priceTiers={product.price_tiers as
-                | { min_qty: number; max_qty: number; price_cop: number }[]
-                | null}
-              maxQty={product.max_qty ?? 20}
-              availability={availability ?? []}
-              rates={productDateRates ?? []}
-            />
-          ) : reservationMode === "slot" ? (
-            <SlotReservationForm
-              productId={product.id}
-              productName={name}
-              establishmentName={establishmentName}
-              priceCop={product.price_cop ?? 0}
-              slots={productSlots ?? []}
-            />
-          ) : (
-            <ReservationForm
-              productId={product.id}
-              productName={name}
-              establishmentName={establishmentName}
-              priceCop={product.price_cop ?? 0}
-              availability={availability ?? []}
-            />
-          )}
-
-          <p className="text-xs text-muted">{tCommon("cancellationPolicy")}</p>
-        </Card.Content>
-      </Card>
-    </main>
+    <ProductDetailView
+      name={name}
+      description={description}
+      photoSlides={photoSlides}
+      priceDisplay={priceDisplay}
+      unit={product.unit}
+      reservationMode={reservationMode}
+      occurrenceLabel={occurrenceLabel}
+      externalBookingUrl={product.external_booking_url}
+      productId={product.id}
+      establishmentName={establishmentName}
+      establishmentDescription={establishmentDescription}
+      establishmentAddress={establishmentAddress}
+      establishmentPhotoSlides={establishmentPhotoSlides}
+      roomTypes={(roomTypesRaw ?? []).map((room) => ({
+        id: room.id,
+        name: resolveLocalizedField(asLocalizedField(room.name), locale) ?? room.id,
+        kind: room.kind as "dorm" | "private",
+        capacity: room.capacity,
+        priceCop: room.price_cop,
+        priceTiers: room.price_tiers as
+          | { min_qty: number; max_qty: number; price_cop: number }[]
+          | null,
+        minQty: room.min_qty ?? 1,
+        maxQty: room.max_qty ?? 20,
+      }))}
+      roomAvailability={roomAvailability ?? []}
+      roomRates={roomRates ?? []}
+      priceCop={product.price_cop ?? 0}
+      lodgingPriceTiers={
+        product.price_tiers as { min_qty: number; max_qty: number; price_cop: number }[] | null
+      }
+      lodgingMaxQty={product.max_qty ?? 20}
+      availability={availability ?? []}
+      productDateRates={productDateRates ?? []}
+      productSlots={productSlots ?? []}
+    />
   );
 }

@@ -59,6 +59,10 @@ export default async function proxy(request: NextRequest) {
 // Cette app ne sert plus que la vitrine publique (app/[locale]) — admin/partner vivent désormais
 // dans apps/admin, donc plus besoin d'exclure ces chemins de la préfixation de locale next-intl
 // (l'ancien hack de cohabitation dans une seule app disparaît).
+// Feature 32 : "auth" exclu comme "api" l'est déjà — sans ça, une requête vers le futur
+// apps/web/app/auth/callback/route.ts (hors [locale]) serait interceptée par intlMiddleware
+// (localePrefix "always", aucune locale dans /auth/callback) et redirigée vers /es/auth/callback
+// (inexistant) avant même d'atteindre la route.
 export const config = {
-  matcher: ["/((?!api|_next|_vercel|.*\\..*).*)"],
+  matcher: ["/((?!api|auth|_next|_vercel|.*\\..*).*)"],
 };

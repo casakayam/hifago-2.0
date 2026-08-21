@@ -97,18 +97,27 @@ type PaymentIntentResult = {
 export function CheckoutForm({
   isAuthenticated,
   attributionCode,
+  initialHolderName = "",
+  initialHolderPhone = "",
+  initialHolderEmail = "",
 }: {
   isAuthenticated: boolean;
   attributionCode?: string;
+  // Feature 32 — pré-remplissage pour un client connecté (page.tsx, depuis auth.users.email et sa
+  // commande la plus récente). Défaut "" : comportement invité inchangé. Les champs restent
+  // éditables — un pré-remplissage, jamais un verrou.
+  initialHolderName?: string;
+  initialHolderPhone?: string;
+  initialHolderEmail?: string;
 }) {
   const t = useTranslations("CheckoutPage");
   const tCommon = useTranslations("Common");
   const locale = useLocale();
   const { lines, removeLine, clear } = useCart();
 
-  const [holderName, setHolderName] = useState("");
-  const [holderPhone, setHolderPhone] = useState("");
-  const [holderEmail, setHolderEmail] = useState("");
+  const [holderName, setHolderName] = useState(initialHolderName);
+  const [holderPhone, setHolderPhone] = useState(initialHolderPhone);
+  const [holderEmail, setHolderEmail] = useState(initialHolderEmail);
   const [marketingConsent, setMarketingConsent] = useState(false);
 
   const [error, setError] = useState<string | null>(null);

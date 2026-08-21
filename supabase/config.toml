@@ -184,6 +184,14 @@ additional_redirect_urls = [
   # redirect_to qui porte un chemin.
   "http://localhost:3101/**",
   "http://127.0.0.1:3101/**",
+  # Feature 32 (inscription client apps/web, port 3100) : même piège que ci-dessus pour 3101 —
+  # sans ces entrées, le futur /auth/callback d'apps/web (confirmation d'inscription) retomberait
+  # silencieusement sur site_url au lieu de la route réelle. Même paire localhost/127.0.0.1,
+  # même absence volontaire de wildcard https (mêmes raisons, jamais rouvertes ici).
+  "http://localhost:3100",
+  "https://localhost:3100",
+  "http://localhost:3100/**",
+  "http://127.0.0.1:3100/**",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600

@@ -353,21 +353,27 @@ En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
 nouvelle entrée.
 
-*2026-08-20 (suite 7) — dernière entrée : fond de page plus clair partout sauf l'aside/la nav
-(demande Jérôme). `packages/ui/src/styles/globals.css` (`[data-theme="admin"]`) : l'ancienne
-valeur de `--background` (`oklch(92.2% 0.005 34.3)`, taupe-200, piste "Argile" du 2026-08-15) est
-renommée `--sidebar-background` et réservée à l'aside/nav (jamais supprimée, juste réassignée à un
-seul usage) ; `--background` prend une nouvelle valeur quasi blanche
-(`oklch(97.3% 0.003 40)`, "taupe-75") — un cran sous `--surface` (98.6%) pour que les
-cartes/panneaux restent distincts de la page derrière eux, pas la même teinte plate.
-`AppNavShell` (`packages/ui/src/components/app-nav-shell.tsx`, seul composant du repo qui rendait
-`bg-background` en dehors du `body` lui-même, vérifié par grep) : sidebar desktop + barre mobile
-passent à `bg-[var(--sidebar-background)]`. **Vérifié** : typecheck/lint/`next build` propres.
-Pas de navigateur disponible dans cet environnement (même limite que les sessions précédentes) —
-changement de valeurs CSS pures raisonné depuis le code, à confirmer visuellement par Jérôme.
-Aucun test concerné (pas d'assertion de couleur dans ce repo), aucune migration. **Rien commité**
-— en attente d'une demande explicite de push. Détail complet (dont les 6 entrées précédentes du
-jour) : `hifago/docs/journal/2026-08.md` (2026-08-20, suite 2/3/4/5/6/7).
+*2026-08-20/21 (suite 9, feature 32) — dernière entrée : parcours client testable de bout en bout
+sur `apps/web`, **prouvé jusqu'au bout** (paiement réel approuvé + `payment_status='paid'`
+confirmé par webhook re-vérifié auprès de Mercado Pago). Construits : recherche/filtre + cartes
+riches sur l'accueil (`CatalogBrowser.tsx`), bloc établissement sur la fiche produit
+(`ProductDetailView.tsx`, corrige au passage le piège §11.16 déjà présent sur ces 2 routes),
+inscription client complète (`signup/`, `verify-email/`, `auth/callback/route.ts`, template
+`confirmation.html` rendu dynamique via `{{ .RedirectTo }}`, `config.toml`/`proxy.ts` mis à jour),
+pré-remplissage checkout pour un compte connecté. Régression trouvée et corrigée en faisant tourner
+les tests : `apps/admin/e2e/auth-connection-complete.spec.ts` (lien codé en dur cassé par le
+template dynamique) — rejoué vert. Runbook tunnel exécuté (cloudflared, confirmations explicites
+à chaque étape sensible, §8.3) : bug CORS/Private-Network-Access trouvé et contourné (2e tunnel
+pour Supabase local), long diagnostic par élimination sur `"una de las partes es de prueba"` côté
+Mercado Pago (résolu : connexion préalable au compte acheteur de test requise par Checkout Pro,
+doc officielle vérifiée), webhook final déclenché manuellement avec signature HMAC valide après
+qu'une tentative a routé sa `notification_url` vers `localhost` injoignable (même piège documenté
+la veille) — notre route a re-vérifié le paiement en direct auprès de Mercado Pago avant de rien
+confirmer. **Vérifié** : `next build`/typecheck/lint verts `apps/web`+`apps/admin`, e2e `apps/web`
+12/12, Vitest 14/14, `payments.status='approved'`/`orders.payment_status='paid'` en base avec un
+vrai `mp_payment_id`. `.env.local` reverti à l'état local après coup. **Rien commité** — en attente
+d'une demande explicite de push. Détail complet (dont les 8 entrées précédentes du 2026-08-20) :
+`hifago/docs/journal/2026-08.md` (2026-08-20, suite 2/3/4/5/6/7/8/9).
 
 *2026-08-19 (suite 2) — connecteur LobbyPMS (spec 21), Tranche 1 complète
 implémentée (8 phases : schéma, `create_order` étendu, module `packages/domain/src/pms/`, Route

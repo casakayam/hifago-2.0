@@ -11,3 +11,5 @@ export * from "./pms/parseLobbyBookingResponse";
 export * from "./pms/detectTraslado";
 export * from "./pms/mapLobbyErrorCode";
 export * from "./pms/buildEvenRatesPerDay";
+export * from "./http/resolveOrigin";
+export * from "./http/buildAuthCallbackRedirect";

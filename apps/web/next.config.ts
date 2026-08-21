@@ -31,6 +31,12 @@ const nextConfig: NextConfig = {
     // l'hôte exact, cette option ne fait que lever le refus générique sur les IP locales.
     dangerouslyAllowLocalIP: true,
   },
+  // Feature 32 — runbook tunnel Mercado Pago (docs/journal/2026-08.md, 2026-08-20 suite 8) :
+  // Next 16 bloque par défaut les requêtes cross-origin vers le dev server. Nécessaire
+  // uniquement pour naviguer via l'URL publique du tunnel cloudflared (jamais utilisé sinon,
+  // aucun risque en local pur) — l'URL exacte change à chaque lancement (tunnel éphémère, sans
+  // compte), d'où le wildcard plutôt qu'un hôte fixe.
+  allowedDevOrigins: ["*.trycloudflare.com"],
 };
 
 const withNextIntl = createNextIntlPlugin();
