@@ -31,7 +31,8 @@ export async function POST(request: Request) {
 
   try {
     const baseUrl = process.env.LOBBY_API_BASE_URL || LOBBY_DEFAULT_BASE_URL;
-    const result = await getLobbyRooms(baseUrl, apiToken);
+    const relaySecret = process.env.LOBBY_RELAY_SECRET;
+    const result = await getLobbyRooms(baseUrl, apiToken, undefined, relaySecret);
     if (result.status !== 200) {
       return Response.json({ ok: false, reason: "lobby_rejected", status: result.status }, { status: 502 });
     }

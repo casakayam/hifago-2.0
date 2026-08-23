@@ -13,9 +13,11 @@ import {
 // observée en prod — c'est exactement ce que lobbyClient.ts doit savoir parser.
 let server: Server;
 let baseUrl: string;
+let lastRequestHeaders: import("node:http").IncomingHttpHeaders = {};
 
 beforeAll(async () => {
   server = createServer((req, res) => {
+    lastRequestHeaders = req.headers;
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     let body = "";
     req.on("data", (chunk) => (body += chunk));
@@ -135,5 +137,13 @@ describe("lobbyClient (vrai fetch contre un serveur de fixtures local)", () => {
     const result = await cancelLobbyBooking(baseUrl, "fake-token", 20873561, "TTC");
     expect(result.status).toBe(422);
     expect((result.body as { error_code: string }).error_code).toBe("RESTRICTED_RESERVATION");
+  });
+
+  it("envoie l'en-tête X-Relay-Secret uniquement si relaySecret est fourni à l'appel", async () => {
+    await getLobbyRooms(baseUrl, "fake-token");
+    expect(lastRequestHeaders["x-relay-secret"]).toBeUndefined();
+
+    await getLobbyRooms(baseUrl, "fake-token", undefined, "test-relay-secret-value");
+    expect(lastRequestHeaders["x-relay-secret"]).toBe("test-relay-secret-value");
   });
 });

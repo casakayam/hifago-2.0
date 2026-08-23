@@ -30,6 +30,7 @@ Deno.serve(async () => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
   );
   const baseUrl = Deno.env.get("LOBBY_API_BASE_URL") || LOBBY_DEFAULT_BASE_URL;
+  const relaySecret = Deno.env.get("LOBBY_RELAY_SECRET");
 
   const { data: establishments, error } = await supabase
     .from("establishments")
@@ -46,7 +47,7 @@ Deno.serve(async () => {
   for (const establishment of establishments ?? []) {
     if (!establishment.lobby_api_token) continue;
     try {
-      const rooms = await getLobbyRooms(baseUrl, establishment.lobby_api_token);
+      const rooms = await getLobbyRooms(baseUrl, establishment.lobby_api_token, undefined, relaySecret);
       if (rooms.status !== 200 || !hasExpectedRoomsShape(rooms.body)) {
         drifts.push(`établissement ${establishment.id} : GET /rooms forme inattendue (status ${rooms.status})`);
       }

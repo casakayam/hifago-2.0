@@ -20,7 +20,7 @@ async function lobbyCall<T = unknown>(
   baseUrl: string,
   path: string,
   apiToken: string,
-  options: { params?: Record<string, string | number>; data?: unknown } = {}
+  options: { params?: Record<string, string | number>; data?: unknown; relaySecret?: string } = {}
 ): Promise<LobbyCallResult<T>> {
   const url = new URL(path, baseUrl);
   if (method === "GET") {
@@ -30,9 +30,14 @@ async function lobbyCall<T = unknown>(
     }
   }
 
+  const headers: Record<string, string> = { Accept: "application/json", "Content-Type": "application/json" };
+  if (options.relaySecret) {
+    headers["X-Relay-Secret"] = options.relaySecret;
+  }
+
   const response = await fetch(url.toString(), {
     method,
-    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    headers,
     body: method === "POST" ? JSON.stringify({ api_token: apiToken, ...(options.data as object) }) : undefined,
   });
 
@@ -50,9 +55,10 @@ async function lobbyCall<T = unknown>(
   return { status: response.status, body: body as T };
 }
 
-export function getLobbyRooms(baseUrl: string, apiToken: string, page?: number) {
+export function getLobbyRooms(baseUrl: string, apiToken: string, page?: number, relaySecret?: string) {
   return lobbyCall("GET", baseUrl, "/api/v1/rooms", apiToken, {
     params: page ? { page } : undefined,
+    relaySecret,
   });
 }
 
@@ -63,10 +69,12 @@ export function getLobbyNightAvailability(
   apiToken: string,
   categoryId: number,
   date: string,
-  nextDate: string
+  nextDate: string,
+  relaySecret?: string
 ) {
   return lobbyCall("GET", baseUrl, "/api/v2/available-rooms", apiToken, {
     params: { category_id: categoryId, start_date: date, end_date: nextDate },
+    relaySecret,
   });
 }
 
@@ -84,7 +92,12 @@ export interface CreateLobbyBookingInput {
 // rates_per_day[].price est le tarif DÉJÀ NET (remise appliquée, quantité encodée) — Lobby ne
 // multiplie jamais par occupants ni n'applique de remise propre (piège confirmé, client cahier des
 // charges §5). L'appelant (Route Handler) est responsable d'envoyer un prix déjà net.
-export function createLobbyBooking(baseUrl: string, apiToken: string, input: CreateLobbyBookingInput) {
+export function createLobbyBooking(
+  baseUrl: string,
+  apiToken: string,
+  input: CreateLobbyBookingInput,
+  relaySecret?: string
+) {
   return lobbyCall("POST", baseUrl, "/api/v1/bookings", apiToken, {
     data: {
       category_id: input.categoryId,
@@ -96,6 +109,7 @@ export function createLobbyBooking(baseUrl: string, apiToken: string, input: Cre
       rates_per_day: input.ratesPerDay,
       note: input.note,
     },
+    relaySecret,
   });
 }
 
@@ -103,18 +117,22 @@ export function addLobbyProductService(
   baseUrl: string,
   apiToken: string,
   bookingId: number,
-  items: { productId: number; qty: number }[]
+  items: { productId: number; qty: number }[],
+  relaySecret?: string
 ) {
   return lobbyCall("POST", baseUrl, "/api/v1/booking/add-product-service", apiToken, {
     data: {
       booking_id: bookingId,
       items: items.map((item) => ({ product_id: item.productId, cant: item.qty })),
     },
+    relaySecret,
   });
 }
 
-export function getLobbyBookingDetail(baseUrl: string, apiToken: string, bookingId: number) {
-  return lobbyCall("GET", baseUrl, `/api/v1/bookings/${encodeURIComponent(String(bookingId))}`, apiToken);
+export function getLobbyBookingDetail(baseUrl: string, apiToken: string, bookingId: number, relaySecret?: string) {
+  return lobbyCall("GET", baseUrl, `/api/v1/bookings/${encodeURIComponent(String(bookingId))}`, apiToken, {
+    relaySecret,
+  });
 }
 
 export function cancelLobbyBooking(
@@ -122,13 +140,14 @@ export function cancelLobbyBooking(
   apiToken: string,
   bookingId: number,
   cancellationReason: string,
-  description?: string
+  description?: string,
+  relaySecret?: string
 ) {
   return lobbyCall(
     "POST",
     baseUrl,
     `/api/v1/cancel-booking/${encodeURIComponent(String(bookingId))}`,
     apiToken,
-    { data: { cancellation_reason: cancellationReason, description } }
+    { data: { cancellation_reason: cancellationReason, description }, relaySecret }
   );
 }

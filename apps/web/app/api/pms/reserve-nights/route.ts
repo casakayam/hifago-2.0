@@ -138,6 +138,7 @@ export async function POST(request: Request) {
   }
 
   const baseUrl = process.env.LOBBY_API_BASE_URL || LOBBY_DEFAULT_BASE_URL;
+  const relaySecret = process.env.LOBBY_RELAY_SECRET;
 
   for (const group of groups.values()) {
     let primaryBookingId: number | null = null;
@@ -149,15 +150,20 @@ export async function POST(request: Request) {
         continue;
       }
       try {
-        const response = await createLobbyBooking(baseUrl, group.apiToken, {
-          categoryId: product.lobby_category_id,
-          startDate: line.date,
-          endDate: line.end_date,
-          totalAdults: line.qty,
-          holderName: line.holder_name,
-          ratesPerDay: buildEvenRatesPerDay(line.date, line.end_date, line.total_cop),
-          note: `hifago order_line ${line.id}`,
-        });
+        const response = await createLobbyBooking(
+          baseUrl,
+          group.apiToken,
+          {
+            categoryId: product.lobby_category_id,
+            startDate: line.date,
+            endDate: line.end_date,
+            totalAdults: line.qty,
+            holderName: line.holder_name,
+            ratesPerDay: buildEvenRatesPerDay(line.date, line.end_date, line.total_cop),
+            note: `hifago order_line ${line.id}`,
+          },
+          relaySecret
+        );
         const parsed = parseLobbyBookingResponse(response.body);
         if (!parsed) {
           await recordFailure(service, line.id);
@@ -180,9 +186,13 @@ export async function POST(request: Request) {
         continue;
       }
       try {
-        const response = await addLobbyProductService(baseUrl, group.apiToken, primaryBookingId, [
-          { productId: lobbyProductId, qty: line.qty },
-        ]);
+        const response = await addLobbyProductService(
+          baseUrl,
+          group.apiToken,
+          primaryBookingId,
+          [{ productId: lobbyProductId, qty: line.qty }],
+          relaySecret
+        );
         if (response.status !== 200) {
           await recordFailure(service, line.id);
           continue;

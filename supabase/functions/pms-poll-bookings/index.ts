@@ -34,6 +34,7 @@ Deno.serve(async () => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
   );
   const baseUrl = Deno.env.get("LOBBY_API_BASE_URL") || LOBBY_DEFAULT_BASE_URL;
+  const relaySecret = Deno.env.get("LOBBY_RELAY_SECRET");
 
   const { data: batch, error } = await supabase.rpc("claim_pms_poll_batch", { p_limit: 20 });
   if (error) {
@@ -47,7 +48,12 @@ Deno.serve(async () => {
   for (const row of rows) {
     summary.polled++;
     try {
-      const detail = await getLobbyBookingDetail(baseUrl, row.lobby_api_token, Number(row.pms_booking_id));
+      const detail = await getLobbyBookingDetail(
+        baseUrl,
+        row.lobby_api_token,
+        Number(row.pms_booking_id),
+        relaySecret
+      );
 
       if (detail.status === 404) {
         // Cas limite spec 21 §0 : un booking annulé par API n'est plus retourné du tout —
