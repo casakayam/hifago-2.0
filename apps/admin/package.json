@@ -31,6 +31,7 @@
     "sharp": "^0.35.3"
   },
   "devDependencies": {
+    "@hifago/e2e-support": "*",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.1",
