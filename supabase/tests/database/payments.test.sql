@@ -7,7 +7,7 @@
 -- `set local role authenticated` (le vrai rôle Postgres change, contrairement à test_login qui ne
 -- simule qu'un claim JWT), pas seulement l'un ou l'autre.
 begin;
-select plan(41);
+select plan(42);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -384,6 +384,24 @@ insert into order_lines (
   '2028-12-13', 1, 'reserved', 'Holder Already Paid', 100000, 100000, 'direct', 0.17, 0, 0.17, 17000, 0, 17000
 );
 
+-- Order J (régression 2026-08-18, corrigée 2026-08-24, cf. migration
+-- 20260824010000_expire_stale_payment_orders_exempt_manual) : réservation walk-in
+-- (commission_case='operator_manual', payment_status resté à son défaut 'unpaid' — create_manual_
+-- order_line ne le touche jamais), 31 minutes → ne doit JAMAIS expirer, un walk-in n'attend
+-- structurellement aucun paiement en ligne.
+insert into orders (id, account_id, holder_name, holder_email, payment_status, created_at)
+values ('88970000-0000-4000-8000-000000000050', null,
+        'Holder Walk-in Manual', 'reserva-manual@hifago.local', 'unpaid', now() - interval '31 minutes');
+insert into order_lines (
+  id, order_id, account_id, product_id, date, qty, status, holder_name,
+  price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
+  acompte_cop, referrer_commission_cop, app_commission_cop
+) values (
+  '88970000-0000-4000-8000-000000000085', '88970000-0000-4000-8000-000000000050',
+  null, '88970000-0000-4000-8000-000000000021',
+  '2028-12-14', 1, 'reserved', 'Holder Walk-in Manual', 100000, 100000, 'operator_manual', 0, 0, 0, 0, 0, 0
+);
+
 select expire_stale_payment_orders();
 
 select is(
@@ -420,6 +438,11 @@ select is(
   (select status from order_lines where id = '88970000-0000-4000-8000-000000000084'),
   'reserved',
   'cas 18 : Order I (déjà paid, 31 min) → jamais touché même vieux'
+);
+select is(
+  (select status from order_lines where id = '88970000-0000-4000-8000-000000000085'),
+  'reserved',
+  'cas 19 : Order J (walk-in operator_manual, unpaid, 31 min) → jamais touché (régression 2026-08-18)'
 );
 
 ------------------------------------------------------------------------------------------------

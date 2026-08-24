@@ -4,7 +4,7 @@ import { addDays } from "date-fns";
 import { notFound } from "next/navigation";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@hifago/supabase/server";
-import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
+import { asLocalizedField, isPmsBacked, resolveLocalizedField } from "@hifago/domain";
 import { formatOccurrenceLabel } from "@/lib/products/formatOccurrenceLabel";
 import { formatCop } from "@hifago/domain";
 import { ProductDetailView } from "./ProductDetailView";
@@ -18,7 +18,9 @@ import { ProductDetailView } from "./ProductDetailView";
 // SELECT public — supabase/migrations/20260819110000_pms_connector_schema.sql — la sélectionner
 // ferait échouer toute la requête). Photo d'établissement : establishment_media (public, RLS
 // héritée), requêtée séparément ci-dessous comme product_media l'est déjà pour les produits.
-const PRODUCT_COLUMNS = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, establishment:establishments(id, name, description, address)`;
+// lobby_category_id : spec 21 §13 (gap comblé) — jamais revoke côté products (contrairement à
+// establishments.lobby_api_token), sert uniquement à dériver isPmsBacked ci-dessous.
+const PRODUCT_COLUMNS = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, lobby_category_id, establishment:establishments(id, name, description, address)`;
 
 const getProduct = cache(async (slug: string) => {
   const supabase = await createClient();
@@ -95,6 +97,12 @@ export default async function ProductPage({
   // par date unique — écran dédié (LodgingReservationForm, pendant de HotelReservationForm sans
   // sélecteur de chambre), jamais le ReservationForm générique non plus.
   const isLodging = product.type === "lodging";
+  // Spec 21 §13 (gap comblé) : un alojamiento PMS-backed (Casa Kayam) n'a jamais de
+  // product_availability/product_date_rates peuplées (Lobby fait foi, jamais dupliqué en base) —
+  // LodgingReservationForm.tsx bascule sur un fetch client dédié (/api/pms/night-availability)
+  // quand ce flag est vrai, au lieu de la prop `availability` SSR ci-dessous (toujours vide pour ce
+  // cas, conservée telle quelle par cohérence avec le reste du fichier plutôt que retirée).
+  const productIsPmsBacked = isPmsBacked({ type: product.type, lobbyCategoryId: product.lobby_category_id });
   // Ces 3 flags dérivés de product.type (connu synchronement dès getProduct() ci-dessus) restent
   // nécessaires en l'état : ils gardent les requêtes ci-dessous, exécutées en parallèle (Promise.all)
   // AVANT de savoir si le produit est à créneaux (slotRulesCount, résultat du Promise.all) — le
@@ -322,6 +330,7 @@ export default async function ProductPage({
         product.price_tiers as { min_qty: number; max_qty: number; price_cop: number }[] | null
       }
       lodgingMaxQty={product.max_qty ?? 20}
+      isPmsBacked={productIsPmsBacked}
       availability={availability ?? []}
       productDateRates={productDateRates ?? []}
       productSlots={productSlots ?? []}

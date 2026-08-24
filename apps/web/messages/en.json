@@ -77,6 +77,8 @@
     "selectRange": "Pick a check-in and check-out date on the calendar.",
     "nightsCount": "{count, plural, one {# night} other {# nights}}",
     "rangeUnavailable": "Some night in this range is no longer available.",
+    "pmsAvailabilityLoading": "Checking real availability...",
+    "pmsAvailabilityError": "Could not check availability right now. Please try again later.",
     "estimatedTotal": "Estimated total",
     "establishmentTitle": "About the establishment",
     "occurrence": {

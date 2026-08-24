@@ -55,6 +55,7 @@ export function ProductDetailView({
   priceCop,
   lodgingPriceTiers,
   lodgingMaxQty,
+  isPmsBacked,
   availability,
   productDateRates,
   productSlots,
@@ -78,6 +79,7 @@ export function ProductDetailView({
   priceCop: number;
   lodgingPriceTiers: PriceTier[] | null;
   lodgingMaxQty: number;
+  isPmsBacked: boolean;
   availability: AvailabilityRow[];
   productDateRates: DateRateRow[];
   productSlots: SlotRow[];
@@ -143,6 +145,7 @@ export function ProductDetailView({
               priceCop={priceCop}
               priceTiers={lodgingPriceTiers}
               maxQty={lodgingMaxQty}
+              isPmsBacked={isPmsBacked}
               availability={availability}
               rates={productDateRates}
             />

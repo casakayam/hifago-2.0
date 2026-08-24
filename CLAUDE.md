@@ -380,11 +380,23 @@ l'export comptable/fiscal · fournisseur email final (Resend vs Postmark).
 En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 `hifago/docs/journal/<mois-en-cours>.md` — nouveau mois = nouveau fichier (`2026-09.md` le
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
-nouvelle entrée. **Note de cette session** : le paragraphe 2026-08-23 "déploiement préprod Vercel"
-juste en dessous représentait un travail non commité d'une session concurrente au moment d'écrire
-ceci (disque partagé) — non remplacé pour ne pas perdre son résumé avant qu'elle ait pu committer
-elle-même ; à consolider en un seul paragraphe une fois les deux batches réellement fusionnés sur
-`main`.
+nouvelle entrée.
+
+*2026-08-24 — correction du bug `expire_stale_payment_orders` sur les réservations walk-in (ouvert
+depuis le 2026-08-18, repris pendant que les chantiers LobbyPMS bloquants attendaient une action de
+Jérôme indisponible). Root cause : `create_manual_order_line` ne touche jamais `payment_status`
+(reste à son défaut `unpaid`), donc le job pg_cron expirait toute réservation walk-in 30 min après
+sa saisie comme une vraie commande en ligne abandonnée — 88/102 `order_lines` locales déjà `expired`
+à tort au moment du constat. Fix (migration `20260824010000`, CREATE OR REPLACE, signature
+inchangée) : exclusion des commandes portant `commission_case='operator_manual'` sur au moins une
+ligne (invariant vérifié : une commande walk-in est toujours 100% manuelle, jamais mixte). Nouveau
+cas 19 dans `payments.test.sql` (`plan` 41→42). **Vérifié** : suite pgTAP complète 772/772,
+migration appliquée via `supabase migration up --local` (jamais `db reset`). **Non traité,
+signalé** : les lignes déjà expirées à tort avant le fix (données locales/seed uniquement, hifago
+pas en production) — aucune réparation de données sans accord explicite de Jérôme ; l'affichage
+"Sin pagar" d'un walk-in dans la fiche cliente admin reste techniquement vrai mais potentiellement
+trompeur (cosmétique, hors périmètre). Détail complet : `hifago/docs/journal/2026-08.md`
+(2026-08-24). Rien commité, comme le reste de cette session — en attente d'accord de Jérôme.*
 
 *2026-08-23 (suite, session distincte) — relais réseau IP stable LobbyPMS provisionné pour la
 préprod : instance Vultr (région Miami, ~3 $/mois avec IP réservée — Oracle Cloud puis Hetzner
@@ -612,19 +624,29 @@ là-bas, non touchée). Corrigé après confirmation explicite de Jérôme — m
 obsolète corrigée (`modify_order_line.test.sql` cas L1), suite rejouée à 0 échec. Détail complet :
 `hifago/docs/journal/2026-08.md` (2026-08-19).
 
-**Ouvert, pas tranché** : job `expire_stale_payment_orders` (spec 19, ajouté 2026-08-18 par la
-session paiement) expire TOUTE réservation dont `payment_status` reste `unpaid` 30 min après
-création — or ni `create_manual_order_line` (walk-in cash) ni un `create_order` de test jamais payé
-en ligne ne passent jamais ce champ à `paid`. Constaté : 88/102 `order_lines` récentes déjà
-`expired` pour cette raison. Question posée à Jérôme sur comment exempter les résas manuelles,
-interrompue par la découverte du bug de prix ci-dessus — **à reprendre, pas corrigé**.
+**Corrigé le 2026-08-24** (était resté ouvert depuis le 2026-08-18, cf. entrée datée en tête de ce
+§12) : job `expire_stale_payment_orders` expirait TOUTE réservation walk-in
+(`create_manual_order_line`, payment_status jamais touché par cette RPC, resté à son défaut
+`unpaid`) 30 min après sa saisie au comptoir, exactement comme une vraie commande en ligne jamais
+payée — 88/102 `order_lines` récentes déjà `expired` pour cette raison au moment du constat. Corrigé
+en excluant du job toute commande dont au moins une ligne porte `commission_case='operator_manual'`
+(invariant : une commande créée par `create_manual_order_line` est toujours 100% walk-in, jamais
+mixte) — migration `20260824010000`, nouveau cas 19 dans `payments.test.sql` (plan 41→42), suite
+pgTAP complète rejouée à 0 échec (772/772). **Pas corrigé** : les lignes déjà expirées à tort par ce
+bug avant le fix (données de test/seed local, pas de production réelle à ce jour) — pas de script de
+réparation écrit sans accord explicite de Jérôme (règle données, jamais de correction silencieuse).
 Spec 20 — palette bleue par défaut de SVAR non harmonisée avec HeroUI (cosmétique), pas de refetch
 agenda au changement de vue, `modify_order_line` toujours hors périmètre créneaux horaires ;
 fragilité préexistante de `admin-reconciliation.spec.ts` (entrée seedée déjà `resolved`) ;
 `admin-home-navigation.spec.ts` sensible à l'exécution en parallèle ; activer les créneaux du jetski
 réel via `set_product_slot_capacity` (action de données) ; e2e Playwright pour les écrans créneaux
 (spec 18) ; machinerie de tri/filtre par tag catalogue client ; Tranche 4 de la spec 17 ; Tranche 2
-des specs 11/12/13 ; connecteur LobbyPMS ; correctif `waitForLoadState` sur
+des specs 11/12/13 ; connecteur LobbyPMS — décisions spec 21 §10 points 3-5 non tranchées
+(traslado↔commission hifago, valeur exacte de `orders.status` en cas d'échec PMS post-confirmation,
+chiffrement du token) + tests réels contre le compte Casa Kayam (pas de sandbox chez Lobby, IP du
+relais `104.207.147.127` pas encore déclarée côté Lobby par Jérôme, seul point bloquant restant) —
+le gap disponibilité live côté client (2026-08-21) et le relais réseau IP stable (2026-08-23, Vultr)
+sont tous deux comblés, cf. entrées datées en tête de ce §12 ; correctif `waitForLoadState` sur
 `admin-camp-booking.spec.ts` ; lot 2 `LocalizedTextField` établissement ; correction
 `admin-evento-vitrine.spec.ts` (`#name-es`) ; sidebar admin non repliée sous `md` ; carte transport
 multi-transporteurs groupée `apps/web` ; volume de données accumulé cassant 6 fichiers pgTAP

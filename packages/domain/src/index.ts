@@ -11,5 +11,8 @@ export * from "./pms/parseLobbyBookingResponse";
 export * from "./pms/detectTraslado";
 export * from "./pms/mapLobbyErrorCode";
 export * from "./pms/buildEvenRatesPerDay";
+export * from "./pms/parseLobbyNightAvailability";
+export * from "./pms/getNightAvailabilityWindow";
+export * from "./pms/nightAvailabilityCache";
 export * from "./http/resolveOrigin";
 export * from "./http/buildAuthCallbackRedirect";

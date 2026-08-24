@@ -4,8 +4,8 @@ titre: "Connecteur LobbyPMS — contrat générique multi-prestataire"
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: "implémenté (Tranche 1) le 2026-08-19 — voir § Implémentation en fin de document pour le gap connu (disponibilité live côté client)"
-maj: 2026-08-19
+statut: "implémenté (Tranche 1) le 2026-08-19, disponibilité live côté client comblée le 2026-08-21 — voir § Implémentation en fin de document"
+maj: 2026-08-21
 resume: >
   Porte le connecteur LobbyPMS (aujourd'hui unique voie legacy pour Casa Kayam) vers un
   contrat générique multi-prestataire dans hifago — disponibilité/prix par nuit, création de
@@ -31,7 +31,7 @@ repond_a:
 | 1 | Contexte et problème | implémenté |
 | 2 | Portée | implémenté (Tranche 1) |
 | 3 | Décisions retenues | implémenté |
-| 4 | Parcours cible | implémenté — sauf disponibilité live côté client, cf. § Implémentation |
+| 4 | Parcours cible | implémenté (disponibilité live côté client comblée le 2026-08-21) |
 | 5 | Écran(s) | implémenté |
 | 6-9 | *(fusionnées dans 0)* | — |
 | 10 | Décisions tranchées / points ouverts | **tranché par Jérôme le 2026-08-19 (périmètre complet, jeton en clair RPC-only, poll 15 min/lot 20) — voir § Implémentation** |
@@ -370,20 +370,36 @@ l'Edge Function `pms-poll-bookings` (`tests/pms-integration/`, contre la stack S
 réelle — confirme empiriquement que `host.docker.internal` résout bien le serveur de fixtures
 depuis le conteneur Edge Runtime local).
 
-**Gap connu, non comblé par cette Tranche 1 — signalé, pas implémenté** : le contrat §0 promettait
-« disponibilité/prix par nuit toujours relus à chaud au moment de réserver » comme invariant, mais
-seule l'écriture (`POST /api/pms/reserve-nights`, appelé APRÈS `create_order`) consulte réellement
-Lobby — `create_order` lui-même ne fait toujours aucun appel réseau (conforme à l'invariant « zéro
-appel réseau dans cette fonction »), et **aucune route ne lit la disponibilité Lobby pour
-l'affichage client** (calendrier de sélection des dates sur la fiche produit). Concrètement, un
-établissement PMS-backed n'a aujourd'hui aucun moyen d'afficher ses dates réellement disponibles
-au client avant réservation — le calendrier client existant suppose `product_calendar`/
-`product_availability` (jamais peuplés pour une ligne PMS-backed). La protection anti-survente
-réelle reste néanmoins intacte : `POST /bookings` est TOUJOURS le juge final côté Lobby (rejet
-422/NOT_ROOM si indisponible → réconciliation), donc pas de risque de survente silencieuse — mais
-l'expérience client (voir les dates dispo avant de réserver) manque. À raffiner dans une future
-spec (probablement une route `GET /api/pms/night-availability` + branchement du calendrier client
-existant), hors périmètre de cette Tranche 1.
+**Gap comblé le 2026-08-21** : le contrat §0 promettait « disponibilité/prix par nuit toujours
+relus à chaud au moment de réserver » comme invariant, mais jusqu'ici seule l'écriture (`POST
+/api/pms/reserve-nights`, appelé APRÈS `create_order`) consultait réellement Lobby — aucune route
+ne lisait la disponibilité Lobby pour l'affichage client (calendrier de sélection des dates sur la
+fiche produit). Un établissement PMS-backed n'avait donc aucun moyen d'afficher ses dates
+réellement disponibles au client avant réservation. Comblé par `GET /api/pms/night-availability`
+(`apps/web/app/api/pms/night-availability/route.ts`) : Route Handler public (fiche produit visible
+par un visiteur anonyme, même niveau d'exposition que `product_availability` déjà public), appelé
+**depuis le client** (`LodgingReservationForm.tsx`, un fetch au montage + à chaque changement de
+mois du calendrier — jamais depuis `page.tsx`/Server Component, pour ne jamais bloquer le rendu SSR
+sur des appels Lobby). Ne lit QUE `available_rooms` (jamais `plans[].prices[]` — Lobby n'est jamais
+la source du prix côté hifago, cf. `buildEvenRatesPerDay.ts`) ; `product_date_rates`/`price_tiers`
+restent la seule source de prix, y compris pour un produit PMS-backed. Nouveaux modules domaine :
+`getNightAvailabilityWindow.ts` (port de `mapChunked`, lots de 6, chaque nuit dans son propre
+`try/catch` — un échec isolé OMET cette nuit du résultat, jamais une valeur fabriquée ;
+`hasUnavailableNightInRange` traite déjà toute nuit absente comme indisponible, fail-closed
+gratuit), `parseLobbyNightAvailability.ts`, `nightAvailabilityCache.ts` (cache TTL 60s en mémoire,
+best-effort, non partagé entre instances Vercel — cohérent avec l'invariant « cache 60s autorisé
+pour l'affichage », jamais pour l'écriture). `createLobbyBooking`/`reserve-nights` restent inchangés
+: la protection anti-survente réelle reste `POST /bookings`, toujours juge final côté Lobby au
+moment de réserver. Tests : Vitest (les 3 nouveaux modules domaine, serveur `node:http` de
+fixtures), 1 e2e Playwright chemin heureux + dégradation
+(`apps/web/e2e/reserve-lodging-pms-availability.spec.ts`, établissement PMS-backed dédié, mock
+`page.route()` — jamais le vrai LobbyPMS). Détail complet : `hifago/docs/journal/2026-08.md`
+(2026-08-21).
+
+**Hors périmètre de ce comblement, resté ouvert** : rate-limiting de la route publique (aucune
+infra de ce type n'existe ailleurs dans le repo) ; préchargement du mois adjacent au mois visible ;
+cache partagé entre instances serverless concurrentes. Aucun de ces trois points n'affecte
+l'anti-survente (toujours assurée par `reserve-nights`), seulement l'expérience d'affichage.
 
 **Deux bugs trouvés en FAISANT TOURNER les tests, pas en écrivant le code** (même discipline que
 les sessions précédentes, cf. `hifago/CLAUDE.md` §12 historique) :

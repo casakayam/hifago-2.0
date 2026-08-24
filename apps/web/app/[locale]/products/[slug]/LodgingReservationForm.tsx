@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { useTranslations } from "next-intl";
 import type { DateRange } from "react-day-picker";
@@ -40,6 +40,7 @@ export function LodgingReservationForm({
   priceCop,
   priceTiers,
   maxQty,
+  isPmsBacked,
   availability,
   rates,
 }: {
@@ -49,6 +50,7 @@ export function LodgingReservationForm({
   priceCop: number;
   priceTiers: PriceTier[] | null;
   maxQty: number;
+  isPmsBacked: boolean;
   availability: AvailabilityRow[];
   rates: RateRow[];
 }) {
@@ -59,7 +61,67 @@ export function LodgingReservationForm({
   const [qty, setQty] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
 
-  const byDate = useMemo(() => new Map(availability.map((row) => [row.date, row])), [availability]);
+  // Spec 21 §13 (gap comblé) — un alojamiento PMS-backed n'a jamais de product_availability/
+  // product_date_rates peuplées (Lobby fait foi, cf. page.tsx) : `availability` (prop SSR) reste
+  // vide dans ce cas, remplacée ici par un fetch client mois par mois vers
+  // /api/pms/night-availability. `visibleMonth` pilote le calendrier en mode contrôlé (inoffensif
+  // pour un produit non-PMS, qui ignore ce state) ; `loadedMonthsRef` évite de refetcher un mois
+  // déjà chargé (mémoire de session du composant, jamais persistée) ; `pmsAvailability` s'accumule
+  // au fil de la navigation (jamais réinitialisée en changeant de mois) pour ne pas perdre les
+  // nuits déjà résolues d'un mois précédemment visité.
+  const [visibleMonth, setVisibleMonth] = useState(() => new Date());
+  const [pmsAvailability, setPmsAvailability] = useState<Map<string, AvailabilityRow>>(new Map());
+  const [pmsLoading, setPmsLoading] = useState(isPmsBacked);
+  const [pmsError, setPmsError] = useState(false);
+  const loadedMonthsRef = useRef<Set<string>>(new Set());
+
+  const monthKey = useMemo(() => format(visibleMonth, "yyyy-MM"), [visibleMonth]);
+
+  useEffect(() => {
+    if (!isPmsBacked || loadedMonthsRef.current.has(monthKey)) return;
+    let cancelled = false;
+    setPmsLoading(true);
+    setPmsError(false);
+
+    fetch(`/api/pms/night-availability?productId=${encodeURIComponent(productId)}&month=${monthKey}`)
+      .then((response) => response.json() as Promise<{ ok: boolean; nights?: AvailabilityRow[] }>)
+      .then((result) => {
+        if (cancelled) return;
+        if (!result.ok) {
+          // Échec (ou connecteur inactif) : nuits de ce mois OMISES, jamais une valeur fabriquée —
+          // hasUnavailableNightInRange traite déjà toute nuit absente comme indisponible (fail-closed
+          // gratuit, cf. reservationRange.ts).
+          setPmsError(true);
+          return;
+        }
+        loadedMonthsRef.current.add(monthKey);
+        setPmsAvailability((prev) => {
+          const next = new Map(prev);
+          for (const row of result.nights ?? []) next.set(row.date, row);
+          return next;
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setPmsError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setPmsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isPmsBacked, monthKey, productId]);
+
+  const effectiveAvailability = useMemo(
+    () => (isPmsBacked ? [...pmsAvailability.values()] : availability),
+    [isPmsBacked, pmsAvailability, availability]
+  );
+
+  const byDate = useMemo(
+    () => new Map(effectiveAvailability.map((row) => [row.date, row])),
+    [effectiveAvailability]
+  );
   const rateByDate = useMemo(() => new Map(rates.map((row) => [row.date, row.price_cop])), [rates]);
 
   // Cupos déjà occupés par CE produit dans le panier en cours (pas encore en base) — même
@@ -78,12 +140,12 @@ export function LodgingReservationForm({
 
   const fullDates = useMemo(() => {
     const full: Date[] = [];
-    for (const row of availability) {
+    for (const row of effectiveAvailability) {
       const inCart = inCartByDate.get(row.date) ?? 0;
       if (row.capacity - row.booked - inCart <= 0) full.push(parseISO(row.date));
     }
     return full;
-  }, [availability, inCartByDate]);
+  }, [effectiveAvailability, inCartByDate]);
 
   const nights = useMemo(() => nightsInRange(range), [range]);
   const hasUnavailableNight = hasUnavailableNightInRange(
@@ -134,10 +196,22 @@ export function LodgingReservationForm({
     <div className="flex flex-col gap-4">
       <div>
         <h2 className="mb-2 text-sm font-medium">{t("availabilityTitle")}</h2>
+        {isPmsBacked && pmsError ? (
+          <p className="mb-2 text-sm text-danger" role="alert" data-testid="pms-availability-error">
+            {t("pmsAvailabilityError")}
+          </p>
+        ) : null}
+        {isPmsBacked && pmsLoading ? (
+          <p className="mb-2 text-sm text-muted" aria-live="polite" data-testid="pms-availability-loading">
+            {t("pmsAvailabilityLoading")}
+          </p>
+        ) : null}
         <Calendar
           mode="range"
           selected={range}
           onSelect={handleSelectRange}
+          month={visibleMonth}
+          onMonthChange={setVisibleMonth}
           disabled={[{ before: new Date() }]}
           modifiers={{ full: fullDates }}
           modifiersClassNames={{ full: "line-through opacity-60" }}

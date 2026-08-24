@@ -20,6 +20,25 @@ export async function mockPmsReserveNights(page: Page): Promise<void> {
   });
 }
 
+// Spec 21 §13 (gap comblé) — même discipline que mockPmsReserveNights ci-dessus : intercepte
+// UNIQUEMENT l'appel navigateur vers /api/pms/night-availability déclenché par
+// LodgingReservationForm.tsx, jamais le vrai LobbyPMS. `nights` couvre le contrat réel de la route
+// ({ ok: true, nights: [...] } ou { ok: false, reason }) — un test qui veut prouver le comportement
+// du Route Handler lui-même (lecture service_role, parsing V2) utilise plutôt LOBBY_API_BASE_URL +
+// pmsFixtureServer, jamais ce mock navigateur.
+export async function mockPmsNightAvailability(
+  page: Page,
+  result: { ok: true; nights: { date: string; capacity: number; booked: number }[] } | { ok: false; reason: string }
+): Promise<void> {
+  await page.route("**/api/pms/night-availability**", async (route) => {
+    await route.fulfill({
+      status: result.ok ? 200 : 502,
+      contentType: "application/json",
+      body: JSON.stringify(result),
+    });
+  });
+}
+
 /**
  * Établissement PMS-backed dédié (jamais "Casa Kayam Guatapé" du seed, partagé — cf.
  * AGENTS-PARALLELES.md point 5 : une fixture e2e ne réutilise jamais un enregistrement seedé

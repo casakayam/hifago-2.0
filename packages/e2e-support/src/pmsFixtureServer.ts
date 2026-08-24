@@ -14,6 +14,10 @@ export interface PmsFixtureScenario {
   addProductServiceStatus?: number;
   addProductServiceBody?: unknown;
   bookingDetailByStatus?: Map<number, { status: number; body: unknown }>;
+  // Spec 21 §13 (gap comblé) — clé = start_date (yyyy-MM-dd) envoyé par getLobbyNightAvailability.
+  // Une date absente de cette map répond "disponible" par défaut (available_rooms: 5) : un scénario
+  // n'a besoin d'énumérer que les exceptions (nuit pleine, nuit en erreur), pas tout le mois.
+  nightAvailabilityByDate?: Record<string, { status?: number; availableRooms?: number }>;
 }
 
 let scenario: PmsFixtureScenario = {};
@@ -56,6 +60,17 @@ export function startPmsFixtureServer(port: number): Promise<{ url: string; clos
           scenario.createBookingStatus ?? 200,
           scenario.createBookingBody ?? { booking: { booking_id: 90000001, room_id: 90000002 } }
         );
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/api/v2/available-rooms") {
+        const categoryId = Number(url.searchParams.get("category_id"));
+        const startDate = url.searchParams.get("start_date") ?? "";
+        const entry = scenario.nightAvailabilityByDate?.[startDate];
+        send(res, entry?.status ?? 200, {
+          date: startDate,
+          categories: [{ category_id: categoryId, available_rooms: entry?.availableRooms ?? 5, plans: [] }],
+        });
         return;
       }
 
