@@ -2,6 +2,17 @@
 -- copie de production (cf. hifago/CLAUDE.md §7). Ce seed grossira au fil des tranches suivantes
 -- (catalogue, disponibilité, commandes...) — normal, pas une dérive à corriger.
 --
+-- Ordre d'exécution (2026-08-21, depuis que les auth.users de ce fichier sont créés via l'API
+-- Admin Auth plutôt qu'en SQL direct — cf. plus bas) :
+--   Local  : `npx supabase db reset --no-seed` (migrations seules) puis
+--            `node supabase/scripts/seed_auth_users.mjs` (variables d'env : voir ce script) puis
+--            `psql "$(npx supabase status -o env | grep DB_URL | cut -d'"' -f2)" -f supabase/seed.sql`.
+--   Préprod/prod : migrations déjà à jour (`supabase db push`), puis le même
+--            `seed_auth_users.mjs` contre le projet cible (jamais sans /hifago-verify-compte au
+--            préalable), puis `supabase db push --include-seed` (applique ce fichier).
+--   `supabase db reset`/`db push --include-seed` seuls (sans le script au milieu) échoueront tant
+--   que les auth.users référencés ci-dessous n'existent pas encore.
+--
 -- 4 profils demandés par le plan de la Tranche 1 :
 --   1. Invitation en attente (jamais consommée)
 --   2. Référent seul, actif
@@ -13,6 +24,12 @@
 -- lignes à la main), puis leur statut de capacité est ajusté par UPDATE direct — aucune RPC
 -- d'approbation/suspension admin n'existe encore à ce stade du chantier (backlog Partie B). Les
 -- trois profils partagent la même séquence en 6 étapes ; factorisée en boucle plutôt que répétée.
+--
+-- Comptes auth.users (2026-08-21) : plus insérés ici en SQL direct — bloqué sur Supabase Cloud
+-- (permission denied for schema auth, restriction plateforme, pas un grant manquant). Créés en
+-- amont via `node supabase/scripts/seed_auth_users.mjs` (API Admin Auth, mêmes UUID), qui doit
+-- donc tourner AVANT ce fichier (le trigger on_auth_user_created a besoin du vrai INSERT déclenché
+-- par createUser() pour provisionner partner_accounts).
 
 -- 1. Invitation en attente --------------------------------------------------
 insert into partner_codes (code) values ('SEED-PENDING');
@@ -44,15 +61,7 @@ begin
        'SEED-REFSUSP', 'seed-referent-suspendu-token', 'referrer', 'Référent Suspendu', 'suspended')
     ) as t(account_id, email, code, token, onboarding_path, signer_name, final_status)
   loop
-    insert into auth.users (
-      instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
-      created_at, updated_at, raw_app_meta_data, raw_user_meta_data
-    ) values (
-      '00000000-0000-0000-0000-000000000000', profile.account_id, 'authenticated', 'authenticated',
-      profile.email, crypt('Seed1234!', gen_salt('bf')), now(), now(), now(),
-      '{"provider":"email","providers":["email"]}', '{}'
-    );
-
+    -- profile.account_id existe déjà dans auth.users (seed_auth_users.mjs, cf. commentaire plus haut).
     insert into partner_codes (code) values (profile.code);
     insert into partner_invitations (token_hash, promo_code, onboarding_path, expires_at, partner_hint)
     values (
@@ -83,15 +92,7 @@ select set_config('request.jwt.claims', '', false);
 -- avant cette feature). Capacité insérée directement, pas de flux d'invitation à consommer : une
 -- capacité admin est account_id-scoped (jamais partner_id-scoped), cf.
 -- partner_capabilities_scope — même schéma que les fixtures admin des tests pgTAP.
-insert into auth.users (
-  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
-  created_at, updated_at, raw_app_meta_data, raw_user_meta_data
-) values (
-  '00000000-0000-0000-0000-000000000000', 'a0000000-0000-4000-8000-000000000005',
-  'authenticated', 'authenticated', 'admin@hifago.test', crypt('Seed1234!', gen_salt('bf')),
-  now(), now(), now(), '{"provider":"email","providers":["email"]}', '{}'
-);
-
+-- a0000000-...-0005 (admin@hifago.test) existe déjà dans auth.users (seed_auth_users.mjs).
 insert into partner_capabilities (account_id, role, source, status)
 values ('a0000000-0000-4000-8000-000000000005', 'admin', 'migration', 'active');
 
@@ -201,16 +202,8 @@ values (
   jsonb_build_object('es', 'Establecimiento Propuestas E2E')
 );
 
-insert into auth.users (
-  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
-  created_at, updated_at, raw_app_meta_data, raw_user_meta_data
-) values (
-  '00000000-0000-0000-0000-000000000000', 'a0000000-0000-4000-8000-000000000006',
-  'authenticated', 'authenticated', 'operador.propuestas@hifago.test',
-  crypt('Seed1234!', gen_salt('bf')), now(), now(), now(),
-  '{"provider":"email","providers":["email"]}', '{}'
-);
-
+-- a0000000-...-0006 (operador.propuestas@hifago.test) existe déjà dans auth.users
+-- (seed_auth_users.mjs).
 -- partner_accounts est déjà provisionné par le trigger handle_new_auth_user (Tranche 1) avec
 -- partner_id null — rattaché ici directement (pas de flux d'invitation à consommer, ce profil n'a
 -- besoin que de sa capacité finale, pas de tester le parcours d'onboarding).
@@ -469,10 +462,7 @@ select id, 'retrying', 2, now() - interval '30 minutes'
 -- plus récente, l'autre sans, pour que e2e/admin-campaign.spec.ts observe une vraie répartition
 -- envoyé/ignoré après traitement du lot, pas un seul cas. Aucun mot de passe/champ d'auth complet
 -- nécessaire : ces comptes ne sont jamais connectés, seulement ciblés par une campagne admin.
-insert into auth.users (id, email) values
-  ('d0000000-0000-4000-8000-000000000001', 'campaign-client-consent-seed@test.local'),
-  ('d0000000-0000-4000-8000-000000000002', 'campaign-client-no-consent-seed@test.local');
-
+-- d0000000-...-0001/0002 existent déjà dans auth.users (seed_auth_users.mjs, sans mot de passe).
 insert into orders (id, account_id, holder_name, holder_email, marketing_consent) values
   ('c0000000-0000-4000-8000-000000000004', 'd0000000-0000-4000-8000-000000000001',
    'Cliente Campaign Consent Seed', 'campaign-client-consent-seed@test.local', true),
