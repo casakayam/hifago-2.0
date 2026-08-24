@@ -167,7 +167,10 @@ racine (`AGENTS.md` point 2).
 360dialog (WhatsApp Business, mode API-only) · Google Routes API (itinéraire admin) · Resend ou
 Postmark (email — choix final renvoyé au chiffrage, mais le principe "un fournisseur email dédié,
 jamais le mailer Supabase Auth" est acquis) · un relais réseau minimal auto-hébergé (jamais Fly)
-pour l'IP stable exigée par LobbyPMS.
+pour l'IP stable exigée par LobbyPMS — **Vultr retenu pour l'instance préprod** (région Miami,
+substitué à l'hypothèse Hetzner initiale de `docs/04-architecture-cible.md` après avoir écarté
+Oracle Cloud pour sa carte bancaire obligatoire ; Hetzner reste valide comme référence "ou
+équivalent" pour un futur relais prod).
 
 ## 10. Hors périmètre — à ne jamais trancher sans Jérôme
 Niveaux d'accès différenciés entre utilisateurs d'une même organisation partenaire · schéma exact
@@ -345,13 +348,140 @@ l'export comptable/fiscal · fournisseur email final (Resend vs Postmark).
     a priori "sans état" comme `SimpleTable`. Racine exacte non creusée plus loin (lequel des
     nouveaux imports du barrel est en cause précisément) — seul le correctif est vérifié
     empiriquement, à re-tester si `app-nav-shell.tsx` est un jour retiré du barrel.
+17. **`supabase db push --include-seed` sur Supabase Cloud n'exécute PAS `supabase/seed.sql` avec
+    les mêmes privilèges qu'une connexion `postgres` directe** (constaté 2026-08-21, déblocage seed
+    préprod) — le CLI provisionne, via l'API Management (`Initialising login role...` →
+    `POST /cli/login-role`), un rôle éphémère `cli_login_postgres` (`rolinherit=false`, non
+    superuser). Ce rôle affiche bien `current_user='postgres'` une fois connecté (vérifié par
+    `raise exception` diagnostique), mais une opération DML pourtant couverte par les grants réels
+    de `postgres` (`UPDATE partner_capabilities`, confirmé accordé — colonne par colonne — via
+    `information_schema`) échoue quand même : `ERROR: permission denied for table
+    partner_capabilities (SQLSTATE 42501)`. La même instruction, exécutée via une connexion
+    `postgres` authentique (`mcp__supabase__execute_sql`, ou un `psql` direct comme en local),
+    réussit sans erreur — mécanisme exact non percé à jour (la piste la plus probable : un rôle
+    atteint via un mécanisme interne au CLI distinct d'un vrai `SET ROLE`/login direct ne porte pas
+    les mêmes droits malgré un `current_user` identique en apparence), mais le contournement est
+    vérifié empiriquement et suffisant : appliquer `seed.sql` via `mcp__supabase__execute_sql` (ou
+    un `psql` direct authentifié `postgres`) plutôt que `db push --include-seed`, qui reste fiable
+    pour les migrations (DDL) mais pas pour ce seed spécifique. Toujours tester d'abord en local
+    (`psql` direct, jamais ce piège en local où `postgres` est superuser Docker) avant de rejouer
+    sur le cloud.
+18. **`npx supabase projects api-keys` affiche la clé `service_role` LEGACY (JWT) en clair même
+    SANS `--reveal`** (reconstaté 2026-08-21, 3ᵉ occurrence après le 2026-08-12 et une première fois
+    dans cette même session — `--reveal` ne masque que les clés du nouveau format `sb_secret_...`,
+    pas les JWT legacy `anon`/`service_role`, qui n'ont pas de représentation partiellement
+    masquable). Ne JAMAIS appeler cette commande brute : toujours rediriger vers un filtre qui capture
+    la valeur sans l'afficher (`eval "$(... -o env | grep SERVICE_ROLE_KEY)"` dans un seul appel non
+    échoïsant), ou au minimum passer par `sed -E 's/="[^"]*"/=<redacted>/'` avant toute lecture, même
+    pour un simple diagnostic de nom de variable.
 
 ## 12. Curseur — dernière session
 
 En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 `hifago/docs/journal/<mois-en-cours>.md` — nouveau mois = nouveau fichier (`2026-09.md` le
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
-nouvelle entrée.
+nouvelle entrée. **Note de cette session** : le paragraphe 2026-08-23 "déploiement préprod Vercel"
+juste en dessous représentait un travail non commité d'une session concurrente au moment d'écrire
+ceci (disque partagé) — non remplacé pour ne pas perdre son résumé avant qu'elle ait pu committer
+elle-même ; à consolider en un seul paragraphe une fois les deux batches réellement fusionnés sur
+`main`.
+
+*2026-08-23 (suite, session distincte) — relais réseau IP stable LobbyPMS provisionné pour la
+préprod : instance Vultr (région Miami, ~3 $/mois avec IP réservée — Oracle Cloud puis Hetzner
+écartés en cours de session, cf. §9) à l'IP réservée `104.207.147.127`, reverse-proxy Caddy
+authentifié (`X-Relay-Secret`, généré côté serveur, jamais connu de l'agent) vérifié bout-en-bout
+contre le vrai `api.lobbypms.com` (réponse JSON réelle de Lobby, jeton factice, IP pas encore
+déclarée côté Lobby). Durcissement SSH/ufw/unattended-upgrades vérifié après un piège cloud-init
+silencieux (mauvais magic header). Supervision double (ntfy.sh + UptimeRobot) confirmée active.
+Code : `relaySecret` optionnel ajouté à `lobbyClient.ts` (6 fonctions, additif) et câblé sur 4 des
+5 call sites — `getNightAvailabilityWindow.ts`/`night-availability/route.ts` laissés à la session
+LobbyPMS parallèle (fichiers non commités par elle, coordination faite par message). `LOBBY_API_
+BASE_URL`/`LOBBY_RELAY_SECRET` posés sur Vercel `staging` (web+admin) — un déploiement propre a
+nécessité un worktree git isolé (le checkout partagé aurait embarqué le travail non commité d'une
+autre session dans le build) et 2 dépendances fantômes supplémentaires corrigées
+(`@hifago/e2e-support`, `@tanstack/react-table` dans `packages/ui`). Commits `5f5b792`/`affa065`/
+`3993a2d` sur `main`. **Point bloquant restant, action Jérôme requise** : déclarer
+`104.207.147.127` dans LobbyPMS (Configuraciones > Acceso Api) avant tout appel réel contre Casa
+Kayam — non fait durant cette session. Détail complet (tous les pièges empiriques) :
+`hifago/docs/journal/2026-08.md`, entrée "relais réseau IP stable LobbyPMS provisionné (préprod)".*
+
+*2026-08-23 (session en pause, en attente de Jérôme sur 2 points) — déploiement préprod Vercel de
+`apps/web`/`apps/admin` : équipe dédiée `vercel.com/hifago` créée (compte perso `cosmogab`
+initialement connecté, ambiguïté signalée avant toute création), deux projets scopés Root Directory
+(`hifago-web`→`apps/web`, `hifago-admin`→`apps/admin`), Custom Environment `staging` configuré sur
+les deux (branche `staging` créée sur le remote), Deployment Protection (SSO) désactivée sur
+`staging` (décision explicite de Jérôme — plus simple à tester, préférée à la fermeture par défaut).
+**Déploiements réels vérifiés** (pas juste supposés) sur l'infra Vercel + smoke test anonyme passé :
+`https://hifago-web-env-staging-hifago.vercel.app` (catalogue avec vrai contenu seedé, fiche
+produit `200`) et `https://hifago-admin-env-staging-hifago.vercel.app` (login rendu, `/admin`
+protégé redirige `307`).
+
+**Trois vrais pièges monorepo/Vercel trouvés et corrigés en déployant pour de vrai** (détail complet
+`docs/journal/2026-08.md`, 2026-08-23) :
+1. Dépendances fantômes non déclarées (`@tanstack/react-table` manquant dans `packages/ui`,
+   `@hifago/e2e-support` manquant dans `apps/web`/`apps/admin`) — masquées par le hoisting npm local,
+   cassent l'install scopée Vercel. Corrigé dans les `package.json` (changements encore **non
+   commités**, attente accord sur branche/PR pour ne pas interférer avec la session parallèle
+   LobbyPMS en cours sur `main`).
+2. Mauvaise détection de framework spécifique à `hifago-admin` (`@vercel/static-build` choisi au
+   lieu de `@vercel/next` malgré un `next build` réussi) — corrigé en posant `framework=nextjs`
+   explicitement via l'API sur les deux projets. **À faire systématiquement pour tout futur projet
+   Vercel de ce monorepo, jamais compter sur la détection zero-config.**
+3. Changer `framework` sur un projet **après** qu'un déploiement soit déjà live a cassé le routing
+   edge de ce déploiement (`hifago-web` renvoyait `404 NOT_FOUND` sur toutes les routes, y compris
+   hors middleware) sans nouveau déploiement déclencheur — corrigé par un redeploy à froid
+   (`vercel deploy --force`). **À retenir : après tout changement de réglage projet zero-config,
+   refaire un déploiement frais plutôt que supposer le déploiement existant toujours valide.**
+
+**4 secrets posés** (`SUPABASE_SERVICE_ROLE_KEY`, `MERCADOPAGO_ACCESS_TOKEN`,
+`MERCADOPAGO_WEBHOOK_SECRET`, `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`) — tentative de les poser via CLI
+bloquée à deux reprises par le classificateur de sécurité auto mode de Claude Code (refuse tout
+secret en clair dans une commande Bash, cohérent avec §8.2, pas contourné) : **Jérôme les a posés
+lui-même** dans le dashboard Vercel en "Shared Environment Variables" d'équipe scopées sur `staging`
+des deux projets — confirmé via API (`vercel env ls` ne les affiche PAS, cette commande ignore les
+variables "Shared", piège CLI à noter). Redeploy des deux apps fait, smoke test post-secrets passé
+(pages clés `200`, redirections cohérentes, aucun `500`) — connexion authentifiée et paiement
+bout-en-bout non testés (pas de mot de passe de compte de test redemandé cette session).
+
+**1 point encore bloquant** : connexion Git GitHub↔Vercel impossible avec le compte `cosmogab` (pas
+admin sur `casakayam/hifago-2.0`, ne peut pas autoriser la GitHub App Vercel) — donc pas encore de
+redéploiement auto sur push, seulement des déploiements CLI ad hoc cette session. Nécessite que
+Jérôme (ou un admin de l'org `casakayam`) autorise la GitHub App Vercel depuis GitHub.*
+
+*2026-08-21 (suite session parallèle) — préprod cloud `hqldjdzgvhfwoqypwzqx` désormais **entièrement
+seedé** (identité, catalogue, commandes, ledger, réconciliation PMS, campagne) et vérifié en
+conditions réelles bout-en-bout. MCP Supabase confirmé connecté cette fois (scopé à ce seul projet,
+pas de niveau organisation exposé — `get_project_url` + recoupement CLI `status -o env`/`projects
+list`, aucune ambiguïté). Seed débloqué via nouveau `supabase/scripts/seed_auth_users.mjs` (API
+Admin Auth, `createUser({id, email, ...})` — `id` fixe confirmé accepté empiriquement bien
+qu'absent du type TS) remplaçant les 4 `insert into auth.users` directs de `seed.sql`. **Nouveau
+piège cloud** (`CLAUDE.md` §11 point 17) : `supabase db push --include-seed` échoue sur
+`partner_capabilities` (rôle éphémère `cli_login_postgres` du CLI, droits effectifs différents de
+`postgres` malgré un `current_user` identique en apparence, mécanisme exact non élucidé) —
+contournement vérifié : appliquer le seed via `mcp__supabase__execute_sql` à la place. Vérifié
+bout-en-bout : connexion mot de passe réussie (local + cloud), écran catalogue et fiche produit
+(bloc établissement) confirmés servis depuis le cloud via `apps/web` basculé temporairement puis
+remis en local proprement (`apps/admin` jamais touché, session Firefox active dessus). Point de
+sécurité récurrent (3ᵉ occurrence, §11 point 18) : clé `service_role` legacy encore affichée en
+clair par `supabase projects api-keys` sans `--reveal` — signalé à Jérôme, rotation à envisager.
+Détail complet : `hifago/docs/journal/2026-08.md` (2026-08-21, suite session parallèle).
+
+*2026-08-21 — connecteur LobbyPMS (spec 21 §13) : gap disponibilité live côté client comblé.
+`GET /api/pms/night-availability` (Route Handler public, appelé depuis `LodgingReservationForm.tsx`
+— jamais depuis `page.tsx`/Server Component, pour ne jamais bloquer le rendu SSR sur des appels
+Lobby) alimente enfin le calendrier client d'un logement PMS-backed (Casa Kayam), qui affichait
+jusqu'ici un calendrier où rien n'était jamais grisé (faux-positif silencieux, `product_availability`
+toujours vide pour ce cas). Ne lit que `available_rooms` (jamais un prix — Lobby n'est jamais la
+source du prix côté hifago). Nouveaux modules `packages/domain/src/pms/`
+(`getNightAvailabilityWindow`/`parseLobbyNightAvailability`/`nightAvailabilityCache`, échec isolé
+par nuit OMIS jamais fabriqué — fail-closed gratuit via `hasUnavailableNightInRange`). Anti-survente
+réelle inchangée (`POST /bookings` chez Lobby reste juge final). Bug de test trouvé en faisant
+tourner le test (pas de bug applicatif) : le modifier CSS "nuit pleine" s'applique par
+react-day-picker au `<td>`, pas au `<button>` — corrigé côté test uniquement. **Vérifié** : Vitest
+`packages/domain` 116/116, typecheck/lint propres, e2e `apps/web` 13/13 en séquentiel (échecs à 4
+workers = contention sur le serveur dev partagé, pas une régression, confirmé en isolation).
+Nouveau test `reserve-lodging-pms-availability.spec.ts`. Détail complet :
+`hifago/docs/journal/2026-08.md` (2026-08-21).
 
 *2026-08-20/21 (suite 9, feature 32) — dernière entrée : parcours client testable de bout en bout
 sur `apps/web`, **prouvé jusqu'au bout** (paiement réel approuvé + `payment_status='paid'`
