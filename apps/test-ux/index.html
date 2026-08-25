@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>hifago — bac à sable UX</title>
+<link rel="stylesheet" href="wireframe.css" />
+</head>
+<body>
+
+<div class="wf-toolbar">
+  <h1>hifago · bac à sable UX</h1>
+
+  <div class="wf-group">
+    <label for="wf-picker">Écran</label>
+    <select id="wf-picker"></select>
+  </div>
+
+  <div class="wf-group">
+    <button id="wf-back" type="button">← Retour</button>
+  </div>
+
+  <div class="wf-group" role="group" aria-label="Gabarit">
+    <label>Gabarit</label>
+    <button type="button" data-device-btn="mobile" aria-pressed="false">Mobile</button>
+    <button type="button" data-device-btn="tablet" aria-pressed="false">Tablette</button>
+    <button type="button" data-device-btn="desktop" aria-pressed="true">Desktop</button>
+  </div>
+
+  <div class="wf-spacer"></div>
+  <div class="wf-breadcrumb" id="wf-breadcrumb"></div>
+</div>
+
+<div class="wf-stage">
+  <div class="wf-frame" id="wf-frame">
+    <div id="wf-canvas"></div>
+  </div>
+</div>
+
+<script src="screens.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
