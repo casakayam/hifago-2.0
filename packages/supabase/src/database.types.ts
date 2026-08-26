@@ -482,6 +482,68 @@ export type Database = {
           },
         ]
       }
+      notification_emails: {
+        Row: {
+          attempts: number
+          body_html: string
+          created_at: string
+          event_type: string
+          id: string
+          last_attempt_at: string | null
+          last_error: string | null
+          provider_message_id: string | null
+          recipient_account_id: string | null
+          recipient_email: string
+          related_id: string | null
+          related_table: string | null
+          sent_at: string | null
+          status: string
+          subject: string
+        }
+        Insert: {
+          attempts?: number
+          body_html: string
+          created_at?: string
+          event_type: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          provider_message_id?: string | null
+          recipient_account_id?: string | null
+          recipient_email: string
+          related_id?: string | null
+          related_table?: string | null
+          sent_at?: string | null
+          status?: string
+          subject: string
+        }
+        Update: {
+          attempts?: number
+          body_html?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          provider_message_id?: string | null
+          recipient_account_id?: string | null
+          recipient_email?: string
+          related_id?: string | null
+          related_table?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_emails_recipient_account_id_fkey"
+            columns: ["recipient_account_id"]
+            isOneToOne: false
+            referencedRelation: "partner_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_lines: {
         Row: {
           account_id: string | null
@@ -888,6 +950,7 @@ export type Database = {
           consumed_by_account_id: string | null
           created_at: string
           created_by: string | null
+          email: string | null
           expires_at: string
           id: string
           onboarding_path: string
@@ -902,6 +965,7 @@ export type Database = {
           consumed_by_account_id?: string | null
           created_at?: string
           created_by?: string | null
+          email?: string | null
           expires_at: string
           id?: string
           onboarding_path: string
@@ -916,6 +980,7 @@ export type Database = {
           consumed_by_account_id?: string | null
           created_at?: string
           created_by?: string | null
+          email?: string | null
           expires_at?: string
           id?: string
           onboarding_path?: string
@@ -1030,6 +1095,32 @@ export type Database = {
             columns: ["unpublished_by"]
             isOneToOne: false
             referencedRelation: "partner_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_payout_accounts: {
+        Row: {
+          mercadopago_account: string
+          partner_id: string
+          updated_at: string
+        }
+        Insert: {
+          mercadopago_account: string
+          partner_id: string
+          updated_at?: string
+        }
+        Update: {
+          mercadopago_account?: string
+          partner_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_payout_accounts_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: true
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]
@@ -1652,6 +1743,7 @@ export type Database = {
           price_label: string | null
           price_tiers: Json | null
           qty_unit: string
+          quantity: number | null
           recurrence_end_count: number | null
           recurrence_end_date: string | null
           recurrence_frequency_days: number | null
@@ -1697,6 +1789,7 @@ export type Database = {
           price_label?: string | null
           price_tiers?: Json | null
           qty_unit?: string
+          quantity?: number | null
           recurrence_end_count?: number | null
           recurrence_end_date?: string | null
           recurrence_frequency_days?: number | null
@@ -1742,6 +1835,7 @@ export type Database = {
           price_label?: string | null
           price_tiers?: Json | null
           qty_unit?: string
+          quantity?: number | null
           recurrence_end_count?: number | null
           recurrence_end_date?: string | null
           recurrence_frequency_days?: number | null
@@ -1987,6 +2081,32 @@ export type Database = {
       }
       cancel_order: { Args: { p_order_id: string }; Returns: Json }
       check_partner_invitation: { Args: { p_token: string }; Returns: Json }
+      claim_notification_email_batch: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          body_html: string
+          created_at: string
+          event_type: string
+          id: string
+          last_attempt_at: string | null
+          last_error: string | null
+          provider_message_id: string | null
+          recipient_account_id: string | null
+          recipient_email: string
+          related_id: string | null
+          related_table: string | null
+          sent_at: string | null
+          status: string
+          subject: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "notification_emails"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_pms_poll_batch: {
         Args: { p_limit?: number }
         Returns: {
@@ -2081,6 +2201,7 @@ export type Database = {
       create_partner_invitation: {
         Args: {
           p_code: string
+          p_email?: string
           p_expires_days?: number
           p_onboarding_path: string
           p_partner_hint?: Json
@@ -2100,6 +2221,18 @@ export type Database = {
       delete_product: {
         Args: { p_note?: string; p_product_id: string }
         Returns: undefined
+      }
+      enqueue_notification_email: {
+        Args: {
+          p_body_html: string
+          p_event_type: string
+          p_recipient_account_id: string
+          p_recipient_email: string
+          p_related_id?: string
+          p_related_table?: string
+          p_subject: string
+        }
+        Returns: string
       }
       expand_product_slots: {
         Args: { p_date: string; p_product_id: string }
@@ -2140,6 +2273,7 @@ export type Database = {
       }
       invoke_pms_nightly_contract_check: { Args: never; Returns: undefined }
       invoke_pms_poll_bookings: { Args: never; Returns: undefined }
+      invoke_send_notification_emails: { Args: never; Returns: undefined }
       is_admin: { Args: { uid: string }; Returns: boolean }
       list_audience_members: {
         Args: { p_audience: string }
@@ -2245,8 +2379,17 @@ export type Database = {
         }
         Returns: Json
       }
+      mark_notification_email_failed: {
+        Args: { p_error: string; p_id: string; p_max_attempts?: number }
+        Returns: undefined
+      }
+      mark_notification_email_sent: {
+        Args: { p_id: string; p_provider_message_id: string }
+        Returns: undefined
+      }
       moderate_establishment_proposal: {
         Args: {
+          p_activate_pms_connector?: boolean
           p_corrected_payload?: Json
           p_decision: string
           p_expected_version: number
@@ -2276,6 +2419,16 @@ export type Database = {
         Returns: Json
       }
       normalize_price_tiers: { Args: { p_price_tiers: Json }; Returns: Json }
+      notify_all_admins: {
+        Args: {
+          p_body_html: string
+          p_event_type: string
+          p_related_id?: string
+          p_related_table?: string
+          p_subject: string
+        }
+        Returns: undefined
+      }
       offboarding_attest_payments: {
         Args: { p_note: string; p_offboarding_id: string }
         Returns: Json
@@ -2356,6 +2509,10 @@ export type Database = {
       }
       set_establishment_status: {
         Args: { p_establishment_id: string; p_note?: string; p_status: string }
+        Returns: Json
+      }
+      set_my_payout_account: {
+        Args: { p_mercadopago_account: string }
         Returns: Json
       }
       set_order_line_status: {

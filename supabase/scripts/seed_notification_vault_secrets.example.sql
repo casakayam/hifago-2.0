@@ -1,0 +1,19 @@
+-- Spec 23 — notifications email. Template documenté (même esprit que seed_pms_vault_secrets)
+-- pour le seul secret Vault propre à cette spec — JAMAIS de vraie valeur commitée dans ce fichier.
+-- pms_functions_base_url/pms_service_role_key (invoke_send_notification_emails) sont RÉUTILISÉS
+-- tels quels, aucun nouveau secret nécessaire pour eux.
+--
+-- admin_app_public_url : URL publique cliquable par un humain (le lien d'invitation pointe dessus,
+-- create_partner_invitation), distincte des secrets PMS ci-dessus (qui pointent vers un endpoint
+-- Edge Function interne, jamais montré à un humain).
+--
+-- Usage local :
+--   1. Copier ce fichier (jamais l'éditer en place) : cp supabase/scripts/seed_notification_vault_secrets.example.sql /tmp/seed_notification_vault_secrets.local.sql
+--   2. Remplacer la valeur ci-dessous — en local, apps/admin tourne sur http://localhost:3101
+--      (cf. .claude/skills/hifago-dev/SKILL.md).
+--   3. Appliquer : PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -f /tmp/seed_notification_vault_secrets.local.sql
+--   4. Supprimer le fichier local une fois appliqué (jamais persisté, hifago/CLAUDE.md §8.2).
+--
+-- En préprod/prod : même insertion, exécutée une fois par un humain via le SQL Editor du projet
+-- Supabase concerné (jamais via une migration versionnée) — hors périmètre de cette spec.
+select vault.create_secret('http://localhost:3101', 'admin_app_public_url', 'URL publique de apps/admin, utilisée dans le lien d''invitation envoyé par email.');

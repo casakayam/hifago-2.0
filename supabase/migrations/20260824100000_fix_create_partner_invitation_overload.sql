@@ -1,0 +1,11 @@
+-- Spec 23 Tranche 1 — corrige une régression trouvée en faisant tourner la suite pgTAP complète
+-- (create_partner_invitation.test.sql : "function create_partner_invitation(unknown, unknown) is
+-- not unique"). Root cause : `create or replace function create_partner_invitation(text, text,
+-- jsonb, int, text)` (20260824040000) n'a PAS remplacé l'ancienne signature à 4 paramètres —
+-- en Postgres, CREATE OR REPLACE ne remplace une fonction que si la signature (types de paramètres)
+-- est identique ; un paramètre supplémentaire, même avec une valeur par défaut, crée une SURCHARGE
+-- distincte au lieu de remplacer l'originale. Les deux versions coexistaient donc, rendant tout
+-- appel à 2-4 arguments ambigu (les deux ont des défauts pour compléter jusqu'à leurs arités
+-- respectives). Corrigé en supprimant explicitement l'ancienne surcharge à 4 paramètres — la
+-- nouvelle définition à 5 paramètres (20260824040000) reste inchangée et devient la seule.
+drop function if exists create_partner_invitation(text, text, jsonb, int);

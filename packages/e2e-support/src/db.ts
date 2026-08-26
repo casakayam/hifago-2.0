@@ -106,6 +106,33 @@ export async function deleteOrdersByHolderName(holderName: string) {
   });
 }
 
+/**
+ * Spec 23 — purge notification_emails avant tout nettoyage qui supprimerait un compte référencé
+ * par recipient_account_id (FK vers partner_accounts) ou une entité référencée par related_id
+ * (pas une vraie FK — related_table/related_id suit le pattern audit_log, jamais de contrainte —
+ * mais laisser traîner des lignes orphelines pollue quand même les assertions d'un test suivant).
+ * Filtre au choix par email destinataire ou par (related_table, related_id) — au moins un requis.
+ */
+export async function purgeNotificationEmails(filter: {
+  recipientEmailLike?: string;
+  relatedTable?: string;
+  relatedId?: string;
+}) {
+  await withDb(async (client) => {
+    if (filter.recipientEmailLike) {
+      await client.query("delete from notification_emails where recipient_email like $1", [
+        filter.recipientEmailLike,
+      ]);
+    }
+    if (filter.relatedTable && filter.relatedId) {
+      await client.query(
+        "delete from notification_emails where related_table = $1 and related_id = $2",
+        [filter.relatedTable, filter.relatedId]
+      );
+    }
+  });
+}
+
 // Simule directement en base un événement concurrent (une autre commande qui consomme des
 // places) survenu entre l'ajout au panier (purement local, cf. lib/cart/CartContext.tsx) et la
 // validation du panier — la seule vraie barrière anti-survente reste create_order, jamais un

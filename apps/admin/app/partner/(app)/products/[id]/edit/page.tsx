@@ -19,7 +19,7 @@ export default async function EditProductProposalPage({
   const { data: product } = await supabase
     .from("products")
     .select(
-      "id, type, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, default_capacity, stay_rates"
+      "id, type, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, quantity, default_capacity, stay_rates, establishment_id, lobby_category_id, lobby_product_id, establishment:establishments(lobby_connector_active, lobby_has_token)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -96,6 +96,10 @@ export default async function EditProductProposalPage({
         type={product.type as "activity" | "evento" | "camp" | "lodging" | "hotel" | "transport"}
         currentPayload={product}
         pendingProposal={pendingProposal}
+        establishmentId={product.establishment_id}
+        establishmentLobbyConnected={Boolean(
+          product.establishment?.lobby_connector_active && product.establishment?.lobby_has_token
+        )}
       />
     </div>
   );

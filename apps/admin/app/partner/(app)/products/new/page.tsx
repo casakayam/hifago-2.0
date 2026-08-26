@@ -45,7 +45,7 @@ export default async function NewProductProposalPage() {
     activeEstablishmentIds.length > 0
       ? await supabase
           .from("establishments")
-          .select("id, name, partner_id")
+          .select("id, name, partner_id, lobby_connector_active, lobby_has_token")
           .in("id", activeEstablishmentIds)
           .order("created_at", { ascending: true })
       : { data: [] };

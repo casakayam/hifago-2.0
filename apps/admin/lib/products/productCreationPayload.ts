@@ -25,7 +25,7 @@ export function buildProductCreationPayload(
   stagedPhotos: StagedPhoto[] = [],
 ): Record<string, unknown> {
   const {
-    isEvento, isCamp, isHotel, isLodging, isActivity,
+    isEvento, isCamp, isHotel, isLodging, isActivity, isTransport,
     hasLocationAndTags, hasTags, hasPriceQtyFields, hasCheckInOut, hasDefaultCapacity,
   } = productTypeGating(type);
   const usesTiers = hasPriceQtyFields && fields.priceMode === "tiers";
@@ -61,8 +61,22 @@ export function buildProductCreationPayload(
     ...(isLodging
       ? {
           capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
+          // `quantity` (2026-08-26) : nombre d'unités du type, à côté de la capacité qui est le
+          // nombre d'occupants d'UNE unité. Whitelisté par submit_product_creation_proposal ET
+          // submit_product_proposal (migration 20260826190000) — les deux, sinon le champ se
+          // remplirait à la création puis disparaîtrait à la première modification.
+          quantity: fields.quantity.trim() ? Number(fields.quantity) : null,
           stay_rates: toStayRatesColumn(fields.stayRates),
+          // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — la RPC elle-même ignore ce champ
+          // si l'établissement n'est pas connecté (cf. submit_product_creation_proposal), donc
+          // aucun besoin de reconditionner ça ici.
+          lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
         }
+      : {}),
+    // Élargi le 2026-08-26 de isActivity seul à (isActivity || isTransport) — cf. commentaire de
+    // tête de product-type-fields.tsx pour le raisonnement complet (evento/camp restent exclus).
+    ...(isActivity || isTransport
+      ? { lobby_product_id: fields.lobbyProductId.trim() ? Number(fields.lobbyProductId) : null }
       : {}),
     ...(hasDefaultCapacity
       ? { default_capacity: fields.defaultCapacity.trim() ? Number(fields.defaultCapacity) : null }

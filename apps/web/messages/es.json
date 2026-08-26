@@ -56,6 +56,8 @@
   "ProductPage": {
     "backToCatalog": "← Volver al catálogo",
     "perPerson": "por persona",
+    "lodgingCapacity": "Hasta {count, plural, one {# persona} other {# personas}}",
+    "lodgingQuantity": "{count} en total",
     "fromPrice": "Desde",
     "availabilityTitle": "Disponibilidad",
     "spotsLeft": "{count, plural, one {# cupo disponible} other {# cupos disponibles}}",

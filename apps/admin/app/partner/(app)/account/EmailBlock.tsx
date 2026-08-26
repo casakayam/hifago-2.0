@@ -11,6 +11,7 @@ import { Button, Card, Input, Label, TextField, toast } from "@hifago/ui";
 export function EmailBlock({ initialEmail }: { initialEmail: string }) {
   const [email, setEmail] = useState(initialEmail);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isDirty = email !== initialEmail;
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -50,7 +51,7 @@ export function EmailBlock({ initialEmail }: { initialEmail: string }) {
           </p>
           <Button
             type="submit"
-            isDisabled={isSubmitting}
+            isDisabled={isSubmitting || !isDirty}
             data-testid="save-email-button"
             className="self-start"
           >

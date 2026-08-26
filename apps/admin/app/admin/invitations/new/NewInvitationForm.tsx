@@ -18,6 +18,7 @@ type CreateInvitationResult = { ok: boolean; invitation_id?: string; token?: str
 export function NewInvitationForm() {
   const [code, setCode] = useState("");
   const [onboardingPath, setOnboardingPath] = useState<OnboardingPath | "">("");
+  const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -33,18 +34,24 @@ export function NewInvitationForm() {
     setIsSubmitting(true);
 
     // Un seul aller-retour (jamais de génération de jeton côté client) — le jeton brut n'est
-    // retourné qu'ici, une seule fois : seul son hash persiste côté serveur.
+    // retourné qu'ici, une seule fois : seul son hash persiste côté serveur. p_email optionnel
+    // (spec 23) : canal email EN PLUS du lien à copier-coller, jamais un remplacement — sans
+    // email, le flux WhatsApp manuel reste inchangé.
     const supabase = createClient();
     const { data, error: rpcError } = await supabase.rpc("create_partner_invitation", {
       p_code: code.trim(),
       p_onboarding_path: onboardingPath,
+      p_email: email.trim() || undefined,
     });
 
     setIsSubmitting(false);
 
     const result = data as CreateInvitationResult | null;
     if (rpcError || !result?.ok || !result.token) {
-      toast.danger("No se pudo crear la invitación.");
+      // Código ya asignado a otro socio (create_partner_invitation, errcode 23505) : message
+      // précis plutôt que le générique ci-dessous — le seul cas où l'échec vient d'une saisie
+      // corrigeable par l'admin, pas d'un problème réseau/serveur.
+      toast.danger(rpcError?.code === "23505" ? rpcError.message : "No se pudo crear la invitación.");
       return;
     }
 
@@ -65,6 +72,11 @@ export function NewInvitationForm() {
           Este enlace solo se muestra una vez — cópialo ahora, no podrás recuperarlo después (solo
           su hash queda guardado).
         </Description>
+        {email.trim() ? (
+          <Description data-testid="invitation-email-sent-hint">
+            También se envió por correo a {email.trim()}.
+          </Description>
+        ) : null}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="invitation-link">Enlace de invitación</Label>
           <Input id="invitation-link" data-testid="invitation-link" readOnly value={link} />
@@ -113,6 +125,21 @@ export function NewInvitationForm() {
             </ListBox>
           </Select.Popover>
         </Select>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="invitation-email">Correo (opcional)</Label>
+        <Input
+          id="invitation-email"
+          name="invitation-email"
+          type="email"
+          data-testid="invitation-email-input"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+        />
+        <Description>
+          Si lo completas, la invitación también se envía por correo — el enlace de arriba sigue
+          disponible para copiar y compartir manualmente (ej. WhatsApp).
+        </Description>
       </div>
       <Button type="submit" isDisabled={isSubmitting} data-testid="create-invitation-button">
         {isSubmitting ? "Creando…" : "Crear invitación"}

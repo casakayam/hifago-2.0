@@ -16,6 +16,7 @@ export function ProfileBlock({
   const [fullName, setFullName] = useState(initialFullName);
   const [phone, setPhone] = useState(initialPhone);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isDirty = fullName !== initialFullName || phone !== initialPhone;
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -64,7 +65,7 @@ export function ProfileBlock({
           </TextField>
           <Button
             type="submit"
-            isDisabled={isSubmitting}
+            isDisabled={isSubmitting || !isDirty}
             data-testid="save-profile-button"
             className="self-start"
           >

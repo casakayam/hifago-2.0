@@ -62,6 +62,18 @@ export function getLobbyRooms(baseUrl: string, apiToken: string, page?: number, 
   });
 }
 
+// GET /api/v1/products — services/activités du compte Lobby (jamais des chambres). Réponse
+// { data: [{ service_id, name, value, infinite_inventory, stock }], meta }. Champ nommé
+// service_id côté Lobby — le Route Handler appelant (jamais ce module générique) est responsable
+// de le mapper vers ce que hifago appelle lobby_product_id ailleurs, cohérent avec l'usage de ce
+// même identifiant comme product_id dans addLobbyProductService.
+export function getLobbyProducts(baseUrl: string, apiToken: string, page?: number, relaySecret?: string) {
+  return lobbyCall("GET", baseUrl, "/api/v1/products", apiToken, {
+    params: page ? { page } : undefined,
+    relaySecret,
+  });
+}
+
 // GET /api/v2/available-rooms pour UNE nuit (start_date=date, end_date=date+1) — la forme V2 groupe
 // les prix par plan (plans[].prices[]), pas directement categories[].prices[] comme la V1.
 export function getLobbyNightAvailability(

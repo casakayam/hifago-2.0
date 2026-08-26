@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { Input, Label, ListBox, Select, TextField } from "@hifago/ui";
 import { TagsMultiSelect, type TagOption } from "@/components/tags-multiselect";
+import { LobbyOptionPicker, type LobbyRoomOption } from "@/components/lobby-option-picker";
 import { SlotRulesEditor } from "@/components/slot-rules-editor";
 import { StayRatesEditor } from "@/components/stay-rates-editor";
 import { HotelRoomsEditor } from "@/components/hotel-rooms-editor";
@@ -29,6 +30,30 @@ function occurrenceWeekdayHint(occurrenceDate: string, recurrenceFrequencyDays: 
   return `Cae en ${weekday}.`;
 }
 
+// Refonte parcours produit ↔ LobbyPMS (2026-08-26) — libellé du sélecteur Lobby par type concret
+// ("esta actividad"/"este transporte"/"este alojamiento"), jamais une "vinculación" abstraite
+// (retour Jérôme : le choix doit parler de la chose créée). Evento/Campamento/Hotel n'entrent
+// jamais dans cette table — le bloc qui la consomme ne se rend pas pour ces types (cf. décision E
+// du plan LobbyPMS : evento ne produit jamais d'order_line, camp est incompatible avec le payload
+// {productId, qty} sans date d'addLobbyProductService, hotel n'a pas de prix propre).
+const LOBBY_LINK_COPY: Partial<Record<ProductType, { question: string; noneLabel: string; pickerLabel: string }>> = {
+  lodging: {
+    question: "¿Cómo cargar este alojamiento?",
+    noneLabel: "Alojamiento clásico",
+    pickerLabel: "Habitación vinculada a una categoría de LobbyPMS",
+  },
+  activity: {
+    question: "¿Cómo cargar esta actividad?",
+    noneLabel: "Actividad clásica",
+    pickerLabel: "Actividad vinculada a un servicio de LobbyPMS",
+  },
+  transport: {
+    question: "¿Cómo cargar este transporte?",
+    noneLabel: "Transporte clásico",
+    pickerLabel: "Transporte vinculado a un servicio de LobbyPMS",
+  },
+};
+
 // Extrait de ProductForm (spec 15) — regroupe tous les champs dont la présence dépend du `type` de
 // produit (hasLocationAndTags/hasPriceQtyFields/hasCheckInOut + les blocs propres à chaque type),
 // PAS le nom/description/établissement/type/photos ni le bouton de soumission (ceux-là restent
@@ -47,7 +72,11 @@ export function ProductTypeFields({
   allowCreateTags,
   hidePhotosInHotelRooms,
   availableTags,
-  showLobbyFields,
+  establishmentId,
+  establishmentLobbyConnected,
+  allowManualLobbyEntry,
+  onApplyLobbyRoomData,
+  lobbyLinkReadOnly = false,
 }: {
   type: ProductType;
   state: ProductTypeFieldsState;
@@ -62,15 +91,35 @@ export function ProductTypeFields({
   allowCreateTags?: boolean;
   hidePhotosInHotelRooms?: boolean;
   availableTags?: TagOption[];
-  // Spec 21 (connecteur LobbyPMS) — admin-only, même patron que allowCreateTags (ProductForm passe
-  // `variant === "admin"`) : un socio qui propose une création ne voit jamais ce mapping, classé
-  // décision plateforme comme operated_directly côté établissement.
-  showLobbyFields?: boolean;
+  // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — remplace l'ancien showLobbyFields
+  // (booléen unique, admin-only). establishmentLobbyConnected (dérivé de
+  // lobby_connector_active && lobby_has_token côté appelant) contrôle si le bloc s'affiche DU TOUT
+  // (admin ET socio, dès que l'établissement est connecté) ; allowManualLobbyEntry
+  // (`variant === "admin"`) contrôle si l'option "Entrada manual" (ID tapé à la main) est proposée
+  // — jamais au socio, pour préserver l'invariant qui empêche d'injecter un ID Lobby arbitraire.
+  establishmentId?: string;
+  establishmentLobbyConnected?: boolean;
+  allowManualLobbyEntry?: boolean;
+  // Arbitrage Jérôme du 2026-08-26 (« import à la liaison ») — fourni uniquement par les écrans qui
+  // détiennent réellement le nom et la description du produit (ProductForm). Absent → le bouton
+  // « Usar estos datos » ne s'affiche pas, plutôt qu'un bouton sans effet.
+  onApplyLobbyRoomData?: (data: LobbyRoomOption) => void;
+  // Arbitrage Jérôme du 2026-08-26 : le socio VOIT le lien, ne le modifie pas (cf. le commentaire
+  // de `readOnly` dans lobby-option-picker.tsx).
+  lobbyLinkReadOnly?: boolean;
 }) {
   const {
-    isEvento, isCamp, isActivity, isLodging, isHotel,
+    isEvento, isCamp, isActivity, isLodging, isHotel, isTransport,
     hasLocationAndTags, hasTags, hasPriceQtyFields, hasCheckInOut, hasDefaultCapacity,
   } = productTypeGating(type);
+
+  // Le déclencheur est "une valeur existe", pas "quel mode du sélecteur est actif" — vrai que l'ID
+  // vienne du picker ou d'une saisie admin manuelle. Reste correct depuis que le mode par défaut
+  // en édition est passé de "manual" à "picker" (cf. useProductTypeFieldsState), justement parce
+  // qu'il ne dépend pas du mode.
+  const isRoomLinkedToLobby = isLodging && Boolean(state.lobbyCategoryId.trim());
+  const lobbyValue = (isLodging ? state.lobbyCategoryId : state.lobbyProductId).trim();
+  const lobbyLinkCopy = LOBBY_LINK_COPY[type];
 
   const addressSearchRef = useRef<HTMLDivElement | null>(null);
 
@@ -90,6 +139,125 @@ export function ProductTypeFields({
 
   return (
     <>
+      {/* Refonte parcours partenaire ↔ LobbyPMS (2026-08-25, réordonnée sur retour Jérôme le même
+          jour — "la page, je te dis de la changer en haut") — ce choix vient EN PREMIER, avant
+          adresse/prix/etc. : c'est une bifurcation structurante (Lobby vs saisie propre), pas un
+          détail à découvrir en scrollant. lobby_category_id (alojamiento) et lobby_product_id
+          (activité reflétée) vivent tous deux sur `products`, mais s'appliquent à des TYPES
+          distincts et mutuellement exclusifs (isPmsBacked = lodging + lobby_category_id ; miroir
+          d'activité = activity + lobby_product_id, cf. packages/domain/src/pms/isPmsBacked.ts et
+          apps/web/app/api/pms/reserve-nights/route.ts). Affiché uniquement si l'établissement est
+          connecté à Lobby — jamais un champ vide sans contexte pour un établissement non connecté. */}
+      {(isLodging || isActivity || isTransport) && establishmentLobbyConnected && lobbyLinkCopy ? (
+        <div className="flex flex-col gap-2">
+          {lobbyLinkReadOnly ? (
+            // Lecture seule : ni sélecteur de mode, ni saisie. Si aucun lien n'existe, on n'affiche
+            // rien du tout plutôt qu'un bloc vide sans action possible.
+            lobbyValue ? (
+              <>
+                <Label>{lobbyLinkCopy.pickerLabel}</Label>
+                <LobbyOptionPicker
+                  establishmentId={establishmentId ?? ""}
+                  kind={isLodging ? "rooms" : "services"}
+                  value={lobbyValue}
+                  onChange={() => {}}
+                  testId={isLodging ? "lobby-category-id-picker" : "lobby-product-id-picker"}
+                  readOnly
+                />
+              </>
+            ) : null
+          ) : (
+          <>
+          <Select
+            fullWidth
+            value={state.lobbyLinkMode}
+            onChange={(newMode) => {
+              if (!newMode) return;
+              state.setLobbyLinkMode(newMode as "none" | "picker" | "manual");
+              if (newMode === "none") {
+                if (isLodging) state.setLobbyCategoryId("");
+                if (isActivity || isTransport) state.setLobbyProductId("");
+              }
+            }}
+          >
+            <Label>{lobbyLinkCopy.question}</Label>
+            <Select.Trigger data-testid="lobby-link-mode-select">
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="none" textValue={lobbyLinkCopy.noneLabel}>
+                  {lobbyLinkCopy.noneLabel}
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                <ListBox.Item id="picker" textValue={lobbyLinkCopy.pickerLabel}>
+                  {lobbyLinkCopy.pickerLabel}
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                {allowManualLobbyEntry ? (
+                  <ListBox.Item id="manual" textValue="Entrada manual (ID)">
+                    Entrada manual (ID)
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ) : null}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+
+          {state.lobbyLinkMode === "picker" && establishmentId ? (
+            isLodging ? (
+              <LobbyOptionPicker
+                establishmentId={establishmentId}
+                kind="rooms"
+                value={state.lobbyCategoryId}
+                onChange={state.setLobbyCategoryId}
+                testId="lobby-category-id-picker"
+                onApplyRoomData={onApplyLobbyRoomData}
+              />
+            ) : (
+              <LobbyOptionPicker
+                establishmentId={establishmentId}
+                kind="services"
+                value={state.lobbyProductId}
+                onChange={state.setLobbyProductId}
+                testId="lobby-product-id-picker"
+              />
+            )
+          ) : null}
+
+          {state.lobbyLinkMode === "manual" && allowManualLobbyEntry ? (
+            isLodging ? (
+              <TextField fullWidth name="lobby-category-id" value={state.lobbyCategoryId} onChange={state.setLobbyCategoryId}>
+                <Label>LobbyPMS category_id</Label>
+                <Input type="number" min={1} data-testid="lobby-category-id-input" />
+              </TextField>
+            ) : (
+              <TextField fullWidth name="lobby-product-id" value={state.lobbyProductId} onChange={state.setLobbyProductId}>
+                <Label>LobbyPMS product_id (servicio reflejado en el establecimiento PMS)</Label>
+                <Input type="number" min={1} data-testid="lobby-product-id-input" />
+              </TextField>
+            )
+          ) : null}
+
+          {/* Réécrite le 2026-08-26 avec l'arbitrage « import à la liaison ». L'ancienne version
+              affirmait que capacité/description/photos « se gestionan allí, no aquí » alors
+              qu'aucun code ne les lisait chez Lobby : les champs étaient masqués ET vides, donc la
+              fiche publique d'une chambre PMS-backed était un nom nu. Ne jamais rétablir une des
+              deux moitiés sans l'autre — un bloc photos rendu sous une phrase qui dit le contraire
+              est pire que les deux états cohérents. */}
+          </>
+          )}
+
+          {isRoomLinkedToLobby ? (
+            <p className="text-xs text-muted" data-testid="lobby-room-managed-fields-note">
+              LobbyPMS gestiona la disponibilidad de esta habitación. El nombre, la descripción, la
+              capacidad y las fotos se copian desde allí al vincular y luego se editan aquí.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {hasLocationAndTags ? (
         <>
           <div className="flex flex-col gap-1.5">
@@ -193,8 +361,11 @@ export function ProductTypeFields({
         </div>
       ) : null}
 
+      {/* 2 colonnes dans tous les cas : un hôtel n'a que check-in/check-out, un alojamiento
+          complète la 2e ligne avec capacité + cantidad (ajoutée le 2026-08-26). Une grille de 4
+          colonnes serait illisible sur un écran étroit. */}
       {hasCheckInOut ? (
-        <div className={isLodging ? "grid grid-cols-3 gap-4" : "grid grid-cols-2 gap-4"}>
+        <div className="grid grid-cols-2 gap-4">
           <TextField fullWidth name="check-in" value={state.checkInTime} onChange={state.setCheckInTime}>
             <Label>Check-in — opcional</Label>
             <Input type="time" data-testid="check-in-input" />
@@ -203,36 +374,32 @@ export function ProductTypeFields({
             <Label>Check-out — opcional</Label>
             <Input type="time" data-testid="check-out-input" />
           </TextField>
+          {/* Arbitrage Jérôme du 2026-08-26 (« import à la liaison ») : la capacité redevient
+              éditable même pour une chambre liée. Elle était masquée parce qu'elle faisait doublon
+              avec le `capacity` de Lobby — sauf que rien ne la lisait chez eux, donc le champ
+              restait simplement vide, et la fiche publique avec. Elle est désormais PRÉREMPLIE
+              depuis Lobby (bouton « Usar estos datos » du picker) puis corrigeable ici. */}
           {isLodging ? (
             <TextField fullWidth name="capacity" value={state.capacity} onChange={state.setCapacity}>
               <Label>Capacidad (couchage) — opcional</Label>
               <Input type="number" min={1} data-testid="capacity-input" />
             </TextField>
           ) : null}
+          {/* `quantity` (2026-08-26) : combien d'unités de ce type existent — 3 cabañas, 8 lits.
+              Purement DESCRIPTIF, aucune RPC ne s'en sert pour autoriser une réservation (pour un
+              logement PMS-backed, c'est Lobby qui tranche la disponibilité en direct). Préremplie
+              depuis Lobby comme la capacité juste à côté ; le libellé nomme les deux unités
+              possibles parce que « cantidad » seul se confondrait avec la capacité. */}
+          {isLodging ? (
+            <TextField fullWidth name="quantity" value={state.quantity} onChange={state.setQuantity}>
+              <Label>Cantidad (habitaciones o camas) — opcional</Label>
+              <Input type="number" min={1} data-testid="quantity-input" />
+            </TextField>
+          ) : null}
         </div>
       ) : null}
 
       {isLodging ? <StayRatesEditor value={state.stayRates} onChange={state.setStayRates} /> : null}
-
-      {/* Spec 21 (connecteur LobbyPMS) — lobby_category_id (alojamiento) et lobby_product_id
-          (activité reflétée) vivent tous deux sur `products`, mais s'appliquent à des TYPES
-          distincts et mutuellement exclusifs (isPmsBacked = lodging + lobby_category_id ; miroir
-          d'activité = activity + lobby_product_id, cf. packages/domain/src/pms/isPmsBacked.ts et
-          apps/web/app/api/pms/reserve-nights/route.ts) — jamais les deux champs sur le même
-          formulaire. */}
-      {isLodging && showLobbyFields ? (
-        <TextField fullWidth name="lobby-category-id" value={state.lobbyCategoryId} onChange={state.setLobbyCategoryId}>
-          <Label>LobbyPMS category_id — opcional</Label>
-          <Input type="number" min={1} data-testid="lobby-category-id-input" />
-        </TextField>
-      ) : null}
-
-      {isActivity && showLobbyFields ? (
-        <TextField fullWidth name="lobby-product-id" value={state.lobbyProductId} onChange={state.setLobbyProductId}>
-          <Label>LobbyPMS product_id (actividad reflejada en el establecimiento PMS) — opcional</Label>
-          <Input type="number" min={1} data-testid="lobby-product-id-input" />
-        </TextField>
-      ) : null}
 
       {showHotelRoomsEditor && isHotel ? (
         <div className="flex flex-col gap-1.5">

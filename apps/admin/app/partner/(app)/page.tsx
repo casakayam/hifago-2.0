@@ -138,6 +138,11 @@ export default async function PartnerHomePage() {
         .in("product.establishment_id", establishmentIds)
         .gte("date", from)
         .lte("date", to)
+        // Spec 20 §10 point 9 : "superseded/expired masqués" — étendu à cancelled_by_client/
+        // cancelled_by_provider (une réservation annulée n'a plus sa place sur l'agenda, contrairement
+        // à la liste "Mis reservas" qui garde tout avec un filtre statut explicite). no_show reste
+        // visible (le créneau a réellement eu lieu).
+        .in("status", ["reserved", "fulfilled", "no_show"])
         .returns<OrderLineRow[]>(),
     ]);
 

@@ -18,7 +18,103 @@ export interface PmsFixtureScenario {
   // Une date absente de cette map répond "disponible" par défaut (available_rooms: 5) : un scénario
   // n'a besoin d'énumérer que les exceptions (nuit pleine, nuit en erreur), pas tout le mois.
   nightAvailabilityByDate?: Record<string, { status?: number; availableRooms?: number }>;
+  // Refonte parcours produit ↔ LobbyPMS — GET /api/v1/products (les « services » du compte). Sans
+  // cette route, le picker de services (apps/admin/app/api/pms/lobby-services/route.ts) tombait en
+  // 404 → 502 : il n'était ni testable ni exerçable en local, contrairement à son jumeau /rooms.
+  services?: unknown;
+  // POST /api/v1/cancel-booking/{id} — clé = booking_id. Une entrée absente répond 200 avec un
+  // cancel_booking synthétique ; poser explicitement { status: 422, body: { error_code:
+  // "RESTRICTED_RESERVATION" } } pour rejouer le cas « booking portant déjà une charge », qui est
+  // un cas ATTENDU et documenté (spec 21 §0), jamais une exception.
+  cancelBookingByStatus?: Map<number, { status: number; body: unknown }>;
 }
+
+// Forme RÉELLEMENT OBSERVÉE le 2026-08-26 sur le compte Lobby de Casa Kayam, via la préprod
+// (spec 24 §11.1) — et non plus une transcription de leur documentation, qui s'était déjà révélée
+// fausse une fois sur `POST /bookings`. Les tests qui consomment ceci prouvent donc le contrat réel.
+//
+// Les quatre traits que cette fixture doit conserver, parce que chacun a cassé ou aurait pu casser
+// quelque chose :
+//   1. `type` est en ESPAGNOL (`privada` / `compartida`), jamais en anglais ;
+//   2. `capacity` = occupants d'UNE unité, `quantity` = NOMBRE d'unités — un dortoir est
+//      capacity:1 × quantity:8 (huit lits), pas capacity:8 ;
+//   3. `descriptions[]` contient `pt` et `fr` en plus de `es`/`en` : le parseur DOIT les ignorer
+//      sans les écrire (l'éditeur hifago est fermé à es/en) et les signaler via unsupportedLangs ;
+//   4. une catégorie parfaitement valide peut avoir `descriptions: []` ET `photos: []` — c'est le
+//      cas de 2 des 6 catégories réelles, jamais une anomalie.
+export const LOBBY_ROOMS_OBSERVED_2026_08_26 = {
+  data: [
+    {
+      category_id: 29376,
+      name: "GLAMPING",
+      type: "privada",
+      capacity: 2,
+      quantity: 3,
+      descriptions: [
+        { description: "Habitación con baño privado, agua caliente\n", lang: "es" },
+        { description: "Room with private bathroom, hot water", lang: "en" },
+        { description: "Quarto com banheiro privativo, água quente", lang: "pt" },
+        { description: "Chambre avec salle de bain privée, eau chaude", lang: "fr" },
+      ],
+      photos: [
+        { photo_id: 60107, url: "https://app.lobbypms.com/permanent/uploads/1157066d7610b43075.jpg" },
+        { photo_id: 60108, url: "https://app.lobbypms.com/permanent/uploads/1157066d7613394959.jpg" },
+      ],
+      rooms: [
+        { id: 718411, name: "EMBERA", type: "privada" },
+        { id: 718412, name: "KUNA", type: "privada" },
+        { id: 718413, name: "ZENU", type: "privada" },
+      ],
+    },
+    {
+      category_id: 9631,
+      name: "VIDPOVO",
+      type: "compartida",
+      capacity: 1,
+      quantity: 8,
+      descriptions: [
+        { description: "Dormitorio práctico y organizado con cortinas [8 camas]", lang: "es" },
+        { description: "Practical and organized bedroom with curtains [8 beds]", lang: "en" },
+      ],
+      photos: [
+        { photo_id: 60541, url: "https://app.lobbypms.com/permanent/uploads/1157064f271ab8fb20.jpg" },
+      ],
+      rooms: Array.from({ length: 8 }, (_, i) => ({
+        id: 700000 + i,
+        name: `Cama ${i + 1}`,
+        type: "compartida",
+      })),
+    },
+    // Catégorie sans aucun contenu éditorial — cas réel (2 des 6 catégories du compte), à garder
+    // pour que la carte de prévisualisation soit toujours exercée sur sa branche "rien à montrer".
+    {
+      category_id: 49823,
+      name: "CAMPER Van",
+      type: "privada",
+      capacity: 4,
+      quantity: 2,
+      descriptions: [],
+      photos: [],
+      rooms: [
+        { id: 939246, name: "Habitación 1", type: "privada" },
+        { id: 939247, name: "Habitación 2", type: "privada" },
+      ],
+    },
+  ],
+  meta: { total_records: 3, total_pages: 1 },
+};
+
+// Forme réellement observée de GET /api/v1/products (spec 24 §11.3). À retenir : un service ne
+// porte NI photo, NI capacité, NI quantité, NI description — ces champs n'existent pas sur cette
+// ressource, et aucun compte n'en fournira. `stock` est null quand `infinite_inventory` est vrai.
+export const LOBBY_SERVICES_OBSERVED_2026_08_26 = {
+  data: [
+    { service_id: 494426, name: "YOGA session", value: 22000, infinite_inventory: true, stock: null },
+    { service_id: 473220, name: "Ensayo hora", value: 40000, infinite_inventory: true, stock: null },
+    { service_id: 566605, name: "Paddle boarding 4H", value: 135000, infinite_inventory: true, stock: null },
+  ],
+  meta: { total_records: 3, total_pages: 1 },
+};
 
 let scenario: PmsFixtureScenario = {};
 
@@ -80,6 +176,19 @@ export function startPmsFixtureServer(port: number): Promise<{ url: string; clos
           scenario.addProductServiceStatus ?? 200,
           scenario.addProductServiceBody ?? { sale: { id: 90000003, total: 0 } }
         );
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/api/v1/products") {
+        send(res, 200, scenario.services ?? { data: [], meta: { total_records: 0, total_pages: 1 } });
+        return;
+      }
+
+      const cancelBookingMatch = url.pathname.match(/^\/api\/v1\/cancel-booking\/(\d+)$/);
+      if (req.method === "POST" && cancelBookingMatch) {
+        const bookingId = Number(cancelBookingMatch[1]);
+        const entry = scenario.cancelBookingByStatus?.get(bookingId);
+        send(res, entry?.status ?? 200, entry?.body ?? { cancel_booking: bookingId });
         return;
       }
 

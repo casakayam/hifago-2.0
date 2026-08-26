@@ -52,12 +52,18 @@ export function ModerateProductCreationProposalForm({
   type,
   payload,
   availableTags,
+  establishmentId,
+  establishmentLobbyConnected,
 }: {
   proposalId: string;
   expectedVersion: number;
   type: ProductType;
   payload: unknown;
   availableTags: TagOption[];
+  // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — l'établissement est déjà fixé à la
+  // soumission (immuable ici, contrairement à ProductForm), donc toujours connu de la page parente.
+  establishmentId: string;
+  establishmentLobbyConnected: boolean;
 }) {
   const proposedPayload = (payload ?? {}) as RawProductCreationPayload;
   const proposedPhotos = Array.isArray(proposedPayload.photos) ? proposedPayload.photos : [];
@@ -139,6 +145,10 @@ export function ModerateProductCreationProposalForm({
         inputName="nombre"
         testIdPrefix="name"
       />
+      {/* Démasqué le 2026-08-26 (arbitrage « import à la liaison », cf. product-form.tsx). Cacher
+          ce champ ici avait un effet particulièrement fâcheux : l'admin modérait une proposition de
+          chambre liée à Lobby sans voir AUCUNE description — ni celle proposée par le socio, ni
+          celle de Lobby. Il validait à l'aveugle. */}
       <LocalizedTextField
         label="Descripción — opcional"
         value={description}
@@ -178,6 +188,9 @@ export function ModerateProductCreationProposalForm({
         allowCreateTags
         hidePhotosInHotelRooms
         availableTags={availableTags}
+        establishmentId={establishmentId}
+        establishmentLobbyConnected={establishmentLobbyConnected}
+        allowManualLobbyEntry
       />
 
       <TextField value={rejectionReason} onChange={setRejectionReason}>

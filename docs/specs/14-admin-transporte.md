@@ -169,8 +169,14 @@ de l'activation admin du type.
   reste la liste plate/générique déjà existante, sans regroupement par établissement ni brouillon
   cumulable. À traiter comme une spec à part si un jour voulue.
 - Toute donnée d'horaires structurée (la V1 n'en avait pas non plus pour transport).
-- Toute réintégration LobbyPMS pour transport — déjà découplé en V1 (backlog C2), aucune régression
-  à réintroduire.
+- ~~Toute réintégration LobbyPMS pour transport — déjà découplé en V1 (backlog C2), aucune
+  régression à réintroduire.~~ **Amendé le 2026-08-26** : un transport peut désormais être rattaché
+  à un *service* LobbyPMS (`products.lobby_product_id`), au même titre qu'une activité — migration
+  `20260826110000_product_creation_proposal_lobby_transport.sql` et
+  `apps/web/app/api/pms/reserve-nights/route.ts`. Ce n'est pas la « réintégration » écartée ici
+  (qui visait la disponibilité et le prix) : le transport reste piloté par hifago de bout en bout,
+  seul le reflet de la consommation sur le booking de l'hôte est ajouté. Cf.
+  [`24-modele-hebergement-et-surface-lobbypms.md`](24-modele-hebergement-et-surface-lobbypms.md).
 - Check-in/check-out, capacité produit, `stay_rates` — non pertinents pour ce type (cf. §0
   invariants), non exposés.
 

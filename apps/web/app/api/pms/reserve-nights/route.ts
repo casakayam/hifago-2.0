@@ -1,6 +1,7 @@
 import {
   addLobbyProductService,
   buildEvenRatesPerDay,
+  buildLobbyBookingNote,
   createLobbyBooking,
   isPmsBacked,
   LOBBY_DEFAULT_BASE_URL,
@@ -34,6 +35,8 @@ interface OrderLineRow {
   end_date: string | null;
   qty: number;
   holder_name: string;
+  holder_email: string | null;
+  holder_phone: string | null;
   price_cop: number;
   total_cop: number;
 }
@@ -76,7 +79,7 @@ export async function POST(request: Request) {
 
   const { data: lines } = await service
     .from("order_lines")
-    .select("id, product_id, date, end_date, qty, holder_name, price_cop, total_cop")
+    .select("id, product_id, date, end_date, qty, holder_name, holder_email, holder_phone, price_cop, total_cop")
     .eq("order_id", orderId)
     .eq("status", "reserved")
     .returns<OrderLineRow[]>();
@@ -86,6 +89,15 @@ export async function POST(request: Request) {
     // une erreur, réponse identique au cas nominal.
     return Response.json({ ok: true });
   }
+
+  // Attribution de la commande — le code promo et la source ne vivent que sur `orders`. Lus ici
+  // pour la note du booking (cf. buildLobbyBookingNote) : Lobby n'ayant aucun champ dédié, la note
+  // est le seul endroit où l'hôte peut voir d'où vient la réservation et qui contacter.
+  const { data: order } = await service
+    .from("orders")
+    .select("attribution_code, attribution_source")
+    .eq("id", orderId)
+    .maybeSingle();
 
   const productIds = [...new Set(lines.map((line) => line.product_id))];
   const { data: products } = await service
@@ -118,7 +130,11 @@ export async function POST(request: Request) {
     if (!establishment) continue;
 
     const lodging = isPmsBacked({ type: product.type, lobbyCategoryId: product.lobby_category_id });
-    const activityEligible = product.type === "activity" && product.lobby_product_id != null;
+    // Élargi le 2026-08-26 de "activity" seul à ("activity", "transport") — cf. commentaire de tête
+    // de product-type-fields.tsx pour le raisonnement complet (evento/camp restent exclus,
+    // incompatibilité structurelle avec ce mécanisme, pas un simple oubli).
+    const activityEligible =
+      (product.type === "activity" || product.type === "transport") && product.lobby_product_id != null;
     if (!lodging && !activityEligible) continue;
 
     let group = groups.get(establishment.id);
@@ -160,7 +176,13 @@ export async function POST(request: Request) {
             totalAdults: line.qty,
             holderName: line.holder_name,
             ratesPerDay: buildEvenRatesPerDay(line.date, line.end_date, line.total_cop),
-            note: `hifago order_line ${line.id}`,
+            note: buildLobbyBookingNote({
+              orderLineId: line.id,
+              promoCode: order?.attribution_code ?? null,
+              phone: line.holder_phone,
+              email: line.holder_email,
+              source: order?.attribution_source ?? null,
+            }),
           },
           relaySecret
         );
@@ -179,9 +201,26 @@ export async function POST(request: Request) {
 
     for (const { line, lobbyProductId } of group.activityLines) {
       if (primaryBookingId === null) {
-        // Aucun booking de nuit primaire dans cette commande pour cet établissement — pas de vente
-        // d'activité standalone dans Lobby (add-product-service exige un vrai booking, piège
-        // empirique confirmé v1). Jamais de coquille inventée.
+        // Deux situations très différentes se cachaient derrière ce seul test, et elles étaient
+        // traitées pareil (corrigé le 2026-08-26) :
+        //
+        // (a) la commande ne contient AUCUNE nuit pour cet établissement — vendre un service Lobby
+        //     seul est structurellement impossible (add-product-service exige un vrai booking :
+        //     422 "The booking doesnt exits", piège empirique confirmé v1), et il a été décidé de
+        //     ne jamais inventer de booking coquille. Ce n'est donc pas un incident, c'est une
+        //     limite connue de Lobby. Or `recordFailure` insère dans pms_reconciliation_entries,
+        //     dont le trigger notify_all_admins (20260824060000) envoie un e-mail À CHAQUE ADMIN,
+        //     sans dédup : une activité liée à Lobby vendue sans nuit produisait donc une salve
+        //     d'e-mails à chaque vente, pour une situation que personne ne peut « résoudre ».
+        //
+        // (b) il Y AVAIT des nuits, mais toutes leurs créations de booking ont échoué — là c'est
+        //     une vraie panne, et l'entrée de réconciliation est exactement ce qu'il faut.
+        if (group.lodgingLines.length === 0) {
+          console.warn(
+            `reserve-nights : service Lobby non reflété (order_line ${line.id}) — aucune nuit dans la commande pour cet établissement, Lobby n'accepte pas de vente de service isolée`
+          );
+          continue;
+        }
         await recordFailure(service, line.id);
         continue;
       }

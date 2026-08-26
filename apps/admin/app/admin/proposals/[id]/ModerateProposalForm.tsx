@@ -163,6 +163,14 @@ export function ModerateProposalForm({
               <dd className="inline">{currentPayload.capacity ?? "—"}</dd>
             </div>
           ) : null}
+          {/* Affiché à côté de la capacité (2026-08-26) : le modérateur compare l'existant à la
+              proposition champ par champ — un champ absent de cette liste change en silence. */}
+          {isLodging ? (
+            <div>
+              <dt className="inline font-medium text-foreground">Cantidad: </dt>
+              <dd className="inline">{currentPayload.quantity ?? "—"}</dd>
+            </div>
+          ) : null}
         </dl>
       </div>
 

@@ -48,7 +48,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   return (
     <div className="flex min-h-screen w-full flex-col md:flex-row">
       <AdminNav pendingProposalsCount={pendingProposalsCount} />
-      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 md:p-8">{children}</div>
+      <div className="mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col gap-6 p-4 md:p-8">{children}</div>
     </div>
   );
 }

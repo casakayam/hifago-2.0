@@ -56,6 +56,7 @@ export function EditEstablishmentProposalForm({
   const [address, setAddress] = useState(initialAddress);
   const [lat, setLat] = useState(initialLat);
   const [lon, setLon] = useState(initialLon);
+  const [lobbyApiToken, setLobbyApiToken] = useState("");
 
   const [proposal, setProposal] = useState(pendingProposal);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -101,6 +102,8 @@ export function EditEstablishmentProposalForm({
       address: address.trim() || null,
       lat: lat.trim() ? Number(lat) : null,
       lon: lon.trim() ? Number(lon) : null,
+      // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — cf. NewEstablishmentProposalForm.tsx.
+      ...(lobbyApiToken.trim() ? { lobby_api_token: lobbyApiToken.trim() } : {}),
     };
 
     const supabase = createClient();
@@ -122,6 +125,7 @@ export function EditEstablishmentProposalForm({
     if (result.proposal_id) {
       setProposal({ id: result.proposal_id, payload, created_at: new Date().toISOString() });
     }
+    setLobbyApiToken("");
     toast.success("Propuesta enviada.");
   }
 
@@ -256,6 +260,15 @@ export function EditEstablishmentProposalForm({
             />
           </div>
         </div>
+
+        <TextField fullWidth value={lobbyApiToken} onChange={setLobbyApiToken}>
+          <Label>Token LobbyPMS — opcional</Label>
+          <Input type="password" autoComplete="off" data-testid="edit-proposal-lobby-token-input" />
+        </TextField>
+        <p className="text-xs text-muted">
+          Déjalo en blanco si no quieres cambiar la conexión con LobbyPMS. Si pegas un token aquí,
+          el equipo lo verificará antes de aprobar esta edición.
+        </p>
 
         <Button type="submit" isDisabled={isSubmitting} data-testid="submit-edit-proposal-button">
           {isSubmitting ? "Enviando…" : "Enviar propuesta"}

@@ -77,6 +77,14 @@ test("un admin crée une invitation, un nouveau visiteur la consomme et atterrit
   await expect(visitorPage.getByTestId("partner-role-referrer")).toBeVisible();
   await expect(visitorPage.getByTestId("partner-role-referrer")).toContainText("Referente");
 
+  // Bug remonté par Jérôme (2026-08-25) : le nom saisi dans ce formulaire n'apparaissait jamais
+  // sur "Mi cuenta" — consume_partner_invitation écrivait p_signer_name dans partners.display_name
+  // (l'organisation) et role_agreements.signer_name (audit), jamais dans
+  // partner_accounts.full_name (le profil du compte individuel lu par cette page). Corrigé en
+  // migration 20260825150000.
+  await visitorPage.goto("/partner/account");
+  await expect(visitorPage.getByTestId("profile-full-name-input")).toHaveValue("Nouvelle Organisation E2E");
+
   await visitorContext.close();
 });
 

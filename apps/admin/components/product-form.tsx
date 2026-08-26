@@ -14,6 +14,7 @@ import {
   type LocalizedValue,
 } from "@/components/localized-text-field";
 import { ProductTypeFields } from "@/components/product-type-fields";
+import type { LobbyRoomOption } from "@/components/lobby-option-picker";
 import { StagedProductPhotos, type StagedPhoto } from "@/components/product-photos-staged";
 import { lowestTierPrice, toPriceTiersColumn, validatePriceTiers } from "@/lib/products/priceTiers";
 import { validateSlotRules, toSlotRuleRows } from "@/lib/products/slotRules";
@@ -26,7 +27,13 @@ import {
   type ProductType,
 } from "@/lib/products/useProductTypeFieldsState";
 
-type Establishment = { id: string; name: unknown; partner_id: string };
+type Establishment = {
+  id: string;
+  name: unknown;
+  partner_id: string;
+  lobby_connector_active?: boolean | null;
+  lobby_has_token?: boolean | null;
+};
 
 export type EditableProduct = {
   id: string;
@@ -42,13 +49,17 @@ export type EditableProduct = {
   check_in_time: string | null;
   check_out_time: string | null;
   capacity: number | null;
+  quantity: number | null;
   default_capacity: number | null;
   stay_rates: unknown;
   type: string;
   establishment_id: string;
-  // Spec 21 (connecteur LobbyPMS) — admin-only (cf. product-type-fields.tsx showLobbyFields).
   lobby_category_id: number | null;
   lobby_product_id: number | null;
+  // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — statut du connecteur de l'établissement
+  // parent, nécessaire en édition pour savoir si le picker (vs saisie manuelle) doit s'afficher.
+  lobby_connector_active?: boolean | null;
+  lobby_has_token?: boolean | null;
 };
 
 // Spec 15 — variant "socio-proposal" : un socio ne peut jamais écrire products directement (RLS
@@ -126,6 +137,7 @@ export function ProductForm({
           checkInTime: product.check_in_time,
           checkOutTime: product.check_out_time,
           capacity: product.capacity,
+          quantity: product.quantity,
           defaultCapacity: product.default_capacity,
           stayRates: product.stay_rates,
           lobbyCategoryId: product.lobby_category_id,
@@ -141,6 +153,74 @@ export function ProductForm({
     isEvento, isCamp, isActivity, isLodging, isHotel, isTransport,
     hasLocationAndTags, hasPriceQtyFields, hasCheckInOut, hasDefaultCapacity,
   } = productTypeGating(type);
+
+  // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — en édition, le statut vient directement
+  // du produit (join établissement fait par la page appelante) ; en création, de l'établissement
+  // actuellement sélectionné dans le combobox ci-dessous.
+  const selectedEstablishment = establishments.find((item) => item.id === establishmentId);
+  const establishmentLobbyConnected = isEditing
+    ? Boolean(product?.lobby_connector_active && product?.lobby_has_token)
+    : Boolean(selectedEstablishment?.lobby_connector_active && selectedEstablishment?.lobby_has_token);
+  const activeEstablishmentId = isEditing ? product?.establishment_id : establishmentId;
+  // Arbitrage Jérôme du 2026-08-26 — « import à la liaison ». Lobby PROPOSE, hifago fait foi :
+  // on recopie une fois ce que Lobby sait de la catégorie, puis tout reste éditable ici. On n'écrit
+  // JAMAIS un champ que Lobby ne renseigne pas — sinon un compte Lobby sans description effacerait
+  // une description saisie à la main. Le nom, lui, n'est rempli que s'il est encore vide : c'est
+  // l'identité publique du produit (elle porte le slug), jamais quelque chose qu'on écrase.
+  async function applyLobbyRoomData(data: LobbyRoomOption) {
+    const importedDescription: Record<string, string> = {};
+    if (data.descriptions.es) importedDescription.es = data.descriptions.es;
+    if (data.descriptions.en) importedDescription.en = data.descriptions.en;
+    if (Object.keys(importedDescription).length > 0) {
+      setDescription((current) => ({ ...current, ...importedDescription }));
+    }
+    if (data.capacity !== null) fields.setCapacity(String(data.capacity));
+    // `quantity` (2026-08-26) : Lobby le renseigne sur les 6 catégories réelles de Casa Kayam
+    // (spec 24 §11.1). Il était parsé et affiché dans la carte depuis le 25/08, puis jeté faute de
+    // colonne d'accueil — elle existe depuis la migration 20260826190000.
+    if (data.quantity !== null) fields.setQuantity(String(data.quantity));
+    setName((current) => (current.es?.trim() ? current : { ...current, es: data.name }));
+
+    // Les photos ne peuvent pas être « recopiées » comme un texte : il faut aller les chercher chez
+    // Lobby côté serveur (téléchargement, décodage, réécriture dans Storage), ce qu'un formulaire
+    // navigateur ne sait pas faire. Retour Jérôme du 2026-08-26 — « à la proposition il faut les
+    // lier les images » : en création/proposition le produit n'existe pas encore, la route renvoie
+    // donc des storage_path qu'on range dans les photos EN ATTENTE. Elles voyagent alors dans
+    // payload.photos[] et sont rattachées à l'approbation par create_product_from_proposal, comme
+    // n'importe quelle photo uploadée à la main. En édition, c'est ImportLobbyPhotosBlock (admin,
+    // produit existant) qui s'en charge — jamais ce chemin, d'où la sortie anticipée.
+    if (isEditing || !activeEstablishmentId || data.photoUrls.length === 0) return;
+
+    try {
+      const response = await fetch("/api/pms/import-room-photos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          establishmentId: activeEstablishmentId,
+          categoryId: data.id,
+          alreadyStaged: stagedPhotos.length,
+        }),
+      });
+      const result = (await response.json()) as
+        | { ok: true; photos: StagedPhoto[]; reason?: string }
+        | { ok: false; reason: string };
+
+      if (!result.ok) {
+        toast.danger("No se pudieron importar las fotos de LobbyPMS.");
+        return;
+      }
+      if (result.photos.length === 0) {
+        // Lobby n'a pas de photo : la carte de prévisualisation le dit déjà, inutile d'en remettre
+        // une couche. Une galerie pleine, en revanche, est une raison qu'il faut nommer.
+        if (result.reason === "gallery_full") toast.danger("La galería ya tiene 6 fotos.");
+        return;
+      }
+      setStagedPhotos((current) => [...current, ...result.photos]);
+      toast.success(`${result.photos.length} foto(s) importada(s) de LobbyPMS.`);
+    } catch {
+      toast.danger("No se pudieron importar las fotos de LobbyPMS.");
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -221,6 +301,12 @@ export function ProductForm({
         toast.danger("La capacidad (número de couchage) debe ser un número entero mayor a 0.");
         return;
       }
+      // Même garde que la capacité — products_quantity_positive refuserait de toute façon la
+      // valeur côté base, mais un message clair vaut mieux qu'une erreur SQL remontée brute.
+      if (fields.quantity.trim() && (!Number.isInteger(Number(fields.quantity)) || Number(fields.quantity) <= 0)) {
+        toast.danger("La cantidad (habitaciones o camas) debe ser un número entero mayor a 0.");
+        return;
+      }
       const stayRatesError = validateStayRates(fields.stayRates);
       if (stayRatesError) {
         toast.danger(stayRatesError);
@@ -260,11 +346,12 @@ export function ProductForm({
           ...(isLodging
             ? {
                 capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
+                quantity: fields.quantity.trim() ? Number(fields.quantity) : null,
                 stay_rates: toStayRatesColumn(fields.stayRates),
                 lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
               }
             : {}),
-          ...(isActivity
+          ...(isActivity || isTransport
             ? { lobby_product_id: fields.lobbyProductId.trim() ? Number(fields.lobbyProductId) : null }
             : {}),
           ...(hasDefaultCapacity
@@ -370,11 +457,12 @@ export function ProductForm({
         ...(isLodging
           ? {
               capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
+              quantity: fields.quantity.trim() ? Number(fields.quantity) : null,
               stay_rates: toStayRatesColumn(fields.stayRates),
               lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
             }
           : {}),
-        ...(isActivity
+        ...(isActivity || isTransport
           ? { lobby_product_id: fields.lobbyProductId.trim() ? Number(fields.lobbyProductId) : null }
           : {}),
         ...(hasDefaultCapacity
@@ -547,16 +635,35 @@ export function ProductForm({
                   Alojamiento
                   <ListBox.ItemIndicator />
                 </ListBox.Item>
-                <ListBox.Item id="hotel" textValue="Hotel">
-                  Hotel
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
+                {/* « Hotel » retiré de la CRÉATION le 2026-08-26 (décision Jérôme sur le modèle
+                    hébergement, cf. docs/specs/24-modele-hebergement-et-surface-lobbypms.md §4).
+                    Un hôtel n'est pas une activité : c'est l'ÉTABLISSEMENT. Ses chambres —
+                    dortoirs et privées — sont des Alojamientos vendables, un par unité, exactement
+                    comme la v1 en production (src/config/properties.js : les products lodging sont
+                    « des TYPES DE COUCHAGE à l'intérieur d'une propriété ») et comme LobbyPMS
+                    lui-même, qui n'a aucun objet « hôtel » — un jeton = une propriété, puis
+                    directement des catégories de chambres.
+                    Conséquence pratique immédiate : seul un Alojamiento peut être adossé à
+                    LobbyPMS (isPmsBacked = lodging + lobby_category_id), donc proposer « Hotel »
+                    ici menait à un produit qu'on ne pouvait ensuite pas connecter.
+                    Ce n'est QUE la fermeture à la création : les hôtels existants restent
+                    éditables (ce sélecteur n'est pas rendu en édition), product_room_types et la
+                    branche room_type de create_order sont intactes. Leur retrait est la suite du
+                    chantier (T2/T3 de la spec 24), qui touche la RPC anti-survente et exige une
+                    migration de données — jamais dans le même geste. */}
               </ListBox>
             </Select.Popover>
           </Select>
         </>
       ) : null}
 
+      {/* Démasqué le 2026-08-26 (arbitrage Jérôme « import à la liaison »). Ce champ avait été
+          masqué pour une chambre liée à Lobby, au motif que descriptions[] faisait doublon — mais
+          rien ne lisait jamais ce champ chez Lobby : il était donc masqué ET vide, et la fiche
+          publique d'une chambre PMS-backed apparaissait dans le catalogue comme un nom nu, sans
+          photo ni description (apps/web/app/[locale]/page.tsx tire son extrait de
+          products.description et son image de product_media). Il est désormais PRÉREMPLI depuis
+          Lobby via « Usar estos datos », puis éditable. */}
       <LocalizedTextField
         label="Descripción — opcional"
         value={description}
@@ -573,7 +680,10 @@ export function ProductForm({
         showHotelRoomsEditor={!isEditing}
         showSlotRulesEditor={!isEditing}
         allowCreateTags={variant === "admin"}
-        showLobbyFields={variant === "admin"}
+        establishmentId={activeEstablishmentId}
+        establishmentLobbyConnected={establishmentLobbyConnected}
+        allowManualLobbyEntry={variant === "admin"}
+        onApplyLobbyRoomData={applyLobbyRoomData}
         // Retour Jérôme (2026-08-18) : les chambres/dortoires doivent pouvoir avoir des photos
         // aussi côté socio — les masquer ici était la seule raison pour laquelle elles ne
         // pouvaient jamais en avoir (buildProductCreationPayload transporte désormais ces photos,
@@ -582,6 +692,9 @@ export function ProductForm({
         availableTags={allTags}
       />
 
+      {/* Démasqué avec la description ci-dessus, même raison : une chambre liée à Lobby ne pouvait
+          structurellement avoir AUCUNE photo — ni locale (bloc masqué), ni importée (rien ne lisait
+          photos[]). Sa carte de catalogue s'affichait donc sans image. */}
       {!isEditing ? (
         <div className="flex flex-col gap-1.5">
           <Label>Fotos — opcional</Label>

@@ -10,6 +10,7 @@ export function PasswordBlock() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isDirty = password !== "" || confirmPassword !== "";
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -66,7 +67,7 @@ export function PasswordBlock() {
           </TextField>
           <Button
             type="submit"
-            isDisabled={isSubmitting}
+            isDisabled={isSubmitting || !isDirty}
             data-testid="save-password-button"
             className="self-start"
           >

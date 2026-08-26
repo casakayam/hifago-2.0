@@ -12,6 +12,7 @@
 // vrai baseUrl — seulement contre un serveur de fixtures via LOBBY_API_BASE_URL).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getLobbyRooms, LOBBY_DEFAULT_BASE_URL } from "../../../packages/domain/src/pms/lobbyClient.ts";
+import { parseLobbyRooms } from "../../../packages/domain/src/pms/parseLobbyRooms.ts";
 
 interface EstablishmentRow {
   id: string;
@@ -22,6 +23,40 @@ function hasExpectedRoomsShape(body: unknown): boolean {
   if (typeof body !== "object" || body === null) return false;
   const data = (body as { data?: unknown }).data;
   return Array.isArray(data);
+}
+
+// Étendu le 2026-08-26. Vérifier que `data` est un tableau ne suffit plus : depuis que l'écran de
+// liaison affiche et prérremplit le contenu Lobby (type/capacity/descriptions[]/photos[]), la
+// disparition SILENCIEUSE d'un de ces champs ne casserait rien — les parseurs sont défensifs, ils
+// omettent proprement — mais viderait l'écran sans que personne ne le sache. C'est exactement le
+// genre de dérive que ce job existe pour attraper, et la seule vigie possible tant que ces formes
+// n'ont pas été observées en conditions réelles (elles viennent de la doc, déjà prise en défaut
+// une fois sur POST /bookings).
+//
+// Aucune de ces absences n'est une panne : ce sont des signalements. Un compte peut légitimement
+// n'avoir aucune photo. Le but est de distinguer « Lobby ne renvoie plus ce champ » de « le champ
+// est vide chez ce client », en le disant plutôt qu'en l'ignorant.
+function describeRoomsFieldCoverage(body: unknown): string[] {
+  const categories = parseLobbyRooms(body);
+  if (categories.length === 0) return ["aucune catégorie exploitable dans GET /rooms"];
+
+  const notes: string[] = [];
+  const withKind = categories.filter((c) => c.rawType !== null).length;
+  const withCapacity = categories.filter((c) => c.capacity !== null).length;
+  const withDescription = categories.filter((c) => Object.keys(c.descriptions).length > 0).length;
+  const withPhotos = categories.filter((c) => c.photos.length > 0).length;
+
+  if (withKind === 0) notes.push("aucune catégorie ne porte `type`");
+  if (withCapacity === 0) notes.push("aucune catégorie ne porte `capacity`");
+  if (withDescription === 0) notes.push("aucune catégorie ne porte `descriptions[]`");
+  if (withPhotos === 0) notes.push("aucune catégorie ne porte `photos[]`");
+
+  // Une langue que l'éditeur hifago ne sait pas afficher (fermé à es/en) : la signaler, sinon la
+  // description existe chez Lobby et n'arrive jamais nulle part sans explication.
+  const unsupported = [...new Set(categories.flatMap((c) => c.unsupportedLangs))].sort();
+  if (unsupported.length > 0) notes.push(`descriptions dans des langues non éditables : ${unsupported.join(", ")}`);
+
+  return notes;
 }
 
 Deno.serve(async () => {
@@ -50,6 +85,10 @@ Deno.serve(async () => {
       const rooms = await getLobbyRooms(baseUrl, establishment.lobby_api_token, undefined, relaySecret);
       if (rooms.status !== 200 || !hasExpectedRoomsShape(rooms.body)) {
         drifts.push(`établissement ${establishment.id} : GET /rooms forme inattendue (status ${rooms.status})`);
+      } else {
+        for (const note of describeRoomsFieldCoverage(rooms.body)) {
+          drifts.push(`établissement ${establishment.id} : ${note}`);
+        }
       }
     } catch (err) {
       drifts.push(`établissement ${establishment.id} : GET /rooms injoignable (${err})`);

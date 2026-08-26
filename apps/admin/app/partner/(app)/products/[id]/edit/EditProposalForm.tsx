@@ -44,11 +44,20 @@ export function EditProposalForm({
   type,
   currentPayload,
   pendingProposal,
+  establishmentId,
+  establishmentLobbyConnected,
 }: {
   productId: string;
   type: ProductType;
   currentPayload: RawProductFieldsPayload & { name?: unknown; description?: unknown };
   pendingProposal: PendingProposal;
+  // Corrigé le 2026-08-26 : ce formulaire rendait <ProductTypeFields type state /> SANS ces deux
+  // props, donc la garde interne du bloc LobbyPMS (establishmentLobbyConnected) était toujours
+  // fausse et le bloc n'était JAMAIS monté côté socio — un prestataire ne pouvait pas voir à quoi
+  // son propre logement était lié, ni ce que LobbyPMS en savait. En lecture seule (arbitrage
+  // Jérôme du même jour : Desvincular/Actualizar restent admin-only).
+  establishmentId: string;
+  establishmentLobbyConnected: boolean;
 }) {
   const [name, setName] = useState<LocalizedValue>(() => ({ ...(asLocalizedField(currentPayload.name) ?? {}) }));
   const [description, setDescription] = useState<LocalizedValue>(() => ({
@@ -167,7 +176,13 @@ export function EditProposalForm({
           fieldTestId="description-textarea"
         />
 
-        <ProductTypeFields type={type} state={fields} />
+        <ProductTypeFields
+          type={type}
+          state={fields}
+          establishmentId={establishmentId}
+          establishmentLobbyConnected={establishmentLobbyConnected}
+          lobbyLinkReadOnly
+        />
 
         <Button type="submit" isDisabled={isSubmitting} data-testid="submit-proposal-button">
           {isSubmitting ? "Enviando…" : "Enviar propuesta"}

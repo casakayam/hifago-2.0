@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { asLocalizedField } from "@hifago/domain";
-import { Button, Input, Label, TextArea, TextField, toast } from "@hifago/ui";
+import { Button, Checkbox, Input, Label, TextArea, TextField, toast } from "@hifago/ui";
 import { LocalizedTextField, buildLocalizedPayload, type LocalizedValue } from "@/components/localized-text-field";
 
 // storage_path résolu en URL publique côté client (bucket "catalog-media" public en lecture,
@@ -27,6 +27,11 @@ type EstablishmentFieldsPayload = {
   lat?: number | null;
   lon?: number | null;
   photos?: { storage_path: string }[];
+  // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — lobby_api_token n'est présent QUE tant
+  // que la proposition est "pending" (rédigé dès qu'elle est tranchée, cf.
+  // moderate_establishment_proposal) ; lobby_api_token_provided reste comme trace après coup.
+  lobby_api_token?: string;
+  lobby_api_token_provided?: boolean;
 };
 
 // Aperçu "valeur actuelle" vide pour kind='create' (l'établissement n'existe pas encore, donc
@@ -57,6 +62,10 @@ export function ModerateEstablishmentProposalForm({
   const [lat, setLat] = useState(proposedPayload.lat != null ? String(proposedPayload.lat) : "");
   const [lon, setLon] = useState(proposedPayload.lon != null ? String(proposedPayload.lon) : "");
   const [rejectionReason, setRejectionReason] = useState("");
+  const [lobbyApiToken, setLobbyApiToken] = useState(proposedPayload.lobby_api_token ?? "");
+  const [activatePmsConnector, setActivatePmsConnector] = useState(false);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [connectionTestResult, setConnectionTestResult] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -68,7 +77,33 @@ export function ModerateEstablishmentProposalForm({
       address: address.trim() || null,
       lat: lat.trim() ? Number(lat) : null,
       lon: lon.trim() ? Number(lon) : null,
+      // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — vide = l'admin a effacé le champ,
+      // moderate_establishment_proposal traite "" comme "aucun token" (nullif(btrim(...), '')).
+      lobby_api_token: lobbyApiToken.trim(),
     };
+  }
+
+  async function handleTestConnection() {
+    if (!lobbyApiToken.trim()) return;
+    setIsTestingConnection(true);
+    setConnectionTestResult(null);
+    try {
+      const response = await fetch("/api/pms/test-connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiToken: lobbyApiToken.trim() }),
+      });
+      const result = (await response.json()) as { ok: boolean; roomsCount?: number };
+      setConnectionTestResult(
+        result.ok
+          ? `Conexión exitosa (${result.roomsCount ?? 0} categorías encontradas).`
+          : "No se pudo conectar con LobbyPMS. Verifica el token con el partner."
+      );
+    } catch {
+      setConnectionTestResult("No se pudo conectar con LobbyPMS. Verifica el token con el partner.");
+    } finally {
+      setIsTestingConnection(false);
+    }
   }
 
   async function handleDecision(decision: "approve" | "reject") {
@@ -90,6 +125,7 @@ export function ModerateEstablishmentProposalForm({
       p_expected_version: expectedVersion,
       p_corrected_payload: decision === "approve" ? buildCorrectedPayload() : null,
       p_rejection_reason: decision === "reject" ? rejectionReason.trim() : undefined,
+      p_activate_pms_connector: decision === "approve" ? activatePmsConnector : undefined,
     });
 
     setIsSubmitting(false);
@@ -255,6 +291,46 @@ export function ModerateEstablishmentProposalForm({
             <Input id="lon" name="lon" />
           </TextField>
         </div>
+
+        {/* Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — le token proposé n'est visible ici
+            que tant que la proposition est "pending" (rédigé après décision, cf.
+            moderate_establishment_proposal). "Probar conexión" réutilise la même route que
+            EstablishmentPmsBlock.tsx (admin-direct), sans rien persister. */}
+        <TextField fullWidth value={lobbyApiToken} onChange={setLobbyApiToken}>
+          <Label>Token LobbyPMS {proposedPayload.lobby_api_token ? "(propuesto por el partner)" : "— opcional"}</Label>
+          <Input type="password" autoComplete="off" data-testid="moderate-lobby-token-input" />
+        </TextField>
+        {lobbyApiToken.trim() ? (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              isDisabled={isTestingConnection}
+              onPress={handleTestConnection}
+              data-testid="moderate-test-connection-button"
+            >
+              {isTestingConnection ? "Probando…" : "Probar conexión"}
+            </Button>
+            {connectionTestResult ? (
+              <p className="text-sm text-muted" data-testid="moderate-connection-test-result">
+                {connectionTestResult}
+              </p>
+            ) : null}
+            <Checkbox
+              data-testid="activate-pms-connector-checkbox"
+              isSelected={activatePmsConnector}
+              onChange={setActivatePmsConnector}
+            >
+              <Checkbox.Content>
+                <Checkbox.Control>
+                  <Checkbox.Indicator />
+                </Checkbox.Control>
+                Activar conector al aprobar
+              </Checkbox.Content>
+            </Checkbox>
+          </>
+        ) : null}
 
         <TextField value={rejectionReason} onChange={setRejectionReason}>
           <Label>Motivo de rechazo — obligatorio para rechazar</Label>

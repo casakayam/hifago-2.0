@@ -8,8 +8,8 @@ const RESERVATIONS_HREF = "/partner/reservations";
 const ALL_NAV_ITEMS = [
   { href: "/partner", label: "Inicio" },
   { href: ESTABLISHMENT_HREF, label: "Mi establecimiento y actividades" },
-  { href: "/partner/commissions", label: "Mis comisiones" },
   { href: RESERVATIONS_HREF, label: "Mis reservas" },
+  { href: "/partner/commissions", label: "Mis comisiones" },
   { href: "/partner/tools", label: "Mi enlace y QR" },
   { href: "/partner/account", label: "Mi cuenta" },
 ] as const;

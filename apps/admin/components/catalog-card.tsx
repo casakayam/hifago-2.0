@@ -121,7 +121,7 @@ export function CatalogCard({
   if (isHorizontal) {
     return (
       <Card data-testid={testId}>
-        <div className="flex flex-col sm:flex-row">
+        <div className="flex flex-col gap-4 sm:flex-row">
           {photoBlock}
           <div className="flex flex-1 flex-col">{contentBlock}</div>
         </div>

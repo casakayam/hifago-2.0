@@ -18,6 +18,7 @@ import { tiersFromColumn } from "@/lib/products/priceTiers";
 import { stayRatesFromColumn } from "@/lib/products/stayRates";
 import { ProductStatusBlock } from "./ProductStatusBlock";
 import { ProductPhotosBlock } from "./ProductPhotosBlock";
+import { ImportLobbyPhotosBlock } from "./ImportLobbyPhotosBlock";
 import { ProductTagsBlock } from "./ProductTagsBlock";
 import { ProductSlotRulesBlock } from "./ProductSlotRulesBlock";
 import { ProductHotelRoomsBlock } from "./ProductHotelRoomsBlock";
@@ -35,17 +36,25 @@ export default async function EditProductPage({
   const supabase = await createClient();
 
   // RLS (products_select_public) : l'admin voit aussi les activités non publiées.
-  const { data: product } = await supabase
+  const { data: productRow } = await supabase
     .from("products")
     .select(
-      "id, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, default_capacity, stay_rates, category, type, establishment_id, sellable, lobby_category_id, lobby_product_id",
+      "id, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, quantity, default_capacity, stay_rates, category, type, establishment_id, sellable, lobby_category_id, lobby_product_id, establishment:establishments(lobby_connector_active, lobby_has_token)",
     )
     .eq("id", id)
     .maybeSingle();
 
-  if (!product) {
+  if (!productRow) {
     notFound();
   }
+
+  // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — aplati ici (jamais transporté comme un
+  // objet imbriqué jusqu'à ProductForm, qui attend ces deux champs directement sur EditableProduct).
+  const product = {
+    ...productRow,
+    lobby_connector_active: productRow.establishment?.lobby_connector_active ?? false,
+    lobby_has_token: productRow.establishment?.lobby_has_token ?? false,
+  };
 
   // Spec 08/12/13 — tags : réservés au parcours partagé activité/alojamiento/hôtel (écran partagé
   // conservé, champ conditionnel). productTypeGating : SEULE définition de ces booléens dans tout
@@ -54,6 +63,10 @@ export default async function EditProductPage({
   const { isActivity, isLodging, isHotel, isTransport, hasTags } = productTypeGating(
     product.type as ProductType,
   );
+  // Refonte parcours produit ↔ LobbyPMS (2026-08-26) — même condition que product-type-fields.tsx/
+  // product-form.tsx (cf. leurs commentaires), calculée ici depuis la valeur PERSISTÉE (Server
+  // Component, pas de state React) plutôt que depuis un state client.
+  const isRoomLinkedToLobby = isLodging && product.lobby_category_id != null;
 
   // 5 lectures indépendantes (aucune ne dépend du résultat d'une autre, seulement de product.id/
   // product.type déjà connus) — lancées en parallèle plutôt qu'en séquence, le TTFB de la page tombe
@@ -102,6 +115,7 @@ export default async function EditProductPage({
   const availabilityScreen = availabilityScreenFor(
     product.type as ProductType,
     (slotRulesRaw ?? []).length > 0,
+    isRoomLinkedToLobby,
   );
 
   // Photos des chambres : dépend des id de roomTypesRaw, donc une 2e vague après le Promise.all
@@ -177,6 +191,12 @@ export default async function EditProductPage({
             Calendario &amp; cupos
           </Link>
         ) : null}
+        {/* Dire pourquoi il n'y a pas de calendrier, plutôt que de laisser un vide inexpliqué. */}
+        {availabilityScreen === "pms" ? (
+          <p className="text-sm text-muted" data-testid="availability-managed-by-pms">
+            La disponibilidad se gestiona en LobbyPMS.
+          </p>
+        ) : null}
         {/* Spec 17 §0 Tranche 2 — le calendrier générique (product_availability, lien ci-dessus)
             ne représente aucune chambre réelle pour un hôtel : grille dédiée chambres×dates. */}
         {availabilityScreen === "room" ? (
@@ -207,7 +227,13 @@ export default async function EditProductPage({
       {hasTags ? (
         <ProductTagsBlock productId={product.id} allTags={allTags} initialTagIds={initialTagIds} />
       ) : null}
+      {/* Démasqué le 2026-08-26 (arbitrage « import à la liaison »). Ce bloc était retiré pour une
+          chambre liée à Lobby : combiné au fait que rien n'importait jamais photos[], une chambre
+          PMS-backed ne pouvait structurellement avoir AUCUNE photo, ni locale ni importée — sa
+          carte de catalogue public s'affichait donc sans image. L'import depuis Lobby est le bloc
+          juste en dessous (admin-only). */}
       <ProductPhotosBlock productId={product.id} initialPhotos={photos} />
+      {isRoomLinkedToLobby ? <ImportLobbyPhotosBlock productId={product.id} /> : null}
       {isActivity ? (
         <ProductSlotRulesBlock productId={product.id} initialRules={initialSlotRules} />
       ) : null}

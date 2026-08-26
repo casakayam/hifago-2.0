@@ -14,6 +14,7 @@ type ProductQueryRow = {
   price_cop: number | null;
   establishment_id: string;
   sellable: boolean;
+  lobby_category_id: number | null;
   product_tag_assignments: { catalog_tags: { id: string; label: unknown } | null }[];
 };
 
@@ -88,7 +89,7 @@ export default async function PartnerEstablishmentPage() {
       ? supabase
           .from("products")
           .select(
-            "id, type, name, price_cop, establishment_id, sellable, product_tag_assignments(catalog_tags(id, label))",
+            "id, type, name, price_cop, establishment_id, sellable, lobby_category_id, product_tag_assignments(catalog_tags(id, label))",
           )
           .eq("partner_id", partnerId)
           .order("created_at", { ascending: false })
@@ -192,6 +193,8 @@ export default async function PartnerEstablishmentPage() {
       photos: (photosByProduct.get(product.id) ?? []).map((photo) => ({ id: photo.id, url: photo.url, alt: name })),
       pendingEdit: pendingEditProductIds.has(product.id),
       hasSlotRules: slotRulesProductIds.has(product.id),
+      // Même règle que packages/domain isPmsBacked : lodging + lobby_category_id renseigné.
+      isPmsBacked: product.type === "lodging" && product.lobby_category_id != null,
     };
     const list = productsByEstablishment.get(product.establishment_id) ?? [];
     list.push(row);
@@ -216,13 +219,27 @@ export default async function PartnerEstablishmentPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">Mi establecimiento y actividades</h1>
-        <Link
-          href="/partner/establishment/new"
-          className={buttonVariants({ size: "sm" })}
-          data-testid="propose-new-establishment-link"
-        >
-          Proponer un nuevo establecimiento
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          {/* Sans établissement existant, l'écran /partner/products/new n'a nulle part où proposer
+              l'activité (message "Aún no tienes ningún establecimiento con capacidad de operador
+              activa.") — bouton réservé au cas où au moins un existe déjà, comme celui-ci. */}
+          {establishmentRows.length > 0 ? (
+            <Link
+              href="/partner/products/new"
+              className={buttonVariants({ size: "sm" })}
+              data-testid="add-new-activity-link"
+            >
+              Añadir actividad
+            </Link>
+          ) : null}
+          <Link
+            href="/partner/establishment/new"
+            className={buttonVariants({ size: "sm" })}
+            data-testid="propose-new-establishment-link"
+          >
+            Proponer un nuevo establecimiento
+          </Link>
+        </div>
       </div>
 
       {(pendingEstablishmentCreations ?? []).map((proposal) => (

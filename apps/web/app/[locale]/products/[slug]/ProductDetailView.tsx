@@ -38,6 +38,8 @@ export function ProductDetailView({
   photoSlides,
   priceDisplay,
   unit,
+  capacity,
+  quantity,
   reservationMode,
   occurrenceLabel,
   externalBookingUrl,
@@ -65,6 +67,10 @@ export function ProductDetailView({
   photoSlides: PhotoSlide[];
   priceDisplay: string | null;
   unit: string | null;
+  /** Occupants d'UNE unité (Lobby : `capacity`). Facultatif — beaucoup de produits ne le portent pas. */
+  capacity: number | null;
+  /** Nombre d'unités de ce type (Lobby : `quantity`). Un TOTAL, jamais une disponibilité du jour. */
+  quantity: number | null;
   reservationMode: "evento" | "hotel" | "lodging" | "slot" | "date";
   occurrenceLabel: string | null;
   externalBookingUrl: string | null;
@@ -108,6 +114,23 @@ export function ProductDetailView({
               <span className="ml-1 text-sm font-normal text-muted">{t("perPerson")}</span>
             ) : null}
           </p>
+
+          {/* Capacité et nombre d'unités (2026-08-26). Chaque moitié est FACULTATIVE et rendue
+              séparément : un produit peut porter l'une sans l'autre, et la plupart n'ont ni l'une
+              ni l'autre — la ligne entière disparaît alors, plutôt que d'afficher un séparateur
+              orphelin. `quantity` est libellé « en total » et non « disponibles » : c'est le parc
+              total du type, jamais ce qui reste libre cette nuit (pour un logement PMS-backed,
+              cette réponse-là vient de LobbyPMS en direct, cf. LodgingReservationForm). */}
+          {capacity !== null || quantity !== null ? (
+            <p className="text-sm text-muted" data-testid="product-lodging-facts">
+              {[
+                capacity !== null ? t("lodgingCapacity", { count: capacity }) : null,
+                quantity !== null ? t("lodgingQuantity", { count: quantity }) : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          ) : null}
 
           {reservationMode === "evento" ? (
             <div className="flex flex-col gap-3">

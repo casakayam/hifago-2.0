@@ -354,6 +354,32 @@ non tranché par cette spec, à fixer au moment du chiffrage/implémentation.
   `docs/3-integrations/lobby_pms_implementation.md`, `docs/2-reference/06-lobbypms.md`,
   `.claude/skills/lobby-debug/SKILL.md`.
 
+## 14. Amendements (2026-08-26)
+
+Deux évolutions postérieures rendent le §0 partiellement daté — signalées ici plutôt que réécrites
+en place, même discipline que le §13 amendé le 2026-08-21 :
+
+1. **Le miroir ne concerne plus seulement une « activité ».** `lobby_product_id` s'applique désormais
+   à `activity` **et** `transport` (tous deux « service » côté Lobby, une date unique + une quantité,
+   compatibles avec `add-product-service`). `evento` et `camp` restent strictement exclus, pour une
+   raison structurelle et non par oubli : un evento vitrine ne produit jamais d'`order_line`, et un
+   camp se réserve par date + `duration_days` alors qu'`add-product-service` ne transporte ni date ni
+   durée. Migration `20260826110000`, route `reserve-nights` l.121-126.
+
+2. **Un service vendu sans nuit n'est plus traité comme un échec.** Le §0 prévoyait qu'une activité
+   éligible se rattache « au booking de sa propre propriété dans la commande » ; quand la commande
+   n'en contient aucune, `reserve-nights` insérait une entrée `pms_reconciliation_entries` par ligne
+   et par vente — dont le trigger `notify_all_admins` (`20260824060000`) envoie un e-mail à **chaque
+   admin**, sans dédup. Or Lobby refuse structurellement la vente d'un service isolé
+   (`422 "The booking doesnt exits"`) et il a été décidé de ne jamais inventer de booking coquille :
+   ce n'est pas un incident réparable, c'est une limite connue. Désormais distingué du cas où des
+   nuits existaient mais dont tous les bookings ont échoué — celui-là reste une vraie entrée de
+   réconciliation.
+
+Le reste du contrat §0 est inchangé. Détail complet et suite du chantier :
+[`24-modele-hebergement-et-surface-lobbypms.md`](24-modele-hebergement-et-surface-lobbypms.md).
+
+
 ## 13. Implémentation (2026-08-19) — Tranche 1 livrée
 
 Tous les points §10 tranchés par Jérôme le 2026-08-19 : périmètre complet (schéma, `create_order`,

@@ -38,6 +38,10 @@ export type ProductTypeFieldsInit = {
   checkInTime?: string | null;
   checkOutTime?: string | null;
   capacity?: number | null;
+  // Nombre d'unités de ce type (3 cabañas, 8 lits) — descriptif, jamais un quota de réservation.
+  // À ne pas confondre avec defaultCapacity, qui amorce product_availability (cf. migration
+  // 20260826190000_product_quantity.sql, qui détaille les trois colonnes voisines).
+  quantity?: number | null;
   defaultCapacity?: number | null;
   stayRates?: unknown;
   roomTypes?: unknown;
@@ -52,9 +56,10 @@ export type ProductTypeFieldsInit = {
   startTime?: string | null;
   durationMinutes?: number | null;
   externalBookingUrl?: string | null;
-  // Spec 21 (connecteur LobbyPMS) — admin-only, jamais dans RawProductFieldsPayload/
-  // payloadToFieldsInit (jamais exposé au payload d'une proposition socio, même traitement que
-  // operated_directly côté établissement) : ProductForm seul les lit/écrit directement.
+  // Spec 21 + refonte parcours partenaire ↔ Lobby (2026-08-25) — désormais dans
+  // RawProductFieldsPayload/payloadToFieldsInit aussi : un socio peut proposer ces champs quand
+  // l'établissement est connecté (choisis via LobbyOptionPicker, jamais une saisie libre), donc
+  // l'écran de modération doit pouvoir les prérremplir pour la revue admin.
   lobbyCategoryId?: number | null;
   lobbyProductId?: number | null;
 };
@@ -79,6 +84,7 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
   const [checkInTime, setCheckInTime] = useState(toTimeInputValue(init.checkInTime));
   const [checkOutTime, setCheckOutTime] = useState(toTimeInputValue(init.checkOutTime));
   const [capacity, setCapacity] = useState(init.capacity != null ? String(init.capacity) : "");
+  const [quantity, setQuantity] = useState(init.quantity != null ? String(init.quantity) : "");
   const [defaultCapacity, setDefaultCapacity] = useState(
     init.defaultCapacity != null ? String(init.defaultCapacity) : "",
   );
@@ -113,6 +119,18 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
   const [lobbyProductId, setLobbyProductId] = useState(
     init.lobbyProductId != null ? String(init.lobbyProductId) : "",
   );
+  // "none" tant que rien n'est choisi ; "picker" dès qu'une valeur existe (édition d'un produit
+  // déjà lié) — jamais recalculé après le montage.
+  //
+  // Corrigé le 2026-08-26 : le défaut était "manual", ce qui faisait afficher un ID NUMÉRIQUE BRUT
+  // à la place du nom de la catégorie dès qu'on rouvrait un produit lié — la seule information
+  // vraiment utile (« à quoi suis-je lié ? ») était la seule qu'on ne montrait pas. En "picker",
+  // LobbyOptionPicker résout l'id contre la liste réelle et affiche le nom, la capacité, la
+  // description et les photos. "manual" reste accessible à l'admin via le sélecteur, comme
+  // échappatoire pour saisir un id que la liste ne contiendrait pas.
+  const [lobbyLinkMode, setLobbyLinkMode] = useState<"none" | "picker" | "manual">(() =>
+    init.lobbyCategoryId != null || init.lobbyProductId != null ? "picker" : "none",
+  );
 
   return {
     address, setAddress, lat, setLat, lon, setLon,
@@ -120,7 +138,8 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
     priceMode, setPriceMode, priceCop, setPriceCop, priceTiers, setPriceTiers,
     minQty, setMinQty, maxQty, setMaxQty,
     checkInTime, setCheckInTime, checkOutTime, setCheckOutTime,
-    capacity, setCapacity, defaultCapacity, setDefaultCapacity, stayRates, setStayRates,
+    capacity, setCapacity, quantity, setQuantity,
+    defaultCapacity, setDefaultCapacity, stayRates, setStayRates,
     hotelRooms, setHotelRooms,
     durationDays, setDurationDays,
     slotRules, setSlotRules,
@@ -135,6 +154,7 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
     durationMinutes, setDurationMinutes,
     externalBookingUrl, setExternalBookingUrl,
     lobbyCategoryId, setLobbyCategoryId, lobbyProductId, setLobbyProductId,
+    lobbyLinkMode, setLobbyLinkMode,
   };
 }
 
@@ -158,6 +178,7 @@ export type RawProductFieldsPayload = {
   check_in_time?: string | null;
   check_out_time?: string | null;
   capacity?: number | null;
+  quantity?: number | null;
   default_capacity?: number | null;
   stay_rates?: unknown;
   room_types?: unknown;
@@ -172,6 +193,8 @@ export type RawProductFieldsPayload = {
   start_time?: string | null;
   duration_minutes?: number | null;
   external_booking_url?: string | null;
+  lobby_category_id?: number | null;
+  lobby_product_id?: number | null;
 };
 
 export function payloadToFieldsInit(payload: RawProductFieldsPayload): ProductTypeFieldsInit {
@@ -187,6 +210,7 @@ export function payloadToFieldsInit(payload: RawProductFieldsPayload): ProductTy
     checkInTime: payload.check_in_time,
     checkOutTime: payload.check_out_time,
     capacity: payload.capacity,
+    quantity: payload.quantity,
     defaultCapacity: payload.default_capacity,
     stayRates: payload.stay_rates,
     roomTypes: payload.room_types,
@@ -201,5 +225,7 @@ export function payloadToFieldsInit(payload: RawProductFieldsPayload): ProductTy
     startTime: payload.start_time,
     durationMinutes: payload.duration_minutes,
     externalBookingUrl: payload.external_booking_url,
+    lobbyCategoryId: payload.lobby_category_id,
+    lobbyProductId: payload.lobby_product_id,
   };
 }

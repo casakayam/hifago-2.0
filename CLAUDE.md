@@ -374,6 +374,26 @@ l'export comptable/fiscal · fournisseur email final (Resend vs Postmark).
     la valeur sans l'afficher (`eval "$(... -o env | grep SERVICE_ROLE_KEY)"` dans un seul appel non
     échoïsant), ou au minimum passer par `sed -E 's/="[^"]*"/=<redacted>/'` avant toute lecture, même
     pour un simple diagnostic de nom de variable.
+19. **Un secret webhook Mercado Pago confirmé identique entre `.env.local` et le panel développeur
+    peut quand même échouer la vérification HMAC pour de VRAIES notifications Payment/Merchant
+    order envoyées par Checkout Pro, alors que « Simular notificaciones » avec ce même secret valide
+    sans problème** (constaté 2026-08-24, retest du paiement local). Diagnostic exhaustif avant de
+    conclure : secret comparé caractère pour caractère (identique) ; 8 formats de manifest testés en
+    parallèle (ordre des champs, avec/sans `request-id`, sans `;` final, `id` en minuscule...) —
+    aucun ne correspond au hash reçu pour les vraies livraisons, alors que le format standard
+    documenté (`id:...;request-id:...;ts:...;`) valide parfaitement via le simulateur avec le même
+    secret. Root cause non élucidée côté Mercado Pago (probablement une clé pas propagée à leur
+    pipeline de livraison réel pour ce type d'événement précis) — écarté comme bug hifago après
+    cette vérification. Contournement sûr utilisé : une fois le paiement confirmé `approved` via la
+    redirection Checkout Pro (`collection_status=approved` + `payment_id` réel dans l'URL de
+    retour), rejouer manuellement le webhook avec une signature HMAC forgée localement (même secret,
+    `crypto.createHmac('sha256', secret)`, manifest standard) — sûr car `apply_payment_webhook`
+    n'écrit jamais rien sans que la route ait d'abord re-vérifié le paiement en direct via
+    `GET /v1/payments/{id}` (jamais sur la seule foi du corps du webhook, cf. commentaire de tête de
+    `apply_payment_webhook.sql`). **À surveiller avant tout passage en staging/prod** : si ce
+    symptôme se reproduit sur un vrai déploiement, il n'y aura plus d'accès shell pour rejouer
+    manuellement — contacter le support Mercado Pago proactivement plutôt que de découvrir le
+    problème en prod.
 
 ## 12. Curseur — dernière session
 
@@ -381,6 +401,106 @@ En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 `hifago/docs/journal/<mois-en-cours>.md` — nouveau mois = nouveau fichier (`2026-09.md` le
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
 nouvelle entrée.
+
+*2026-08-26 — audit LobbyPMS (spec 24 écrite) : surface API réellement exploitée, parcours front
+d'un produit lié, cible du modèle hébergement. **Trouvaille centrale** : le chantier en cours avait
+posé la moitié « masquer les champs que Lobby fournit » sans jamais construire la moitié « aller les
+chercher » — `GET /rooms` renvoie type/capacity/quantity/descriptions[]/photos[], la route n'en
+gardait que `{id, name}`. Une chambre PMS-backed apparaissait donc dans le catalogue public comme un
+**nom nu, sans photo ni description**. **Livré (Lot A)** : 3 parseurs défensifs
+(`parseLobbyRooms`/`parseLobbyServices`/`buildLobbyBookingNote`), carte de prévisualisation dans le
+sélecteur + bouton « Usar estos datos », `lobbyLinkMode` en `"picker"` (le **nom** au lieu de l'ID
+brut), démasquage description/photos/capacité sur les 3 écrans, `availabilityScreenFor(…,
+isPmsBacked)` → plus de calendrier de cupos inerte, badge « LobbyPMS », fixtures complétées
+(`/products`, `/cancel-booking` manquaient — le sélecteur de services n'était pas testable), vigie
+nocturne étendue, **import effectif des photos Lobby** (`POST /api/pms/import-room-photos`, admin-only) avec ses bornes de fetch sortant (liste blanche d'hôtes, refus des redirections, plafond sur les octets reçus, nettoyage Storage si l'attachement échoue). **Bugs réels corrigés** : le bloc Lobby n'était **jamais monté en édition socio**
+(`EditProposalForm` ne passait pas `establishmentLobbyConnected`) ; un service Lobby vendu **sans
+nuit** envoyait un e-mail à **chaque admin, à chaque vente** (entrée de réconciliation pour une
+situation que personne ne peut résoudre). **Arbitrages Jérôme** : import à la liaison · Desvincular
+admin-only · note de booking enrichie partout (l'invariant PII invoqué contre était déjà levé par
+lui le 2026-08-19, `20260819180000`). **Challenge adversarial** (37 agents, 30 findings) : 4
+corrections structurantes, dont un plan qui s'apprêtait à défaire une décision du jour même, un
+diagnostic faux de ma part sur le trou socio, et C4 qui aurait été **inerte en production**
+(`products.unit` n'est écrit par aucun code applicatif). **Vérifié** : typecheck+lint 3 workspaces,
+300 tests unitaires, `next build` sur les 2 apps, 7 e2e ciblées. **Reliquat d'environnement corrigé**
+: `apps/web/.env.local` pointait sur un tunnel cloudflared mort depuis le 2026-08-24 — toute fiche
+produit publique répondait 404. **Non fait, signalé** : Lobby n'est joignable que depuis la préprod,
+donc aucune sonde locale — Lot B gelé (C1 filtrage, C2 annulation à re-spécifier, C4, C5) et
+liste d'observations à faire en préprod dans la spec 24 §11. Cible du modèle hébergement (hôtel →
+établissement, chambre → produit) **retenue sous 4 conditions**, non implémentée. Détail complet :
+`hifago/docs/journal/2026-08.md` (2026-08-26). Rien commité.*
+
+*2026-08-24 (suite 3, session distincte) — spec 23 (`docs/specs/23-notifications-email-
+transactionnelles.md`) écrite et implémentée intégralement, Tranche 1 + Tranche 2 (8 événements).
+Premier fournisseur email du projet : **Resend** (tranché cette session — offre gratuite 3
+000/mois vs 100/mois chez Postmark), file Postgres + journal d'envoi + Edge Function
+`send-notification-emails`, sur le patron déjà validé du connecteur LobbyPMS. Tranche 1 (aucune RPC
+de réservation/paiement touchée) : invitation partenaire par email, notification admin "nouvelle
+proposition"/"exception de réconciliation" (triggers), notification partenaire "proposition
+traitée". Tranche 2 (`create_order`/`apply_payment_webhook`, les 2 RPC les plus sensibles) :
+commission attribuée, paiement effectué, confirmation client, blocage camp/evento.
+
+**Workflow multi-agents de challenge lancé sur demande explicite** ("relance le challenge du
+plan") : 78 agents, 6 dimensions, 11 findings confirmés. Deux corrections majeures : (1) erreur de
+lecture du cahier des charges — un événement "rattachement établissement en attente" inventé
+(le texte réel dit "demande d'ouverture prestataire en attente", parcours self-service jamais
+construit en code) retiré, remplacé par un événement réellement décidé mais oublié (blocage
+camp/evento). (2) isolation des échecs de notification renforcée : `query_canceled` (exclu par
+`when others` en PL/pgSQL) + isolation PAR DESTINATAIRE (pas par boucle entière) + reprise des
+lignes bloquées à `sending` (`Idempotency-Key` Resend) + revokes explicites + réponse HTTP agrégée
++ fault-injection réelle exigée plutôt qu'une supposition sur `exception when others`.
+
+**2 régressions trouvées en testant, pas en écrivant le code** : trigger "nouvelle proposition"
+perdait le nom d'une entité en cours de création (jointure sur `product_id`/`establishment_id`
+NULL, kind='create' — corrigé) ; `create_partner_invitation` cassée par une surcharge de fonction
+(`create or replace` avec un paramètre en plus ne remplace jamais une signature différente en
+Postgres — corrigé en supprimant explicitement l'ancienne). `create_order`/`apply_payment_webhook`
+modifiées via `pg_get_functiondef` (définition live extraite de la base, insertion programmatique)
+plutôt que retapées à la main — 647/65 lignes, risque de transcription trop élevé pour les 2 RPC
+les plus critiques du système (leçon tirée d'avoir déjà mal lu une version historique de
+`moderate_product_proposal` plus tôt dans cette même session).
+
+**Vérifié** : pgTAP complet 816/816 (4 fichiers pré-existants en échec, accumulation `audit_log`
+déjà documentée, sans lien) ; 3 nouveaux fichiers pgTAP dédiés (44 cas dont la fault-injection sur
+`apply_payment_webhook`, jugée le test le plus important de la spec) ; nouveau test de concurrence
+`claim_notification_email_batch` (SKIP LOCKED) ; `create_order_camp.concurrency.mjs` existant
+rejoué propre (5×20) après modification de `create_order` ; test d'intégration Edge Function
+(fixtures Resend locales) vert ; e2e Tranche 1 + e2e paiement/camp existants rejoués (1 flake de
+navigation confirmé environnemental à la reprise, cf. §11 point 10) ; typecheck/lint propres.
+
+**Non fait, signalé, hors périmètre** : aucun envoi réel vérifié (pas de domaine Resend
+disponible) ; gap `verify_jwt` des Edge Functions (déjà présent pour `pms-poll-bookings`, pas
+introduit ici) ; 9 points laissés explicitement ouverts en spec §10 (langue, seuils de retry,
+destinataire exact "paiement effectué", etc.) — aucun tranché en silence. **Aléa de concurrence
+constaté sans y toucher** : deux autres sessions ont modifié ce même fichier CLAUDE.md et le journal
+pendant cette session (entrées "agenda socio"/"retest Mercado Pago" ci-dessous, désormais empilées
+sous celle-ci plutôt qu'écrasées) — aucune collision de fichier de code, seulement ce curseur commun.
+Détail complet (tous les findings, tout le code, toutes les corrections) :
+`hifago/docs/journal/2026-08.md` (2026-08-24, suite distincte). Rien commité, en attente d'une
+demande explicite.*
+
+*2026-08-24 (suite 2) — agenda socio (`/partner`) : bug trouvé par Jérôme en testant manuellement,
+une réservation `Expirada` s'affichait dans le calendrier. Root cause : la requête `order_lines` de
+`page.tsx` ne filtrait aucun statut (spec 20 §10 point 9, jamais câblé). Fix :
+`.in("status", ["reserved", "fulfilled", "no_show"])`, excluant `cancelled_by_client`/
+`cancelled_by_provider`/`expired`/`superseded` (ce dernier ajouté de ma propre initiative — doublon
+fantôme laissé par `modify_order_line`). Extension `partner-agenda.spec.ts` (3 lignes basculées vers
+ces statuts via `withDb`, confirmées absentes ; `no_show` confirmé toujours visible), 1/1 passe,
+typecheck+lint clean. Détail : `hifago/docs/journal/2026-08.md` (2026-08-24, suite 2). Rien commité.*
+
+*2026-08-24 (suite) — retest complet du paiement Mercado Pago en local, jusqu'à confirmation réelle
+en base (`orders.payment_status='paid'`, `mp_payment_id` réel). Activité de test dédiée créée
+(`test-pago-manual-20-cupos`, 20 cupos/jour), tunnels `cloudflared` relancés (les précédents étaient
+morts). Trouvaille principale : les vraies notifications webhook Payment/Merchant order envoyées par
+Checkout Pro échouent en `SignatureMismatch` malgré un secret confirmé identique et un code de
+vérification prouvé correct (via `Simular notificaciones`, qui valide sans problème avec le même
+secret) — 8 formats de manifest testés, aucun ne correspond ; root cause non élucidée côté Mercado
+Pago, nouveau piège empirique §11 point 19. Contourné en rejouant le webhook avec une signature
+forgée localement (sûr : `apply_payment_webhook` re-vérifie toujours le paiement en direct auprès de
+l'API Mercado Pago avant de rien confirmer). **À surveiller avant tout déploiement staging/prod** —
+pas de contournement shell possible à distance si le symptôme se reproduit. Détail complet :
+`hifago/docs/journal/2026-08.md` (2026-08-24, suite). Rien commité (net zéro changement de code, le
+debug temporaire a été retiré).*
 
 *2026-08-24 — correction du bug `expire_stale_payment_orders` sur les réservations walk-in (ouvert
 depuis le 2026-08-18, repris pendant que les chantiers LobbyPMS bloquants attendaient une action de

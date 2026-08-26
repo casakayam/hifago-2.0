@@ -32,6 +32,7 @@ export function NewEstablishmentProposalForm() {
   const [address, setAddress] = useState("");
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
+  const [lobbyApiToken, setLobbyApiToken] = useState("");
   const [stagedPhotos, setStagedPhotos] = useState<StagedPhoto[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,6 +78,10 @@ export function NewEstablishmentProposalForm() {
       lat: lat.trim() ? Number(lat) : null,
       lon: lon.trim() ? Number(lon) : null,
       photos: stagedPhotos.map((photo) => ({ storage_path: photo.path })) as Json,
+      // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — optionnel, filtré côté RPC si vide ;
+      // reste en clair uniquement tant que la proposition est "pending" (l'admin doit le lire pour
+      // le tester), rédigé dès qu'elle est tranchée (cf. moderate_establishment_proposal).
+      ...(lobbyApiToken.trim() ? { lobby_api_token: lobbyApiToken.trim() } : {}),
     };
 
     const supabase = createClient();
@@ -183,6 +188,15 @@ export function NewEstablishmentProposalForm() {
         <Label>Fotos — opcional</Label>
         <StagedEstablishmentPhotos photos={stagedPhotos} onChange={setStagedPhotos} />
       </div>
+
+      <TextField fullWidth value={lobbyApiToken} onChange={setLobbyApiToken}>
+        <Label>Token LobbyPMS — opcional</Label>
+        <Input type="password" autoComplete="off" data-testid="proposal-lobby-token-input" />
+      </TextField>
+      <p className="text-xs text-muted">
+        Si ya usas LobbyPMS, pega aquí tu token de acceso — el equipo lo verificará antes de
+        aprobar tu establecimiento. Puedes dejarlo en blanco y añadirlo más adelante.
+      </p>
 
       <Button type="submit" isDisabled={isSubmitting} data-testid="submit-establishment-proposal-button">
         {isSubmitting ? "Enviando…" : "Enviar propuesta"}

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { createSignedInClient, webProductUrl, mockMercadoPagoCheckout } from "@hifago/e2e-support";
+import { createSignedInClient, webProductUrl, mockMercadoPagoCheckout, withDb } from "@hifago/e2e-support";
 import { slugify } from "../lib/utils";
 
 // Spec 20 — agenda de réservations socio (remplace la page d'accueil /partner). Établissement/
@@ -102,6 +102,57 @@ test("un socio voit une réservation réelle dans son agenda, clique dessus pour
   await page.getByTestId("confirm-status-button").click();
   await expect(page.getByTestId("reservation-detail-status")).toContainText("Ausencia");
   await expect(page.getByTestId("detail-no-show-button")).toHaveCount(0);
+
+  // Spec 20 §10 point 9 (masqué/atténué par statut, jamais câblé jusqu'ici — bug trouvé en testant
+  // manuellement, 2026-08-24) : no_show reste visible dans l'agenda (le créneau a réellement eu
+  // lieu)...
+  await page.goto("/partner");
+  await page.waitForLoadState("networkidle");
+  await expect(eventLocator).toBeVisible();
+
+  // ...alors que cancelled_by_client/expired/superseded en sont masqués. Aucune action UI ne permet
+  // d'atteindre ces 3 statuts sur une ligne de test à ce stade (cancelled_by_client/expired/
+  // superseded proviennent tous d'un déclencheur qu'on ne peut pas simuler simplement ici : action
+  // cliente, job cron, ou modify_order_line) — lignes créées proprement via create_manual_order_line
+  // (comme le walk-in ci-dessous) puis statut posé directement en base via withDb (connexion
+  // postgres directe, contourne RLS pour la SEULE préparation du fixture, même patron que
+  // resetAvailability/deleteOrdersByHolderName dans packages/e2e-support/src/db.ts).
+  const hiddenStatuses = ["cancelled_by_client", "expired", "superseded"] as const;
+  const hiddenHolderNames: string[] = [];
+  const operatorClient = await createSignedInClient(SEEDED_ACCOUNTS.operadorPropuestas, SEEDED_PASSWORD);
+  for (const [index, status] of hiddenStatuses.entries()) {
+    const hiddenHolderName = `Cliente ${status} E2E ${stamp}`;
+    hiddenHolderNames.push(hiddenHolderName);
+    const hiddenDate = futureDateInCurrentMonth(stamp + index + 1);
+    const { data: hiddenAvailabilityResult, error: hiddenAvailabilityError } = await adminClient.rpc(
+      "set_product_availability",
+      { p_product_id: product.id, p_date: hiddenDate, p_capacity: 5, p_open: true }
+    );
+    if (hiddenAvailabilityError || !(hiddenAvailabilityResult as { ok: boolean } | null)?.ok) {
+      throw new Error(
+        `e2e setup: ouverture de la disponibilité a échoué (${status}) : ${hiddenAvailabilityError?.message ?? JSON.stringify(hiddenAvailabilityResult)}`
+      );
+    }
+    const { data: manualResult, error: manualError } = await operatorClient.rpc(
+      "create_manual_order_line",
+      { p_product_id: product.id, p_date: hiddenDate, p_qty: 1, p_holder_name: hiddenHolderName }
+    );
+    if (manualError || !(manualResult as { ok: boolean } | null)?.ok) {
+      throw new Error(
+        `e2e setup: création manuelle a échoué (${status}) : ${manualError?.message ?? JSON.stringify(manualResult)}`
+      );
+    }
+    const orderLineId = (manualResult as { order_line_id: string }).order_line_id;
+    await withDb((client) =>
+      client.query("update order_lines set status = $1 where id = $2", [status, orderLineId])
+    );
+  }
+
+  await page.goto("/partner");
+  await page.waitForLoadState("networkidle");
+  for (const hiddenHolderName of hiddenHolderNames) {
+    await expect(page.getByText(hiddenHolderName, { exact: false })).toHaveCount(0);
+  }
 
   // --- Ajout manuel (walk-in) depuis l'agenda : bouton "Nueva reserva", create_manual_order_line -
   const manualHolderName = `Cliente Walk-in E2E ${stamp}`;

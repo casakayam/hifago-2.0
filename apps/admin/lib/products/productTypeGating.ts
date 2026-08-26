@@ -65,7 +65,20 @@ export function productTypeGating(type: ProductType) {
 export function availabilityScreenFor(
   type: ProductType,
   hasSlotRules: boolean,
-): "generic" | "room" | "slot" | "none" {
+  isPmsBacked: boolean,
+): "generic" | "room" | "slot" | "none" | "pms" {
+  // Ajouté le 2026-08-26. Un logement PMS-backed (lodging + lobby_category_id) ne décrémente
+  // JAMAIS product_availability : create_order saute explicitement verrou et décrément pour lui,
+  // Lobby étant seule source de vérité de la capacité (20260819130000_create_order_pms_backed.sql).
+  // Sa table de cupos est donc structurellement vide, et le lien « Calendario & cupos » ouvrait un
+  // calendrier inerte — un écran qui laisse croire qu'on peut y ouvrir ou fermer des dates alors
+  // que rien de ce qu'on y ferait ne serait lu. 'pms' n'est pas 'none' : l'appelant doit dire
+  // POURQUOI il n'y a pas de calendrier, pas se contenter de ne rien afficher.
+  //
+  // Le paramètre est volontairement REQUIS, pas optionnel avec un défaut : cette fonction est la
+  // seule définition de ce gating et elle a deux appelants (admin et socio). Un défaut aurait
+  // laissé le portail socio compiler en gardant l'ancien comportement, sans que rien ne le signale.
+  if (isPmsBacked) return "pms";
   if (type === "hotel") return "room";
   if (type === "evento") return "none";
   if (type === "activity" && hasSlotRules) return "slot";

@@ -45,6 +45,9 @@ export function buildProductEditPayload(
     ...(isLodging
       ? {
           capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
+          // Miroir exact de productCreationPayload (cf. son commentaire) : même clé whitelistée des
+          // deux côtés, sinon une modification effacerait la valeur posée à la création.
+          quantity: fields.quantity.trim() ? Number(fields.quantity) : null,
           stay_rates: toStayRatesColumn(fields.stayRates),
         }
       : {}),

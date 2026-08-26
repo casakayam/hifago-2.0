@@ -4,6 +4,12 @@ import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 // Feature 29 (docs/specs/05-invitations-onboarding-dashboard-partenaire.md §5.3) — jusqu'ici seul
 // /admin/invitations/new existait, aucun suivi de ce qui a été envoyé/consommé/expiré.
 
+// Les 3 tests de ce fichier créent une invitation via le même compte admin seedé, dont le facteur
+// TOTP a montré une contention sous exécution parallèle (constaté 2026-08-17, cf. entrée
+// hifago/CLAUDE.md §12) — même rationale que partner-join.spec.ts/partner-establishment-
+// proposals.spec.ts, appliquée ici aussi (gap découvert le 2026-08-26 en ajoutant un 3e test).
+test.describe.configure({ mode: "serial" });
+
 test("la liste pagine et une invitación pendiente puede revocarse", async ({ page, context }) => {
   await loginAs(context, SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
 
@@ -26,6 +32,27 @@ test("la liste pagine et une invitación pendiente puede revocarse", async ({ pa
 
   await expect(row).toContainText("Revocada");
   await expect(row.getByTestId(/^revoke-invitation-/)).toHaveCount(0);
+});
+
+// Gap corrigé (2026-08-26) : réutiliser le code d'un socio déjà existant réattribuait ce code en
+// silence, sans erreur — SEED-DEMO-REF (supabase/seed.sql) est un code stable déjà attribué au
+// partenaire b0000000-...-0003, jamais consommé/modifié par un autre test.
+test("créer une invitación avec un código déjà attribué à un autre socio échoue avec un message clair", async ({
+  page,
+  context,
+}) => {
+  await loginAs(context, SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
+
+  await page.goto("/admin/invitations/new");
+  await page.locator('input[name="code"]').fill("SEED-DEMO-REF");
+  await page.getByTestId("onboarding-path-select").click();
+  await page.getByRole("option", { name: "Referente" }).click();
+  await page.getByTestId("create-invitation-button").click();
+
+  await expect(
+    page.getByRole("alertdialog").filter({ hasText: "Ese código ya está asignado a otro socio" })
+  ).toBeVisible();
+  await expect(page.getByTestId("invitation-link")).toHaveCount(0);
 });
 
 // Scénario à deux acteurs (même patron que partner-join.spec.ts) : un Prestador invité qui

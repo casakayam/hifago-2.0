@@ -11,7 +11,7 @@ export default async function NewProductPage({
   // sélecteur.
   const { data: establishments } = await supabase
     .from("establishments")
-    .select("id, name, partner_id")
+    .select("id, name, partner_id, lobby_connector_active, lobby_has_token")
     .order("created_at", { ascending: false });
 
   const { data: tagsRaw } = await supabase.from("catalog_tags").select("id, label").order("slug");

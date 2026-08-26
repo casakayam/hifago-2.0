@@ -19,6 +19,10 @@ export type ProductCardRow = {
   photos: { id: string; url: string; alt: string }[];
   pendingEdit: boolean;
   hasSlotRules: boolean;
+  // Ajouté le 2026-08-26 avec availabilityScreenFor(…, isPmsBacked) : le portail socio doit savoir
+  // qu'un logement est adossé à LobbyPMS, sinon il continue de proposer un calendrier de cupos
+  // structurellement vide (create_order ne décrémente jamais product_availability pour ces lignes).
+  isPmsBacked: boolean;
 };
 
 export type PendingProductCreationRow = {
@@ -147,7 +151,18 @@ export function EstablishmentActivities({
                 : { label: "No publicada", color: "default" },
             ];
 
-        const availabilityScreen = availabilityScreenFor(product.type as ProductType, product.hasSlotRules);
+        // Repérer d'un coup d'œil ce qui est adossé au PMS : rien ne le signalait nulle part, alors
+        // que ça change le comportement réel du produit (disponibilité lue chez Lobby, cupos
+        // internes inertes). Posé dans les chips déjà existants plutôt qu'en modifiant CatalogCard.
+        const chips: CatalogCardStatus[] = product.isPmsBacked
+          ? [...statusChips, { label: "LobbyPMS", color: "default" }]
+          : statusChips;
+
+        const availabilityScreen = availabilityScreenFor(
+          product.type as ProductType,
+          product.hasSlotRules,
+          product.isPmsBacked,
+        );
 
         return (
           <CatalogCard
@@ -156,7 +171,7 @@ export function EstablishmentActivities({
             photos={product.photos}
             title={product.name}
             tags={product.tags}
-            statusChips={statusChips}
+            statusChips={chips}
             meta={product.priceCop === null ? undefined : formatCop(product.priceCop)}
             footer={
               <>

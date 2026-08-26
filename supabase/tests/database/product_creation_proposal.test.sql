@@ -4,7 +4,7 @@
 -- 3 types représentatifs — activity/hotel/lodging — et rejet), create_product_from_proposal
 -- jamais appelable directement (pas de grant execute).
 begin;
-select plan(34);
+select plan(40);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -485,6 +485,92 @@ select throws_ok(
      ) $$,
   '42501'::char(5), null,
   'create_product_from_proposal appelée directement par authenticated échoue en permission denied (aucun grant execute)'
+);
+
+-- Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — cas positif : sur un établissement
+-- CONNECTÉ, lobby_category_id (lodging)/lobby_product_id (activity) survivent désormais à la
+-- whitelist (le cas négatif — établissement non connecté ...0011 — est couvert plus haut, jamais
+-- modifié par cette extension). Nouvel établissement dédié pour ne toucher aucune fixture existante.
+reset role;
+insert into establishments (id, partner_id, name, lobby_connector_active, lobby_api_token) values
+  ('88880000-0000-4000-8000-000000000015', '88880000-0000-4000-8000-000000000001',
+   jsonb_build_object('es', 'Establecimiento Own Lobby'), true, 'fixture-token');
+insert into partner_capabilities (partner_id, role, source, status, establishment_id) values
+  ('88880000-0000-4000-8000-000000000001', 'operator', 'migration', 'active',
+   '88880000-0000-4000-8000-000000000015');
+
+set local role authenticated;
+select test_login('88880000-0000-4000-8000-000000000021');
+
+create temp table tmp_lobby_lodging as
+  select submit_product_creation_proposal(
+    '88880000-0000-4000-8000-000000000015'::uuid, 'lodging',
+    jsonb_build_object('name', jsonb_build_object('es', 'Alojamiento Lobby'), 'price_cop', 90000, 'lobby_category_id', 9631)
+  ) as result;
+select is(
+  (select payload ->> 'lobby_category_id' from product_proposals
+    where id = (select (result->>'proposal_id')::uuid from tmp_lobby_lodging)),
+  '9631',
+  'établissement connecté : lobby_category_id (lodging) survit désormais à la whitelist'
+);
+
+create temp table tmp_lobby_activity as
+  select submit_product_creation_proposal(
+    '88880000-0000-4000-8000-000000000015'::uuid, 'activity',
+    jsonb_build_object('name', jsonb_build_object('es', 'Actividad Lobby'), 'price_cop', 50000, 'lobby_product_id', 4242)
+  ) as result;
+select is(
+  (select payload ->> 'lobby_product_id' from product_proposals
+    where id = (select (result->>'proposal_id')::uuid from tmp_lobby_activity)),
+  '4242',
+  'établissement connecté : lobby_product_id (activity) survit désormais à la whitelist'
+);
+
+-- Généralisation (2026-08-26) : lobby_product_id ne sert plus qu'à "activity" seul, "transport"
+-- est désormais un candidat structurellement sain (une seule date + qty, comme activity) —
+-- evento/camp restent volontairement exclus, cf. commentaire de tête de product-type-fields.tsx.
+create temp table tmp_lobby_transport as
+  select submit_product_creation_proposal(
+    '88880000-0000-4000-8000-000000000015'::uuid, 'transport',
+    jsonb_build_object('name', jsonb_build_object('es', 'Transporte Lobby'), 'price_cop', 60000, 'lobby_product_id', 5151)
+  ) as result;
+select is(
+  (select payload ->> 'lobby_product_id' from product_proposals
+    where id = (select (result->>'proposal_id')::uuid from tmp_lobby_transport)),
+  '5151',
+  'établissement connecté : lobby_product_id (transport) survit désormais à la whitelist (généralisation 2026-08-26)'
+);
+
+create temp table tmp_lobby_mismatch as
+  select submit_product_creation_proposal(
+    '88880000-0000-4000-8000-000000000015'::uuid, 'lodging',
+    jsonb_build_object('name', jsonb_build_object('es', 'Alojamiento Lobby 2'), 'price_cop', 90000, 'lobby_product_id', 999)
+  ) as result;
+select is(
+  (select payload ? 'lobby_product_id' from product_proposals
+    where id = (select (result->>'proposal_id')::uuid from tmp_lobby_mismatch)),
+  false,
+  'établissement connecté mais type lodging : lobby_product_id (le champ ACTIVITY) reste filtré'
+);
+
+create temp table tmp_lobby_lodging_approved as
+  select submit_product_creation_proposal(
+    '88880000-0000-4000-8000-000000000015'::uuid, 'lodging',
+    jsonb_build_object('name', jsonb_build_object('es', 'Alojamiento Lobby Aprobado'), 'price_cop', 90000, 'lobby_category_id', 7777)
+  ) as result;
+
+select test_login('88880000-0000-4000-8000-000000000024');
+select is(
+  (select moderate_product_proposal((select (result->>'proposal_id')::uuid from tmp_lobby_lodging_approved), 'approve', 1)->>'ok'),
+  'true',
+  'approbation d''une création lodging avec lobby_category_id réussit'
+);
+select is(
+  (select lobby_category_id from products
+     join product_proposals on product_proposals.product_id = products.id
+    where product_proposals.id = (select (result->>'proposal_id')::uuid from tmp_lobby_lodging_approved)),
+  7777,
+  'lobby_category_id est bien copié vers products à l''approbation (create_product_from_proposal)'
 );
 
 select * from finish();

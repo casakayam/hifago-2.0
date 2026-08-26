@@ -28,6 +28,27 @@ test("un socio actualiza su nombre y WhatsApp, la persistencia se mantiene, lueg
   await expect(page.getByTestId("profile-full-name-input")).toHaveValue(newName);
   await expect(page.getByTestId("profile-phone-input")).toHaveValue("+57 300 1234567");
 
+  // Cuenta de pago (spec 19 §10 point 7, self-service ajouté le 2026-08-25) : "referent.actif" a
+  // une capacité referrer, donc le bloc doit être visible. Bouton grisé tant qu'aucune saisie
+  // n'a été faite (même contrat que save-profile-button).
+  const payoutInput = page.getByTestId("payout-mercadopago-account-input");
+  await expect(payoutInput).toBeVisible();
+  const savePayoutButton = page.getByTestId("save-payout-account-button");
+  await expect(savePayoutButton).toBeDisabled();
+
+  const mercadopagoAccount = `referente-${Date.now()}@mp.test`;
+  await payoutInput.fill(mercadopagoAccount);
+  await expect(savePayoutButton).toBeEnabled();
+  await savePayoutButton.click();
+
+  await expect(
+    page.getByRole("alertdialog").filter({ hasText: "Cuenta de pago actualizada." })
+  ).toBeVisible();
+
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByTestId("payout-mercadopago-account-input")).toHaveValue(mercadopagoAccount);
+
   await page.getByTestId("logout-button-page").click();
   await expect(page).toHaveURL(/\/login/);
 

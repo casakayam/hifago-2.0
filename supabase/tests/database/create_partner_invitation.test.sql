@@ -3,7 +3,7 @@
 -- le cas, entrée audit_log par invitation créée. consume_partner_invitation n'est pas retestée ici
 -- (déjà entièrement couverte et gatée depuis la Tranche 1, concurrence comprise).
 begin;
-select plan(14);
+select plan(17);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -20,6 +20,12 @@ insert into partner_capabilities (account_id, role, source, status)
 -- rôle authenticated ci-dessous), partner_codes étant RPC-only (aucune écriture directe, même
 -- pour un futur appelant admin, cf. hifago/CLAUDE.md §3).
 insert into partner_codes (code) values ('TEST-EXISTING');
+
+-- Fixture pour le cas « code déjà attribué à un autre socio » (2026-08-26, gap corrigé : ce cas
+-- réattribuait le code en silence au lieu d'échouer) — distinct de TEST-EXISTING ci-dessus, dont
+-- le partner_id reste NULL (pré-créé/whitelisté, jamais attribué).
+insert into partners (display_name) values ('Otro Socio Test') returning id as taken_code_partner_id \gset
+insert into partner_codes (code, partner_id) values ('TEST-TAKEN', :'taken_code_partner_id');
 
 -- non-admin refusé, rien créé ------------------------------------------------------------------
 set local role authenticated;
@@ -98,6 +104,22 @@ select is(
 select is(
   (select count(*) from partner_invitations where promo_code = 'TEST-EXISTING')::int, 1,
   'une invitation a bien été créée pour le code existant'
+);
+
+-- admin, code déjà attribué à un autre partenaire → rejeté (2026-08-26) ------------------------
+select throws_ok(
+  $$ select create_partner_invitation('TEST-TAKEN', 'referrer') $$,
+  '23505'::char(5), 'Ese código ya está asignado a otro socio',
+  'un code déjà attribué à un autre socio est refusé'
+);
+select is(
+  (select count(*) from partner_invitations where promo_code = 'TEST-TAKEN')::int, 0,
+  'aucune invitation créée pour un code déjà attribué'
+);
+select is(
+  (select partner_id from partner_codes where code = 'TEST-TAKEN'),
+  :'taken_code_partner_id'::uuid,
+  'le code reste attribué à son partenaire d''origine, pas réassigné'
 );
 
 -- une entrée audit_log par invitation créée avec succès (3 : TEST-NEWCODE/HASHCHECK/EXISTING).

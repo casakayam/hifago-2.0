@@ -1,17 +1,26 @@
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { checkboxInput, createSignedInClient, selectValue, toggleCheckbox, webProductUrl } from "@hifago/e2e-support";
+import { checkboxInput, createSignedInClient, selectValue, toggleCheckbox } from "@hifago/e2e-support";
 import { slugify } from "../lib/utils";
 
-// Spec 13 — active type='hotel' dans le même ProductForm que l'activité/l'alojamiento (specs
-// 11/12) : nom/lieu/photos/tags/check-in-check-out réutilisent le mécanisme existant (couvert par
-// admin-product-create.spec.ts/admin-product-lodging.spec.ts), ce test se concentre sur ce qui
-// diverge — un hôtel n'a pas de prix propre, ses chambres (product_room_types) en ont chacune un —
-// tout en exerçant le chemin complet création → édition, cf. CLAUDE.md §6.5.
+// Spec 13 — type='hotel' : un hôtel n'a pas de prix propre, ses chambres (product_room_types) en
+// ont chacune un. Ce test exerce la gestion des chambres et sa persistance.
+//
+// RÉÉCRIT le 2026-08-26. « Hotel » a été retiré du sélecteur Tipo (décision Jérôme sur le modèle
+// hébergement, spec 24 §4 : un hôtel est l'ÉTABLISSEMENT, ses chambres sont des Alojamientos
+// vendables) — la création d'un hôtel par le formulaire n'existe donc plus, et ce test ne peut plus
+// l'emprunter. Le produit est désormais posé en fixture, et les chambres sont construites par le
+// bloc d'édition (ProductHotelRoomsBlock), qui est le chemin réellement vivant : les galeries y
+// sont « live » (l'id de la chambre est connu), pas « stagées ».
+//
+// COUVERTURE PERDUE, assumée : le mode stagé de HotelRoomsEditor (chambres et photos rattachées
+// après coup dans le même clic de création) n'est plus atteignable depuis aucun écran, donc plus
+// testé. Le code correspondant reste en place jusqu'au retrait complet de la branche hôtel
+// (T3 de la spec 24), qui touche create_order et exige une migration de données.
 const FIXTURE_PHOTO = path.join(__dirname, "fixtures/test-photo.jpg");
 
-test("admin crée un hotel avec 2 tipos de habitación (dortoir prix simple, privada por tramos), l'édite et vérifie la persistance", async ({
+test("admin gère les 2 tipos de habitación d'un hotel existant (dortoir prix simple, privada por tramos) et vérifie la persistance", async ({
   page,
   context,
 }) => {
@@ -27,42 +36,53 @@ test("admin crée un hotel avec 2 tipos de habitación (dortoir prix simple, pri
   await page.getByTestId("create-establishment-button").click();
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
-  const row = page.locator("tr", { hasText: establishmentName });
-  await row.getByRole("link", { name: "+ Actividad" }).click();
-  await expect(page).toHaveURL(/\/admin\/products\/new\?establishment=/);
-  // Même piège d'hydratation que ProductForm pour une activité (CLAUDE.md §11.8) — le composant
-  // est partagé, le risque est identique.
-  await page.waitForLoadState("networkidle");
-
-  await page.getByTestId("type-select").click();
-  await page.getByRole("option", { name: "Hotel" }).click();
+  // Le produit hôtel est posé directement en base : le formulaire ne sait plus en créer.
+  // partner_id est dérivé de l'établissement, comme le fait ProductForm lui-même.
+  const adminClient = await createSignedInClient(SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
+  const { data: establishment } = await adminClient
+    .from("establishments")
+    .select("id, partner_id")
+    .eq("name->>es", establishmentName)
+    .single();
+  if (!establishment) throw new Error("e2e: établissement introuvable après création");
 
   const suffix = Date.now();
   const nameEs = `Hotel Guatapé ES ${suffix}`;
-  await page.locator('input[name="nombre"]').fill(nameEs);
+  const { data: created } = await adminClient
+    .from("products")
+    .insert({
+      partner_id: establishment.partner_id,
+      establishment_id: establishment.id,
+      type: "hotel",
+      name: { es: nameEs },
+      slug: slugify(nameEs),
+      // Un hôtel n'a pas de prix propre (products_price_cop_required_unless_evento l'exempte).
+      price_cop: null,
+      address: "Calle del Recuerdo, Guatapé",
+      check_in_time: "14:00",
+      check_out_time: "10:00",
+      sellable: true,
+    })
+    .select("id")
+    .single();
+  if (!created) throw new Error("e2e: hotel introuvable après création");
+  const productId = created.id as string;
 
-  // Lieu (réutilisation du parcours activité/alojamiento) — opcional.
-  await page.getByTestId("address-input").fill("Calle del Recuerdo, Guatapé");
-  await page.getByTestId("lat-input").fill("6.2331");
-  await page.getByTestId("lon-input").fill("-75.1601");
+  await page.goto(`/admin/products/${productId}/edit`);
+  // Même piège d'hydratation que ProductForm pour une activité (CLAUDE.md §11.8).
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("heading", { name: "Editar hotel" })).toBeVisible();
 
-  // Foto (opcional, même staging que l'activité/l'alojamiento).
-  const gallery = page.getByTestId("media-gallery");
-  await gallery.getByTestId("media-gallery-add").locator("input[type=file]").setInputFiles(FIXTURE_PHOTO);
-  await expect(page.getByTestId("image-crop-stage")).toBeVisible();
-  await page.getByTestId("image-crop-confirm").click();
-  await expect(gallery.getByTestId("media-gallery-item")).toHaveCount(1, { timeout: 10000 });
+  await expect(page.locator('input[name="nombre"]')).toHaveValue(nameEs);
+  await expect(page.getByTestId("address-input")).toHaveValue("Calle del Recuerdo, Guatapé");
+  await expect(page.getByTestId("check-in-input")).toHaveValue("14:00");
+  await expect(page.getByTestId("check-out-input")).toHaveValue("10:00");
 
-  // Aucun bloc "Precio" au niveau hôtel — le prix vit sur les chambres (spec 13 §3).
-  await expect(page.getByTestId("price-input")).toHaveCount(0);
-  await expect(page.getByTestId("price-tiers-editor")).toHaveCount(0);
+  // Les chambres sont construites ICI, dans le bloc à sauvegarde immédiate
+  // (ProductHotelRoomsBlock) — le seul chemin qui existe encore depuis la fermeture de la création
+  // d'un hôtel. Chaque chambre reçoit son id dès la sauvegarde, donc sa galerie est « live ».
 
-  // Check-in/check-out (réutilisés de la spec 12) — pas de champ capacité au niveau hôtel.
-  await page.getByTestId("check-in-input").fill("14:00");
-  await page.getByTestId("check-out-input").fill("10:00");
-  await expect(page.getByTestId("capacity-input")).toHaveCount(0);
-
-  // Habitación 0 — dortoir (valeur par défaut), prix simple, une foto y un prix par período.
+  // Habitación 0 — dortoir (valeur par défaut), prix simple.
   await page.getByTestId("add-room-button").click();
   await page.getByTestId("room-name-input-0").fill("Dormitorio mixto 6 camas");
   await page.getByTestId("room-capacity-0").fill("6");
@@ -72,20 +92,10 @@ test("admin crée un hotel avec 2 tipos de habitación (dortoir prix simple, pri
   await page.getByTestId("room-max-qty-0").fill("6");
 
   const room0 = page.getByTestId("room-0");
-
-  // Prix par período de la habitación 0 (StayRatesEditor réutilisé de la spec 12, testIdPrefix
-  // "room-0-") — Checkbox HeroUI v3 : cibler l'input natif, jamais le wrapper (CLAUDE.md §11.5).
-  // Avant la foto, volontairement : le clic forcé sur la checkbox ne doit pas courir contre le
-  // redimensionnement du bloc Fotos causé par l'apparition de la vignette juste en dessous.
+  // Prix par période (StayRatesEditor, testIdPrefix "room-0-") — Checkbox HeroUI v3 : cibler
+  // l'input natif, jamais le wrapper (CLAUDE.md §11.5).
   await toggleCheckbox(room0.getByTestId("room-0-stay-rates-month-12"));
   await room0.getByTestId("room-0-stay-rates-season-surcharge-input").fill("15");
-
-  // Foto de la habitación 0 — stagée (pas encore d'id), même mécanique que la foto de l'hôtel mais
-  // scopée à sa propre carte (data-testid="room-0") : plusieurs galeries coexistent sur cet écran.
-  await room0.getByTestId("media-gallery-add").locator("input[type=file]").setInputFiles(FIXTURE_PHOTO);
-  await expect(page.getByTestId("image-crop-stage")).toBeVisible();
-  await page.getByTestId("image-crop-confirm").click();
-  await expect(room0.getByTestId("media-gallery-item")).toHaveCount(1, { timeout: 10000 });
 
   // Habitación 1 — chambre privée, prix par tramos.
   await page.getByTestId("add-room-button").click();
@@ -98,33 +108,25 @@ test("admin crée un hotel avec 2 tipos de habitación (dortoir prix simple, pri
   await page.getByTestId("room-price-tier-max-1-0").fill("2");
   await page.getByTestId("room-price-tier-price-1-0").fill("120000");
 
-  await page.getByTestId("create-product-button").click();
-  await expect(page).toHaveURL(/\/admin\/establishments$/);
-  await expect(row).toContainText("1 actividades");
+  await page.getByTestId("save-hotel-rooms-button").click();
+  await expect(page.getByRole("alertdialog").filter({ hasText: "Habitaciones guardadas." })).toBeVisible();
+  await page.reload();
+  await page.waitForLoadState("networkidle");
 
-  // sellable=true à la création (retour Jérôme, 2026-08-20) — même garde-fou que pour une
-  // activité/un alojamiento.
-  await context.clearCookies();
-  const slug = slugify(nameEs);
-  const publicResponse = await page.goto(webProductUrl(slug));
-  expect(publicResponse?.status()).toBe(200);
+  // Foto de la habitación 0 — galerie live (l'id existe depuis la sauvegarde ci-dessus), scopée à
+  // sa propre carte : plusieurs galeries coexistent sur cet écran.
+  const savedRoom0 = page.getByTestId("room-0");
+  await savedRoom0.getByTestId("media-gallery-add").locator("input[type=file]").setInputFiles(FIXTURE_PHOTO);
+  await expect(page.getByTestId("image-crop-stage")).toBeVisible();
+  await page.getByTestId("image-crop-confirm").click();
+  await expect(savedRoom0.getByTestId("media-gallery-item")).toHaveCount(1, { timeout: 10000 });
+  await page.reload();
+  await page.waitForLoadState("networkidle");
 
-  const adminClient = await createSignedInClient(SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
-  const { data: created } = await adminClient.from("products").select("id").eq("slug", slug).single();
-  if (!created) throw new Error("e2e: hotel introuvable après création");
-  const productId = created.id as string;
+  // Aucun bloc « Precio » au niveau hôtel — le prix vit sur les chambres (spec 13 §3).
+  await expect(page.getByTestId("price-input")).toHaveCount(0);
+  await expect(page.getByTestId("price-tiers-editor")).toHaveCount(0);
 
-  await loginAs(context, SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
-  await page.goto(`/admin/products/${productId}/edit`);
-  await expect(page.getByRole("heading", { name: "Editar hotel" })).toBeVisible();
-
-  await expect(page.locator('input[name="nombre"]')).toHaveValue(nameEs);
-  await expect(page.getByTestId("address-input")).toHaveValue("Calle del Recuerdo, Guatapé");
-  await expect(page.getByTestId("check-in-input")).toHaveValue("14:00");
-  await expect(page.getByTestId("check-out-input")).toHaveValue("10:00");
-
-  // Les chambres vivent dans un bloc séparé à sauvegarde immédiate (ProductHotelRoomsBlock),
-  // contrairement à check-in/check-out qui sont de simples colonnes products (spec 13 §0).
   await expect(page.getByTestId("room-capacity-0")).toHaveValue("6");
   await expect(page.getByTestId("room-quantity-0")).toHaveValue("2");
   await expect(page.getByTestId("room-price-input-0")).toHaveValue("45000");

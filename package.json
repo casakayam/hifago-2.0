@@ -18,6 +18,7 @@
     "test:e2e": "npm run test:e2e --workspaces --if-present",
     "test:concurrency": "for f in tests/concurrency/*.concurrency.mjs; do node \"$f\" || exit 1; done",
     "test:pms-integration": "for f in tests/pms-integration/*.integration.mjs; do node \"$f\" || exit 1; done",
+    "test:notification-integration": "for f in tests/notification-integration/*.integration.mjs; do node \"$f\" || exit 1; done",
     "docs:index": "node scripts/docs_index.js --build",
     "docs:check": "node scripts/docs_index.js --check"
   },
