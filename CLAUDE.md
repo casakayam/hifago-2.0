@@ -489,9 +489,18 @@ ailleurs — une unité fausse rend une fiche fausse sans la rendre suspecte. Le
 (3) **Bruit du job nocturne réglé** : le seed portait `lobby_connector_active` avec un jeton factice
 et produisait une dérive `401` chaque nuit ; connecteur désactivé en préprod. ⚠️ Reste que son
 produit `alojamiento-pms-backed-demo` est encore `sellable` dans le catalogue public de préprod
-alors qu'il est invendable — donnée de démo, décision de Jérôme. (4) Modèle hébergement : T2 avancé
-(`unit_count` + `lodging_kind`), T1/T3/T4 non commencés — et le `mode` au niveau **établissement**
-(« a-t-il des chambres à choisir, ou se loue-t-il entier ? ») reste à porter, T1 en aura besoin.
+alors qu'il est invendable — donnée de démo, décision de Jérôme. (4) Modèle hébergement : **T1 LIVRÉ** le 27/08 — `/[locale]/establishments/[slug]` présente le lieu
+et regroupe ses produits, la fiche produit y renvoie ; `establishments` gagne `slug` (dérivé par
+trigger, jamais saisi), `check_in_time`/`check_out_time` (propriété du LIEU) et `mode`
+(`rooms`|`whole_house`, repris de la v1 où Bania Travel se loue entier). ⚠️ **Deux pièges évités et
+à retenir** : `establishments` n'a pas de grant SELECT global (révoqué pour protéger
+`lobby_api_token`, ré-accordé COLONNE PAR COLONNE — une colonne neuve est illisible, et le
+`permission denied` précède la RLS) ; et il ne faut **pas** étendre `update_establishment`, qui
+remplace tous ses champs et est appelée par trois chemins de modération — chaque approbation aurait
+remis les nouveaux champs à null. D'où `update_establishment_stay_details`, étroite. **T1 ne couvre
+PAS** les tags/équipements d'établissement (aucune table d'affectation n'existe) ni la
+déduplication de `products.check_in_time`, qui appartient à T3. T2 avancé (`unit_count` +
+`lodging_kind` + `unit`), **T3/T4 non commencés**.
 **⚠️ `LOBBY_PMS_TOKEN` : révocation DIFFÉRÉE, décision explicite de Jérôme le 2026-08-27.** Sa valeur
 a transité par une conversation (§8 point 2 voudrait une rotation immédiate), et le jeton mort a bien
 été retiré de `apps/admin/.env.local` — mais la révocation chez LobbyPMS est repoussée **tant qu'on

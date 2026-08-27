@@ -48,6 +48,7 @@ function renderView(overrides: {
         externalBookingUrl={null}
         productId="p1"
         establishmentName="Casa Kayam"
+        establishmentSlug="casa-kayam"
         establishmentDescription={null}
         establishmentAddress={null}
         establishmentPhotoSlides={[]}

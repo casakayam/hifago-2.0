@@ -356,6 +356,8 @@ export type Database = {
       establishments: {
         Row: {
           address: string | null
+          check_in_time: string | null
+          check_out_time: string | null
           created_at: string
           description: Json | null
           id: string
@@ -365,14 +367,18 @@ export type Database = {
           lobby_has_token: boolean | null
           lobby_last_synced_at: string | null
           lon: number | null
+          mode: string | null
           name: Json
           operated_directly: boolean
           partner_id: string
+          slug: string
           status: string
           updated_at: string
         }
         Insert: {
           address?: string | null
+          check_in_time?: string | null
+          check_out_time?: string | null
           created_at?: string
           description?: Json | null
           id?: string
@@ -382,14 +388,18 @@ export type Database = {
           lobby_has_token?: boolean | null
           lobby_last_synced_at?: string | null
           lon?: number | null
+          mode?: string | null
           name: Json
           operated_directly?: boolean
           partner_id: string
+          slug: string
           status?: string
           updated_at?: string
         }
         Update: {
           address?: string | null
+          check_in_time?: string | null
+          check_out_time?: string | null
           created_at?: string
           description?: Json | null
           id?: string
@@ -399,9 +409,11 @@ export type Database = {
           lobby_has_token?: boolean | null
           lobby_last_synced_at?: string | null
           lon?: number | null
+          mode?: string | null
           name?: Json
           operated_directly?: boolean
           partner_id?: string
+          slug?: string
           status?: string
           updated_at?: string
         }
@@ -2297,6 +2309,10 @@ export type Database = {
         }
         Returns: string
       }
+      establishment_slug_from_name: {
+        Args: { p_exclude?: string; p_name: Json }
+        Returns: string
+      }
       expand_product_slots: {
         Args: { p_date: string; p_product_id: string }
         Returns: {
@@ -2699,6 +2715,15 @@ export type Database = {
           p_name: Json
           p_note?: string
           p_operated_directly?: boolean
+        }
+        Returns: Json
+      }
+      update_establishment_stay_details: {
+        Args: {
+          p_check_in_time?: string
+          p_check_out_time?: string
+          p_establishment_id: string
+          p_mode?: string
         }
         Returns: Json
       }

@@ -47,6 +47,7 @@ export function ProductDetailView({
   externalBookingUrl,
   productId,
   establishmentName,
+  establishmentSlug,
   establishmentDescription,
   establishmentAddress,
   establishmentPhotoSlides,
@@ -80,6 +81,8 @@ export function ProductDetailView({
   externalBookingUrl: string | null;
   productId: string;
   establishmentName: string;
+  /** `null` sur un produit dont l'établissement n'a pas de page publique (statut non actif). */
+  establishmentSlug: string | null;
   establishmentDescription: string | null;
   establishmentAddress: string | null;
   establishmentPhotoSlides: PhotoSlide[];
@@ -223,8 +226,17 @@ export function ProductDetailView({
           </Card.Header>
           <Card.Content className="flex flex-col gap-3">
             <ProductPhotos slides={establishmentPhotoSlides} />
+            {/* T1 : le nom mène désormais à la page de l'établissement, qui regroupe toutes ses
+                chambres et ses activités. Sans slug — établissement non actif, donc sans page
+                publique — on garde le texte nu plutôt qu'un lien mort. */}
             <p className="font-medium" data-testid="establishment-name">
-              {establishmentName}
+              {establishmentSlug ? (
+                <Link href={`/establishments/${establishmentSlug}`} className="hover:underline">
+                  {establishmentName}
+                </Link>
+              ) : (
+                establishmentName
+              )}
             </p>
             {establishmentDescription ? (
               <p className="text-sm text-muted">{establishmentDescription}</p>

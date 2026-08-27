@@ -4,6 +4,7 @@ import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
 import { EstablishmentPhotosBlock } from "./EstablishmentPhotosBlock";
 import { EstablishmentEditBlock } from "./EstablishmentEditBlock";
+import { EstablishmentStayBlock } from "./EstablishmentStayBlock";
 import { EstablishmentPmsBlock } from "./EstablishmentPmsBlock";
 import { EstablishmentStatusBlock } from "./EstablishmentStatusBlock";
 import { EstablishmentProductsTable } from "./EstablishmentProductsTable";
@@ -23,7 +24,7 @@ export default async function AdminEstablishmentDetailPage({
   const { data: establishment } = await supabase
     .from("establishments")
     .select(
-      "id, name, description, address, lat, lon, operated_directly, status, lobby_connector_active, lobby_has_token, lobby_last_synced_at",
+      "id, name, description, address, lat, lon, operated_directly, status, lobby_connector_active, lobby_has_token, lobby_last_synced_at, check_in_time, check_out_time, mode",
     )
     .eq("id", id)
     .maybeSingle();
@@ -86,6 +87,13 @@ export default async function AdminEstablishmentDetailPage({
         initialLon={establishment.lon !== null ? String(establishment.lon) : ""}
         initialOperatedDirectly={establishment.operated_directly}
         pendingEditProposalId={pendingEditProposal?.id ?? null}
+      />
+
+      <EstablishmentStayBlock
+        establishmentId={establishment.id}
+        initialCheckInTime={establishment.check_in_time}
+        initialCheckOutTime={establishment.check_out_time}
+        initialMode={establishment.mode}
       />
 
       <EstablishmentPmsBlock

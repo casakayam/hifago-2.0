@@ -219,6 +219,22 @@ depuis le 2026-08-16 : en l'état, **un hôtel à chambres ne peut jamais être 
 - **T1 — prérequis, pas un détail.** Aucune page publique établissement n'existe dans `apps/web`
   (seule route produit : `/[locale]/products/[slug]`). La page produit « hôtel » est aujourd'hui le
   seul écran qui présente le lieu et regroupe ses chambres : il faut la remplacer avant de la retirer.
+
+**T1 LIVRÉ le 2026-08-27** (migrations `20260827200000` / `20260827210000`) :
+`/[locale]/establishments/[slug]` existe, présente le lieu (nom, description, adresse, photos,
+horaires) et **regroupe ses produits** — logements d'un côté, activités de l'autre. La fiche produit
+y renvoie par le nom de l'établissement. `establishments` gagne `slug` (dérivé du nom par trigger,
+jamais saisi : le changer casserait une URL déjà partagée), `check_in_time`/`check_out_time` — qui
+sont une propriété du LIEU, pas de chaque chambre — et `mode` (`rooms` | `whole_house`), repris de
+la v1 où **Bania Travel** se loue déjà entier. `mode` intitule la liste : « Habitaciones » vs
+« Alojamiento completo », et `null` (un établissement qui ne vend que des activités) retombe sur un
+intitulé neutre plutôt que d'inventer une nature d'hébergement.
+
+⚠️ **Ce que T1 ne couvre PAS**, et qu'il ne faut pas croire fait : les **tags/équipements**
+d'établissement — il n'existe aucune table d'affectation (`product_tag_assignments` n'a pas
+d'équivalent côté établissement), c'est une tranche à part entière. Et `products.check_in_time`
+subsiste : les deux niveaux coexistent, seul celui de l'établissement est publié. La déduplication
+appartient à T3, avec le retrait de l'étage `hotel`.
 **Première étape livrée le 2026-08-26** : `type='hotel'` est **fermé à la création** — l'option a
 été retirée du sélecteur `Tipo` (`product-form.tsx`), qui n'est de toute façon rendu qu'en création.
 Déclencheur : l'option apparaissait sur l'écran « créer une activité » alors qu'un hôtel n'est pas
