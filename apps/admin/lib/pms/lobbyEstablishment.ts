@@ -1,4 +1,15 @@
-import { LOBBY_DEFAULT_BASE_URL, parseLobbyPageMeta, type LobbyCallResult } from "@hifago/domain";
+import {
+  createTtlCache,
+  getLobbyProducts,
+  getLobbyRooms,
+  LOBBY_DEFAULT_BASE_URL,
+  parseLobbyPageMeta,
+  parseLobbyRooms,
+  parseLobbyServices,
+  type LobbyCallResult,
+  type LobbyRoomCategory,
+  type LobbyService,
+} from "@hifago/domain";
 import { createClient } from "@hifago/supabase/server";
 import { createServiceRoleClient } from "@hifago/supabase/service";
 
@@ -93,7 +104,7 @@ export async function resolveLobbyEstablishment(
   // une seule vague au lieu des trois séquentielles d'avant (~1 aller-retour Supabase économisé à
   // chaque ouverture du sélecteur). Toutes les autorisations restent évaluées AVANT le premier
   // appel Lobby et avant toute écriture Storage.
-  const [{ data: isAdmin }, { data: hasOperator }, { data: establishment }] = await Promise.all([
+  const [adminResult, capabilityResult, establishmentResult] = await Promise.all([
     supabase.rpc("is_admin", { uid: user.id }),
     supabase.rpc("has_capability", {
       uid: user.id,
@@ -106,6 +117,25 @@ export async function resolveLobbyEstablishment(
       .eq("id", establishmentId)
       .maybeSingle(),
   ]);
+
+  // ⚠️ Distinguer « tu n'as pas le droit » de « je n'ai pas pu le savoir ». supabase-js ne LÈVE pas
+  // sur échec : il renvoie `{ data: null, error }`. Ignorer `error` — ce que faisait le code d'avant
+  // — transforme une panne transitoire de Postgres en un 403 silencieux, impossible à distinguer
+  // d'un vrai refus dans les journaux comme à l'écran. Constaté en préprod le 2026-08-27 : un 403
+  // isolé sur lobby-rooms pendant que lobby-services répondait 200, avec la même session et le même
+  // établissement. Un 503 explicite est à la fois plus honnête et plus facile à diagnostiquer, et
+  // reste fermé par défaut : on n'autorise jamais sur une réponse qu'on n'a pas obtenue.
+  if (adminResult.error || capabilityResult.error) {
+    console.error(
+      `resolveLobbyEstablishment : autorisation indéterminable (establishment ${establishmentId})`,
+      { isAdmin: adminResult.error?.message, hasCapability: capabilityResult.error?.message },
+    );
+    return deny("authorization_unavailable", 503);
+  }
+
+  const isAdmin = adminResult.data;
+  const hasOperator = capabilityResult.data;
+  const establishment = establishmentResult.data;
 
   if (options.requireAdmin && !isAdmin) return deny("not_authorized", 403);
   if (!isAdmin && !hasOperator) return deny("not_authorized", 403);
@@ -176,4 +206,73 @@ export async function collectLobbyPages<T>(
   }
 
   return { ok: true, items };
+}
+
+// ─────────────────────────── Lectures Lobby mises en cache ───────────────────────────
+//
+// Sans cache, un seul geste utilisateur déclenchait DEUX balayages complets de GET /rooms : le
+// montage du sélecteur, puis le clic sur « Usar estos datos » (ou « Importar fotos »), qui repose
+// exactement la même question à quelques secondes d'intervalle. Le défaut `lobbyLinkMode = "picker"`
+// posé le 2026-08-26 a amplifié le premier : quatre écrans qui ne faisaient aucun appel en font
+// désormais un au chargement.
+//
+// Réutilise createTtlCache de packages/domain (renommé le 2026-08-27 : il s'appelait
+// createNightAvailabilityCache alors qu'il n'a jamais rien eu de spécifique aux nuitées). Il cache
+// la PROMESSE en vol, donc il coalesce aussi les appels concurrents — ce qui neutralise au passage
+// le double montage de React StrictMode en développement et les rafales de démontage/remontage
+// quand on bascule le mode du sélecteur.
+//
+// Best-effort et par instance : sur Vercel, le GET du sélecteur et le POST de l'import peuvent
+// atterrir sur deux lambdas différentes, l'économie est donc opportuniste et jamais garantie. C'est
+// acceptable — aucune décision d'anti-survente ne passe par ici (la disponibilité live a son propre
+// chemin, /api/pms/night-availability), et la liste des catégories d'un compte change au mieux une
+// fois par mois.
+const roomsCache = createTtlCache<LobbyRoomCategory[]>(60_000);
+const servicesCache = createTtlCache<LobbyService[]>(60_000);
+
+/** Lobby a répondu autre chose que 200 — jamais mis en cache (cf. createTtlCache). */
+export class LobbyRejectedError extends Error {
+  constructor(readonly status: number) {
+    super(`LobbyPMS a répondu ${status}`);
+    this.name = "LobbyRejectedError";
+  }
+}
+
+export type LobbyFetchCredentials = {
+  apiToken: string;
+  baseUrl: string;
+  relaySecret: string | undefined;
+};
+
+// L'échec est LEVÉ plutôt que renvoyé : c'est ce qui fait évincer l'entrée par createTtlCache (il
+// n'évince que sur promesse rejetée). Renvoyer un `{ok:false}` le figerait 60 s, et une panne
+// passagère de Lobby deviendrait une minute d'indisponibilité pour tout le monde.
+export function fetchLobbyRoomsCached(
+  establishmentId: string,
+  credentials: LobbyFetchCredentials,
+): Promise<LobbyRoomCategory[]> {
+  return roomsCache.getOrFetch(establishmentId, async () => {
+    const collected = await collectLobbyPages<LobbyRoomCategory>(
+      (page) => getLobbyRooms(credentials.baseUrl, credentials.apiToken, page, credentials.relaySecret),
+      parseLobbyRooms,
+      (category) => category.categoryId,
+    );
+    if (!collected.ok) throw new LobbyRejectedError(collected.status);
+    return collected.items;
+  });
+}
+
+export function fetchLobbyServicesCached(
+  establishmentId: string,
+  credentials: LobbyFetchCredentials,
+): Promise<LobbyService[]> {
+  return servicesCache.getOrFetch(establishmentId, async () => {
+    const collected = await collectLobbyPages<LobbyService>(
+      (page) => getLobbyProducts(credentials.baseUrl, credentials.apiToken, page, credentials.relaySecret),
+      parseLobbyServices,
+      (service) => service.serviceId,
+    );
+    if (!collected.ok) throw new LobbyRejectedError(collected.status);
+    return collected.items;
+  });
 }

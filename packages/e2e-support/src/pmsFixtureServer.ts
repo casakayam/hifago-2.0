@@ -33,15 +33,15 @@ export interface PmsFixtureScenario {
 // (spec 24 §11.1) — et non plus une transcription de leur documentation, qui s'était déjà révélée
 // fausse une fois sur `POST /bookings`.
 //
-// ⚠️ HONNÊTETÉ SUR CE QUE CECI VAUT AUJOURD'HUI : **aucun test ne consomme encore ce module**.
-// J'avais écrit ici que « les tests qui consomment ceci prouvent le contrat réel » — c'était faux
-// au moment où je l'écrivais, et le /simplify du 2026-08-26 l'a relevé. Ni ce serveur de fixtures
-// ni ces deux constantes ne sont importés nulle part (les specs Playwright passent par
-// createPmsBackedEstablishmentFixture/mockPmsNightAvailability, et le test d'intégration
-// pms_poll_bookings démarre son propre serveur inline). Ces valeurs sont donc une RÉFÉRENCE ÉCRITE,
-// exacte à la date d'observation, mais que rien ne fait respecter : elles peuvent diverger de Lobby
-// sans qu'aucun test ne rougisse. À brancher sur un test (via LOBBY_API_BASE_URL) ou à supprimer —
-// ne pas les lire comme une garantie.
+// Ces constantes sont LOAD-BEARING depuis le 2026-08-27 :
+// `apps/admin/lib/pms/lobbyContract.test.ts` démarre ce serveur, les sert sur du vrai HTTP et
+// vérifie la chaîne complète (lobbyClient → parseur → pagination). Modifier une valeur ici fait
+// donc rougir un test — c'est tout l'intérêt.
+//
+// Elles ne l'étaient PAS quand elles ont été écrites, et le commentaire prétendait le contraire
+// (« les tests qui consomment ceci prouvent le contrat réel », alors qu'aucun ne les consommait) ;
+// le /simplify du 2026-08-26 l'a relevé, d'où le test. À garder branché : sans consommateur, ces
+// valeurs redeviennent une référence décorative qui peut diverger de Lobby en silence.
 //
 // Les quatre traits que cette fixture doit conserver, parce que chacun a cassé ou aurait pu casser
 // quelque chose :

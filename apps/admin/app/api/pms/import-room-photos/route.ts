@@ -1,19 +1,19 @@
-import sharp from "sharp";
-import {
-  fetchLobbyPhoto,
-  getLobbyRooms,
-  parseLobbyRooms,
-  remainingPhotoSlots,
-  type LobbyRoomCategory,
-} from "@hifago/domain";
+import { fetchLobbyPhoto, remainingPhotoSlots } from "@hifago/domain";
 import { createClient } from "@hifago/supabase/server";
 import { createServiceRoleClient } from "@hifago/supabase/service";
 import {
-  collectLobbyPages,
+  fetchLobbyRoomsCached,
   lobbyCredentials,
+  LobbyRejectedError,
   resolveLobbyEstablishment,
+  type LobbyFetchCredentials,
 } from "@/lib/pms/lobbyEstablishment";
 import { lobbyImportMode } from "@/lib/pms/lobbyImportMode";
+import {
+  CATALOG_MEDIA_BUCKET,
+  toCatalogWebp,
+  uploadCatalogWebp,
+} from "@/lib/media/catalogImage";
 
 // Importe les photos que LobbyPMS détient déjà pour la catégorie à laquelle un logement est lié.
 // Sans ça, une chambre PMS-backed ne pouvait structurellement avoir aucune image et sa carte de
@@ -44,31 +44,24 @@ export const runtime = "nodejs";
 // sharp + plusieurs téléchargements séquentiels : la valeur par défaut de Vercel serait trop courte.
 export const maxDuration = 60;
 
-const BUCKET = "catalog-media";
-const MAX_DIMENSION = 2400;
-const ALLOWED_FORMATS = new Set(["jpeg", "png", "webp"]);
-
 type SkippedPhoto = { url: string; reason: string };
 type ServiceClient = ReturnType<typeof createServiceRoleClient>;
 
-/** URLs des photos que Lobby détient pour UNE catégorie. Partagé par les deux modes. */
+/**
+ * URLs des photos que Lobby détient pour UNE catégorie. Partagé par les deux modes, et servi par le
+ * MÊME cache 60 s que le sélecteur (`fetchLobbyRoomsCached`) : « ouvrir le sélecteur puis cliquer
+ * Usar estos datos » ne coûte donc qu'un seul balayage chez Lobby au lieu de deux.
+ */
 async function lobbyPhotoUrlsFor(
-  baseUrl: string,
-  apiToken: string,
-  relaySecret: string | undefined,
+  establishmentId: string,
+  credentials: LobbyFetchCredentials,
   categoryId: number,
-): Promise<{ ok: true; urls: string[] } | { ok: false; reason: string; status?: number }> {
-  const collected = await collectLobbyPages<LobbyRoomCategory>(
-    (page) => getLobbyRooms(baseUrl, apiToken, page, relaySecret),
-    parseLobbyRooms,
-    (category) => category.categoryId,
-  );
-  if (!collected.ok) return { ok: false, reason: collected.reason, status: collected.status };
-
-  const match = collected.items.find((category) => category.categoryId === categoryId);
+): Promise<string[]> {
+  const categories = await fetchLobbyRoomsCached(establishmentId, credentials);
+  const match = categories.find((category) => category.categoryId === categoryId);
   // Catégorie absente de la liste : traité comme « aucune photo », jamais comme une erreur — elle
   // a pu être supprimée chez Lobby depuis que le lien a été posé.
-  return { ok: true, urls: match ? match.photos : [] };
+  return match ? match.photos : [];
 }
 
 /**
@@ -83,32 +76,14 @@ async function downloadToStorage(
   const fetched = await fetchLobbyPhoto(url);
   if (!fetched.ok) return { ok: false, reason: fetched.reason };
 
-  // Le format est déterminé par sharp à partir des octets, jamais par le Content-Type annoncé.
-  // Même pipeline que api/upload/[entity] : rotation EXIF, redimensionnement sans agrandir,
-  // encodage WebP (qui n'emporte pas l'EXIF de la source).
-  let outputBuffer: Buffer;
-  try {
-    const image = sharp(Buffer.from(fetched.bytes), { limitInputPixels: 60_000_000 });
-    const metadata = await image.metadata();
-    if (!metadata.format || !ALLOWED_FORMATS.has(metadata.format)) {
-      return { ok: false, reason: "unsupported_format" };
-    }
-    outputBuffer = await image
-      .rotate()
-      .resize({ width: MAX_DIMENSION, height: MAX_DIMENSION, fit: "inside", withoutEnlargement: true })
-      .webp({ quality: 82, alphaQuality: 90 })
-      .toBuffer();
-  } catch {
-    return { ok: false, reason: "decode_failed" };
-  }
+  // Décodage et écriture partagés avec api/upload/[entity] (@/lib/media/catalogImage) : les deux
+  // chemins aboutissent au même bucket, ils doivent produire exactement le même rendu.
+  const processed = await toCatalogWebp(Buffer.from(fetched.bytes));
+  if (!processed.ok) return { ok: false, reason: processed.reason };
 
-  const objectPath = `products/${crypto.randomUUID()}.webp`;
-  const { error: uploadError } = await service.storage
-    .from(BUCKET)
-    .upload(objectPath, outputBuffer, { contentType: "image/webp" });
-  if (uploadError) return { ok: false, reason: "upload_failed" };
-
-  return { ok: true, path: objectPath };
+  const stored = await uploadCatalogWebp(service, "products", processed.buffer);
+  if (!stored.ok) return { ok: false, reason: stored.reason };
+  return { ok: true, path: stored.path };
 }
 
 export async function POST(request: Request) {
@@ -160,17 +135,14 @@ async function handleStage(input: {
 
   let urls: string[];
   try {
-    const found = await lobbyPhotoUrlsFor(
-      access.baseUrl,
-      access.apiToken,
-      access.relaySecret,
-      categoryId as number,
-    );
-    if (!found.ok) {
-      return Response.json({ ok: false, reason: found.reason, status: found.status }, { status: 502 });
-    }
-    urls = found.urls;
+    urls = await lobbyPhotoUrlsFor(establishmentId, access, categoryId as number);
   } catch (error) {
+    if (error instanceof LobbyRejectedError) {
+      return Response.json(
+        { ok: false, reason: "lobby_rejected", status: error.status },
+        { status: 502 },
+      );
+    }
     console.error(`import-room-photos (stage) : GET /rooms a échoué (établissement ${establishmentId})`, error);
     return Response.json({ ok: false, reason: "lobby_unreachable" }, { status: 502 });
   }
@@ -191,7 +163,7 @@ async function handleStage(input: {
     // moindre ligne DB existe (même contrat que StagedPhoto{path,url}).
     photos.push({
       path: stored.path,
-      url: access.service.storage.from(BUCKET).getPublicUrl(stored.path).data.publicUrl,
+      url: access.service.storage.from(CATALOG_MEDIA_BUCKET).getPublicUrl(stored.path).data.publicUrl,
     });
   }
 
@@ -252,17 +224,18 @@ async function handleAttach(input: { productId?: unknown }) {
 
   let photoUrls: string[];
   try {
-    const found = await lobbyPhotoUrlsFor(
-      credentials.baseUrl,
-      credentials.apiToken,
-      credentials.relaySecret,
+    photoUrls = await lobbyPhotoUrlsFor(
+      product.establishment_id,
+      credentials,
       product.lobby_category_id,
     );
-    if (!found.ok) {
-      return Response.json({ ok: false, reason: found.reason, status: found.status }, { status: 502 });
-    }
-    photoUrls = found.urls;
   } catch (error) {
+    if (error instanceof LobbyRejectedError) {
+      return Response.json(
+        { ok: false, reason: "lobby_rejected", status: error.status },
+        { status: 502 },
+      );
+    }
     console.error(`import-room-photos : GET /rooms a échoué (produit ${product.id})`, error);
     return Response.json({ ok: false, reason: "lobby_unreachable" }, { status: 502 });
   }
@@ -293,7 +266,7 @@ async function handleAttach(input: { productId?: unknown }) {
       p_storage_path: stored.path,
     });
     if (rpcError) {
-      await service.storage.from(BUCKET).remove([stored.path]);
+      await service.storage.from(CATALOG_MEDIA_BUCKET).remove([stored.path]);
       skipped.push({ url, reason: "attach_failed" });
       continue;
     }

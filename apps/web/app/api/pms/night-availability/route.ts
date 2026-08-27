@@ -1,5 +1,5 @@
 import {
-  createNightAvailabilityCache,
+  createTtlCache,
   getNightAvailabilityWindow,
   isPmsBacked,
   LOBBY_DEFAULT_BASE_URL,
@@ -42,7 +42,7 @@ const MONTH_PATTERN = /^\d{4}-\d{2}$/;
 // uniquement pour l'affichage" — jamais au moment de réserver, reserve-nights relit toujours à
 // chaud). Best-effort, non partagé entre instances Vercel concurrentes — acceptable, ce cache n'a
 // qu'une valeur de réduction de charge sur Lobby, jamais de correction.
-const cache = createNightAvailabilityCache<NightAvailabilityRow[]>(60_000);
+const cache = createTtlCache<NightAvailabilityRow[]>(60_000);
 
 export async function GET(request: Request) {
   const url = new URL(request.url);

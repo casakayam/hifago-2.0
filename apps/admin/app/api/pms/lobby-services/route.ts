@@ -1,5 +1,8 @@
-import { getLobbyProducts, parseLobbyServices, type LobbyService } from "@hifago/domain";
-import { collectLobbyPages, resolveLobbyEstablishment } from "@/lib/pms/lobbyEstablishment";
+import {
+  fetchLobbyServicesCached,
+  LobbyRejectedError,
+  resolveLobbyEstablishment,
+} from "@/lib/pms/lobbyEstablishment";
 import { toServiceOption } from "@/lib/pms/lobbyOptions";
 
 // Jumeau de lobby-rooms pour une activité ou un transport (`lobby_product_id`). Seule différence :
@@ -19,24 +22,19 @@ export async function GET(request: Request) {
   if (!access.ok) return access.response;
 
   try {
-    const collected = await collectLobbyPages<LobbyService>(
-      (page) => getLobbyProducts(access.baseUrl, access.apiToken, page, access.relaySecret),
-      parseLobbyServices,
-      (service) => service.serviceId,
-    );
-    if (!collected.ok) {
+    const services = await fetchLobbyServicesCached(access.establishmentId, access);
+    return Response.json({ ok: true, items: services.map(toServiceOption) });
+  } catch (error) {
+    if (error instanceof LobbyRejectedError) {
       console.error(
         `GET /api/pms/lobby-services : réponse non-200 (establishment ${access.establishmentId})`,
-        { status: collected.status },
+        { status: error.status },
       );
       return Response.json(
-        { ok: false, reason: collected.reason, status: collected.status },
+        { ok: false, reason: "lobby_rejected", status: error.status },
         { status: 502 },
       );
     }
-
-    return Response.json({ ok: true, items: collected.items.map(toServiceOption) });
-  } catch (error) {
     console.error(
       `GET /api/pms/lobby-services a échoué (establishment ${access.establishmentId})`,
       error,

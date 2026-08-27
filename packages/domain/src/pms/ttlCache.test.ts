@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { createNightAvailabilityCache } from "./nightAvailabilityCache";
+import { createTtlCache } from "./ttlCache";
 
-describe("createNightAvailabilityCache", () => {
+describe("createTtlCache", () => {
   it("hit avant expiration : la deuxième lecture ne rappelle jamais le fetcher", async () => {
-    const cache = createNightAvailabilityCache<number>(60_000);
+    const cache = createTtlCache<number>(60_000);
     const fetcher = vi.fn().mockResolvedValue(42);
 
     const first = await cache.getOrFetch("2028-09", fetcher, 0);
@@ -15,7 +15,7 @@ describe("createNightAvailabilityCache", () => {
   });
 
   it("miss après expiration du TTL : rappelle le fetcher", async () => {
-    const cache = createNightAvailabilityCache<number>(60_000);
+    const cache = createTtlCache<number>(60_000);
     const fetcher = vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(2);
 
     const first = await cache.getOrFetch("2028-09", fetcher, 0);
@@ -27,7 +27,7 @@ describe("createNightAvailabilityCache", () => {
   });
 
   it("coalesce deux appels concurrents sur la même clé — un seul aller-retour au fetcher", async () => {
-    const cache = createNightAvailabilityCache<number>(60_000);
+    const cache = createTtlCache<number>(60_000);
     let resolveFetch: (value: number) => void;
     const fetcher = vi.fn().mockReturnValue(new Promise<number>((resolve) => (resolveFetch = resolve)));
 
@@ -41,7 +41,7 @@ describe("createNightAvailabilityCache", () => {
   });
 
   it("clés différentes ne se partagent jamais d'entrée", async () => {
-    const cache = createNightAvailabilityCache<number>(60_000);
+    const cache = createTtlCache<number>(60_000);
     const fetcher = vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(2);
 
     expect(await cache.getOrFetch("2028-09", fetcher, 0)).toBe(1);
@@ -50,7 +50,7 @@ describe("createNightAvailabilityCache", () => {
   });
 
   it("un échec n'est jamais mis en cache jusqu'à expiration du TTL — retenté immédiatement", async () => {
-    const cache = createNightAvailabilityCache<number>(60_000);
+    const cache = createTtlCache<number>(60_000);
     const fetcher = vi.fn().mockRejectedValueOnce(new Error("lobby down")).mockResolvedValueOnce(99);
 
     await expect(cache.getOrFetch("2028-09", fetcher, 0)).rejects.toThrow("lobby down");

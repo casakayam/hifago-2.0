@@ -1,4 +1,4 @@
-export interface NightAvailabilityCache<T> {
+export interface TtlCache<T> {
   getOrFetch(key: string, fetcher: () => Promise<T>, now?: number): Promise<T>;
 }
 
@@ -13,7 +13,7 @@ interface CacheEntry<T> {
 // concurrents sur la même clé : deux visiteurs qui ouvrent le même mois en même temps ne déclenchent
 // qu'un seul aller-retour Lobby. Non partagé entre instances serverless concurrentes — acceptable,
 // le cache 60s est "autorisé pour l'affichage", jamais "requis" (spec 21 §0).
-export function createNightAvailabilityCache<T>(ttlMs = 60_000): NightAvailabilityCache<T> {
+export function createTtlCache<T>(ttlMs = 60_000): TtlCache<T> {
   const entries = new Map<string, CacheEntry<T>>();
 
   return {

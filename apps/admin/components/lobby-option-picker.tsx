@@ -80,7 +80,12 @@ export function LobbyOptionPicker({
           setError(
             result.reason === "pms_not_connected"
               ? "Este establecimiento no está conectado a LobbyPMS."
-              : "No se pudo cargar la lista de LobbyPMS. Inténtalo de nuevo."
+              : // `authorization_unavailable` (2026-08-27) : la route n'a pas pu DÉTERMINER
+                // l'autorisation (panne transitoire côté base), ce n'est pas un refus — le dire,
+                // pour que l'utilisateur retente au lieu de croire qu'il n'a pas les droits.
+                result.reason === "authorization_unavailable"
+                ? "No se pudo verificar tu acceso en este momento. Vuelve a intentarlo."
+                : "No se pudo cargar la lista de LobbyPMS. Inténtalo de nuevo."
           );
           return;
         }
