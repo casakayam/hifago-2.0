@@ -463,9 +463,11 @@ CAPACITÉ d'une unité (GLAMPING 2 → 2 prix, CAMPER Van 4 → 4, dortoirs 1 �
 par niveau d'occupation, modèle que hifago n'a pas ; confirme « Lobby n'est jamais la source du
 prix ». Formes gelées dans `pmsFixtureServer.ts` et opposables par `lobbyContract.test.ts`.
 **NON FAIT, à reprendre** :
-(1) `vault.create_secret(<service_role_key>,'pms_service_role_key')` — débloque
-l'INVOCATION des jobs par pg_cron (les secrets de fonctions Lobby, eux, sont désormais posés) ;
-`RESEND_API_KEY` (email) reste en attente sur décision de Jérôme. (2) **Bruit du job nocturne** :
+(1) `RESEND_API_KEY` (email) reste en attente sur décision de Jérôme — **`pms_service_role_key` est
+POSÉE** (27/08), par une fonction jetable qui l'a recopiée depuis l'environnement des Edge Functions
+vers le Vault sans qu'elle transite par un humain ; les deux `invoke_*` répondent 200, et c'étaient
+les entrées n°1 et n°2 de `net._http_response` — les crons n'avaient JAMAIS abouti depuis le 19/08.
+(2) **Bruit du job nocturne** :
 l'établissement du seed (`b0000000-…-0002`) porte `lobby_connector_active` avec un jeton factice et
 produira une dérive `401` **chaque nuit** — exactement le « crier au loup » que ce job doit éviter.
 (3) **Lot B restant** : C2 propagation d'annulation **à re-spécifier entièrement** ; C4
@@ -474,7 +476,7 @@ produira une dérive `401` **chaque nuit** — exactement le « crier au loup »
 (« a-t-il des chambres à choisir, ou se loue-t-il entier ? ») reste à porter, T1 en aura besoin.
 **Un jeton mort `LOBBY_PMS_TOKEN` retiré de `apps/admin/.env.local` — sa valeur a transité par une
 conversation, À RÉVOQUER chez LobbyPMS.** Détail complet : `hifago/docs/journal/2026-08.md`
-(2026-08-26 et 2026-08-27). 16 commits sur `main`, **rien poussé**. **Secret du relais FAIT TOURNER** le 27/08 (il avait transité par une conversation) — et la rotation a réaligné `/etc/caddy/relay.env` sur ce que Caddy applique, ce qui n'était plus le cas : un reboot du relais aurait coupé LobbyPMS. `systemctl restart`, jamais `reload` — systemd ne relit l'`EnvironmentFile` qu'au démarrage. Vercel redéployé avec `vercel redeploy <url>` et **non** `vercel deploy`, qui aurait envoyé l'arbre local et donc `lodging_kind` sans sa migration.*
+(2026-08-26 et 2026-08-27). 18 commits sur `main`, **rien poussé**. **Secret du relais FAIT TOURNER** le 27/08 (il avait transité par une conversation) — et la rotation a réaligné `/etc/caddy/relay.env` sur ce que Caddy applique, ce qui n'était plus le cas : un reboot du relais aurait coupé LobbyPMS. `systemctl restart`, jamais `reload` — systemd ne relit l'`EnvironmentFile` qu'au démarrage. Vercel redéployé avec `vercel redeploy <url>` et **non** `vercel deploy`, qui aurait envoyé l'arbre local et donc `lodging_kind` sans sa migration.*
 
 *2026-08-24 (suite 3, session distincte) — spec 23 (`docs/specs/23-notifications-email-
 transactionnelles.md`) écrite et implémentée intégralement, Tranche 1 + Tranche 2 (8 événements).
