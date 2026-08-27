@@ -449,9 +449,12 @@ SANS extension `.ts` casse le boot, invisible au typecheck, au lint et aux 378 t
 reprendre** : (1) ⚠️ **`LOBBY_PMS_TOKEN` — révocation DIFFÉRÉE, décision explicite de Jérôme.**
 Déclencheur : **la fin de la campagne de tests LobbyPMS**. C'est le seul secret exposé de la journée
 qui n'a pas été tourné (celui du relais l'a été). (2) `RESEND_API_KEY` en attente de décision.
-(3) `reserve-nights` ne journalise AUCUN motif d'échec de création — l'entrée de réconciliation est
-nue. (4) `products.check_in_time` fait toujours doublon avec celui de l'établissement, et le
-garde-fou `capacity_exceeds_physical` reste à porter sur `products`. (5) `alojamiento-pms-backed-
+(3) `products.check_in_time` fait toujours doublon avec celui de l'établissement — décision de
+modèle, pas un nettoyage. **Deux points de cette liste sont tombés le 27/08** : `reserve-nights`
+journalise bien le motif d'échec depuis `8b78e03` (le curseur le disait encore ouvert, c'était faux
+— vérifié dans l'arbre), et le garde-fou `capacity_exceeds_physical` est PORTÉ sur `products`
+(`20260827230000`, dernière pièce de T2) : `dorm` → `unit_count × capacity`, `private`/`whole_house`
+→ `unit_count`, et rien ne change pour un produit sans `unit_count`. (5) `alojamiento-pms-backed-
 demo` est encore `sellable` en préprod alors qu'il est invendable. **Préprod ALIGNÉE en fin de session** : migration poussée
 (`supabase db push`), commits poussés, **les deux apps redéployées** depuis un worktree isolé — la
 base était en avance de 4 commits sur le code servi, Vercel n'étant pas branché sur Git. Vérifié

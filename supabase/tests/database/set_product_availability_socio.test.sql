@@ -4,7 +4,7 @@
 -- log_admin_action conditionnée à un appelant admin. Verrouillage FOR UPDATE et logique de
 -- capacité inchangés — déjà couverts par le test de concurrence du correctif, rien à ajouter ici.
 begin;
-select plan(10);
+select plan(16);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -144,6 +144,61 @@ select is(
     'after', jsonb_build_object('date', '2027-05-04', 'capacity', 9, 'open', true)
   ),
   'audit_log enregistre action/after corrects pour l''appel admin'
+);
+
+-- ===== capacity_exceeds_physical (20260827230000) ==============================================
+-- Garde-fou porté depuis set_room_type_availability, supprimée avec les chambres par T3 étape 2.
+-- Trois cas, parce que la formule DÉPEND du type de couchage et qu'une seule d'entre elles était
+-- couverte du temps des chambres.
+reset role;
+insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug,
+                      lodging_kind, capacity, unit_count)
+values
+  -- Dortoir : 6 lits × 2 unités = 12 places vendables.
+  ('77770000-0000-4000-8000-000000000041', '77770000-0000-4000-8000-000000000001',
+   '77770000-0000-4000-8000-000000000011', 'lodging', jsonb_build_object('es', 'Dormitorio Fisico'),
+   20000, true, 'avail-socio-dorm', 'dorm', 6, 2),
+  -- Privée : 3 chambres, et la capacité par chambre n'entre PAS dans le calcul — on vend la
+  -- chambre, pas le lit. C'est exactement la distinction que la formule encode.
+  ('77770000-0000-4000-8000-000000000042', '77770000-0000-4000-8000-000000000001',
+   '77770000-0000-4000-8000-000000000011', 'lodging', jsonb_build_object('es', 'Privada Fisica'),
+   90000, true, 'avail-socio-priv', 'private', 2, 3),
+  -- Logement sans unit_count : rien à quoi se comparer, le garde ne doit pas s'armer.
+  ('77770000-0000-4000-8000-000000000043', '77770000-0000-4000-8000-000000000001',
+   '77770000-0000-4000-8000-000000000011', 'lodging', jsonb_build_object('es', 'Sin Unidades'),
+   90000, true, 'avail-socio-nounits', 'private', 2, null);
+set local role authenticated;
+select test_login('77770000-0000-4000-8000-000000000021');
+
+select is(
+  (set_product_availability('77770000-0000-4000-8000-000000000041', '2027-06-01', 13)->>'reason'),
+  'capacity_exceeds_physical',
+  'dortoir : 13 > 6 lits × 2 unités → refusé'
+);
+select is(
+  (set_product_availability('77770000-0000-4000-8000-000000000041', '2027-06-01', 12)->>'ok')::boolean,
+  true,
+  'dortoir : 12 = exactement la capacité physique → accepté (borne inclusive)'
+);
+select is(
+  (set_product_availability('77770000-0000-4000-8000-000000000042', '2027-06-01', 4)->>'reason'),
+  'capacity_exceeds_physical',
+  'privée : 4 > 3 unités → refusé (la capacité par chambre n''entre pas dans le calcul)'
+);
+select is(
+  (set_product_availability('77770000-0000-4000-8000-000000000042', '2027-06-01', 3)->>'ok')::boolean,
+  true,
+  'privée : 3 unités → accepté, jamais 3 × capacity'
+);
+select is(
+  (set_product_availability('77770000-0000-4000-8000-000000000043', '2027-06-01', 99)->>'ok')::boolean,
+  true,
+  'logement sans unit_count : le garde ne s''arme pas, comportement inchangé'
+);
+select is(
+  (set_product_availability('77770000-0000-4000-8000-000000000031', '2027-06-01', 99)->>'ok')::boolean,
+  true,
+  'activité : aucun lodging_kind, chemin strictement inchangé'
 );
 
 select * from finish();
