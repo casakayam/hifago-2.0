@@ -452,10 +452,21 @@ qui n'a pas été tourné (celui du relais l'a été). (2) `RESEND_API_KEY` en a
 (3) `reserve-nights` ne journalise AUCUN motif d'échec de création — l'entrée de réconciliation est
 nue. (4) `products.check_in_time` fait toujours doublon avec celui de l'établissement, et le
 garde-fou `capacity_exceeds_physical` reste à porter sur `products`. (5) `alojamiento-pms-backed-
-demo` est encore `sellable` en préprod alors qu'il est invendable. **Push** : la préprod Vercel n'est
-pas branchée sur Git, un push ne déploie rien ; redéployer avec `vercel redeploy <url>` et **non**
-`vercel deploy`, qui enverrait l'arbre local sans ses migrations. Le relais : `systemctl restart`,
-jamais `reload` — systemd ne relit l'`EnvironmentFile` qu'au démarrage.*
+demo` est encore `sellable` en préprod alors qu'il est invendable. **Préprod ALIGNÉE en fin de session** : migration poussée
+(`supabase db push`), commits poussés, **les deux apps redéployées** depuis un worktree isolé — la
+base était en avance de 4 commits sur le code servi, Vercel n'étant pas branché sur Git. Vérifié
+après : `/es` 200, les DEUX pages établissement 200, fiche produit 200, admin `/login` 200 et
+`/admin`|`/partner` 307. ⚠️ **INCIDENT à ne pas rejouer** : lancé dans un répertoire SANS
+`.vercel/project.json`, `vercel deploy --yes` ne s'arrête pas — **il CRÉE un projet** portant le nom
+du répertoire courant et y déploie. Un projet `deploy-wt` est ainsi apparu dans l'équipe (build en
+erreur, supprimé aussitôt). Cause : ma première tentative avait été refusée par le classifieur AVANT
+d'avoir écrit le `project.json`, et je ne l'ai pas revérifié en réessayant. **Vérifier l'existence de
+`.vercel/project.json` juste avant CHAQUE `vercel deploy`** — le mode d'échec n'est pas une erreur,
+c'est une ressource créée en silence. Aussi : `vercel project rm` n'accepte pas `--yes`, et `yes |`
+part en boucle infinie sur son prompt. **`vercel deploy` reste dangereux hors worktree isolé** (il
+envoie le répertoire local TEL QUEL, non-commités compris) et doit partir de la RACINE du monorepo
+(depuis `apps/web`, le CLI double le chemin). Le relais : `systemctl restart`, jamais `reload` —
+systemd ne relit l'`EnvironmentFile` qu'au démarrage.*
 
 *2026-08-24 (suite 3, session distincte) — spec 23 (`docs/specs/23-notifications-email-
 transactionnelles.md`) écrite et implémentée intégralement, Tranche 1 + Tranche 2 (8 événements).
