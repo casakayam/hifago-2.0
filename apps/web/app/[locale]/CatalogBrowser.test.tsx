@@ -29,23 +29,47 @@ function renderCatalog(products: CatalogProduct[]) {
 const PRODUCTS: CatalogProduct[] = [
   {
     id: "1",
-    slug: "tour-lancha-guatape",
+    href: "/products/tour-lancha-guatape",
+    testId: "catalog-link-tour-lancha-guatape",
     name: "Tour en lancha por el Embalse de Guatapé",
     descriptionSnippet: "Recorrido en lancha por el embalse.",
     type: "activity",
+    subtitle: null,
     imageUrl: null,
   },
   {
     id: "2",
-    slug: "alojamiento-demo",
+    href: "/products/alojamiento-demo",
+    testId: "catalog-link-alojamiento-demo",
     name: "Alojamiento PMS-backed (demo)",
     descriptionSnippet: "Dormitorio de demostración.",
     type: "lodging",
+    subtitle: null,
+    imageUrl: null,
+  },
+  // Carte GROUPÉE (2026-08-27) : plusieurs logements d'un même établissement tiennent en une seule
+  // carte, qui mène à la page établissement et non à une fiche produit. Sans elle, un hôtel à six
+  // catégories occupait six cartes de la page d'accueil.
+  {
+    id: "establishment-abc",
+    href: "/establishments/casa-kayam-guatape",
+    testId: "catalog-link-establishment-casa-kayam-guatape",
+    name: "Casa Kayam Guatapé",
+    descriptionSnippet: "Hostal en la colina.",
+    type: "lodging",
+    subtitle: "6 alojamientos",
     imageUrl: null,
   },
 ];
 
 describe("CatalogBrowser", () => {
+  it("une carte groupée mène à la page établissement et annonce son décompte", () => {
+    renderCatalog(PRODUCTS);
+    const grouped = screen.getByTestId("catalog-link-establishment-casa-kayam-guatape");
+    expect(grouped.getAttribute("href")).toContain("/establishments/casa-kayam-guatape");
+    expect(grouped.textContent).toContain("6 alojamientos");
+  });
+
   it("affiche toutes les cartes au départ, sans filtre actif", () => {
     renderCatalog(PRODUCTS);
     expect(screen.queryByTestId("catalog-link-tour-lancha-guatape")).not.toBeNull();

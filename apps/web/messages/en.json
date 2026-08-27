@@ -17,7 +17,8 @@
       "camp": "Camp",
       "evento": "Event",
       "hotel": "Hotel"
-    }
+    },
+    "lodgingCount": "{count, plural, one {# stay option} other {# stay options}}"
   },
   "Login": {
     "title": "Sign in",

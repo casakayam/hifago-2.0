@@ -8,11 +8,15 @@ import { Card, Input, Label, ListBox, Select, TextField } from "@hifago/ui";
 
 export type CatalogProduct = {
   id: string;
-  slug: string;
+  /** Destination de la carte : une fiche produit, ou une page établissement pour un groupe. */
+  href: string;
+  testId: string;
   name: string;
   descriptionSnippet: string | null;
   type: string;
   imageUrl: string | null;
+  /** « 6 habitaciones » sur une carte groupée. `null` sur une carte produit. */
+  subtitle: string | null;
 };
 
 // Types réels de products.type (supabase/migrations/20260817160000_calendar_tranche0_fixes.sql,
@@ -85,11 +89,7 @@ export function CatalogBrowser({ products }: { products: CatalogProduct[] }) {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {filtered.map((product) => (
-            <Link
-              key={product.slug}
-              href={`/products/${product.slug}`}
-              data-testid={`catalog-link-${product.slug}`}
-            >
+            <Link key={product.id} href={product.href} data-testid={product.testId}>
               <Card className="h-full overflow-hidden">
                 {product.imageUrl ? (
                   <div className="relative aspect-[4/3] w-full">
@@ -104,6 +104,11 @@ export function CatalogBrowser({ products }: { products: CatalogProduct[] }) {
                 ) : null}
                 <Card.Header>
                   <Card.Title>{product.name}</Card.Title>
+                  {/* Une carte groupée dit combien de chambres elle recouvre : sans ça, rien ne
+                      distingue « un hébergement » de « l'un des hébergements de ce lieu ». */}
+                  {product.subtitle ? (
+                    <p className="text-xs text-muted">{product.subtitle}</p>
+                  ) : null}
                   {product.descriptionSnippet ? (
                     <Card.Description>{product.descriptionSnippet}</Card.Description>
                   ) : null}
