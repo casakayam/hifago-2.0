@@ -5,7 +5,7 @@ theme: specs
 public: [ia, dev, jerome]
 langue: fr
 statut: "Lot A implémenté le 2026-08-26 ; Lot B gelé (observation préprod requise) ; cible modèle retenue sous conditions"
-maj: 2026-08-26
+maj: 2026-08-27
 resume: >
   Audit de ce que l'API LobbyPMS expose réellement face à ce que hifago en consomme, refonte du
   parcours front d'un produit lié (voir ce qu'on a choisi, importer ce que Lobby en sait), et
@@ -234,6 +234,28 @@ en fixture et construire les chambres par le bloc d'édition, qui est le chemin 
   **deux** valeurs (`per_person`, `per_two`) ; `per_house` vient de la v1 et n'existe pas ici. Et
   `products` n'a **aucune** colonne `quantity` (elle vit sur `product_room_types`), donc le garde-fou
   `capacity_exceeds_physical` est à porter.
+
+**Colonnes livrées les 2026-08-26/27** — le constat ci-dessus n'est plus à jour sur ce point précis,
+et **seulement** sur ce point :
+
+  - `products.unit_count` (`20260826190000` puis renommée par `20260827100000`) — nombre d'unités du
+    type. Renommée depuis `quantity` **parce que `product_room_types.quantity` porte la sémantique
+    inverse** (un plafond dur de réservation, lu par `create_order`) : même mot, deux rôles de
+    sécurité opposés, dans deux champs éditables côte à côte.
+  - `products.lodging_kind` (`20260827120000`) — `dorm | private | whole_house`. **Trois** valeurs :
+    `whole_house` n'est pas théorique, la v1 en production porte `mode:'whole_house'` sur Bania
+    Travel. Préremplie depuis LobbyPMS pour `dorm`/`private` uniquement — le vocabulaire de Lobby
+    n'a que `privada`/`compartida`, donc `whole_house` est **toujours** un choix manuel, et l'écran
+    le dit. Descriptive : aucune RPC de commande ne la lit.
+  - `products.unit` **étendue à `per_house`** par la même migration. ⚠️ **C4 n'est pas fermé** :
+    rien n'écrit encore `unit` côté application (seul `seed.sql`). La colonne reste inerte, elle a
+    seulement cessé d'être incomplète. La fiche publique sait désormais l'afficher.
+
+  Restent à faire sur T2 : le garde-fou `capacity_exceeds_physical`, et le **`mode` au niveau
+  établissement** — la v1 porte `whole_house` sur la *propriété*, pas sur le produit, parce que ça
+  répond à une autre question : « cet établissement a-t-il des chambres à choisir, ou se loue-t-il
+  entier ? ». T1 en aura besoin : afficher une liste de chambres pour Bania Travel n'aurait aucun
+  sens. `lodging_kind` ne le remplace pas.
 - **T2 bis — la sémantique de réservation change.** La branche `room_type` de `create_order` ne
   vérifie **ni** `price_missing` **ni** `date_closed`, contrairement à la branche `lodging` :
   fusionner les deux n'est pas neutre.
