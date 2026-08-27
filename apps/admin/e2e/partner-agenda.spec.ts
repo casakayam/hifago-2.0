@@ -17,6 +17,87 @@ const PARTNER_ID = "b0000000-0000-4000-8000-000000000003";
 // nombre d'événements affichés par SVAR dans une cellule mensuelle chargée (repliés derrière un
 // bouton "+N more") — constaté en développant ce test. Disperser sur le reste du mois courant
 // évite la collision plutôt que de la découvrir en CI.
+// Purge des résidus laissés par les runs PRÉCÉDENTS de ce fichier. Sans elle, ce test finit par
+// se saboter tout seul — constaté le 2026-08-27, trois exécutions ayant suffi.
+//
+// La dispersion de `futureDateInCurrentMonth` ci-dessous n'y suffit pas, et la raison est
+// arithmétique : elle répartit sur les jours RESTANTS du mois courant, or ce nombre fond à mesure
+// qu'on avance. Le 27 août il vaut 4 — trois réservations résiduelles et la collision est quasi
+// certaine, la cellule dépasse le nombre d'événements que SVAR affiche, et l'assertion de
+// visibilité tombe sur un événement replié derrière « +N more ». Élargir la fenêtre ne ferait que
+// reculer l'échéance ; c'est l'accumulation qu'il faut traiter.
+//
+// Purge par MOTIF de nom (les deux produits de ce fichier portent un timestamp), jamais par id
+// figé : deux runs successifs n'ont pas les mêmes. Idempotente, et placée en beforeEach plutôt
+// qu'en nettoyage de fin — un run qui échoue en cours de route ne nettoie rien, et c'est
+// précisément le cas qui a produit l'accumulation.
+const PRODUCT_NAME_PATTERN = "^(Actividad Agenda|Alojamiento Agenda PMS) E2E [0-9]+$";
+const HOLDER_NAME_PATTERN = "^Cliente (Agenda|Walk-in|PMS Agenda|cancelled_by_client|expired|superseded) E2E [0-9]+$";
+
+test.beforeEach(async () => {
+  await withDb(async (client) => {
+    const { rows } = await client.query(
+      "select id from products where name->>'es' ~ $1",
+      [PRODUCT_NAME_PATTERN]
+    );
+    const productIds = rows.map((row) => row.id as string);
+    if (productIds.length === 0) return;
+
+    // Les lignes d'abord : c'est elles qui retiennent tout le reste (ledger_entries les référence,
+    // et une commande n'est purgeable qu'une fois orpheline).
+    const { rows: lineRows } = await client.query(
+      "select id, order_id from order_lines where product_id = any($1::uuid[])",
+      [productIds]
+    );
+    const lineIds = lineRows.map((row) => row.id as string);
+    const orderIds = [...new Set(lineRows.map((row) => row.order_id as string))];
+
+    if (lineIds.length > 0) {
+      await client.query("delete from ledger_entries where order_line_id = any($1::uuid[])", [lineIds]);
+      await client.query("delete from order_lines where id = any($1::uuid[])", [lineIds]);
+    }
+    if (orderIds.length > 0) {
+      // payments_order_id_fkey retient les commandes payées : même ordre que purgePaymentsThenOrders
+      // (packages/e2e-support/src/db.ts). Les commandes encore référencées par une ligne survivante
+      // (jamais le cas ici, mais la garde coûte une clause) sont laissées telles quelles.
+      await client.query("delete from payments where order_id = any($1::uuid[])", [orderIds]);
+      await client.query(
+        `delete from orders o where o.id = any($1::uuid[])
+           and not exists (select 1 from order_lines ol where ol.order_id = o.id)`,
+        [orderIds]
+      );
+    }
+
+    // Puis les tables filles du produit, avant le produit lui-même.
+    for (const table of [
+      "product_availability",
+      "product_calendar",
+      "product_date_rates",
+      "product_media",
+      "product_slot_availability",
+      "product_slot_rules",
+      "product_tag_assignments",
+    ]) {
+      await client.query(`delete from ${table} where product_id = any($1::uuid[])`, [productIds]);
+    }
+    await client.query("update product_proposals set product_id = null where product_id = any($1::uuid[])", [productIds]);
+    await client.query("delete from products where id = any($1::uuid[])", [productIds]);
+
+    // Enfin les commandes créées par le parcours checkout dont les lignes viennent d'être purgées
+    // — rattrapage par titulaire, au cas où un run aurait laissé une commande sans ligne.
+    const { rows: strayOrders } = await client.query(
+      `select id from orders o where o.holder_name ~ $1
+         and not exists (select 1 from order_lines ol where ol.order_id = o.id)`,
+      [HOLDER_NAME_PATTERN]
+    );
+    const strayIds = strayOrders.map((row) => row.id as string);
+    if (strayIds.length > 0) {
+      await client.query("delete from payments where order_id = any($1::uuid[])", [strayIds]);
+      await client.query("delete from orders where id = any($1::uuid[])", [strayIds]);
+    }
+  });
+});
+
 function futureDateInCurrentMonth(stamp: number): string {
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
