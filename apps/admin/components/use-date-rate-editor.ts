@@ -6,18 +6,17 @@ import { toast } from "@hifago/ui";
 
 type SetRateResult = { ok: boolean; reason?: string };
 
-export type DateRateEntityType = "product" | "room_type";
+export type DateRateEntityType = "product";
 
-// set_date_rate (dispatcher product/room_type, cf. migration 20260817210000) — une seule fonction
-// RPC pour les deux entités, retourne ses propres raisons ('not_found' — jamais
-// 'product_not_found' ni 'room_type_not_found', génériques quel que soit p_entity_type — et
-// 'invalid_price'), distinctes de celles de set_product_availability/set_room_type_availability.
-// Vide = supprime l'override existant (retour au prix de base), jamais une valeur à refuser. SEULE
-// définition de ce wrapper client (état, soumission, mapping d'erreur) dans tout le projet — avant
-// cette extraction, dupliquée verbatim entre AvailabilityFormFields (availability-calendar.tsx,
-// mode "product") et RoomDateEditor (room-availability-grid.tsx), y compris le nom rateMessageFor,
-// avec pour seule vraie différence le libellé "introuvable"/l'erreur générique selon l'entité —
-// désormais des paramètres plutôt que deux fonctions séparées.
+// set_date_rate (migration 20260817210000) retourne ses propres raisons ('not_found' — jamais
+// 'product_not_found', générique — et 'invalid_price'), distinctes de celles de
+// set_product_availability. Vide = supprime l'override existant (retour au prix de base), jamais
+// une valeur à refuser.
+//
+// Ce hook a été extrait alors que set_date_rate dispatchait entre deux entités (produit et chambre
+// d'hôtel) et que ce wrapper était dupliqué verbatim entre AvailabilityFormFields et RoomDateEditor.
+// T3 étape 2 (20260827220000) a supprimé les chambres : 'product' est désormais la seule valeur
+// possible. Le paramètre survit parce que la RPC l'exige encore — pas parce qu'il reste un choix.
 function rateMessageFor(
   result: SetRateResult | null,
   notFoundLabel: string,
@@ -51,8 +50,7 @@ export function useDateRateEditor({
   entityId: string;
   date: string;
   initialPrice: string;
-  // Libellés propres à l'entité (activité vs habitación) — seule vraie variation entre les deux
-  // appelants, cf. commentaire de rateMessageFor ci-dessus.
+  // Libellés propres à l'appelant, cf. commentaire de rateMessageFor ci-dessus.
   notFoundLabel: string;
   genericErrorLabel: string;
   onSaved: () => void;

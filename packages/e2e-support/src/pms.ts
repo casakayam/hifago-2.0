@@ -44,7 +44,7 @@ export async function mockPmsNightAvailability(
  * AGENTS-PARALLELES.md point 5 : une fixture e2e ne réutilise jamais un enregistrement seedé
  * partagé) : établissement + produit lodging avec lobby_category_id, connecteur actif, jeton
  * factice. Retourne les ids générés — jamais des UUID littéraux figés, pour qu'un run parallèle ne
- * collisionne jamais (même discipline que createHotelRoomFixture, packages/e2e-support/src/db.ts).
+ * collisionne jamais (même discipline que les autres fixtures de packages/e2e-support/src/db.ts).
  */
 export async function createPmsBackedEstablishmentFixture(
   client: pg.Client,

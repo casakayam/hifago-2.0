@@ -85,7 +85,7 @@ export function ProductTypeFields({
 }: {
   type: ProductType;
   state: ProductTypeFieldsState;
-  // showTags/showHotelRoomsEditor/showSlotRulesEditor : réplique exacte du gating "création
+  // showTags/showSlotRulesEditor : réplique exacte du gating "création
   // seulement" déjà en place dans ProductForm (spec 11 : "délégués en édition à des blocs
   // séparés") — décidé par l'appelant (ProductForm passe `!isEditing`), pas recalculé ici.
   // address/lat/lon/prix/tramos/min-max/check-in-out/capacité/stay_rates restent, eux, affichés

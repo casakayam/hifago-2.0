@@ -24,12 +24,13 @@ import {
   type PriceTier,
 } from "@/lib/products/reservationRange";
 
-// Spec 17 §0 Tranche 2, §10 point 6 — même choix que HotelReservationForm.tsx (react-day-picker
-// mode="range", tranché sur prototype réel, cf. docs/journal/2026-08.md) : un alojamiento n'a pas
-// de chambre (pas de sélecteur, pas de room_type_id — cf. CartLine.priceCop et create_order,
-// branche end_date sans room_type_id réservée au type lodging), donc ce composant est le pendant
-// direct de HotelReservationForm.tsx MOINS le sélecteur de chambre : une seule "entité" tarifée
-// (le produit lui-même, product_date_rates/price_tiers au lieu de room_type_date_rates/room_tiers).
+// Spec 17 §0 Tranche 2, §10 point 6 — react-day-picker mode="range", tranché sur prototype réel
+// (cf. docs/journal/2026-08.md). Une seule entité tarifée : le produit lui-même, via
+// product_date_rates/price_tiers.
+//
+// Ce composant a eu un jumeau, HotelReservationForm.tsx, qui ajoutait un sélecteur de chambre
+// avant le calendrier. T3 (2026-08-27) a supprimé l'étage hôtel : chaque chambre est devenue un
+// produit, et ce formulaire les sert toutes.
 type AvailabilityRow = { date: string; capacity: number; booked: number };
 type RateRow = { date: string; price_cop: number };
 
@@ -125,9 +126,9 @@ export function LodgingReservationForm({
   const rateByDate = useMemo(() => new Map(rates.map((row) => [row.date, row.price_cop])), [rates]);
 
   // Cupos déjà occupés par CE produit dans le panier en cours (pas encore en base) — même
-  // raisonnement que ReservationForm.tsx/HotelReservationForm.tsx (avertissement indicatif, jamais
-  // la vraie barrière, qui reste create_order au moment du checkout). Filtré par productId (pas de
-  // room_type_id ici pour désambiguïser : product_availability est propre à CE produit).
+  // raisonnement que ReservationForm.tsx (avertissement indicatif, jamais la vraie barrière, qui
+  // reste create_order au moment du checkout). Filtré par productId, qui suffit à désambiguïser :
+  // product_availability est propre à CE produit.
   const inCartByDate = useMemo(
     () =>
       buildInCartNightsMap(

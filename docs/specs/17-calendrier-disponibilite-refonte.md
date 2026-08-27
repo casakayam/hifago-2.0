@@ -25,6 +25,20 @@ repond_a:
   - "Quelle librairie de calendrier utiliser côté admin/socio/client ?"
 ---
 
+> **Amendement daté du 2026-08-27 — l'étage hôtel a été supprimé.** `products.type='hotel'`,
+> `product_room_types`, `room_media`, `room_type_availability`, `room_type_date_rates`,
+> `order_lines.room_type_id` et `set_room_type_availability` n'existent plus (T3 de la spec 24 :
+> application par le commit 38c1b55, base par la migration `20260827220000`). Une chambre est
+> désormais un produit `type='lodging'` à part entière. **Toute mention de `room_type`,
+> `product_room_types` ou d'une « branche chambre » ci-dessous décrit un état passé** ; le mécanisme
+> équivalent vit sur `products`/`product_availability`. Détail et raisons : `docs/specs/24-modele-
+> hebergement-et-surface-lobbypms.md` §4, et le bandeau de `docs/specs/13-admin-hotel-habitaciones.md`.
+
+> ⚠️ Spécifique à cette spec : `resolve_date_price` a perdu son premier paramètre
+> `p_room_type_id` — sa signature vivante est `(p_product_id, p_date, p_tier_base_price_cop,
+> p_stay_rates)`. Le garde-fou `capacity_exceeds_physical` de `set_room_type_availability` est
+> parti avec la fonction ; son portage sur `products` reste ouvert (spec 24, T2).
+
 # Calendrier/disponibilité — audit complet + refonte phasée
 
 > **Cible stack** : Hifago (`hifago/apps/admin`, `hifago/apps/web`, `hifago/supabase`). Croise et

@@ -581,7 +581,6 @@ export type Database = {
           referrer_partner_id: string | null
           referrer_pct: number
           replaces_order_line_id: string | null
-          room_type_id: string | null
           slot_start_time: string | null
           status: string
           total_cop: number
@@ -610,7 +609,6 @@ export type Database = {
           referrer_partner_id?: string | null
           referrer_pct: number
           replaces_order_line_id?: string | null
-          room_type_id?: string | null
           slot_start_time?: string | null
           status?: string
           total_cop: number
@@ -639,7 +637,6 @@ export type Database = {
           referrer_partner_id?: string | null
           referrer_pct?: number
           replaces_order_line_id?: string | null
-          room_type_id?: string | null
           slot_start_time?: string | null
           status?: string
           total_cop?: number
@@ -678,13 +675,6 @@ export type Database = {
             columns: ["replaces_order_line_id"]
             isOneToOne: false
             referencedRelation: "order_lines"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "order_lines_room_type_id_fkey"
-            columns: ["room_type_id"]
-            isOneToOne: false
-            referencedRelation: "product_room_types"
             referencedColumns: ["id"]
           },
         ]
@@ -1596,71 +1586,6 @@ export type Database = {
           },
         ]
       }
-      product_room_types: {
-        Row: {
-          capacity: number
-          created_at: string
-          description: Json | null
-          id: string
-          kind: string
-          lobby_category_id: number | null
-          lobby_product_id: number | null
-          max_qty: number | null
-          min_qty: number | null
-          name: Json
-          price_cop: number
-          price_tiers: Json | null
-          product_id: string
-          quantity: number | null
-          sort: number
-          stay_rates: Json | null
-        }
-        Insert: {
-          capacity: number
-          created_at?: string
-          description?: Json | null
-          id?: string
-          kind: string
-          lobby_category_id?: number | null
-          lobby_product_id?: number | null
-          max_qty?: number | null
-          min_qty?: number | null
-          name: Json
-          price_cop: number
-          price_tiers?: Json | null
-          product_id: string
-          quantity?: number | null
-          sort?: number
-          stay_rates?: Json | null
-        }
-        Update: {
-          capacity?: number
-          created_at?: string
-          description?: Json | null
-          id?: string
-          kind?: string
-          lobby_category_id?: number | null
-          lobby_product_id?: number | null
-          max_qty?: number | null
-          min_qty?: number | null
-          name?: Json
-          price_cop?: number
-          price_tiers?: Json | null
-          product_id?: string
-          quantity?: number | null
-          sort?: number
-          stay_rates?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_room_types_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       product_slot_availability: {
         Row: {
           booked: number
@@ -2020,99 +1945,6 @@ export type Database = {
             columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "partners"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      room_media: {
-        Row: {
-          created_at: string
-          id: string
-          room_type_id: string
-          sort: number
-          storage_path: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          room_type_id: string
-          sort?: number
-          storage_path: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          room_type_id?: string
-          sort?: number
-          storage_path?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "room_media_room_type_id_fkey"
-            columns: ["room_type_id"]
-            isOneToOne: false
-            referencedRelation: "product_room_types"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      room_type_availability: {
-        Row: {
-          booked: number
-          capacity: number
-          date: string
-          id: string
-          room_type_id: string
-        }
-        Insert: {
-          booked?: number
-          capacity: number
-          date: string
-          id?: string
-          room_type_id: string
-        }
-        Update: {
-          booked?: number
-          capacity?: number
-          date?: string
-          id?: string
-          room_type_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "room_type_availability_room_type_id_fkey"
-            columns: ["room_type_id"]
-            isOneToOne: false
-            referencedRelation: "product_room_types"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      room_type_date_rates: {
-        Row: {
-          date: string
-          note: string | null
-          price_cop: number
-          room_type_id: string
-        }
-        Insert: {
-          date: string
-          note?: string | null
-          price_cop: number
-          room_type_id: string
-        }
-        Update: {
-          date?: string
-          note?: string | null
-          price_cop?: number
-          room_type_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "room_type_date_rates_room_type_id_fkey"
-            columns: ["room_type_id"]
-            isOneToOne: false
-            referencedRelation: "product_room_types"
             referencedColumns: ["id"]
           },
         ]
@@ -2542,7 +2374,6 @@ export type Database = {
         Args: {
           p_date: string
           p_product_id: string
-          p_room_type_id: string
           p_stay_rates: Json
           p_tier_base_price_cop: number
         }
@@ -2659,15 +2490,6 @@ export type Database = {
           p_date: string
           p_establishment_id: string
           p_note?: string
-        }
-        Returns: Json
-      }
-      set_room_type_availability: {
-        Args: {
-          p_capacity: number
-          p_date: string
-          p_note?: string
-          p_room_type_id: string
         }
         Returns: Json
       }

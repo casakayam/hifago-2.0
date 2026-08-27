@@ -10,14 +10,16 @@ import { formatCop } from "@hifago/domain";
 
 // Raisons qui renvoient `line` (product_id/date de LA ligne fautive) — toujours un sous-ensemble
 // de KNOWN_REASONS ci-dessous (composé à partir de celui-ci, jamais recopié à la main : chaque
-// littéral n'existe qu'à un seul endroit du fichier). Spec 17 §0 Tranche 2 (chambre d'hôtel/
-// alojamiento par plage) : room_type_required/room_type_mismatch/room_type_not_found/
-// end_date_required/invalid_date_range/unsupported_date_range, jamais censées surgir via l'écran
-// réel (le sélecteur de chambre empêche déjà l'absence de room_type_id), mais mappées en défense
-// en profondeur si la RPC est appelée directement avec un panier malformé. Spec 18 §0 Tranche 1
-// (produit à créneaux horaires) : slot_required/unsupported_slot_combination, même traitement —
-// défense en profondeur, l'écran réel (SlotReservationForm) empêche déjà l'absence de
-// slot_start_time ou une combinaison incohérente.
+// littéral n'existe qu'à un seul endroit du fichier). Spec 17 §0 Tranche 2 (alojamiento par
+// plage) : invalid_date_range/unsupported_date_range, jamais censées surgir via l'écran réel, mais
+// mappées en défense en profondeur si la RPC est appelée directement avec un panier malformé.
+// Spec 18 §0 Tranche 1 (produit à créneaux horaires) : slot_required/unsupported_slot_combination,
+// même traitement — défense en profondeur, l'écran réel (SlotReservationForm) empêche déjà
+// l'absence de slot_start_time ou une combinaison incohérente.
+//
+// room_type_required/room_type_mismatch/room_type_not_found/end_date_required ont disparu avec
+// l'étage hôtel (T3 étape 2, 20260827220000) : create_order ne les produit plus. Les garder ici
+// aurait promis une traduction pour une réponse impossible.
 const LINE_SCOPED_REASONS = [
   "product_not_found",
   "not_sellable",
@@ -25,10 +27,6 @@ const LINE_SCOPED_REASONS = [
   "slot_not_found",
   "full",
   "resource_unavailable",
-  "room_type_required",
-  "room_type_mismatch",
-  "room_type_not_found",
-  "end_date_required",
   "invalid_date_range",
   "unsupported_date_range",
   "slot_required",

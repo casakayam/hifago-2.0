@@ -6,8 +6,8 @@ import { proposeLodgingUnit, type LodgingKind, type LodgingUnit } from "@hifago/
 // de product-form.tsx le 2026-08-27. C'est une RÈGLE MÉTIER, pas du câblage de formulaire : elle
 // encode quatre décisions dont la violation coûte cher, et elle vivait dans une closure non
 // exportée d'un fichier de 738 lignes — donc intestable autrement qu'en montant tout le formulaire
-// avec sa session Supabase, son router et ses toasts. Même patron que hotelRooms.ts / slotRules.ts
-// / stayRates.ts, qui ont chacun leur fichier de test à côté.
+// avec sa session Supabase, son router et ses toasts. Même patron que slotRules.ts / stayRates.ts,
+// qui ont chacun leur fichier de test à côté.
 //
 // Les quatre règles, et pourquoi :
 //

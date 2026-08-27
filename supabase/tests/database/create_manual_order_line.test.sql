@@ -3,7 +3,7 @@
 -- set_product_slot_capacity, cf. product_slot_availability.test.sql). Ne re-teste jamais la
 -- logique de verrouillage anti-survente elle-même (déjà couverte par create_order.test.sql/
 -- product_slot_availability.test.sql pour les mêmes deux branches) — seulement les gardes propres
--- à CETTE RPC (autorisation admin+socio, exclusion hotel/lodging/camp, absence de commission).
+-- à CETTE RPC (autorisation admin+socio, exclusion lodging/camp, absence de commission).
 begin;
 select plan(23);
 
@@ -62,8 +62,8 @@ values (
 insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug)
 values (
   '88950000-0000-4000-8000-000000000032', '88950000-0000-4000-8000-000000000001',
-  '88950000-0000-4000-8000-000000000011', 'hotel',
-  jsonb_build_object('es', 'Hotel Manual'), null, true, 'manual-order-line-hotel'
+  '88950000-0000-4000-8000-000000000011', 'lodging',
+  jsonb_build_object('es', 'Alojamiento Manual'), 100000, true, 'manual-order-line-lodging'
 );
 insert into products (id, partner_id, establishment_id, type, name, price_cop, price_tiers, sellable, slug, min_qty, max_qty)
 values (
@@ -147,13 +147,14 @@ select is(
 
 select test_login('88950000-0000-4000-8000-000000000021'); -- operator_own pour le reste des cas
 
--- Cas 6 : type exclu (hotel).
+-- Cas 6 : type exclu. Fixture 'lodging' depuis T3 étape 2 (20260827220000) : le type 'hotel',
+-- qu'exerçait ce cas jusque-là, n'existe plus — l'exclusion elle-même, elle, est intacte.
 select is(
   (select create_manual_order_line(
      '88950000-0000-4000-8000-000000000032', '2029-05-01', 1, 'Cliente Walk-in'
    )->>'reason'),
   'unsupported_product_type',
-  'cas 6 : products.type=hotel → unsupported_product_type'
+  'cas 6 : products.type=lodging → unsupported_product_type'
 );
 
 -- Cas 7 : quantité hors bornes (max_qty=5).

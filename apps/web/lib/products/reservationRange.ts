@@ -35,8 +35,7 @@ export function nightsInRange(range: DateRange | undefined): string[] {
 // Une nuit de la plage sélectionnée est indisponible si elle n'a aucune ligne de disponibilité, ou
 // si la capacité restante (déjà nette du panier en cours, cf. getInCartQty) tombe sous la quantité
 // demandée. `getAvailability`/`getInCartQty` sont des lookups fournis par l'appelant (clé
-// composée room_type_id+date pour Hotel, date seule pour Lodging) — jamais une Map construite ici,
-// pour ne pas imposer une forme de clé.
+// clé date) — jamais une Map construite ici, pour ne pas imposer une forme de clé.
 export function hasUnavailableNightInRange(
   nights: string[],
   qty: number,

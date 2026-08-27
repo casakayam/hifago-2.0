@@ -160,24 +160,30 @@ n'a aujourd'hui aucune façon de vendre plusieurs chambres à des prix qui varie
 
 ## 2. Type de couchage / Chambre (à l'intérieur d'un établissement en mode « chambres »)
 
-**Champs actuels** : nom, unité de vente (par personne / par deux), capacité, plafond
-d'unités réservables — **l'identifiant de la chambre est directement l'identifiant de sa
-catégorie côté PMS** (pas un identifiant interne indépendant).
+> **Réécrite le 2026-08-27.** Cette section décrivait un étage intermédiaire, `product_room_types`,
+> introduit par la spec 13 et **supprimé** par T3 de la spec 24 (application : commit 38c1b55 ;
+> base : migration `20260827220000`). Une chambre n'est plus un enfant d'un produit hôtel : **une
+> chambre EST un produit** `type='lodging'`, rattaché à son établissement comme n'importe quel autre
+> produit. C'est le modèle de la v1 en production (`src/config/properties.js`) et celui de LobbyPMS,
+> qui n'a pas non plus d'objet « hôtel ».
+
+**Champs actuels** : nom, description, unité de vente, capacité, nombre d'unités, type de couchage,
+prix et paliers, tarifs saisonniers, photos — tous portés par `products`, avec un identifiant
+interne (`products.id`) indépendant du PMS.
 
 | Champ | Statut |
 |---|---|
-| Nom, capacité, unité de vente, plafond | ✅ |
-| **Identifiant interne indépendant du PMS** | ✅ **livré hors PMS (2026-08-16, spec 13)** — `product_room_types.id` (uuid propre au système), pour un hôtel géré via le nouveau `type='hotel'`. Le gap reste entier pour le mode `rooms` legacy adossé à LobbyPMS (hors périmètre spec 13, cf. §1 gap critique) — deux mécanismes distincts, pas une continuité de celui-ci. |
-| **Prix propre** | ✅ **livré hors PMS (2026-08-16, spec 13)** — `product_room_types.price_cop`/`price_tiers`, même mécanisme que `products.price_tiers` (spec 08/12) posé par chambre. |
-| **Calendrier de disponibilité propre** | ✅ **livré hors PMS (2026-08-17, spec 17 Tranche 2)** — `room_type_availability` (+ `room_type_date_rates`), consommé par la branche chambre de `create_order` : une chambre d'hôtel est réellement réservable. *(Cette ligne affirmait le contraire jusqu'au 2026-08-26 — elle était restée figée à l'état de la spec 13, définitionnelle.)* |
-| Photos par chambre | ✅ **livré (2026-08-16, spec 13)** — nouvelle table `room_media` (miroir de `product_media`/`establishment_media`), `add_catalog_media`/`reorder_gallery` étendus à `p_entity_type='room_type'` — même chokepoint d'abord signalé, puis étendu le jour même à la demande de Jérôme. Aligné sur `photos[]` de `GET /rooms` LobbyPMS |
-| Prix par période (chambre) | ✅ **livré, définitionnel seulement (2026-08-16, spec 13)** — `product_room_types.stay_rates`, réutilise tel quel le mécanisme `stay_rates`/`StayRatesEditor` de l'alojamiento (spec 12). Jamais consommé par `create_order`, cf. §1 |
-| Description par chambre | ✅ **livré (2026-08-16, spec 13)** — `product_room_types.description` (jsonb `{es, en?}`), miroir de `descriptions[]` LobbyPMS — 🌐 multilingue |
-| **Équipements propres à la chambre** (salle de bain privée, climatisation…) | ❌ absent — aucun champ structuré, seulement le nom de la chambre porte l'information de façon informelle aujourd'hui |
-| Nom de la chambre | ✅ **livré (2026-08-16, spec 13)** — `product_room_types.name` (jsonb `{es, en?}`) — 🌐 multilingue |
-| **Quantité de chambres du même type** | ✅ **livré (2026-08-16, spec 13)** — `product_room_types.quantity`, absent de tout audit précédent, ajouté par alignement volontaire sur `quantity` de `GET /rooms` LobbyPMS (distinct de `capacity`, jamais demandé avant) |
-
-| **Quantité et capacité sur le PRODUIT lui-même** (`type='lodging'`, sans étage hôtel) | ✅ **livré (2026-08-26, spec 24 §11)** — `products.quantity` (migration `20260826190000`), miroir de `product_room_types.quantity` ci-dessus mais posé sur le produit, pour le modèle « chambre = produit vendable » (cible T2). Couple avec `products.capacity`, qui existait depuis la spec 12 : **`capacity` = occupants d'UNE unité, `quantity` = nombre d'unités** — un dortoir est `capacity:1 × quantity:8`, une privée `capacity:2 × quantity:3`, sémantique confirmée par l'observation réelle de `GET /api/v1/rooms` (spec 24 §11.1). Les deux sont préremplis depuis LobbyPMS à la liaison et **affichés sur la fiche publique** ; ni l'un ni l'autre n'autorise ou ne refuse une réservation (pour un logement PMS-backed, `create_order` saute entièrement `product_availability` — c'est Lobby qui tranche en direct). À ne pas confondre avec `default_capacity`, qui amorce `product_availability` et ne concerne pas le groupe lodging |
+| Nom, description | ✅ `products.name` / `products.description` (jsonb `{es, en?}`) — 🌐 multilingue |
+| **Identifiant interne indépendant du PMS** | ✅ `products.id`. Le lien vers LobbyPMS est une colonne à part, `products.lobby_category_id` — l'identifiant interne ne dépend donc jamais du PMS, y compris pour un logement adossé à Lobby |
+| **Prix propre** | ✅ `products.price_cop` / `products.price_tiers` (specs 08/12) |
+| **Calendrier de disponibilité propre** | ✅ `product_availability` + `product_calendar` (+ `product_date_rates` pour un prix par nuit), consommés par la branche plage de `create_order` : un hébergement est réservable par plage de nuits (check-in/check-out). Pour un logement **PMS-backed**, `create_order` saute entièrement cette table — Lobby fait foi en direct |
+| Photos | ✅ `product_media`, via `add_catalog_media` — plafond de 6, uniforme avec produit et établissement |
+| Prix par période | ✅ `products.stay_rates` (spec 12), consommé nuit par nuit par `resolve_date_price` |
+| **Type de couchage** | ✅ `products.lodging_kind` (migration `20260827120000`) : `dorm` / `private` / `whole_house` |
+| **Capacité et nombre d'unités** | ✅ `products.capacity` et `products.unit_count` : **`capacity` = occupants d'UNE unité, `unit_count` = nombre d'unités** — un dortoir est `capacity:1 × unit_count:8`, une privée `capacity:2 × unit_count:3`. Sémantique confirmée par l'observation réelle de `GET /api/v1/rooms` (spec 24 §11.1). Préremplis depuis LobbyPMS à la liaison et affichés sur la fiche publique ; ni l'un ni l'autre n'autorise ou ne refuse une réservation. À ne pas confondre avec `default_capacity`, qui amorce `product_availability` et ne concerne pas le groupe lodging |
+| **Unité de vente** | ✅ `products.unit` : `per_person` / `per_two` / `per_house`, proposée à partir de `lodging_kind` et de la capacité (`proposeLodgingUnit`) |
+| **Horaires d'arrivée/départ** | ✅ portés par l'**établissement** (`establishments.check_in_time`/`check_out_time`, migration `20260827200000`) — c'est une propriété du lieu, pas de chaque chambre. `products.check_in_time`/`check_out_time` existent encore et restent renseignables produit par produit ; la page publique lit ceux de l'établissement |
+| **Équipements propres à la chambre** (salle de bain privée, climatisation…) | ❌ absent — aucun champ structuré, seul le nom porte l'information de façon informelle |
 
 ## 3. Produit vendable classique (activité, transport, alojamiento loué en entier — hors hôtel à
 chambres, cf. §2)

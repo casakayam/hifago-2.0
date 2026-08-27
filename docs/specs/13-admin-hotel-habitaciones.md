@@ -4,8 +4,8 @@ titre: "Admin : active products.type='hotel' — un hôtel a plusieurs sous-prod
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: implemente
-maj: 2026-08-16
+statut: "SUPPRIMÉE le 2026-08-27 (T3 de la spec 24) — l'étage hôtel n'existe plus, ni en code ni en base. Ce document reste comme archive de ce qui a été construit et de pourquoi il a été défait."
+maj: 2026-08-27
 resume: >
   Active un nouveau type de produit `hotel` : photos/description/lieu/check-in/check-out réutilisés
   du parcours ProductForm (specs 08/11/12), mais le prix ne vit pas sur l'hôtel — il vit sur ses
@@ -28,6 +28,26 @@ repond_a:
   - "Pourquoi products.price_cop est-il null pour un hôtel ?"
   - "Comment ce modèle se rattachera-t-il un jour à LobbyPMS ?"
 ---
+
+> ## ⛔ Cette spec décrit une fonctionnalité SUPPRIMÉE
+>
+> `products.type='hotel'`, `product_room_types`, `room_media`, `room_type_availability` et
+> `room_type_date_rates` **n'existent plus**. Retirés en deux temps le 2026-08-27 : l'application
+> par le commit 38c1b55 (T3 étape 1), la base par la migration `20260827220000` (T3 étape 2).
+>
+> **Pourquoi.** Ce troisième étage — produit → chambre → nuit — n'existait ni chez LobbyPMS (un
+> jeton = une propriété, puis directement des catégories de chambres) ni dans la v1 en production
+> (`src/config/properties.js` : les produits `lodging` sont « des TYPES DE COUCHAGE à l'intérieur
+> d'une propriété »). Il dupliquait intégralement la branche produit — capacité, prix par date,
+> médias, `price_tiers`, `stay_rates`, une branche entière de `create_order`, un écran de
+> disponibilité — pour zéro hôtel réel : la préprod comme la production n'ont jamais compté un seul
+> produit de ce type. L'hôtel est désormais l'**établissement** (page publique `/establishments/
+> [slug]`, spec 24 T1), et chaque chambre un produit `lodging` avec son `lodging_kind`.
+>
+> **Ce qui reste vrai dans ce document** : le raisonnement produit sur ce qu'une chambre doit
+> porter (nom, description, capacité, quantité, prix, paliers, photos, tarifs saisonniers). Tout
+> cela vit maintenant sur `products`. **Ce qui est faux** : chaque nom de table, de colonne, de
+> RPC et d'écran cité ci-dessous.
 
 # Admin : activer `type='hotel'` — un hôtel a plusieurs chambres
 

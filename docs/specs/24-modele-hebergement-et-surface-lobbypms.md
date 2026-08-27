@@ -4,7 +4,7 @@ titre: "Surface LobbyPMS exploitée, parcours front d'un produit lié, et cible 
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: "Lot A implémenté le 2026-08-26 ; Lot B gelé (observation préprod requise) ; cible modèle retenue sous conditions"
+statut: "Lot A implémenté le 2026-08-26 ; Lot B gelé (observation préprod requise) ; T1/T2/T3 de la cible modèle LIVRÉS le 2026-08-27 — l'étage hôtel n'existe plus. T4 (import Lobby avancé) reste à faire."
 maj: 2026-08-27
 resume: >
   Audit de ce que l'API LobbyPMS expose réellement face à ce que hifago en consomme, refonte du
@@ -241,10 +241,8 @@ Déclencheur : l'option apparaissait sur l'écran « créer une activité » alo
 une activité, et surtout un produit `hotel` **ne peut pas être adossé à LobbyPMS**
 (`isPmsBacked` = `lodging` + `lobby_category_id`) — le proposer menait donc à un produit qu'on ne
 pouvait ensuite pas connecter. Les hôtels existants restent éditables, `product_room_types` et la
-branche `room_type` de `create_order` sont **intactes**. Effet de bord assumé : le mode « stagé » de
-`HotelRoomsEditor` (chambres créées dans le même clic que le produit) n'est plus atteignable, donc
-plus testé — consigné dans l'en-tête de `admin-product-hotel.spec.ts`, réécrit pour poser le produit
-en fixture et construire les chambres par le bloc d'édition, qui est le chemin vivant.
+branche `room_type` de `create_order` étaient alors **intactes** — T3 les a supprimées depuis, voir
+plus bas.
 
 - **T2 — les colonnes sont à créer, pas « déjà présentes ».** `products.unit` est contraint à
   **deux** valeurs (`per_person`, `per_two`) ; `per_house` vient de la v1 et n'existe pas ici. Et
@@ -276,10 +274,45 @@ et **seulement** sur ce point :
   entier ? ». T1 en aura besoin : afficher une liste de chambres pour Bania Travel n'aurait aucun
   sens. `lodging_kind` ne le remplace pas.
 - **T2 bis — la sémantique de réservation change.** La branche `room_type` de `create_order` ne
-  vérifie **ni** `price_missing` **ni** `date_closed`, contrairement à la branche `lodging` :
-  fusionner les deux n'est pas neutre.
-- **T3 — effet catalogue.** Après fusion, un hôtel à 12 types produit **12 cartes** dans le catalogue
-  public (`page.tsx`, select à plat sur `sellable`) et perd son interrupteur `sellable` parent unique.
+  vérifiait **ni** `price_missing` **ni** `date_closed`, contrairement à la branche `lodging` :
+  fusionner les deux n'était pas neutre. **Point clos sans migration de données** : il n'existait
+  aucun produit `hotel` à fusionner, ni en préprod ni en production. La branche a donc été
+  supprimée, pas fusionnée — la sémantique survivante est celle de `lodging`, la plus stricte des
+  deux.
+- **T3 — effet catalogue.** Après fusion, un hôtel à 12 types produirait **12 cartes** dans le
+  catalogue public. **Réglé avant T3** (commit 265749a) : le catalogue regroupe les logements d'un
+  même établissement en une seule carte dès qu'il y en a au moins deux, et cette carte renvoie vers
+  la page établissement. La condition existait déjà pour les logements ordinaires — T3 ne l'a pas
+  créée, il l'a rendue visible.
+
+**T3 LIVRÉ le 2026-08-27, en deux étapes.**
+
+*Étape 1 — l'application* (commit 38c1b55, 36 fichiers, −2 395 lignes). Suppression de l'éditeur de
+chambres, de la grille disponibilité chambres×dates, des deux routes `room-availability`, du
+formulaire de réservation d'hôtel et de quatre specs e2e ; `ProductType` retombe à cinq valeurs,
+`CartLine` perd `roomTypeId`, le filtre du catalogue perd `hotel`.
+
+*Étape 2 — la base* (migration `20260827220000`). Disparaissent : `product_room_types`, `room_media`,
+`room_type_availability`, `room_type_date_rates`, `order_lines.room_type_id`,
+`set_room_type_availability`, la valeur `'hotel'` de `products.type` et de `product_proposals.type`,
+et les branches chambre de **onze** fonctions Postgres. `resolve_date_price` perd son premier
+paramètre `p_room_type_id` (changement de signature : ancienne version droppée explicitement).
+
+Les onze fonctions ont été extraites vivantes par `pg_get_functiondef` puis transformées par
+remplacements exacts vérifiés en nombre d'occurrences — jamais retapées de mémoire. C'était la
+condition posée par le journal du 2026-08-24 pour toucher `create_order` (647 lignes) et
+`modify_order_line`.
+
+**Ce que T3 étape 2 ne fait pas** : `products.check_in_time`/`check_out_time` subsistent à côté de
+ceux de l'établissement. Les fusionner est une décision de modèle, pas un nettoyage — la
+déduplication annoncée plus haut « appartient à T3 » reste donc ouverte.
+
+**Couverture de test conservée, pas perdue.** Deux fichiers ont été *portés* plutôt que supprimés,
+parce qu'ils couvraient la réservation par PLAGE DE NUITS — que rien d'autre ne couvre, la branche
+alojamiento partageant exactement le même verrouillage nuit par nuit :
+`room_type_and_date_range_booking.test.sql` → `date_range_booking.test.sql`, et
+`create_order_room_range.concurrency.mjs` → `create_order_date_range.concurrency.mjs` (15 runs
+concurrents propres).
 
 ## 10. Décisions tranchées / points ouverts
 

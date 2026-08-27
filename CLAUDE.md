@@ -402,113 +402,60 @@ En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
 nouvelle entrée.
 
-*2026-08-27 — chantier LobbyPMS livré et VÉRIFIÉ DE BOUT EN BOUT en préprod (spec 24), puis
-`products.lodging_kind`. Le connecteur ne rapatriait que `{id, name}` de `GET /rooms` : une chambre
-PMS-backed apparaissait dans le catalogue public comme un **nom nu, sans photo ni description**.
-Aujourd'hui le produit `glamping` (préprod) affiche nom, description es/en, 6 photos importées,
-« Hasta 2 personas · 3 en total », et sa disponibilité vient de Lobby en direct. **Parcours complet
-enfin exercé** : proposition socio → import serveur des photos en attente → modération →
-approbation → produit → fiche publique. **Forme réelle de l'API observée** (le 26/08, préprod —
-seul environnement joignable, spec 24 §11) : 6 catégories, 6/6 avec
-`type`(`privada`/`compartida`)/`capacity`/`quantity`, 4/6 avec `descriptions[]`(es,en,**pt,fr**)/
-`photos[]`. **Ce que ça a tranché** : `capacity` = occupants d'UNE unité, `quantity` = NOMBRE
-d'unités (un dortoir est 1×8) — d'où `products.unit_count` (`20260827100000`, renommée depuis
-`quantity` **parce que `product_room_types.quantity` porte la sémantique INVERSE, un plafond dur de
-réservation**). Puis **`products.lodging_kind`** (`20260827120000`), à **TROIS** valeurs
-`dorm|private|whole_house` : `whole_house` n'est pas théorique, la v1 en production porte
-`mode:'whole_house'` sur **Bania Travel** (`src/config/properties.js` du legacy) et hifago ne savait
-pas le représenter. Lobby n'ayant que deux termes, `whole_house` est **toujours** un choix manuel —
-`LobbyRoomKind` reste donc à deux valeurs (vocabulaire de Lobby), `LodgingKind` en est le
-sur-ensemble, et l'écran dit explicitement que l'import ne la remplira jamais. **À ne pas confondre
-avec `products.unit`**, qui est une unité de PRIX : la correspondance n'est pas mécanique (CAMPER
-Van est `privada` avec `capacity:4`, sûrement pas « per_two »). `unit` est étendue à `per_house`
-dans la même migration mais **C4 reste ouvert — rien ne l'écrit encore**. Le round-trip
-whitelist→insert de `unit_count`+`lodging_kind` est désormais couvert en pgTAP (il ne l'était pour
-ni l'un ni l'autre : un oubli de clé les jette EN SILENCE, côté Postgres, invisible du TypeScript).
-**Piège de parcours constaté** : lier une ACTIVITÉ à un SERVICE Lobby ne peut rien rapatrier —
-`GET /products` ne renvoie que `{service_id, name, value, infinite_inventory, stock}` ; l'écran le
-dit désormais. **`/simplify` (4 agents)** : la garde d'accès des 3 routes `api/pms` était non
-seulement dupliquée mais **plus FAIBLE que celle de la base** (comparaison `partner_id` au lieu de
-`has_capability(uid,'operator',estId)`, qui filtre aussi sur `status='active'`) — un operator
-suspendu déclenchait des appels et des écritures Storage pour une proposition que la RPC refusait
-ensuite. Corrigé une fois pour les trois. Aussi : cache 60 s partagé sélecteur↔import
-(stage 1455→619 ms), pipeline image unifié, `mergeLobbyRoom` extraite (pure, testée — « le nom
-n'est JAMAIS écrasé » porte le slug public), fixtures « forme observée » rendues opposables par un
-test HTTP réel. **Trouvé en vérifiant, pas en lisant** : `supabase-js` ne lève pas sur échec —
-ignorer `error` transformait une panne transitoire en **403 silencieux** ; désormais
-`503 authorization_unavailable`. **Infra** : les 3 Edge Functions n'avaient **jamais été déployées**
-et le **Vault de la préprod était vide** — les 4 `invoke_*` sortaient en `raise warning` sans jamais
-appeler, donc les crons tournaient à vide en silence depuis leur création. Fonctions déployées,
-2 entrées Vault non secrètes posées. **Sonde C1/C5** construite et déployée (`available-rooms` sans `category_id`, dans le job nocturne
-plutôt qu'en script jetable : la réponse arrive sans humain et reste surveillée). Elle a fait
-tomber DEUX obstacles d'infra, tous deux vérifiés et non supposés. (a) L'extraction de
-`parseHelpers.ts` avait écrit un import SANS extension — Node/Vite s'en moquent, **Deno l'exige** :
-la fonction ne bootait plus, et ni typecheck ni lint ni les 378 tests ne le voyaient (tous en
-résolution bundler). Attrapé en la servant en local AVANT de la pousser. (b) `supabase secrets list`
-ne renvoie que les 7 variables auto-provisionnées : **ni `LOBBY_API_BASE_URL`, ni
-`LOBBY_RELAY_SECRET`** — les Edge Functions n'ont JAMAIS eu la configuration Lobby que Vercel
-possède, et appellent en direct depuis une IP non whitelistée. Prouvé par différentiel : même
-établissement, même jeton, `night-availability` répond **200** depuis Vercel préprod pendant que
-l'Edge Function reçoit **403**. **C1 RÉFUTÉ, C5 RÉPONDU** (sonde exécutée contre le compte réel, nuit J+30) : `available-rooms`
-cote les **6/6** catégories avec une **signature de champs identique** et une disponibilité non
-nulle partout — y compris 18013/49823, qui refusaient en `422` en juillet. Cette réponse ne
-discrimine RIEN, et 2 des 4 catégories « refusantes » de juillet (17998, 51636) n'existent même
-plus. **C1 n'est pas « à faire » : il est non implémentable en l'état** — plus aucun angle
-documentaire, la seule preuve serait de tenter un booking (`TESTLIVE`, fermé) ; à reprendre par une
-re-vérification du 422 ou une question à LobbyPMS. Le repli « informer sans filtrer » reste en
-place, désormais assumé. **C5** : `restrictions` existe (jamais observé jusqu'ici) et vaut
-`{0,0,0}` sur les six — n'appliquer que si `> 0` était la bonne règle, c'est maintenant un constat,
-et le job le surveille. **Bonus non cherché** : `plans[].prices[]` a autant d'entrées que la
-CAPACITÉ d'une unité (GLAMPING 2 → 2 prix, CAMPER Van 4 → 4, dortoirs 1 → 1) — les prix Lobby sont
-par niveau d'occupation, modèle que hifago n'a pas ; confirme « Lobby n'est jamais la source du
-prix ». Formes gelées dans `pmsFixtureServer.ts` et opposables par `lobbyContract.test.ts`.
-**NON FAIT, à reprendre** :
-(1) `RESEND_API_KEY` (email) reste en attente sur décision de Jérôme — **`pms_service_role_key` est
-POSÉE** (27/08), par une fonction jetable qui l'a recopiée depuis l'environnement des Edge Functions
-vers le Vault sans qu'elle transite par un humain ; les deux `invoke_*` répondent 200, et c'étaient
-les entrées n°1 et n°2 de `net._http_response` — les crons n'avaient JAMAIS abouti depuis le 19/08.
-(2) **Lot B TERMINÉ — C2 implémenté ET vérifié en conditions réelles** (spec 25) : booking créé puis
-annulé sur le compte de Casa Kayam, nettoyage confirmé. Trigger `for each statement` sur
-`order_lines` (pas un appel depuis les RPC : il les attrape TOUTES, même futures), liste blanche de
-statuts, file drainée par `pms-cancel-bookings`. **Le test live a trouvé 3 défauts invisibles en
-local** : le trigger enfilait sur `fulfilled`/`no_show` (hifago aurait annulé des séjours
-EFFECTUÉS) ; `cancellation_reason` est un CODE fermé (NS/RC/RE/TTC/CC/OTH), pas du texte ; et le
-succès de Lobby se lit **dans le corps** (`{"cancel_booking":id}`), jamais dans le statut HTTP. Le
-serveur de fixtures répondait 200 à tout — un faux Lobby plus poli que le vrai. ⚠️ **C1 rouvert par
-ce test** : CAMPER Van (49823) a refusé la création du booking là où GLAMPING (29376) a réussi, même
-code et même commande — la distinction de juillet est TOUJOURS vraie, elle n'est simplement visible
-que par un booking réel, donc derrière `TESTLIVE`. ⚠️ `reserve-nights` ne journalise AUCUN motif
-d'échec de création (l'entrée de réconciliation est nue) — même angle mort que le job nocturne, à
-corriger.
-**C1 réfuté, C5 répondu, C4 FAIT** (`20260827140000` : `products.unit` est enfin écrivable — elle
-était contrainte, documentée et lue, mais écrite par rien sauf `seed.sql`). Aucune conversion
-automatique depuis Lobby : leurs prix sont par niveau d'occupation, `proposeLodgingUnit` ne propose
-que l'évident (dorm→per_person, whole_house→per_house, private+capacity 2→per_two) et se tait
-ailleurs — une unité fausse rend une fiche fausse sans la rendre suspecte. Le repli legacy
-`NULL ⇒ per_person` n'est **pas** porté : il ferait apparaître « por persona » partout d'un coup.
-(3) **Bruit du job nocturne réglé** : le seed portait `lobby_connector_active` avec un jeton factice
-et produisait une dérive `401` chaque nuit ; connecteur désactivé en préprod. ⚠️ Reste que son
-produit `alojamiento-pms-backed-demo` est encore `sellable` dans le catalogue public de préprod
-alors qu'il est invendable — donnée de démo, décision de Jérôme. (4) Modèle hébergement : **T1 LIVRÉ** le 27/08 — `/[locale]/establishments/[slug]` présente le lieu
-et regroupe ses produits, la fiche produit y renvoie ; `establishments` gagne `slug` (dérivé par
-trigger, jamais saisi), `check_in_time`/`check_out_time` (propriété du LIEU) et `mode`
-(`rooms`|`whole_house`, repris de la v1 où Bania Travel se loue entier). ⚠️ **Deux pièges évités et
-à retenir** : `establishments` n'a pas de grant SELECT global (révoqué pour protéger
-`lobby_api_token`, ré-accordé COLONNE PAR COLONNE — une colonne neuve est illisible, et le
-`permission denied` précède la RLS) ; et il ne faut **pas** étendre `update_establishment`, qui
-remplace tous ses champs et est appelée par trois chemins de modération — chaque approbation aurait
-remis les nouveaux champs à null. D'où `update_establishment_stay_details`, étroite. **T1 ne couvre
-PAS** les tags/équipements d'établissement (aucune table d'affectation n'existe) ni la
-déduplication de `products.check_in_time`, qui appartient à T3. T2 avancé (`unit_count` +
-`lodging_kind` + `unit`), **T3/T4 non commencés**.
-**⚠️ `LOBBY_PMS_TOKEN` : révocation DIFFÉRÉE, décision explicite de Jérôme le 2026-08-27.** Sa valeur
-a transité par une conversation (§8 point 2 voudrait une rotation immédiate), et le jeton mort a bien
-été retiré de `apps/admin/.env.local` — mais la révocation chez LobbyPMS est repoussée **tant qu'on
-teste le connecteur** : la tourner maintenant couperait la chaîne relais→Lobby en pleine série de
-tests live. **Déclencheur de la révocation : la fin de la campagne de tests LobbyPMS.** À ne pas
-laisser filer — c'est le seul secret exposé de la journée qui n'a pas été tourné (celui du relais l'a
-été le 27/08). Détail complet : `hifago/docs/journal/2026-08.md`
-(2026-08-26 et 2026-08-27). **24 commits POUSSÉS sur `main`** (`26f28d9..8b78e03`, 2026-08-27) — la préprod Vercel n'est pas branchée sur Git, un push ne déploie donc rien. **Secret du relais FAIT TOURNER** le 27/08 (il avait transité par une conversation) — et la rotation a réaligné `/etc/caddy/relay.env` sur ce que Caddy applique, ce qui n'était plus le cas : un reboot du relais aurait coupé LobbyPMS. `systemctl restart`, jamais `reload` — systemd ne relit l'`EnvironmentFile` qu'au démarrage. Vercel redéployé avec `vercel redeploy <url>` et **non** `vercel deploy`, qui aurait envoyé l'arbre local et donc `lodging_kind` sans sa migration.*
+*2026-08-27 — journée en trois temps : connecteur LobbyPMS vérifié de bout en bout (spec 24), C2
+livré et testé en réel (spec 25), puis **le modèle hébergement mené à son terme (T1 → T3)**.
+**T3 : `products.type='hotel'` n'existe plus.** Étape 1 (38c1b55, −2 395 lignes) a retiré l'étage de
+l'application ; étape 2 (`20260827220000`) l'a retiré de la BASE — 4 tables, `order_lines.
+room_type_id`, `set_room_type_availability`, la valeur `'hotel'` de deux contraintes, et les branches
+chambre de ONZE fonctions Postgres. **Méthode, qui était la condition posée le 24/08 pour toucher
+`create_order`** : extraction vivante par `pg_get_functiondef` + remplacements exacts **vérifiés en
+nombre d'occurrences** (une cible manquée = échec bruyant, jamais un silence). Le garde-fou a servi
+4 fois. `resolve_date_price` perd `p_room_type_id` (surcharge + `drop` explicite : un `create or
+replace` ne retire pas un paramètre). ⚠️ **Deux tests PORTÉS, pas supprimés** —
+`date_range_booking.test.sql` et `create_order_date_range.concurrency.mjs` : ils couvraient la
+réservation par PLAGE DE NUITS, que rien d'autre ne couvre, et la branche alojamiento partage le même
+verrouillage nuit par nuit. ⚠️ **Leçon d'inventaire** : ma liste de tests venait d'un `grep
+room_type` et ratait `create_manual_order_line.test.sql`, qui ne dit que `'hotel'` — c'est la suite
+pgTAP complète qui l'a trouvé. ⚠️ **Échecs qui n'en sont pas** : 4 fichiers pgTAP et `partner-agenda`
+tombaient sur la POLLUTION de la base locale (60 lignes d'`audit_log` accumulées, 3 réservations le
+même jour) — prouvé en vidant les tables dans la transaction du test, pas supposé. **`partner-agenda`
+ne nettoie pas derrière lui et se sabote au bout de quelques runs** : défaut réel, à traiter à part.
+**T1 LIVRÉ** : `/[locale]/establishments/[slug]` présente le lieu et regroupe ses produits ;
+`establishments` gagne `slug` (dérivé par trigger, jamais saisi), `check_in_time`/`check_out_time`
+(propriété du LIEU) et `mode` (`rooms`|`whole_house`, repris de la v1 où Bania Travel se loue
+entier). ⚠️ **Deux pièges à retenir** : `establishments` n'a PAS de grant SELECT global (révoqué pour
+protéger `lobby_api_token`, ré-accordé COLONNE PAR COLONNE — une colonne neuve est illisible, et le
+`permission denied` précède la RLS) ; et ne **pas** étendre `update_establishment`, qui remplace tous
+ses champs et est appelée par trois chemins de modération — d'où `update_establishment_stay_details`,
+étroite. **T2** : `unit_count`, `lodging_kind` (3 valeurs — `whole_house` est TOUJOURS manuel, Lobby
+n'a que `privada`/`compartida`), `unit` étendue à `per_house` et enfin ÉCRIVABLE (C4). **T4 non
+commencé.** **Connecteur** : une chambre PMS-backed n'était qu'un nom nu dans le catalogue ;
+aujourd'hui `glamping` (préprod) affiche description es/en, 6 photos importées, capacité, et sa
+dispo vient de Lobby en direct. **C1 RÉFUTÉ par la sonde puis ROUVERT par le test live** — CAMPER Van
+(49823) refuse la création d'un booking là où GLAMPING (29376) réussit, même code : la distinction de
+juillet est vraie, mais visible seulement par un booking réel, donc derrière `TESTLIVE`. **C5
+répondu** : `restrictions` vaut `{0,0,0}` sur les six catégories. **Bonus** : `plans[].prices[]` a
+autant d'entrées que la capacité d'une unité — les prix Lobby sont par niveau d'occupation, modèle
+que hifago n'a pas. **C2 vérifié en réel** (spec 25) : booking créé puis annulé chez Casa Kayam. Le
+test live a trouvé 3 défauts invisibles en local — le trigger enfilait sur `fulfilled`/`no_show`
+(hifago aurait annulé des séjours EFFECTUÉS) ; `cancellation_reason` est un CODE fermé
+(NS/RC/RE/TTC/CC/OTH) ; le succès de Lobby se lit **dans le corps**, jamais dans le statut HTTP — le
+serveur de fixtures répondait 200 à tout, un faux Lobby plus poli que le vrai. **Infra, trois couches
+de la même panne** : les Edge Functions n'avaient JAMAIS été déployées, les secrets Lobby n'ont
+JAMAIS été posés côté Supabase (`supabase secrets list` ne renvoie que les 7 auto-provisionnées), et
+le Vault était vide — les crons tournaient à vide en silence depuis le 19/08. Réglé ; `pms_service_
+role_key` posée par une fonction jetable, sans transiter par un humain. ⚠️ Import Deno : un import
+SANS extension `.ts` casse le boot, invisible au typecheck, au lint et aux 378 tests. **NON FAIT, à
+reprendre** : (1) ⚠️ **`LOBBY_PMS_TOKEN` — révocation DIFFÉRÉE, décision explicite de Jérôme.**
+Déclencheur : **la fin de la campagne de tests LobbyPMS**. C'est le seul secret exposé de la journée
+qui n'a pas été tourné (celui du relais l'a été). (2) `RESEND_API_KEY` en attente de décision.
+(3) `reserve-nights` ne journalise AUCUN motif d'échec de création — l'entrée de réconciliation est
+nue. (4) `products.check_in_time` fait toujours doublon avec celui de l'établissement, et le
+garde-fou `capacity_exceeds_physical` reste à porter sur `products`. (5) `alojamiento-pms-backed-
+demo` est encore `sellable` en préprod alors qu'il est invendable. **Push** : la préprod Vercel n'est
+pas branchée sur Git, un push ne déploie rien ; redéployer avec `vercel redeploy <url>` et **non**
+`vercel deploy`, qui enverrait l'arbre local sans ses migrations. Le relais : `systemctl restart`,
+jamais `reload` — systemd ne relit l'`EnvironmentFile` qu'au démarrage.*
 
 *2026-08-24 (suite 3, session distincte) — spec 23 (`docs/specs/23-notifications-email-
 transactionnelles.md`) écrite et implémentée intégralement, Tranche 1 + Tranche 2 (8 événements).

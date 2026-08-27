@@ -43,7 +43,7 @@
 -- pour self_referral/direct (referrer_pct=0). 3 assertions ajoutées juste après le cas 16b/16c
 -- ci-dessous, mêmes fixtures, aucune nouvelle commande.
 begin;
-select plan(95);
+select plan(93);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -1176,12 +1176,10 @@ select is(
 -- garde-fou vit bien en Phase 3/validation, pas en Phase 4/écriture où un refus tardif ne ferait
 -- pas rollback des lignes déjà traitées plus tôt dans le même appel).
 --
--- Fixture type='evento' (PAS 'hotel' comme à l'écriture initiale de ce cas, Tranche 0) : depuis la
--- migration Tranche 2 (20260817210000), une ligne 'hotel' sans room_type_id est désormais refusée
--- plus tôt et plus précisément par le nouveau garde room_type_required (Phase 1, cf. cas 19
--- ci-dessous) — 'evento' reste le seul type dont la contrainte products_price_cop_required_
--- unless_evento autorise un price_cop null sans déclencher ce nouveau garde, donc le seul fixture
--- qui exerce encore le garde price_missing générique de Phase 3.
+-- Fixture type='evento', et c'est forcé : depuis T3 étape 2 (20260827220000), 'evento' est le SEUL
+-- type dont la contrainte products_price_cop_required_unless_evento autorise un price_cop null.
+-- C'est donc le seul fixture capable d'atteindre le garde price_missing de Phase 3 — tout autre
+-- type serait refusé par la contrainte à l'insertion, avant même d'appeler create_order.
 reset role;
 insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug) values
   ('88880000-0000-4000-8000-000000000046', '88880000-0000-4000-8000-000000000001',
@@ -1212,33 +1210,6 @@ select is(
     where product_id = '88880000-0000-4000-8000-000000000046' and date = '2028-12-25'),
   0,
   'cas 18 : capacité inchangée (refus en Phase 3, avant toute écriture)'
-);
-
--- Cas 19 (spec 17 §0 Tranche 2, migration 20260817210000) : ligne 'hotel' SANS room_type_id →
--- refus room_type_required en Phase 1 (avant tout verrou), pas price_missing — un hôtel ne se
--- réserve jamais "en gros", toujours via une chambre précise.
-reset role;
-insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug) values
-  ('88880000-0000-4000-8000-000000000047', '88880000-0000-4000-8000-000000000001',
-   '88880000-0000-4000-8000-000000000011', 'hotel',
-   jsonb_build_object('es', 'Hotel Sin Habitación'), null, true, 'order-test-hotel-no-room-type');
-set local role authenticated;
-
-select is(
-  (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000047', 'date', '2028-12-25', 'qty', 1
-     )),
-     'Holder No Room Type',
-     p_holder_email => 'buyer-fixture@hifago.test'
-   )->>'reason'),
-  'room_type_required',
-  'cas 19 : ligne hotel sans room_type_id → room_type_required'
-);
-select is(
-  (select count(*) from orders where holder_name = 'Holder No Room Type')::int,
-  0,
-  'cas 19 : aucune commande créée'
 );
 
 -- Cas 20 (gap découvert en session, produit jetski réel — 20260818090000) : products.

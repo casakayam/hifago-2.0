@@ -19,8 +19,8 @@ import {
 // afficher pour CHAQUE cas, y compris la capacité insuffisante — pas de mapping de raisons ici,
 // contrairement à ChangeStatusDialog (dont la RPC, elle, renvoie un {ok:false, reason} structuré).
 //
-// initialEndDate non null ⇒ ligne à plage (chambre d'hôtel OU alojamiento, room_type_id ou pas —
-// la RPC ne distingue que par end_date pour ce garde, cf. migration 20260817220400) : deux champs
+// initialEndDate non null ⇒ ligne à plage (alojamiento — la RPC ne distingue que par end_date pour
+// ce garde, cf. migration 20260817220400) : deux champs
 // de date (Check-in/Check-out) au lieu d'un seul, p_new_end_date transmis à la RPC. Jamais l'inverse
 // (une ligne à date unique ne peut pas devenir une plage depuis cet écran — hors périmètre, refusé
 // explicitement côté serveur si jamais tenté).

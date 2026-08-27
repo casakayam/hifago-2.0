@@ -13,11 +13,10 @@ export type PriceTiersEditorTestIdPart =
   | "tier-price"
   | "remove-tier";
 
-// Bloc "prix simple ou par tramos" — partagé entre le prix d'un produit (ProductForm, spec 08) et
-// le prix d'une chambre (HotelRoomsEditor, spec 13, un bloc par chambre). Composant UI pur,
-// contrôlé, aucun I/O réseau. `testId` laisse chaque appelant reproduire exactement ses data-testid
-// existants (aucun index au niveau produit, `{roomIndex}-{tierIndex}` au niveau chambre) sans que
-// ce composant n'ait à connaître la convention de nommage de son appelant.
+// Bloc "prix simple ou par tramos" du prix d'un produit (ProductForm, spec 08). Composant UI pur,
+// contrôlé, aucun I/O réseau. `testId` laisse l'appelant reproduire exactement ses data-testid
+// existants sans que ce composant n'ait à connaître sa convention de nommage — le paramètre vient
+// de l'époque où HotelRoomsEditor l'utilisait aussi, avec un index par chambre.
 export function PriceTiersEditor({
   priceMode,
   onPriceModeChange,

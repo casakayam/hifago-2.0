@@ -18,7 +18,7 @@
 -- operator serait une redondance, pas une couverture supplémentaire (cf. hifago/CLAUDE.md §6,
 -- proportionnalité du test).
 begin;
-select plan(70);
+select plan(52);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -415,62 +415,19 @@ select is(
   'succès A : ligne audit_log correcte (action/before/note)'
 );
 
--- ===== Tranche 2 (suite) — modify_order_line polymorphe (chambre/alojamiento par plage) ========
+-- ===== Tranche 2 (suite) — modify_order_line sur une ligne à plage ==============================
 -- Fixtures dédiées, jamais partagées avec le groupe gardes/succès date unique ci-dessus (mêmes
 -- partenaire/établissement, IDs disjoints). Migration couverte : 20260817220400_modify_order_
--- line_range_support.sql.
+-- line_range_support.sql. Les scénarios chambre d'hôtel (R1/R2/refus) sont partis avec l'étage
+-- hôtel (T3 étape 2, 20260827220000) — la branche alojamiento qu'ils doublaient reste couverte.
 reset role;
 
-insert into products (id, partner_id, establishment_id, type, name, sellable, slug) values
-  ('88920000-0000-4000-8000-000000000071', '88920000-0000-4000-8000-000000000001',
-   '88920000-0000-4000-8000-000000000011', 'hotel',
-   jsonb_build_object('es', 'Hotel Modify Order Line'), true, 'modify-order-line-hotel');
 insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug, min_qty, max_qty)
 values (
   '88920000-0000-4000-8000-000000000073', '88920000-0000-4000-8000-000000000001',
   '88920000-0000-4000-8000-000000000011', 'lodging',
   jsonb_build_object('es', 'Casa Modify Order Line'), 150000, true, 'modify-order-line-lodging', 1, 4
 );
-
--- ROOM1 (private) : scénario R1, déplacement SANS nuit commune.
-insert into product_room_types (id, product_id, kind, name, capacity, quantity, price_cop, min_qty, max_qty)
-values (
-  '88920000-0000-4000-8000-000000000072', '88920000-0000-4000-8000-000000000071', 'private',
-  jsonb_build_object('es', 'Privada R1'), 1, 3, 80000, 1, 3
-);
--- ROOM2 (dorm) : scénario R2, UNE nuit commune (12/11) aux deux intervalles — le cas visé par la
--- généralisation par nuit du delta (jamais une nuit commune double-libérée/double-consommée).
-insert into product_room_types (id, product_id, kind, name, capacity, quantity, price_cop, min_qty, max_qty)
-values (
-  '88920000-0000-4000-8000-000000000074', '88920000-0000-4000-8000-000000000071', 'dorm',
-  jsonb_build_object('es', 'Dormitorio R2'), 6, 2, 30000, 1, 6
-);
--- ROOM3 (private) : scénario refus tout-ou-rien (nuit pleine dans le nouvel intervalle).
-insert into product_room_types (id, product_id, kind, name, capacity, quantity, price_cop, min_qty, max_qty)
-values (
-  '88920000-0000-4000-8000-000000000076', '88920000-0000-4000-8000-000000000071', 'private',
-  jsonb_build_object('es', 'Privada Full'), 1, 1, 50000, 1, 1
-);
-
-insert into room_type_availability (room_type_id, date, capacity, booked)
-select '88920000-0000-4000-8000-000000000072', d::date, 5, 0
-  from generate_series('2028-11-01'::date, '2028-11-08'::date, interval '1 day') as d;
-update room_type_availability set booked = 2
- where room_type_id = '88920000-0000-4000-8000-000000000072' and date in ('2028-11-01', '2028-11-02');
-
-insert into room_type_availability (room_type_id, date, capacity, booked)
-select '88920000-0000-4000-8000-000000000074', d::date, 5, 0
-  from generate_series('2028-11-10'::date, '2028-11-15'::date, interval '1 day') as d;
-update room_type_availability set booked = 2
- where room_type_id = '88920000-0000-4000-8000-000000000074'
-   and date in ('2028-11-10', '2028-11-11', '2028-11-12');
-
-insert into room_type_availability (room_type_id, date, capacity, booked) values
-  ('88920000-0000-4000-8000-000000000076', '2028-11-20', 1, 1), -- déjà pleine par la ligne fixture elle-même
-  ('88920000-0000-4000-8000-000000000076', '2028-11-21', 1, 0),
-  -- déjà pleine par UNE AUTRE réservation (jamais modélisée en order_line ici, juste le compteur).
-  ('88920000-0000-4000-8000-000000000076', '2028-11-22', 1, 1),
-  ('88920000-0000-4000-8000-000000000076', '2028-11-23', 1, 0);
 
 insert into product_availability (product_id, date, capacity, booked)
 select '88920000-0000-4000-8000-000000000073', d::date, 5, 0
@@ -483,34 +440,19 @@ insert into product_calendar (product_id, date, open) values
   ('88920000-0000-4000-8000-000000000073', '2028-12-09', false);
 
 insert into order_lines (
-  id, order_id, account_id, product_id, room_type_id, date, end_date, qty, status, holder_name,
+  id, order_id, account_id, product_id, date, end_date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values
-  -- R1 : succès chambre, déplacement + augmentation de qty, sans nuit commune.
-  ('88920000-0000-4000-8000-000000000081', '88920000-0000-4000-8000-000000000041',
-   '88920000-0000-4000-8000-000000000032', '88920000-0000-4000-8000-000000000071',
-   '88920000-0000-4000-8000-000000000072', '2028-11-01', '2028-11-03', 2, 'reserved',
-   'Holder Modify Room Range', 160000, 320000, 'direct', 0, 0, 0, 0, 0, 0),
-  -- R2 : succès chambre, une nuit commune (12/11) aux deux intervalles.
-  ('88920000-0000-4000-8000-000000000082', '88920000-0000-4000-8000-000000000041',
-   '88920000-0000-4000-8000-000000000032', '88920000-0000-4000-8000-000000000071',
-   '88920000-0000-4000-8000-000000000074', '2028-11-10', '2028-11-13', 2, 'reserved',
-   'Holder Modify Room Overlap', 90000, 180000, 'direct', 0, 0, 0, 0, 0, 0),
-  -- R-full : refus tout-ou-rien (nuit 22/11 déjà pleine dans le nouvel intervalle).
-  ('88920000-0000-4000-8000-000000000083', '88920000-0000-4000-8000-000000000041',
-   '88920000-0000-4000-8000-000000000032', '88920000-0000-4000-8000-000000000071',
-   '88920000-0000-4000-8000-000000000076', '2028-11-20', '2028-11-21', 1, 'reserved',
-   'Holder Modify Room Full', 50000, 50000, 'direct', 0, 0, 0, 0, 0, 0),
   -- L1 : succès alojamiento, déplacement + augmentation de qty, sans nuit commune.
   ('88920000-0000-4000-8000-000000000084', '88920000-0000-4000-8000-000000000041',
    '88920000-0000-4000-8000-000000000032', '88920000-0000-4000-8000-000000000073',
-   null, '2028-12-01', '2028-12-03', 1, 'reserved',
+   '2028-12-01', '2028-12-03', 1, 'reserved',
    'Holder Modify Lodging Range', 150000, 300000, 'direct', 0, 0, 0, 0, 0, 0),
   -- L-closed : refus tout-ou-rien (nuit 09/12 fermée dans le nouvel intervalle).
   ('88920000-0000-4000-8000-000000000085', '88920000-0000-4000-8000-000000000041',
    '88920000-0000-4000-8000-000000000032', '88920000-0000-4000-8000-000000000073',
-   null, '2028-12-08', '2028-12-09', 1, 'reserved',
+   '2028-12-08', '2028-12-09', 1, 'reserved',
    'Holder Modify Lodging Closed', 150000, 150000, 'direct', 0, 0, 0, 0, 0, 0);
 
 set local role authenticated;
@@ -531,131 +473,13 @@ select is(
   'cas 11 : ligne G toujours intacte après le refus'
 );
 
--- Cas 12 : p_new_end_date manquant sur une ligne à plage (chambre) → exception. Aucune écriture
--- avant ce garde — la ligne R1 est réutilisée juste après pour son vrai test.
+-- Cas 12 : p_new_end_date manquant sur une ligne à plage → exception. Aucune écriture avant ce
+-- garde — la ligne L1 est réutilisée juste après pour son vrai test.
 select throws_ok(
-  $$ select modify_order_line('88920000-0000-4000-8000-000000000081', '2028-11-05', 3, 'Motivo válido') $$,
+  $$ select modify_order_line('88920000-0000-4000-8000-000000000084', '2028-12-04', 2, 'Motivo válido') $$,
   'P0001'::char(5),
-  'p_new_end_date obligatoire pour modifier une ligne à plage (chambre/alojamiento)',
-  'cas 12 : p_new_end_date manquant sur une ligne à plage (chambre) → exception'
-);
-
--- ===== R1 : succès chambre — nouvel intervalle SANS nuit commune, qty 2→3 =======================
-create temp table tmp_modify_r1 as
-  select modify_order_line(
-    '88920000-0000-4000-8000-000000000081', '2028-11-05', 3, 'Cliente cambió de habitación y fechas',
-    '2028-11-07'
-  ) as result;
-select is(
-  (select result->>'ok' from tmp_modify_r1), 'true',
-  'R1 : appel réussi (nouvelles nuits + qty 2→3, chambre)'
-);
-select is(
-  (select status from order_lines where id = '88920000-0000-4000-8000-000000000081'),
-  'superseded',
-  'R1 : ancienne ligne marquée superseded'
-);
-select is(
-  (select jsonb_build_object('date', date, 'end_date', end_date, 'room_type_id', room_type_id, 'qty', qty,
-          'status', status, 'replaces_order_line_id', replaces_order_line_id,
-          'price_cop', price_cop, 'total_cop', total_cop)
-     from order_lines where id = (select (result->>'order_line_id')::uuid from tmp_modify_r1)),
-  jsonb_build_object(
-    'date', '2028-11-05'::date, 'end_date', '2028-11-07'::date,
-    'room_type_id', '88920000-0000-4000-8000-000000000072'::uuid, 'qty', 3,
-    'status', 'reserved', 'replaces_order_line_id', '88920000-0000-4000-8000-000000000081'::uuid,
-    'price_cop', 160000, 'total_cop', 480000
-  ),
-  'R1 : nouvelle ligne correcte (date/end_date/room_type_id/qty/prix)'
-);
-select is(
-  (select booked from room_type_availability
-    where room_type_id = '88920000-0000-4000-8000-000000000072' and date = '2028-11-01'),
-  0, 'R1 : ancienne nuit 01/11 libérée (2 - 2 = 0)'
-);
-select is(
-  (select booked from room_type_availability
-    where room_type_id = '88920000-0000-4000-8000-000000000072' and date = '2028-11-02'),
-  0, 'R1 : ancienne nuit 02/11 libérée (2 - 2 = 0)'
-);
-select is(
-  (select booked from room_type_availability
-    where room_type_id = '88920000-0000-4000-8000-000000000072' and date = '2028-11-05'),
-  3, 'R1 : nouvelle nuit 05/11 consommée (0 + 3 = 3)'
-);
-select is(
-  (select booked from room_type_availability
-    where room_type_id = '88920000-0000-4000-8000-000000000072' and date = '2028-11-06'),
-  3, 'R1 : nouvelle nuit 06/11 consommée (0 + 3 = 3)'
-);
-drop table tmp_modify_r1;
-
--- ===== R2 : succès chambre — UNE nuit commune (12/11) aux deux intervalles, qty 2→4 =============
-create temp table tmp_modify_r2 as
-  select modify_order_line(
-    '88920000-0000-4000-8000-000000000082', '2028-11-12', 4, 'Cliente amplió el grupo y corrió la salida',
-    '2028-11-15'
-  ) as result;
-select is(
-  (select result->>'ok' from tmp_modify_r2), 'true',
-  'R2 : appel réussi (nouvel intervalle chevauchant, qty 2→4)'
-);
-select is(
-  (select booked from room_type_availability
-    where room_type_id = '88920000-0000-4000-8000-000000000074' and date = '2028-11-10'),
-  0, 'R2 : nuit 10/11 (sortie de l''intervalle) libérée'
-);
-select is(
-  (select booked from room_type_availability
-    where room_type_id = '88920000-0000-4000-8000-000000000074' and date = '2028-11-11'),
-  0, 'R2 : nuit 11/11 (sortie de l''intervalle) libérée'
-);
-select is(
-  (select booked from room_type_availability
-    where room_type_id = '88920000-0000-4000-8000-000000000074' and date = '2028-11-12'),
-  4,
-  'R2 : nuit 12/11 COMMUNE aux deux intervalles → delta net (2 - 2 + 4 = 4), jamais 6 (double-compte) ni 2 (double-libération)'
-);
-select is(
-  (select booked from room_type_availability
-    where room_type_id = '88920000-0000-4000-8000-000000000074' and date = '2028-11-13'),
-  4, 'R2 : nouvelle nuit 13/11 consommée (0 + 4 = 4)'
-);
-select is(
-  (select booked from room_type_availability
-    where room_type_id = '88920000-0000-4000-8000-000000000074' and date = '2028-11-14'),
-  4, 'R2 : nouvelle nuit 14/11 consommée (0 + 4 = 4)'
-);
-drop table tmp_modify_r2;
-
--- ===== Refus tout-ou-rien : chambre, nuit pleine dans le nouvel intervalle (22/11) ===============
-select throws_ok(
-  $$ select modify_order_line(
-       '88920000-0000-4000-8000-000000000083', '2028-11-21', 1, 'Motivo válido', '2028-11-23'
-     ) $$,
-  'P0001'::char(5), null,
-  'refus chambre : nuit 22/11 déjà pleine dans le nouvel intervalle → exception'
-);
-select is(
-  (select jsonb_build_object('status', status, 'date', date, 'end_date', end_date, 'qty', qty)
-     from order_lines where id = '88920000-0000-4000-8000-000000000083'),
-  jsonb_build_object('status', 'reserved', 'date', '2028-11-20'::date, 'end_date', '2028-11-21'::date, 'qty', 1),
-  'refus chambre : ligne d''origine intacte (tout ou rien)'
-);
-select is(
-  (select booked from room_type_availability
-    where room_type_id = '88920000-0000-4000-8000-000000000076' and date = '2028-11-20'),
-  1, 'refus chambre : nuit 20/11 (ancienne) jamais libérée'
-);
-select is(
-  (select booked from room_type_availability
-    where room_type_id = '88920000-0000-4000-8000-000000000076' and date = '2028-11-21'),
-  0, 'refus chambre : nuit 21/11 (aurait dû être consommée) jamais touchée'
-);
-select is(
-  (select booked from room_type_availability
-    where room_type_id = '88920000-0000-4000-8000-000000000076' and date = '2028-11-22'),
-  1, 'refus chambre : nuit 22/11 (pleine par une autre réservation) inchangée, jamais double-comptée'
+  'p_new_end_date obligatoire pour modifier une ligne à plage (alojamiento)',
+  'cas 12 : p_new_end_date manquant sur une ligne à plage → exception'
 );
 
 -- ===== L1 : succès alojamiento — nouvel intervalle SANS nuit commune, qty 1→2 ===================
@@ -669,16 +493,16 @@ select is(
   'L1 : appel réussi (nouvelles nuits + qty 1→2, alojamiento)'
 );
 select is(
-  (select jsonb_build_object('date', date, 'end_date', end_date, 'room_type_id', room_type_id, 'qty', qty,
+  (select jsonb_build_object('date', date, 'end_date', end_date, 'qty', qty,
           'status', status, 'price_cop', price_cop, 'total_cop', total_cop)
      from order_lines where id = (select (result->>'order_line_id')::uuid from tmp_modify_l1)),
   jsonb_build_object(
-    'date', '2028-12-04'::date, 'end_date', '2028-12-06'::date, 'room_type_id', null, 'qty', 2,
+    'date', '2028-12-04'::date, 'end_date', '2028-12-06'::date, 'qty', 2,
     'status', 'reserved', 'price_cop', 300000, 'total_cop', 300000
   ),
   -- Correctif 20260818250000 : un alojamiento reste UNE seule unité facturable quel que soit le
   -- nombre d'occupants (150000/nuit × 2 nuits = 300000, jamais multiplié par qty=2 ensuite).
-  'L1 : nouvelle ligne correcte (date/end_date/qty/prix, room_type_id toujours null, total_cop non multiplié par qty)'
+  'L1 : nouvelle ligne correcte (date/end_date/qty/prix, total_cop non multiplié par qty)'
 );
 select is(
   (select booked from product_availability

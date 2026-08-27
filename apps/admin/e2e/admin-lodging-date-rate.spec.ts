@@ -7,8 +7,7 @@ import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 // (product_date_rates via set_date_rate('product', ...)). La logique de la RPC elle-même est déjà
 // couverte par pgTAP (supabase/tests/database/set_date_rate_product.test.sql) — pas re-prouvée
 // ici, seul le parcours écran (ouvrir le jour, fixer un precio especial, le voir apparaître sur la
-// cellule, persistance après rechargement) l'est, même patron que admin-room-availability-grid.spec.ts
-// (RoomDateEditor) adapté au calendrier FullCalendar day-by-day plutôt qu'à la grille chambres×dates.
+// cellule, persistance après rechargement) l'est, sur le calendrier FullCalendar day-by-day.
 const TIMESTAMP = Date.now();
 const PRODUCT_ID = "88960000-0000-4000-8000-000000000001";
 const ESTABLISHMENT_ID = "b0000000-0000-4000-8000-000000000002";

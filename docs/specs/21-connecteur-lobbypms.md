@@ -17,6 +17,19 @@ repond_a:
   - "Qu'est-ce qui existe déjà (scaffolding dormant) et qu'est-ce qui reste à construire ?"
 ---
 
+> **Amendement daté du 2026-08-27 — l'étage hôtel a été supprimé.** `products.type='hotel'`,
+> `product_room_types`, `room_media`, `room_type_availability`, `room_type_date_rates`,
+> `order_lines.room_type_id` et `set_room_type_availability` n'existent plus (T3 de la spec 24 :
+> application par le commit 38c1b55, base par la migration `20260827220000`). Une chambre est
+> désormais un produit `type='lodging'` à part entière. **Toute mention de `room_type`,
+> `product_room_types` ou d'une « branche chambre » ci-dessous décrit un état passé** ; le mécanisme
+> équivalent vit sur `products`/`product_availability`. Détail et raisons : `docs/specs/24-modele-
+> hebergement-et-surface-lobbypms.md` §4, et le bandeau de `docs/specs/13-admin-hotel-habitaciones.md`.
+
+> ⚠️ Spécifique à cette spec : les colonnes `product_room_types.lobby_category_id` /
+> `lobby_product_id`, restées dormantes depuis leur création, ont disparu avec la table. Le
+> lien vers Lobby vit uniquement sur `products.lobby_category_id`.
+
 # Connecteur LobbyPMS — contrat générique multi-prestataire
 
 > **Cible stack** : hifago. **Feature n°32** (indicatif — numérotation séquentielle partagée

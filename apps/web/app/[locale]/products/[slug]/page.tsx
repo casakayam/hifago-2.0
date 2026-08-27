@@ -93,12 +93,8 @@ export default async function ProductPage({
   // Feature 21 : un evento vitrine n'a ni cupo ni panier — la disponibilité n'a aucun sens pour ce
   // type, jamais consultée (contrairement aux autres types, réservables via create_order).
   const isEvento = product.type === "evento";
-  // Spec 17 §0 Tranche 2 : un hôtel ne se réserve jamais "en gros" (product_availability générique
-  // ne représente aucune chambre réelle, cf. create_order room_type_required) — écran dédié avec
-  // sélecteur de chambre, jamais le ReservationForm générique.
   // Spec 17 §0 Tranche 2 : un alojamiento se réserve par plage de nuits (check-in/check-out), pas
-  // par date unique — écran dédié (LodgingReservationForm, pendant de HotelReservationForm sans
-  // sélecteur de chambre), jamais le ReservationForm générique non plus.
+  // par date unique — écran dédié (LodgingReservationForm), jamais le ReservationForm générique.
   const isLodging = product.type === "lodging";
   // Spec 21 §13 (gap comblé) : un alojamiento PMS-backed (Casa Kayam) n'a jamais de
   // product_availability/product_date_rates peuplées (Lobby fait foi, jamais dupliqué en base) —
@@ -114,9 +110,9 @@ export default async function ProductPage({
   // today lié une seule fois (pas un new Date() par site) — new Date() seul reste toléré en corps
   // de composant par la règle react-hooks/purity, jamais Date.now()/l'arithmétique associée.
   // todayIso (cutoff "à partir d'aujourd'hui") est dérivé une seule fois ici et réutilisé aux 4
-  // sites qui en ont besoin ci-dessous (get_product_slots p_from, et les 3 gte("date", …) :
-  // room_type_availability/room_type_date_rates/product_date_rates) — addDays(today, 180) (fenêtre
-  // slots, plus bas) reste un calcul séparé, ce n'est pas le même cutoff.
+  // sites qui en ont besoin ci-dessous (get_product_slots p_from, et les gte("date", …) sur
+  // product_availability/product_date_rates) — addDays(today, 180) (fenêtre slots, plus bas) reste
+  // un calcul séparé, ce n'est pas le même cutoff.
   const today = new Date();
   const todayIso = today.toISOString().slice(0, 10);
 
@@ -156,8 +152,7 @@ export default async function ProductPage({
           .select("id", { count: "exact", head: true })
           .eq("product_id", product.id);
 
-  // Spec 17 §0 Tranche 2 : override de prix par nuit pour un alojamiento (mécanique identique à
-  // room_type_date_rates ci-dessous, mais sur product_id directement — pas de chambre à filtrer).
+  // Spec 17 §0 Tranche 2 : override de prix par nuit pour un alojamiento, sur product_id.
   const fetchProductDateRates = async () =>
     isLodging
       ? await supabase

@@ -100,10 +100,8 @@ const SUBMIT_ERRORS: Record<string, string> = {
 // §3e "jusqu'à 6 photos") : uploadées immédiatement vers Storage (même Route Handler qu'admin-
 // direct), seul storage_path traverse la proposition, rattachées à product_media par
 // create_product_from_proposal à l'approbation. Seules différences restantes avec le variant
-// admin : (1) HotelRoomsEditor sans son bloc photo par chambre (room_types.photos toujours hors
-// périmètre, cf. spec 15 §10) ; (2) écriture via RPC (proposition modérée) au lieu d'un insert
-// direct, TagsMultiSelect sans création de tag à la volée (catalog_tags reste en écriture
-// admin-only).
+// admin : écriture via RPC (proposition modérée) au lieu d'un insert direct, et TagsMultiSelect
+// sans création de tag à la volée (catalog_tags reste en écriture admin-only).
 export function ProductForm({
   establishments = [],
   initialEstablishmentId = "",
@@ -243,8 +241,9 @@ export function ProductForm({
     const nombreEs = name.es?.trim() ?? "";
     const price = Number(fields.priceCop);
     const usesTiers = hasPriceQtyFields && fields.priceMode === "tiers";
-    // Un hôtel n'a pas de prix propre (il vit sur ses chambres, product_room_types) — exempté du
-    // prix obligatoire comme l'evento, cf. products_price_cop_required_unless_evento (spec 13).
+    // L'evento est le seul type exempté de prix obligatoire (son prix est un libellé libre) —
+    // cf. products_price_cop_required_unless_evento. L'hôtel l'était aussi, son prix vivant sur ses
+    // chambres ; T3 (2026-08-27) a supprimé le type, et la contrainte avec.
     const needsOwnPrice = !isEvento;
 
     if (!isEditing) {
@@ -626,11 +625,10 @@ export function ProductForm({
                     Conséquence pratique immédiate : seul un Alojamiento peut être adossé à
                     LobbyPMS (isPmsBacked = lodging + lobby_category_id), donc proposer « Hotel »
                     ici menait à un produit qu'on ne pouvait ensuite pas connecter.
-                    Ce n'est QUE la fermeture à la création : les hôtels existants restent
-                    éditables (ce sélecteur n'est pas rendu en édition), product_room_types et la
-                    branche room_type de create_order sont intactes. Leur retrait est la suite du
-                    chantier (T2/T3 de la spec 24), qui touche la RPC anti-survente et exige une
-                    migration de données — jamais dans le même geste. */}
+                    Le retrait est allé au bout depuis : T3 étape 1 (38c1b55) a retiré le type
+                    de l'application, T3 étape 2 (20260827220000) a supprimé product_room_types, la
+                    branche room_type de create_order et la valeur 'hotel' elle-même. Ce
+                    commentaire reste ici parce qu'il dit POURQUOI, et que la question se reposera. */}
               </ListBox>
             </Select.Popover>
           </Select>

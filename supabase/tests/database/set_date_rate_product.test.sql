@@ -1,7 +1,7 @@
 -- Spec 17 §0 Tranche 2 (docs/specs/17-calendrier-disponibilite-refonte.md) — couverture dédiée du
 -- chemin p_entity_type='product' de set_date_rate (dispatcher défini dans la migration
--- 20260817210000_room_type_availability_and_date_rates.sql). Le chemin 'room_type' est déjà
--- couvert par supabase/tests/database/room_type_and_date_range_booking.test.sql (fichier partagé,
+-- 20260817210000_room_type_availability_and_date_rates.sql). Depuis T3 étape 2 (20260827220000),
+-- 'product' est le SEUL chemin de set_date_rate : le chemin 'room_type' a disparu avec les chambres,
 -- non touché ici) — même dispatcher, mêmes garde-fous identité/propriété/capacité que
 -- set_product_availability (cf. set_product_availability_socio.test.sql, même patron de fixtures).
 begin;

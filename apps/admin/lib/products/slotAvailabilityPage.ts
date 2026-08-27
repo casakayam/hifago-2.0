@@ -18,8 +18,8 @@ export type SlotAvailabilityPageData = {
 // chacun leur propre commentaire RLS (la sûreté de ce select non filtré dépend du RÔLE de
 // l'appelant — admin vs socio — pas de la requête elle-même, donc documentée au point d'appel,
 // pas ici). `null` = fiche introuvable OU sans aucune règle de créneaux (product_slot_rules) :
-// cet écran n'a de sens que pour un produit qui en porte au moins une, même esprit que le gating
-// type!=='hotel' des pages room-availability. Au page.tsx d'appeler notFound() dans les deux cas.
+// cet écran n'a de sens que pour un produit qui en porte au moins une. Au page.tsx d'appeler
+// notFound() dans les deux cas.
 export async function loadSlotAvailabilityPageData(
   productId: string,
   fromParam: string | string[] | undefined,

@@ -2,12 +2,10 @@ import { test, expect } from "@playwright/test";
 import { withDb, mockMercadoPagoCheckout, isoDate, deleteOrdersByHolderName } from "@hifago/e2e-support";
 
 // Spec 17 §0 Tranche 2 (docs/specs/17-calendrier-disponibilite-refonte.md) — alojamiento (maison
-// entière) réservé par plage de nuits, branche create_order end_date sans room_type_id réservée au
-// type lodging. La logique de create_order elle-même (arithmétique de capacité, re-résolution de
-// prix, tout-ou-rien) est déjà entièrement couverte par pgTAP
-// (supabase/tests/database/room_type_and_date_range_booking.test.sql) — pas re-prouvée ici, seul le
-// parcours écran (plage → panier → checkout → confirmation) l'est, même patron que
-// reserve-hotel-room.spec.ts (pendant sans sélecteur de chambre).
+// entière) réservé par plage de nuits, branche create_order end_date. La logique de create_order
+// elle-même (arithmétique de capacité, re-résolution de prix, tout-ou-rien) est déjà entièrement
+// couverte par pgTAP (supabase/tests/database/date_range_booking.test.sql) — pas re-prouvée ici,
+// seul le parcours écran (plage → panier → checkout → confirmation) l'est.
 const TIMESTAMP = Date.now();
 const PRODUCT_ID = "88950000-0000-4000-8000-000000000001";
 const ESTABLISHMENT_ID = "b0000000-0000-4000-8000-000000000002"; // établissement seedé existant
@@ -75,7 +73,7 @@ test("un client réserve un alojamiento par plage de nuits, depuis la fiche prod
   const state = await withDb(async (client) => {
     const { rows: lines } = await client.query(
       `select to_char(ol.date, 'YYYY-MM-DD') as date, to_char(ol.end_date, 'YYYY-MM-DD') as end_date,
-              ol.room_type_id, ol.qty, ol.total_cop
+              ol.qty, ol.total_cop
          from order_lines ol join orders o on o.id = ol.order_id
         where o.holder_name = 'Cliente E2E Alojamiento'`
     );
@@ -88,7 +86,6 @@ test("un client réserve un alojamiento par plage de nuits, depuis la fiche prod
   });
 
   expect(state.lines).toHaveLength(1);
-  expect(state.lines[0].room_type_id).toBeNull();
   expect(state.lines[0].date).toBe(checkIn);
   expect(state.lines[0].end_date).toBe(checkOut);
   expect(state.lines[0].qty).toBe(1);

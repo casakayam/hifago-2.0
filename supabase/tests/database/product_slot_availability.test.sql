@@ -1,9 +1,9 @@
 -- Spec 18 Tranche 1 — product_slot_availability (matérialisation réelle de product_slot_rules,
 -- posée par la spec 11 mais jamais consommée jusqu'ici, cf. spec 17 §10 point 12). Couvre :
 --   - RLS-only (écriture revoke, lecture publique) + contrainte unique(product_id, slot_date,
---     slot_start_time), même patron que product_availability/room_type_availability.
+--     slot_start_time), même patron que product_availability.
 --   - set_product_slot_capacity : régime admin+socio unifié (décision Jérôme, 2026-08-18, même
---     arbitrage que set_product_availability/set_room_type_availability), garde below_booked,
+--     arbitrage que set_product_availability), garde below_booked,
 --     refus slot_not_found pour un créneau qui ne correspond à aucune règle courante.
 --   - expand_product_slots (expansion pure des règles) et get_product_slots (union virtuel/
 --     matérialisé, une ligne matérialisée fait toujours foi, y compris orpheline d'une règle
@@ -127,7 +127,7 @@ update partner_capabilities set status = 'active'
 set local role authenticated;
 
 -- Cas 5 : admin → comportement inchangé, AVEC une ligne audit_log (non-régression du patron
--- set_product_availability/set_room_type_availability).
+-- set_product_availability).
 select test_login('88940000-0000-4000-8000-000000000023');
 select is(
   (select set_product_slot_capacity(
@@ -206,7 +206,7 @@ select throws_ok(
 );
 
 -- Cas 10 : RLS-only — authenticated ne peut jamais écrire directement (revoke insert/update/delete,
--- même critère que product_availability/room_type_availability), même sur un créneau libre.
+-- même critère que product_availability), même sur un créneau libre.
 set local role authenticated;
 select throws_ok(
   $$ insert into product_slot_availability (product_id, slot_date, slot_start_time, slot_duration_minutes, capacity, booked)

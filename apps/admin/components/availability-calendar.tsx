@@ -16,9 +16,9 @@ import { useDateRateEditor } from "./use-date-rate-editor";
 
 type AvailabilityRow = { date: string; capacity: number; booked: number };
 type CalendarRow = { date: string; open: boolean };
-// Spec 17 §0 Tranche 2 — product_date_rates (set_date_rate('product', ...)) : même patron que
-// room_type_date_rates côté grille chambres (room-availability-grid.tsx), une seule ligne par date
-// exacte, jamais fournie en mode "resource" (pas de notion de prix pour une ressource partagée).
+// Spec 17 §0 Tranche 2 — product_date_rates (set_date_rate('product', ...)) : une seule ligne par
+// date exacte, jamais fournie en mode "resource" (pas de notion de prix pour une ressource
+// partagée).
 type RateRow = { date: string; price_cop: number };
 type SetAvailabilityResult = { ok: boolean; reason?: string; booked?: number };
 
@@ -127,11 +127,11 @@ function AvailabilityFormFields({
   const [capacityInput, setCapacityInput] = useState(initialCapacity);
   const [openInput, setOpenInput] = useState(initialOpen);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Precio especial (product_date_rates via set_date_rate) — état et soumission gérés par le hook
-  // partagé avec RoomDateEditor (room-availability-grid.tsx) ; indépendant de handleSubmit
-  // ci-dessous (aucun des deux ne bloque ni n'attend l'autre, même découplage que le cupo/precio
-  // d'une chambre). set_date_rate n'existe que pour p_entity_type='product', jamais appelé en mode
-  // "resource" (composant retourné plus bas avant même d'utiliser priceInput/handlePriceSubmit).
+  // Precio especial (product_date_rates via set_date_rate) — état et soumission gérés par
+  // useDateRateEditor ; indépendant de handleSubmit ci-dessous (aucun des deux ne bloque ni
+  // n'attend l'autre). set_date_rate n'existe que pour p_entity_type='product', jamais appelé en
+  // mode "resource" (composant retourné plus bas avant même d'utiliser priceInput/
+  // handlePriceSubmit).
   const { priceInput, setPriceInput, isSavingPrice, handlePriceSubmit } = useDateRateEditor({
     entityType: "product",
     entityId,
@@ -204,9 +204,9 @@ function AvailabilityFormFields({
   }
 
   // Mode "product" : deux formulaires indépendants dans le même dialog (cupo+abierto, precio
-  // especial) — jamais imbriqués (HTML n'autorise pas un <form> dans un <form>), même structure que
-  // RoomDateEditor (room-availability-grid.tsx) : Modal.Header hors formulaire, chaque formulaire
-  // porte son propre bouton de soumission dans Modal.Body, pas de Modal.Footer partagé entre eux.
+  // especial) — jamais imbriqués (HTML n'autorise pas un <form> dans un <form>) : Modal.Header hors
+  // formulaire, chaque formulaire porte son propre bouton de soumission dans Modal.Body, pas de
+  // Modal.Footer partagé entre eux.
   return (
     <>
       <Modal.Header>
@@ -378,10 +378,9 @@ export function AvailabilityCalendar({
         title = `Por defecto: ${status.capacity}`;
         className = "availability-badge availability-badge--default";
       }
-      // Precio especial (product_date_rates) — affiché sous le badge cupo/estado, jamais à la place
-      // (même hiérarchie visuelle que RoomDateEditor/room-availability-grid.tsx : booked/capacity
-      // d'abord, prix en dessous). rateByDate reste vide en mode "resource" (pas de prop `rates`) :
-      // aucun effet là-bas.
+      // Precio especial (product_date_rates) — affiché sous le badge cupo/estado, jamais à la
+      // place : booked/capacity d'abord, prix en dessous. rateByDate reste vide en mode "resource"
+      // (pas de prop `rates`) : aucun effet là-bas.
       const price = status.kind === "configured" ? rateByDate.get(dateStr) : undefined;
       items.push({
         start: dateStr,

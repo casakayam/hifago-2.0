@@ -36,9 +36,9 @@ type PendingProposal = { id: string; payload: unknown; created_at: string } | nu
 // (jamais migré vers LocalizedTextField comme le reste, spec 11) et une `category` fixe abandonnée
 // par ProductForm admin-direct depuis la spec 08 (tags). Réécrit pour réutiliser exactement les
 // mêmes briques que ProductForm/ProductTypeFields (spec 15) : parité totale avec le parcours
-// d'édition admin-direct — mêmes champs, même gating par type, jamais tags/photos/slot_rules/
-// room_types (délégués côté admin à des blocs séparés à sauvegarde immédiate, jamais couverts par
-// ce même submit là non plus, cf. migration 20260817150000).
+// d'édition admin-direct — mêmes champs, même gating par type, jamais tags/photos/slot_rules
+// (délégués côté admin à des blocs séparés à sauvegarde immédiate, jamais couverts par ce même
+// submit là non plus, cf. migration 20260817150000).
 export function EditProposalForm({
   productId,
   type,
