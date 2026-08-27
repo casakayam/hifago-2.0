@@ -7,7 +7,7 @@
 --   (b) pms_booking_id est PARTAGÉ — annuler une activité ne doit pas tuer la nuit ;
 --   (c) sortir de `reserved` fait quitter claim_pms_poll_batch — d'où la file, qui prend le relais.
 begin;
-select plan(9);
+select plan(12);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -117,6 +117,46 @@ select is(
   (select count(*)::int from public.pms_cancellation_queue where establishment_id = 'cc000000-0000-4000-8000-000000000002'),
   2,
   'une ligne sans pms_booking_id n''enfile rien'
+);
+
+-- LE DÉFAUT TROUVÉ PAR LE TEST LIVE du 2026-08-27, et que ces tests ne voyaient pas : la première
+-- version enfilait sur « tout statut <> reserved », donc AUSSI sur `fulfilled` et `no_show`. hifago
+-- aurait demandé à Lobby d'annuler des séjours DÉJÀ EFFECTUÉS, au cas le plus nominal qui soit —
+-- une réservation qui se termine bien. Ces tests ne l'attrapaient pas parce qu'ils n'exerçaient que
+-- des statuts d'annulation : un test qui ne vérifie que les cas où l'on veut que ça marche ne
+-- prouve jamais que ça s'abstient.
+insert into public.orders (id, holder_name, holder_email, status)
+values ('cc000000-0000-4000-8000-000000000023', 'Cliente C2', 'c2@example.test', 'reserved');
+insert into public.order_lines (id, order_id, product_id, status, qty, price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop, holder_name, date, pms_booking_id)
+values ('cc000000-0000-4000-8000-000000000034', 'cc000000-0000-4000-8000-000000000023',
+        'cc000000-0000-4000-8000-000000000010', 'reserved', 1, 100000, 100000, 'direct', 0.15, 0, 0.10, 15000, 0, 10000,
+        'Cliente C2', '2027-06-01', '90000003');
+
+update public.order_lines set status = 'fulfilled' where id = 'cc000000-0000-4000-8000-000000000034';
+select is(
+  (select count(*)::int from public.pms_cancellation_queue where pms_booking_id = '90000003'),
+  0,
+  'un séjour `fulfilled` n''enfile RIEN — le séjour a eu lieu, l''annuler chez le partenaire serait une faute'
+);
+
+update public.order_lines set status = 'no_show' where id = 'cc000000-0000-4000-8000-000000000034';
+select is(
+  (select count(*)::int from public.pms_cancellation_queue where pms_booking_id = '90000003'),
+  0,
+  'un `no_show` n''enfile rien non plus — le client n''est pas venu, la nuit reste due'
+);
+
+-- Le statut hifago est conservé : LobbyPMS n'accepte pas un motif libre mais un CODE fermé, et le
+-- bon code en dépend (cancelled_by_client → TTC, le reste → OTH).
+--
+-- C'est le PREMIER statut d'annulation qui est retenu, pas le dernier : l'entrée est créée une
+-- seule fois (`on conflict do nothing`), et un changement ultérieur de statut ne la réécrit pas.
+-- Voulu — la ligne est passée `cancelled_by_client` plus haut, puis `cancelled_by_provider` au
+-- test d'idempotence ; c'est bien l'annulation d'origine qui décrit le mieux ce qui s'est passé.
+select is(
+  (select hifago_status from public.pms_cancellation_queue where pms_booking_id = '90000001'),
+  'cancelled_by_client',
+  'le premier statut d''annulation est conservé, pour choisir le code de motif Lobby'
 );
 
 -- Le drainage réclame, incrémente les tentatives, et rend le jeton — miroir de claim_pms_poll_batch.

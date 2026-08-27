@@ -17,7 +17,55 @@ interface CancellationRow {
   pms_booking_id: string;
   establishment_id: string;
   lobby_api_token: string;
+  hifago_status: string | null;
 }
+
+// LobbyPMS n'accepte PAS un motif libre : `cancellation_reason` est un CODE pris dans une liste
+// fermée (docs/3-integrations/lobby_pms_api.md § Cancel Booking). Envoyer du texte donne
+// `422 {"error_code":"INPUT_PARAMETERS","error":"The selected cancellation reason is invalid."}` —
+// constaté en conditions réelles le 2026-08-27, contre le compte de Casa Kayam. Le texte humain va
+// dans `description`, qui est le champ prévu pour ça.
+//
+//   NS  no show · RC room change · RE registration errors
+//   TTC timely customer cancellation · CC customer without communication · OTH other
+function lobbyReasonCode(hifagoStatus: string | null): string {
+  switch (hifagoStatus) {
+    case "cancelled_by_client":
+      return "TTC";
+    // Annulation par l'établissement, commande jamais payée, ligne remplacée : aucun code Lobby ne
+    // correspond exactement, et en inventer un fausserait leurs statistiques d'annulation. `OTH` est
+    // le code prévu pour ça — `description` porte le détail.
+    default:
+      return "OTH";
+  }
+}
+
+// LE SUCCÈS SE LIT DANS LE CORPS, PAS DANS LE STATUT. La réponse documentée d'une annulation
+// réussie est `{"cancel_booking": <id>}` (docs/3-integrations/lobby_pms_api.md), et LobbyPMS ne la
+// renvoie PAS avec un 200 — constaté en conditions réelles le 2026-08-27 : la première version
+// testait `status === 200`, a donc classé en échec une annulation qui avait parfaitement réussi, et
+// l'aurait retentée trois fois avant d'alerter pour rien.
+//
+// Même leçon que le 422 juste en dessous, et que le `{"raw":"forbidden"}` du job nocturne le même
+// jour : chez LobbyPMS, le statut HTTP n'est jamais le contrat — le corps l'est.
+function isCancellationAccepted(body: unknown): boolean {
+  if (typeof body !== "object" || body === null) return false;
+  return "cancel_booking" in (body as Record<string, unknown>);
+}
+
+function lobbyErrorCode(body: unknown): string | null {
+  if (typeof body !== "object" || body === null) return null;
+  const code = (body as { error_code?: unknown }).error_code;
+  return typeof code === "string" ? code : null;
+}
+
+// Les 422 dont hifago ne peut RIEN faire : l'entrée est close, il n'y a pas d'action possible.
+// À distinguer absolument d'INPUT_PARAMETERS, qui signale un bug de NOTRE côté (cf. plus bas).
+const TERMINAL_LOBBY_ERRORS = new Set([
+  "RESTRICTED_RESERVATION",   // le booking porte déjà une charge — spec 21 §0
+  "BOOKING_CHECK_IN_COMPLETE", // le client est arrivé, la réservation ne s'annule plus
+  "RECORD_NOT_FOUND",          // déjà annulé chez Lobby : objectif atteint
+]);
 
 // Au-delà, l'entrée est close en 'failed' plutôt que réessayée indéfiniment. Trois passages du cron
 // suffisent à absorber une indisponibilité passagère du relais ou de Lobby ; au-delà c'est une
@@ -26,7 +74,7 @@ const MAX_ATTEMPTS = 3;
 
 // Motif envoyé à Lobby. En espagnol : il s'affiche tel quel dans le logiciel du partenaire, qui
 // n'est pas francophone.
-const CANCELLATION_REASON = "Cancelado desde hifago";
+const CANCELLATION_DESCRIPTION = "Cancelado desde hifago";
 
 Deno.serve(async () => {
   const supabase = createClient(
@@ -51,16 +99,16 @@ Deno.serve(async () => {
         baseUrl,
         row.lobby_api_token,
         Number(row.pms_booking_id),
-        CANCELLATION_REASON,
-        undefined,
+        lobbyReasonCode(row.hifago_status),
+        CANCELLATION_DESCRIPTION,
         relaySecret
       );
 
-      // 200 — annulé. C'est le cas nominal.
-      if (response.status === 200) {
+      // Annulé — cas nominal, reconnu au CORPS et non au statut (cf. isCancellationAccepted).
+      if (isCancellationAccepted(response.body)) {
         summary.cancelled++;
         await supabase.rpc("resolve_pms_cancellation", {
-          p_entry_id: row.entry_id, p_outcome: "done", p_lobby_status_code: 200,
+          p_entry_id: row.entry_id, p_outcome: "done", p_lobby_status_code: response.status,
         });
         continue;
       }
@@ -76,16 +124,19 @@ Deno.serve(async () => {
         continue;
       }
 
-      // 422 — cas ATTENDU et documenté (spec 21 §0) : le booking porte déjà une charge côté
-      // partenaire, Lobby refuse de l'annuler par API. Ce n'est pas une panne, et personne côté
-      // hifago ne peut le « résoudre » : l'entrée est close, avec le corps conservé pour qu'on
-      // sache pourquoi. La traiter comme un incident déclencherait notify_all_admins sans dédup,
-      // soit un e-mail à chaque admin à chaque annulation — le défaut C9, corrigé le 2026-08-26
-      // sur le chemin jumeau.
-      if (response.status === 422) {
+      // 422 — et surtout PAS « tout 422 est attendu », ce qui était le défaut de la première
+      // version : elle classait en succès un `INPUT_PARAMETERS` qui signalait NOTRE propre bug, et
+      // laissait le booking ouvert sans que personne ne le sache. C'est le corps qui tranche, pas
+      // le statut. Trouvé en conditions réelles le 2026-08-27, jamais par un test local.
+      //
+      // Les cas terminaux sont ceux où hifago ne peut RIEN faire : charge déjà attachée, client
+      // arrivé, booking déjà disparu. L'entrée est close avec le corps conservé. Les traiter comme
+      // des incidents déclencherait notify_all_admins sans dédup, soit un e-mail à chaque admin à
+      // chaque annulation — le défaut C9, corrigé le 2026-08-26 sur le chemin jumeau.
+      if (response.status === 422 && TERMINAL_LOBBY_ERRORS.has(lobbyErrorCode(response.body) ?? "")) {
         summary.restricted++;
         console.warn(
-          `pms-cancel-bookings : booking ${row.pms_booking_id} non annulable par API (422) — ${JSON.stringify(response.body)}`
+          `pms-cancel-bookings : booking ${row.pms_booking_id} non annulable par API (422 ${lobbyErrorCode(response.body)})`
         );
         await supabase.rpc("resolve_pms_cancellation", {
           p_entry_id: row.entry_id, p_outcome: "done", p_lobby_status_code: 422,
@@ -94,8 +145,14 @@ Deno.serve(async () => {
         continue;
       }
 
-      // Tout le reste est une vraie panne : réessai borné, puis clôture en échec.
-      await recordFailure(supabase, row, summary, response.status, JSON.stringify(response.body));
+      // Tout le reste est une vraie panne : réessai borné, puis clôture en échec. Le statut est
+      // recopié DANS le message : `requeue_pms_cancellation` ne conserve que `last_error`, et sans
+      // ça un réessai perd l'information la plus utile au diagnostic (constaté le 2026-08-27 —
+      // `lobby_status_code` restait null sur une entrée requeue, il a fallu deviner).
+      await recordFailure(
+        supabase, row, summary, response.status,
+        `HTTP ${response.status} — ${JSON.stringify(response.body)}`
+      );
     } catch (err) {
       await recordFailure(supabase, row, summary, null, String(err));
     }

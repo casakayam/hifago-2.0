@@ -467,10 +467,19 @@ prix ». Formes gelées dans `pmsFixtureServer.ts` et opposables par `lobbyContr
 POSÉE** (27/08), par une fonction jetable qui l'a recopiée depuis l'environnement des Edge Functions
 vers le Vault sans qu'elle transite par un humain ; les deux `invoke_*` répondent 200, et c'étaient
 les entrées n°1 et n°2 de `net._http_response` — les crons n'avaient JAMAIS abouti depuis le 19/08.
-(2) **Lot B — il ne reste QUE
-l'implémentation de C2** : re-spécifiée le 27/08 dans `docs/specs/25-propagation-annulation-lobbypms.md`
-(les 3 prémisses vérifiées en code invalident l'approche « Route Handler sur cancel_order » ; forme
-retenue = file en base posée dans la transaction des RPC de statut, drainée par une Edge Function).
+(2) **Lot B TERMINÉ — C2 implémenté ET vérifié en conditions réelles** (spec 25) : booking créé puis
+annulé sur le compte de Casa Kayam, nettoyage confirmé. Trigger `for each statement` sur
+`order_lines` (pas un appel depuis les RPC : il les attrape TOUTES, même futures), liste blanche de
+statuts, file drainée par `pms-cancel-bookings`. **Le test live a trouvé 3 défauts invisibles en
+local** : le trigger enfilait sur `fulfilled`/`no_show` (hifago aurait annulé des séjours
+EFFECTUÉS) ; `cancellation_reason` est un CODE fermé (NS/RC/RE/TTC/CC/OTH), pas du texte ; et le
+succès de Lobby se lit **dans le corps** (`{"cancel_booking":id}`), jamais dans le statut HTTP. Le
+serveur de fixtures répondait 200 à tout — un faux Lobby plus poli que le vrai. ⚠️ **C1 rouvert par
+ce test** : CAMPER Van (49823) a refusé la création du booking là où GLAMPING (29376) a réussi, même
+code et même commande — la distinction de juillet est TOUJOURS vraie, elle n'est simplement visible
+que par un booking réel, donc derrière `TESTLIVE`. ⚠️ `reserve-nights` ne journalise AUCUN motif
+d'échec de création (l'entrée de réconciliation est nue) — même angle mort que le job nocturne, à
+corriger.
 **C1 réfuté, C5 répondu, C4 FAIT** (`20260827140000` : `products.unit` est enfin écrivable — elle
 était contrainte, documentée et lue, mais écrite par rien sauf `seed.sql`). Aucune conversion
 automatique depuis Lobby : leurs prix sont par niveau d'occupation, `proposeLodgingUnit` ne propose
@@ -485,7 +494,7 @@ alors qu'il est invendable — donnée de démo, décision de Jérôme. (4) Mod�
 (« a-t-il des chambres à choisir, ou se loue-t-il entier ? ») reste à porter, T1 en aura besoin.
 **Un jeton mort `LOBBY_PMS_TOKEN` retiré de `apps/admin/.env.local` — sa valeur a transité par une
 conversation, À RÉVOQUER chez LobbyPMS.** Détail complet : `hifago/docs/journal/2026-08.md`
-(2026-08-26 et 2026-08-27). 19 commits sur `main`, **rien poussé**. **Secret du relais FAIT TOURNER** le 27/08 (il avait transité par une conversation) — et la rotation a réaligné `/etc/caddy/relay.env` sur ce que Caddy applique, ce qui n'était plus le cas : un reboot du relais aurait coupé LobbyPMS. `systemctl restart`, jamais `reload` — systemd ne relit l'`EnvironmentFile` qu'au démarrage. Vercel redéployé avec `vercel redeploy <url>` et **non** `vercel deploy`, qui aurait envoyé l'arbre local et donc `lodging_kind` sans sa migration.*
+(2026-08-26 et 2026-08-27). 21 commits sur `main`, **rien poussé**. **Secret du relais FAIT TOURNER** le 27/08 (il avait transité par une conversation) — et la rotation a réaligné `/etc/caddy/relay.env` sur ce que Caddy applique, ce qui n'était plus le cas : un reboot du relais aurait coupé LobbyPMS. `systemctl restart`, jamais `reload` — systemd ne relit l'`EnvironmentFile` qu'au démarrage. Vercel redéployé avec `vercel redeploy <url>` et **non** `vercel deploy`, qui aurait envoyé l'arbre local et donc `lodging_kind` sans sa migration.*
 
 *2026-08-24 (suite 3, session distincte) — spec 23 (`docs/specs/23-notifications-email-
 transactionnelles.md`) écrite et implémentée intégralement, Tranche 1 + Tranche 2 (8 événements).
