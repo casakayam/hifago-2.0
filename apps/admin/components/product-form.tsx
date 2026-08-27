@@ -21,6 +21,7 @@ import { validateSlotRules, toSlotRuleRows } from "@/lib/products/slotRules";
 import { toStayRatesColumn, validateStayRates } from "@/lib/products/stayRates";
 import { toRoomTypeRow, validateRoomTypes } from "@/lib/products/hotelRooms";
 import { buildProductCreationPayload } from "@/lib/products/productCreationPayload";
+import { mergeLobbyRoom } from "@/lib/products/lobbyRoomImport";
 import {
   productTypeGating,
   useProductTypeFieldsState,
@@ -162,24 +163,25 @@ export function ProductForm({
     ? Boolean(product?.lobby_connector_active && product?.lobby_has_token)
     : Boolean(selectedEstablishment?.lobby_connector_active && selectedEstablishment?.lobby_has_token);
   const activeEstablishmentId = isEditing ? product?.establishment_id : establishmentId;
-  // Arbitrage Jérôme du 2026-08-26 — « import à la liaison ». Lobby PROPOSE, hifago fait foi :
-  // on recopie une fois ce que Lobby sait de la catégorie, puis tout reste éditable ici. On n'écrit
-  // JAMAIS un champ que Lobby ne renseigne pas — sinon un compte Lobby sans description effacerait
-  // une description saisie à la main. Le nom, lui, n'est rempli que s'il est encore vide : c'est
-  // l'identité publique du produit (elle porte le slug), jamais quelque chose qu'on écrase.
+  // Arbitrage Jérôme du 2026-08-26 — « import à la liaison ». Lobby PROPOSE, hifago fait foi.
+  //
+  // La POLITIQUE (quel champ Lobby a le droit d'écraser, et lequel jamais) vit dans
+  // lib/products/lobbyRoomImport.ts, pure et testée — c'est une règle métier, pas du câblage de
+  // formulaire, et elle était intestable tant qu'elle restait enfermée ici. Ce qui reste dans ce
+  // composant est ce qu'une fonction pure ne peut pas faire : appeler le serveur pour les photos.
+  //
+  // Les setters sont appliqués SANS condition : mergeLobbyRoom renvoie les valeurs inchangées par
+  // référence, donc React ne re-rend rien pour les champs que Lobby ne renseigne pas (comportement
+  // couvert par lobbyRoomImport.test.ts, pour qu'on ne remette pas ici les `if` qu'on en a sortis).
   async function applyLobbyRoomData(data: LobbyRoomOption) {
-    const importedDescription: Record<string, string> = {};
-    if (data.descriptions.es) importedDescription.es = data.descriptions.es;
-    if (data.descriptions.en) importedDescription.en = data.descriptions.en;
-    if (Object.keys(importedDescription).length > 0) {
-      setDescription((current) => ({ ...current, ...importedDescription }));
-    }
-    if (data.capacity !== null) fields.setCapacity(String(data.capacity));
-    // `quantity` (2026-08-26) : Lobby le renseigne sur les 6 catégories réelles de Casa Kayam
-    // (spec 24 §11.1). Il était parsé et affiché dans la carte depuis le 25/08, puis jeté faute de
-    // colonne d'accueil — elle existe depuis la migration 20260826190000.
-    if (data.quantity !== null) fields.setUnitCount(String(data.quantity));
-    setName((current) => (current.es?.trim() ? current : { ...current, es: data.name }));
+    const next = mergeLobbyRoom(
+      { name, description, capacity: fields.capacity, unitCount: fields.unitCount },
+      data,
+    );
+    setName(next.name);
+    setDescription(next.description);
+    fields.setCapacity(next.capacity);
+    fields.setUnitCount(next.unitCount);
 
     // Les photos ne peuvent pas être « recopiées » comme un texte : il faut aller les chercher chez
     // Lobby côté serveur (téléchargement, décodage, réécriture dans Storage), ce qu'un formulaire
