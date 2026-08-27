@@ -22,7 +22,7 @@ import { toStayRatesColumn, validateStayRates } from "@/lib/products/stayRates";
 import { toRoomTypeRow, validateRoomTypes } from "@/lib/products/hotelRooms";
 import { buildProductCreationPayload } from "@/lib/products/productCreationPayload";
 import { mergeLobbyRoom } from "@/lib/products/lobbyRoomImport";
-import { asLodgingKind } from "@hifago/domain";
+import { asLodgingKind, asLodgingUnit } from "@hifago/domain";
 import {
   productTypeGating,
   useProductTypeFieldsState,
@@ -53,6 +53,7 @@ export type EditableProduct = {
   capacity: number | null;
   unit_count: number | null;
   lodging_kind: string | null;
+  unit: string | null;
   default_capacity: number | null;
   stay_rates: unknown;
   type: string;
@@ -142,6 +143,7 @@ export function ProductForm({
           capacity: product.capacity,
           unitCount: product.unit_count,
           lodgingKind: asLodgingKind(product.lodging_kind),
+          unit: asLodgingUnit(product.unit),
           defaultCapacity: product.default_capacity,
           stayRates: product.stay_rates,
           lobbyCategoryId: product.lobby_category_id,
@@ -184,6 +186,7 @@ export function ProductForm({
         capacity: fields.capacity,
         unitCount: fields.unitCount,
         lodgingKind: fields.lodgingKind,
+        unit: fields.unit,
       },
       data,
     );
@@ -192,6 +195,7 @@ export function ProductForm({
     fields.setCapacity(next.capacity);
     fields.setUnitCount(next.unitCount);
     fields.setLodgingKind(next.lodgingKind);
+    fields.setUnit(next.unit);
 
     // Les photos ne peuvent pas être « recopiées » comme un texte : il faut aller les chercher chez
     // Lobby côté serveur (téléchargement, décodage, réécriture dans Storage), ce qu'un formulaire
@@ -360,6 +364,7 @@ export function ProductForm({
                 capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
                 unit_count: fields.unitCount.trim() ? Number(fields.unitCount) : null,
                 lodging_kind: fields.lodgingKind || null,
+                unit: fields.unit || null,
                 stay_rates: toStayRatesColumn(fields.stayRates),
                 lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
               }
@@ -472,6 +477,7 @@ export function ProductForm({
               capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
               unit_count: fields.unitCount.trim() ? Number(fields.unitCount) : null,
               lodging_kind: fields.lodgingKind || null,
+              unit: fields.unit || null,
               stay_rates: toStayRatesColumn(fields.stayRates),
               lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
             }

@@ -49,6 +49,7 @@ export function buildProductEditPayload(
           // deux côtés, sinon une modification effacerait la valeur posée à la création.
           unit_count: fields.unitCount.trim() ? Number(fields.unitCount) : null,
           lodging_kind: fields.lodgingKind || null,
+          unit: fields.unit || null,
           stay_rates: toStayRatesColumn(fields.stayRates),
         }
       : {}),

@@ -247,9 +247,12 @@ et **seulement** sur ce point :
     Travel. Préremplie depuis LobbyPMS pour `dorm`/`private` uniquement — le vocabulaire de Lobby
     n'a que `privada`/`compartida`, donc `whole_house` est **toujours** un choix manuel, et l'écran
     le dit. Descriptive : aucune RPC de commande ne la lit.
-  - `products.unit` **étendue à `per_house`** par la même migration. ⚠️ **C4 n'est pas fermé** :
-    rien n'écrit encore `unit` côté application (seul `seed.sql`). La colonne reste inerte, elle a
-    seulement cessé d'être incomplète. La fiche publique sait désormais l'afficher.
+  - `products.unit` **étendue à `per_house`** par la même migration, puis rendue **ÉCRIVABLE** par
+    `20260827140000` (**C4 fermé le 2026-08-27**) : elle n'était écrite par rien sauf `seed.sql`.
+    Aucune conversion automatique depuis Lobby — leurs prix sont par niveau d'occupation, modèle que
+    hifago n'a pas ; `proposeLodgingUnit` ne propose que les cas non ambigus et se tait ailleurs. Le
+    repli legacy `NULL ⇒ per_person` n'est **pas** porté (il ferait apparaître « por persona » sur
+    toutes les fiches existantes d'un coup, y compris là où c'est faux).
 
   Restent à faire sur T2 : le garde-fou `capacity_exceeds_physical`, et le **`mode` au niveau
   établissement** — la v1 porte `whole_house` sur la *propriété*, pas sur le produit, parce que ça

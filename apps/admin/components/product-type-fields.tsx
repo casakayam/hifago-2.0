@@ -10,8 +10,9 @@ import { HotelRoomsEditor } from "@/components/hotel-rooms-editor";
 import { PriceTiersEditor } from "@/components/price-tiers-editor";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
 import { productTypeGating, type ProductType, type ProductTypeFieldsState } from "@/lib/products/useProductTypeFieldsState";
-import { LODGING_KINDS, type LodgingKind } from "@hifago/domain";
+import { LODGING_KINDS, LODGING_UNITS, type LodgingKind, type LodgingUnit } from "@hifago/domain";
 import { LODGING_KIND_LABELS } from "@/lib/products/lodgingKindLabels";
+import { LODGING_UNIT_LABELS } from "@/lib/products/lodgingUnitLabels";
 
 // apps/admin n'est pas localisé (hifago/CLAUDE.md §2 point 1) — locale "es" fixe, même convention
 // que tout le reste de ce formulaire (labels en dur, pas de next-intl).
@@ -451,6 +452,43 @@ export function ProductTypeFields({
                 </p>
               ) : null}
             </div>
+          ) : null}
+
+          {/* Unité de PRIX (2026-08-27, défaut C4). `products.unit` existait depuis le 13/08,
+              contrainte et lue par la fiche publique, mais n'était écrite par RIEN — seul seed.sql
+              la renseignait. Elle est ici pour la première fois saisissable. À ne pas confondre
+              avec le champ juste au-dessus : celui-là dit ce QU'ON VEND (un lit, une chambre, une
+              maison), celui-ci dit COMMENT ON LE FACTURE. La liaison Lobby ne la prérremplit que
+              dans les cas non ambigus — leurs prix sont par niveau d'occupation, un modèle que
+              hifago n'a pas (cf. proposeLodgingUnit). */}
+          {isLodging ? (
+            <Select
+              fullWidth
+              value={state.unit || LODGING_KIND_NONE}
+              onChange={(value) =>
+                state.setUnit(!value || value === LODGING_KIND_NONE ? "" : (value as LodgingUnit))
+              }
+            >
+              <Label>Unidad de precio — opcional</Label>
+              <Select.Trigger data-testid="lodging-unit-select">
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id={LODGING_KIND_NONE} textValue="Sin especificar">
+                    Sin especificar
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                  {LODGING_UNITS.map((unit) => (
+                    <ListBox.Item key={unit} id={unit} textValue={LODGING_UNIT_LABELS[unit]}>
+                      {LODGING_UNIT_LABELS[unit]}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
           ) : null}
         </div>
       ) : null}

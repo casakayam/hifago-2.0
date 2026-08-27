@@ -440,6 +440,7 @@ create temp table tmp_lodging as
       'capacity', 8,
       'unit_count', 3,
       'lodging_kind', 'whole_house',
+      'unit', 'per_house',
       'price_tiers', jsonb_build_array(
         jsonb_build_object('min_qty', 1, 'max_qty', 4, 'price_cop', 200000),
         jsonb_build_object('min_qty', 5, 'max_qty', 8, 'price_cop', 320000)
@@ -461,13 +462,13 @@ select is(
 );
 select is(
   (select jsonb_build_object('capacity', p.capacity, 'unit_count', p.unit_count,
-                             'lodging_kind', p.lodging_kind, 'price_cop', p.price_cop,
+                             'lodging_kind', p.lodging_kind, 'unit', p.unit, 'price_cop', p.price_cop,
                              'has_stay_rates', p.stay_rates is not null)
      from product_proposals pp join products p on p.id = pp.product_id
     where pp.id = (select id from tmp_lodging)),
   jsonb_build_object('capacity', 8, 'unit_count', 3, 'lodging_kind', 'whole_house',
-                     'price_cop', 200000, 'has_stay_rates', true),
-  'products (lodging) porte capacity/unit_count/lodging_kind/price_cop (plus bas tramo)/stay_rates'
+                     'unit', 'per_house', 'price_cop', 200000, 'has_stay_rates', true),
+  'products (lodging) porte capacity/unit_count/lodging_kind/unit/price_cop (plus bas tramo)/stay_rates'
 );
 
 -- Rejet d'une création : aucun produit créé, product_id reste null ---------------------------------

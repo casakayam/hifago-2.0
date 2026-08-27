@@ -1,6 +1,6 @@
 import type { LocalizedValue } from "@/components/localized-text-field";
 import type { LobbyRoomOption } from "@/lib/pms/lobbyOptions";
-import type { LodgingKind } from "@hifago/domain";
+import { proposeLodgingUnit, type LodgingKind, type LodgingUnit } from "@hifago/domain";
 
 // Politique d'import « Lobby PROPOSE, hifago fait foi » (arbitrage Jérôme du 2026-08-26), extraite
 // de product-form.tsx le 2026-08-27. C'est une RÈGLE MÉTIER, pas du câblage de formulaire : elle
@@ -17,6 +17,12 @@ import type { LodgingKind } from "@hifago/domain";
 //      porte le slug de la fiche — donc jamais quelque chose qu'on écrase derrière l'utilisateur.
 //   3. Les descriptions sont FUSIONNÉES par langue, pas remplacées en bloc : Lobby peut n'avoir
 //      que l'espagnol alors que l'anglais a été écrit ici.
+//   5. L'unité de PRIX (`unit`) n'est jamais écrasée : elle n'est pas un fait Lobby mais une
+//      DÉDUCTION de notre part, et écraser un choix humain par une déduction serait indéfendable.
+//      Elle n'est proposée que si le champ est vide, et seulement dans les cas non ambigus (cf.
+//      proposeLodgingUnit) — le prix est la donnée la plus visible d'une fiche, se tromper d'unité
+//      la rend fausse sans la rendre suspecte.
+//
 //   4. Capacité, nombre d'unités et nature du couchage sont écrasés quand Lobby les fournit —
 //      ce sont des faits physiques sur la chambre, et c'est précisément ce qu'on vient chercher
 //      chez eux. Pour la nature du couchage, l'import ne peut produire que `dorm` ou `private` :
@@ -37,6 +43,8 @@ export type LobbyImportableFields = {
   unitCount: string;
   /** "" = non renseigné. Seules `dorm`/`private` peuvent venir de Lobby (cf. règle 4). */
   lodgingKind: LodgingKind | "";
+  /** Unité de PRIX. Jamais un fait Lobby — une déduction, donc jamais écrasée (cf. règle 5). */
+  unit: LodgingUnit | "";
 };
 
 /**
@@ -49,13 +57,24 @@ export function mergeLobbyRoom(
   current: LobbyImportableFields,
   data: LobbyRoomOption,
 ): LobbyImportableFields {
+  const lodgingKind = data.kind !== null ? data.kind : current.lodgingKind;
+  const capacity = data.capacity !== null ? String(data.capacity) : current.capacity;
+
   return {
     name: mergeName(current.name, data.name),
     description: mergeDescription(current.description, data.descriptions),
-    capacity: data.capacity !== null ? String(data.capacity) : current.capacity,
+    capacity,
     unitCount: data.quantity !== null ? String(data.quantity) : current.unitCount,
-    lodgingKind: data.kind !== null ? data.kind : current.lodgingKind,
+    lodgingKind,
+    // Règle 5. Dérivée des valeurs APRÈS import (pas de celles d'avant), pour qu'une chambre liée
+    // à une catégorie `compartida` propose bien `per_person` dès le premier clic.
+    unit: current.unit || proposeLodgingUnit(lodgingKind || null, toCapacity(capacity)) || "",
   };
+}
+
+function toCapacity(value: string): number | null {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 // Règle 2. `es` est la langue de contenu par défaut du projet (hifago/CLAUDE.md §5.1) et la seule

@@ -39,7 +39,7 @@ export default async function EditProductPage({
   const { data: productRow } = await supabase
     .from("products")
     .select(
-      "id, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, unit_count, lodging_kind, default_capacity, stay_rates, category, type, establishment_id, sellable, lobby_category_id, lobby_product_id, establishment:establishments(lobby_connector_active, lobby_has_token)",
+      "id, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, unit_count, lodging_kind, unit, default_capacity, stay_rates, category, type, establishment_id, sellable, lobby_category_id, lobby_product_id, establishment:establishments(lobby_connector_active, lobby_has_token)",
     )
     .eq("id", id)
     .maybeSingle();

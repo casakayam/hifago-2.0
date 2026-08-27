@@ -25,6 +25,7 @@ const EMPTY: LobbyImportableFields = {
   capacity: "",
   unitCount: "",
   lodgingKind: "",
+  unit: "",
 };
 
 describe("mergeLobbyRoom — ce que Lobby a le droit d'écraser", () => {
@@ -65,6 +66,7 @@ describe("mergeLobbyRoom — ce que Lobby a le droit d'écraser", () => {
       capacity: "4",
       unitCount: "9",
       lodgingKind: "whole_house",
+      unit: "per_house",
     };
     const next = mergeLobbyRoom(
       current,
@@ -109,6 +111,33 @@ describe("mergeLobbyRoom — ce que Lobby a le droit d'écraser", () => {
     expect(mergeLobbyRoom(current, lobbyRoom({ kind: "dorm" })).lodgingKind).toBe("dorm");
   });
 
+  // Règle 5 — l'unité de PRIX. Elle n'est pas un fait Lobby mais une déduction : elle se propose
+  // sur un champ vide et ne remplace JAMAIS un choix humain. Se tromper d'unité rend une fiche
+  // fausse sans la rendre suspecte, c'est la donnée la plus visible après le montant.
+  it("propose per_person pour un dortoir, sur un champ vide", () => {
+    expect(mergeLobbyRoom(EMPTY, lobbyRoom({ kind: "dorm", capacity: 1 })).unit).toBe("per_person");
+  });
+
+  it("propose per_two pour une privée de deux, et RIEN pour une privée de quatre", () => {
+    // GLAMPING : privada, capacity 2 → sans ambiguïté.
+    expect(mergeLobbyRoom(EMPTY, lobbyRoom({ kind: "private", capacity: 2 })).unit).toBe("per_two");
+    // CAMPER Van : privada, capacity 4 → ni per_person, ni per_two, ni per_house de façon
+    // évidente. On ne devine pas, on laisse à l'humain.
+    expect(mergeLobbyRoom(EMPTY, lobbyRoom({ kind: "private", capacity: 4 })).unit).toBe("");
+  });
+
+  it("n'écrase jamais une unité de prix déjà choisie", () => {
+    const current = { ...EMPTY, unit: "per_house" as const };
+    expect(mergeLobbyRoom(current, lobbyRoom({ kind: "dorm", capacity: 1 })).unit).toBe("per_house");
+  });
+
+  // La déduction porte sur les valeurs APRÈS import, pas sur celles d'avant : une fiche vierge liée
+  // à une catégorie `compartida` doit proposer per_person dès le premier clic.
+  it("déduit depuis les valeurs importées, pas depuis l'état précédent", () => {
+    const next = mergeLobbyRoom(EMPTY, lobbyRoom({ kind: "private", capacity: 2 }));
+    expect([next.lodgingKind, next.capacity, next.unit]).toEqual(["private", "2", "per_two"]);
+  });
+
   it("écrase capacité et nombre d'unités quand Lobby les fournit", () => {
     const current = { ...EMPTY, capacity: "99", unitCount: "99" };
     const next = mergeLobbyRoom(current, lobbyRoom());
@@ -126,6 +155,7 @@ describe("mergeLobbyRoom — ce que Lobby a le droit d'écraser", () => {
       capacity: "4",
       unitCount: "9",
       lodgingKind: "",
+      unit: "",
     };
     const next = mergeLobbyRoom(
       current,

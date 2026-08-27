@@ -151,6 +151,26 @@ describe("ProductTypeFields — champs d'une chambre liée à LobbyPMS (préremp
     expect(screen.queryByTestId("lodging-kind-select")).toBeNull();
   });
 
+  // products.unit (défaut C4, 2026-08-27). Elle existait depuis le 13/08, contrainte et lue par la
+  // fiche publique, mais n'était écrite par RIEN : ce champ est le premier chemin d'écriture.
+  it("Unidad de precio est un champ distinct du type d'alojamiento", () => {
+    render(<Harness type="lodging" />);
+    const unit = screen.getByTestId("lodging-unit-select");
+    expect(unit).toBeTruthy();
+    expect(unit).not.toBe(screen.getByTestId("lodging-kind-select"));
+    expect(unit.textContent).toContain("Sin especificar");
+  });
+
+  it("Unidad de precio se préremplit depuis la valeur persistée", () => {
+    render(<Harness type="lodging" init={{ unit: "per_house" }} />);
+    expect(screen.getByTestId("lodging-unit-select").textContent).toContain("Por alojamiento completo");
+  });
+
+  it("Unidad de precio n'existe que pour un logement", () => {
+    render(<Harness type="activity" />);
+    expect(screen.queryByTestId("lodging-unit-select")).toBeNull();
+  });
+
   it("la note dit ce que l'écran fait vraiment — Lobby gère la disponibilité, pas les champs", () => {
     render(<Harness type="lodging" init={{ lobbyCategoryId: 9631 }} />);
     const note = screen.getByTestId("lobby-room-managed-fields-note").textContent ?? "";

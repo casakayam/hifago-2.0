@@ -10,6 +10,7 @@ import { LocalizedTextField, type LocalizedValue } from "@/components/localized-
 import { ProductTypeFields } from "@/components/product-type-fields";
 import { buildProductEditPayload } from "@/lib/products/productEditPayload";
 import { lodgingKindLabel } from "@/lib/products/lodgingKindLabels";
+import { lodgingUnitLabel } from "@/lib/products/lodgingUnitLabels";
 import {
   payloadToFieldsInit,
   productTypeGating,
@@ -176,6 +177,12 @@ export function ModerateProposalForm({
             <div>
               <dt className="inline font-medium text-foreground">Tipo de alojamiento: </dt>
               <dd className="inline">{lodgingKindLabel(currentPayload.lodging_kind) ?? "—"}</dd>
+            </div>
+          ) : null}
+          {isLodging ? (
+            <div>
+              <dt className="inline font-medium text-foreground">Unidad de precio: </dt>
+              <dd className="inline">{lodgingUnitLabel(currentPayload.unit) ?? "—"}</dd>
             </div>
           ) : null}
         </dl>

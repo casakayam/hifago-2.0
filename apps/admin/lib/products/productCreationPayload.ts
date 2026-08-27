@@ -69,6 +69,7 @@ export function buildProductCreationPayload(
           // `lodging_kind` (2026-08-27) : dortoir / chambre privée / maison entière. Whitelisté par
           // les DEUX RPC de proposition (migration 20260827120000), même raison que ci-dessus.
           lodging_kind: fields.lodgingKind || null,
+          unit: fields.unit || null,
           stay_rates: toStayRatesColumn(fields.stayRates),
           // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — la RPC elle-même ignore ce champ
           // si l'établissement n'est pas connecté (cf. submit_product_creation_proposal), donc

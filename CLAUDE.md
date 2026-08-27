@@ -467,16 +467,25 @@ prix ». Formes gelées dans `pmsFixtureServer.ts` et opposables par `lobbyContr
 POSÉE** (27/08), par une fonction jetable qui l'a recopiée depuis l'environnement des Edge Functions
 vers le Vault sans qu'elle transite par un humain ; les deux `invoke_*` répondent 200, et c'étaient
 les entrées n°1 et n°2 de `net._http_response` — les crons n'avaient JAMAIS abouti depuis le 19/08.
-(2) **Bruit du job nocturne** :
-l'établissement du seed (`b0000000-…-0002`) porte `lobby_connector_active` avec un jeton factice et
-produira une dérive `401` **chaque nuit** — exactement le « crier au loup » que ce job doit éviter.
-(3) **Lot B restant** : C2 propagation d'annulation **à re-spécifier entièrement** ; C4
-`products.unit` toujours inerte malgré `per_house`. (3) Modèle hébergement : T2 avancé
+(2) **Lot B — il ne reste QUE
+l'implémentation de C2** : re-spécifiée le 27/08 dans `docs/specs/25-propagation-annulation-lobbypms.md`
+(les 3 prémisses vérifiées en code invalident l'approche « Route Handler sur cancel_order » ; forme
+retenue = file en base posée dans la transaction des RPC de statut, drainée par une Edge Function).
+**C1 réfuté, C5 répondu, C4 FAIT** (`20260827140000` : `products.unit` est enfin écrivable — elle
+était contrainte, documentée et lue, mais écrite par rien sauf `seed.sql`). Aucune conversion
+automatique depuis Lobby : leurs prix sont par niveau d'occupation, `proposeLodgingUnit` ne propose
+que l'évident (dorm→per_person, whole_house→per_house, private+capacity 2→per_two) et se tait
+ailleurs — une unité fausse rend une fiche fausse sans la rendre suspecte. Le repli legacy
+`NULL ⇒ per_person` n'est **pas** porté : il ferait apparaître « por persona » partout d'un coup.
+(3) **Bruit du job nocturne réglé** : le seed portait `lobby_connector_active` avec un jeton factice
+et produisait une dérive `401` chaque nuit ; connecteur désactivé en préprod. ⚠️ Reste que son
+produit `alojamiento-pms-backed-demo` est encore `sellable` dans le catalogue public de préprod
+alors qu'il est invendable — donnée de démo, décision de Jérôme. (3) Modèle hébergement : T2 avancé
 (`unit_count` + `lodging_kind`), T1/T3/T4 non commencés — et le `mode` au niveau **établissement**
 (« a-t-il des chambres à choisir, ou se loue-t-il entier ? ») reste à porter, T1 en aura besoin.
 **Un jeton mort `LOBBY_PMS_TOKEN` retiré de `apps/admin/.env.local` — sa valeur a transité par une
 conversation, À RÉVOQUER chez LobbyPMS.** Détail complet : `hifago/docs/journal/2026-08.md`
-(2026-08-26 et 2026-08-27). 18 commits sur `main`, **rien poussé**. **Secret du relais FAIT TOURNER** le 27/08 (il avait transité par une conversation) — et la rotation a réaligné `/etc/caddy/relay.env` sur ce que Caddy applique, ce qui n'était plus le cas : un reboot du relais aurait coupé LobbyPMS. `systemctl restart`, jamais `reload` — systemd ne relit l'`EnvironmentFile` qu'au démarrage. Vercel redéployé avec `vercel redeploy <url>` et **non** `vercel deploy`, qui aurait envoyé l'arbre local et donc `lodging_kind` sans sa migration.*
+(2026-08-26 et 2026-08-27). 19 commits sur `main`, **rien poussé**. **Secret du relais FAIT TOURNER** le 27/08 (il avait transité par une conversation) — et la rotation a réaligné `/etc/caddy/relay.env` sur ce que Caddy applique, ce qui n'était plus le cas : un reboot du relais aurait coupé LobbyPMS. `systemctl restart`, jamais `reload` — systemd ne relit l'`EnvironmentFile` qu'au démarrage. Vercel redéployé avec `vercel redeploy <url>` et **non** `vercel deploy`, qui aurait envoyé l'arbre local et donc `lodging_kind` sans sa migration.*
 
 *2026-08-24 (suite 3, session distincte) — spec 23 (`docs/specs/23-notifications-email-
 transactionnelles.md`) écrite et implémentée intégralement, Tranche 1 + Tranche 2 (8 événements).
