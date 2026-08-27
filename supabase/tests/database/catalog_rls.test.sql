@@ -1,7 +1,7 @@
 -- Tranche 2 (catalogue) — RLS : lecture publique des produits vendables uniquement, écriture
 -- réservée à l'admin, sur products et product_calendar.
 begin;
-select plan(20);
+select plan(23);
 
 -- Helper local à cette transaction (jamais persisté, rollback en fin de fichier).
 create function test_login(uid uuid) returns void language sql as $$
@@ -179,6 +179,46 @@ select throws_ok(
   $$ select set_product_sellable('99999999-0000-0000-0000-000000000000', true) $$,
   'P0001'::char(5), 'produit introuvable ou non autorisé',
   'set_product_sellable sur un product_id inexistant échoue avec le même message que le refus non-admin'
+);
+
+-- ===== establishments_select_public exige status = 'active' (20260827270000) ====================
+-- Un établissement ARCHIVÉ portant un produit vendable ne doit pas être lisible par un anonyme :
+-- `status` fait partie du grant colonne accordé à anon, donc sans condition dans la policy, un
+-- simple GET sur PostgREST exposait nom, description, adresse et horaires d'un lieu dépublié.
+-- L'admin, lui, continue de le voir — par establishments_select, qui n'a pas de condition de statut.
+reset role;
+insert into establishments (id, partner_id, name, status) values
+  ('33330000-0000-4000-8000-000000000002', '33333333-3333-3333-3333-333333333333',
+   jsonb_build_object('es', 'Establecimiento Archivado'), 'archived');
+insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug) values
+  ('44444444-4444-4444-4444-000000000002', '33333333-3333-3333-3333-333333333333',
+   '33330000-0000-4000-8000-000000000002',
+   'activity', jsonb_build_object('es', 'Actividad de archivado'), 100000, true, 'actividad-archivada');
+
+-- Les claims d'un cas précédent survivent à `set local role` — sans ce reset, `auth.uid()` renvoie
+-- encore l'admin et c'est establishments_select (qui n'a pas de condition de statut) qui répond.
+-- Constaté en écrivant ce cas : le test passait pour la mauvaise raison.
+select set_config('request.jwt.claims', null, true);
+set local role anon;
+select is(
+  (select count(*)::int from establishments where id = '33330000-0000-4000-8000-000000000002'),
+  0,
+  'anon ne lit PAS un établissement archivé, même s''il porte un produit vendable'
+);
+select is(
+  (select count(*)::int from establishments where id = '33330000-0000-4000-8000-000000000001'),
+  1,
+  'anon lit toujours un établissement actif portant un produit vendable (non-régression)'
+);
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  json_build_object('sub', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'role', 'authenticated')::text, true);
+select is(
+  (select count(*)::int from establishments where id = '33330000-0000-4000-8000-000000000002'),
+  1,
+  'l''admin voit l''établissement archivé — establishments_select n''a pas de condition de statut'
 );
 
 select * from finish();
