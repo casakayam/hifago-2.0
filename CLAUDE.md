@@ -402,33 +402,47 @@ En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
 nouvelle entrée.
 
-*2026-08-26 — audit LobbyPMS (spec 24 écrite) : surface API réellement exploitée, parcours front
-d'un produit lié, cible du modèle hébergement. **Trouvaille centrale** : le chantier en cours avait
-posé la moitié « masquer les champs que Lobby fournit » sans jamais construire la moitié « aller les
-chercher » — `GET /rooms` renvoie type/capacity/quantity/descriptions[]/photos[], la route n'en
-gardait que `{id, name}`. Une chambre PMS-backed apparaissait donc dans le catalogue public comme un
-**nom nu, sans photo ni description**. **Livré (Lot A)** : 3 parseurs défensifs
-(`parseLobbyRooms`/`parseLobbyServices`/`buildLobbyBookingNote`), carte de prévisualisation dans le
-sélecteur + bouton « Usar estos datos », `lobbyLinkMode` en `"picker"` (le **nom** au lieu de l'ID
-brut), démasquage description/photos/capacité sur les 3 écrans, `availabilityScreenFor(…,
-isPmsBacked)` → plus de calendrier de cupos inerte, badge « LobbyPMS », fixtures complétées
-(`/products`, `/cancel-booking` manquaient — le sélecteur de services n'était pas testable), vigie
-nocturne étendue, **import effectif des photos Lobby** (`POST /api/pms/import-room-photos`, admin-only) avec ses bornes de fetch sortant (liste blanche d'hôtes, refus des redirections, plafond sur les octets reçus, nettoyage Storage si l'attachement échoue). **Bugs réels corrigés** : le bloc Lobby n'était **jamais monté en édition socio**
-(`EditProposalForm` ne passait pas `establishmentLobbyConnected`) ; un service Lobby vendu **sans
-nuit** envoyait un e-mail à **chaque admin, à chaque vente** (entrée de réconciliation pour une
-situation que personne ne peut résoudre). **Arbitrages Jérôme** : import à la liaison · Desvincular
-admin-only · note de booking enrichie partout (l'invariant PII invoqué contre était déjà levé par
-lui le 2026-08-19, `20260819180000`). **Challenge adversarial** (37 agents, 30 findings) : 4
-corrections structurantes, dont un plan qui s'apprêtait à défaire une décision du jour même, un
-diagnostic faux de ma part sur le trou socio, et C4 qui aurait été **inerte en production**
-(`products.unit` n'est écrit par aucun code applicatif). **Vérifié** : typecheck+lint 3 workspaces,
-300 tests unitaires, `next build` sur les 2 apps, 7 e2e ciblées. **Reliquat d'environnement corrigé**
-: `apps/web/.env.local` pointait sur un tunnel cloudflared mort depuis le 2026-08-24 — toute fiche
-produit publique répondait 404. **Non fait, signalé** : Lobby n'est joignable que depuis la préprod,
-donc aucune sonde locale — Lot B gelé (C1 filtrage, C2 annulation à re-spécifier, C4, C5) et
-liste d'observations à faire en préprod dans la spec 24 §11. Cible du modèle hébergement (hôtel →
-établissement, chambre → produit) **retenue sous 4 conditions**, non implémentée. Détail complet :
-`hifago/docs/journal/2026-08.md` (2026-08-26). Rien commité.*
+*2026-08-27 — chantier LobbyPMS livré et VÉRIFIÉ DE BOUT EN BOUT en préprod (spec 24). Le connecteur
+ne rapatriait que `{id, name}` de `GET /rooms` : une chambre PMS-backed apparaissait dans le
+catalogue public comme un **nom nu, sans photo ni description**. Aujourd'hui le produit `glamping`
+(préprod) affiche nom, description es/en, 6 photos importées, « Hasta 2 personas · 3 en total », et
+sa disponibilité vient de Lobby en direct. **Parcours complet enfin exercé** : proposition socio →
+import serveur des photos en attente → modération → approbation → produit → fiche publique.
+**Forme réelle de l'API observée** (le 26/08, préprod — seul environnement joignable, spec 24 §11) :
+6 catégories, 6/6 avec `type`(`privada`/`compartida`)/`capacity`/`quantity`, 4/6 avec
+`descriptions[]`(es,en,**pt,fr**)/`photos[]`. La doc disait vrai cette fois, le parseur n'a rien eu
+à corriger. **Ce que ça a tranché** : `capacity` = occupants d'UNE unité, `quantity` = NOMBRE
+d'unités (un dortoir est 1×8) — d'où `products.unit_count` (migration `20260827100000`, renommée
+depuis `quantity` **parce que `product_room_types.quantity` porte la sémantique INVERSE, un plafond
+dur de réservation** : même mot, deux rôles de sécurité opposés). **Piège de parcours constaté** :
+lier une ACTIVITÉ à un SERVICE Lobby ne peut rien rapatrier — `GET /products` ne renvoie que
+`{service_id, name, value, infinite_inventory, stock}`, aucune photo/capacité n'existe sur cette
+ressource ; l'écran le dit désormais. **`/simplify` (4 agents)** : la garde d'accès des 3 routes
+`api/pms` était non seulement dupliquée mais **plus FAIBLE que celle de la base** (comparaison
+`partner_id` au lieu de `has_capability(uid,'operator',estId)`, qui filtre aussi sur
+`status='active'`) — un operator suspendu déclenchait des appels et des écritures Storage pour une
+proposition que la RPC refusait ensuite. Corrigé une fois pour les trois. Aussi : cache 60 s partagé
+sélecteur↔import (stage 1455→619 ms), pipeline image unifié avec `api/upload/[entity]`, politique
+d'import extraite en `mergeLobbyRoom` (pure, testée — « le nom n'est JAMAIS écrasé » porte le slug
+public), dispatch d'autorisation en fonction pure testée, fixtures « forme observée » rendues
+opposables par un test HTTP réel, et plusieurs **commentaires qui mentaient** corrigés (dont un que
+j'avais écrit le matin même). **Trouvé en vérifiant, pas en lisant** : `supabase-js` ne lève pas sur
+échec — ignorer `error` transformait une panne transitoire en **403 silencieux**, indiscernable d'un
+vrai refus ; désormais `503 authorization_unavailable`. **Infra** : les 3 Edge Functions n'avaient
+**jamais été déployées** et le **Vault de la préprod était vide** — les 4 `invoke_*` sortaient en
+`raise warning` sans jamais appeler, donc les crons tournaient à vide en silence depuis leur
+création. Fonctions déployées, 2 entrées Vault non secrètes posées. **NON FAIT, à reprendre** :
+(1) `vault.create_secret(<service_role_key>,'pms_service_role_key')` — **bloque `pms-poll-bookings`
+et `pms-nightly-contract-check`, c'est du Lobby, pas de l'email** ; `RESEND_API_KEY` (email) mis en
+attente sur décision de Jérôme. (2) **Lot B entier** : C1 filtrage des catégories non réservables
+(on n'a qu'une corrélation « a des photos », pas un attribut — la lecture de
+`GET /api/v2/available-rooms` sur les 6 catégories le trancherait, et donnerait C5 au passage),
+C2 propagation d'annulation **à re-spécifier entièrement**, C4 `products.unit` toujours inerte
+(exactement le défaut corrigé sur `capacity`), C5 `restrictions{min_stay,lead_days}` jamais observé.
+(3) Modèle hébergement : seul T2 partiellement fait (`unit_count`), T1/T3/T4 non commencés.
+**Un jeton mort `LOBBY_PMS_TOKEN` retiré de `apps/admin/.env.local` — sa valeur a transité par une
+conversation, À RÉVOQUER chez LobbyPMS.** Détail complet : `hifago/docs/journal/2026-08.md`
+(2026-08-26 et 2026-08-27). 6 commits sur `main`, **rien poussé**.*
 
 *2026-08-24 (suite 3, session distincte) — spec 23 (`docs/specs/23-notifications-email-
 transactionnelles.md`) écrite et implémentée intégralement, Tranche 1 + Tranche 2 (8 événements).
