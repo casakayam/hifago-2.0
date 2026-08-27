@@ -111,12 +111,23 @@ function describeAvailabilityContract(body: unknown, knownCategoryIds: number[])
   notes.push(
     `available-rooms cote ${contract.categoryIds.length}/${knownCategoryIds.length} catégories : ${contract.categoryIds.join(", ")}`
   );
+  // Disponibilité par catégorie : dernier angle pour C1. Une catégorie que Lobby cote mais qui
+  // n'a JAMAIS de disponibilité serait un discriminant plausible — à distinguer d'un simple
+  // « complet cette nuit-là », ce que seule une observation répétée peut faire. D'où sa place ici,
+  // dans un job qui repasse chaque nuit, plutôt que dans une sonde unique.
+  notes.push(
+    `available_rooms : ${contract.categories.map((c) => `${c.categoryId}=${c.availableRooms}`).join(", ")}`
+  );
   if (absent.length > 0) {
     notes.push(`absentes d'available-rooms (candidat C1 — non réservables par API ?) : ${absent.join(", ")}`);
   }
   if (extra.length > 0) {
     notes.push(`cotées ici mais absentes de GET /rooms : ${extra.join(", ")}`);
   }
+
+  notes.push(
+    `plans/prix : ${contract.categories.map((c) => `${c.categoryId}=${c.planCount}p/${c.priceCount}€`).join(", ")}`
+  );
 
   const withRestrictions = contract.categories.filter((c) => c.restrictions !== null);
   if (withRestrictions.length === 0) {

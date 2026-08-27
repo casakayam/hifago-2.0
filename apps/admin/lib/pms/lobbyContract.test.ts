@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  LOBBY_AVAILABILITY_OBSERVED_2026_08_27,
   LOBBY_ROOMS_OBSERVED_2026_08_26,
   LOBBY_SERVICES_OBSERVED_2026_08_26,
   setPmsFixtureScenario,
@@ -28,25 +29,6 @@ import { collectLobbyPages } from "./lobbyEstablishment";
 // capacity × quantity (opposée entre une privée et un dortoir), le rejet des langues non éditables,
 // et le fait qu'une catégorie sans contenu éditorial reste une catégorie valide.
 
-// ⚠️ Forme DOCUMENTÉE, pas observée — la nuance est load-bearing dans ce fichier, dont tout le
-// reste vient du compte réel. GET /api/v2/available-rooms sans `category_id` n'a jamais été appelé
-// contre le vrai compte : c'est précisément ce que la sonde du job nocturne va faire. En attendant,
-// ce scénario prouve seulement que la chaîne TIENT — client → parseur → agrégation — pas que Lobby
-// renvoie ceci. Deux catégories sur les trois du catalogue, à dessein : la troisième absente rejoue
-// l'hypothèse C1 (« Lobby ne cote que les catégories réservables »).
-const AVAILABILITY_CATALOG_DOCUMENTED = {
-  date: "2026-09-26",
-  categories: [
-    {
-      category_id: 29376,
-      available_rooms: 2,
-      restrictions: { min_stay: 2, max_stay: null, lead_days: 1 },
-      plans: [{ plan_id: 1, prices: [{ date: "2026-09-26", price: 180000 }] }],
-    },
-    { category_id: 9631, available_rooms: 8, plans: [] },
-  ],
-};
-
 const PORT = 45311;
 let fixtureUrl: string;
 let close: () => Promise<void>;
@@ -58,7 +40,7 @@ beforeAll(async () => {
   setPmsFixtureScenario({
     rooms: LOBBY_ROOMS_OBSERVED_2026_08_26,
     services: LOBBY_SERVICES_OBSERVED_2026_08_26,
-    availableRoomsCatalog: AVAILABILITY_CATALOG_DOCUMENTED,
+    availableRoomsCatalog: LOBBY_AVAILABILITY_OBSERVED_2026_08_27,
   });
 });
 
@@ -141,9 +123,9 @@ describe("Contrat LobbyPMS observé — GET /rooms de bout en bout", () => {
   });
 });
 
-// La chaîne de la sonde de contrat (C1/C5), exercée sur du vrai HTTP comme les deux autres. Ce
-// n'est pas un test de LobbyPMS — c'est la garantie que le jour où le compte réel répondra, rien
-// entre le client et l'agrégation ne perdra l'information en route.
+// La sonde de contrat (C1/C5), exercée sur du vrai HTTP comme les deux autres describes. Elle
+// rejoue désormais la charge utile RÉELLEMENT OBSERVÉE le 2026-08-27 (relevé en préprod via le
+// relais) : ces assertions verrouillent donc deux réponses acquises, pas deux hypothèses.
 describe("Sonde de contrat — GET /available-rooms sans category_id", () => {
   async function probe() {
     const response = await getLobbyAvailableRooms(fixtureUrl, "jeton-de-fixture", "2026-09-26", "2026-09-27");
@@ -151,30 +133,46 @@ describe("Sonde de contrat — GET /available-rooms sans category_id", () => {
     return parseLobbyAvailabilityContract(response.body);
   }
 
-  // LE point de C1 : si Lobby ne cote qu'une partie du catalogue, la différence avec GET /rooms est
-  // le filtre cherché — et on n'a alors jamais à coder un identifiant de catégorie en dur.
-  it("permet de nommer les catégories que Lobby ne cote pas", async () => {
+  // C1, RÉFUTÉ le 2026-08-27 et verrouillé ici. L'hypothèse était : « Lobby ne cote que les
+  // catégories réservables, donc la réponse EST le filtre ». Le compte réel cote les SIX, avec une
+  // signature de champs identique et une disponibilité non nulle partout — y compris 18013 et
+  // 49823, qui refusaient un booking en 422 le 2026-07-06. Cette réponse ne discrimine rien.
+  // Ce test existe pour qu'on ne réessaie pas : s'il devient faux un jour, c'est que Lobby a
+  // changé, et C1 redevient une piste.
+  it("ne discrimine RIEN : toutes les catégories cotées, une seule signature de champs", async () => {
     const contract = await probe();
-    // Tri NUMÉRIQUE explicite : le tri par défaut de JS est lexicographique, et rangerait 29376
-    // avant 9631.
     const byValue = (a: number, b: number) => a - b;
     const known = (await collectAllRoomIds()).sort(byValue);
-    const absent = known.filter((id) => !contract.categoryIds.includes(id));
-    expect([...contract.categoryIds].sort(byValue)).toEqual([9631, 29376]);
-    expect(absent).toEqual([49823]);
+
+    expect([...contract.categoryIds].sort(byValue)).toEqual([9629, 9631, 18013, 29376, 36572, 49823]);
+    expect(known.filter((id) => !contract.categoryIds.includes(id))).toEqual([]);
+    expect(new Set(contract.categories.map((c) => c.keys.join(","))).size).toBe(1);
+    expect(contract.categories.every((c) => (c.availableRooms ?? 0) > 0)).toBe(true);
   });
 
-  it("remonte `restrictions` telles quelles, sans les interpréter (C5)", async () => {
+  // C5, RÉPONDU. `restrictions` existe bien — il n'avait jamais été observé — et vaut {0,0,0} sur
+  // les six. Aucune contrainte sur ce compte : n'appliquer que si > 0 reste la bonne règle, et
+  // c'est maintenant un constat, plus une précaution.
+  it("porte `restrictions` sur toutes les catégories, toutes à zéro (C5)", async () => {
     const contract = await probe();
-    const glamping = contract.categories.find((c) => c.categoryId === 29376)!;
-    expect(glamping.restrictions).toEqual({ min_stay: 2, max_stay: null, lead_days: 1 });
-    expect(contract.categories.find((c) => c.categoryId === 9631)!.restrictions).toBeNull();
+    expect(contract.categories.every((c) => c.restrictions !== null)).toBe(true);
+    for (const category of contract.categories) {
+      expect(category.restrictions).toEqual({ min_stay: 0, max_stay: 0, lead_days: 0 });
+    }
   });
 
-  it("distingue deux signatures de champs, l'autre angle de C1", async () => {
+  // Constat non cherché, et qui vaut d'être gelé : Lobby cote UN plan, avec autant de prix que la
+  // capacité d'une unité — GLAMPING (capacity 2) → 2 prix, CAMPER Van (capacity 4) → 4, les
+  // dortoirs (capacity 1) → 1. Ses prix sont donc par NIVEAU D'OCCUPATION, un modèle que hifago
+  // n'a pas (unit = per_person | per_two | per_house). Ça confirme « Lobby n'est jamais la source
+  // du prix » au lieu de l'infirmer — et le parseur COMPTE ces prix sans jamais les lire.
+  it("expose un plan par catégorie, avec un prix par niveau d'occupation", async () => {
     const contract = await probe();
-    const signatures = new Set(contract.categories.map((c) => c.keys.join(",")));
-    expect(signatures.size).toBe(2);
+    const byId = new Map(contract.categories.map((c) => [c.categoryId, c]));
+    expect(contract.categories.every((c) => c.planCount === 1)).toBe(true);
+    expect(byId.get(9631)!.priceCount).toBe(1);
+    expect(byId.get(29376)!.priceCount).toBe(2);
+    expect(byId.get(49823)!.priceCount).toBe(4);
   });
 });
 

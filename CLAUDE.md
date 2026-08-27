@@ -449,20 +449,40 @@ ne renvoie que les 7 variables auto-provisionnées : **ni `LOBBY_API_BASE_URL`, 
 `LOBBY_RELAY_SECRET`** — les Edge Functions n'ont JAMAIS eu la configuration Lobby que Vercel
 possède, et appellent en direct depuis une IP non whitelistée. Prouvé par différentiel : même
 établissement, même jeton, `night-availability` répond **200** depuis Vercel préprod pendant que
-l'Edge Function reçoit **403**. **NON FAIT, à reprendre** :
-(1) **DEUX verrous sur les jobs PMS, pas un** — `vault.create_secret(<service_role_key>,
-'pms_service_role_key')` débloque l'INVOCATION par pg_cron, mais `npx supabase secrets set
-LOBBY_API_BASE_URL=… LOBBY_RELAY_SECRET=…` (valeurs à reprendre de l'env `staging` de Vercel) est
-ce qui leur donne de quoi JOINDRE Lobby. Poser le premier sans le second produirait un job qui
-s'exécute enfin… pour collectionner des 403. `RESEND_API_KEY` (email) reste en attente sur décision
-de Jérôme. (2) **Lot B** : C1 et C5 restent **ouverts** — la sonde est en place et répondra dès que
-les deux secrets seront posés, sans rien réécrire ; C2 propagation d'annulation **à re-spécifier
-entièrement** ; C4 `products.unit` toujours inerte malgré `per_house`. (3) Modèle hébergement : T2 avancé
+l'Edge Function reçoit **403**. **C1 RÉFUTÉ, C5 RÉPONDU** (sonde exécutée contre le compte réel, nuit J+30) : `available-rooms`
+cote les **6/6** catégories avec une **signature de champs identique** et une disponibilité non
+nulle partout — y compris 18013/49823, qui refusaient en `422` en juillet. Cette réponse ne
+discrimine RIEN, et 2 des 4 catégories « refusantes » de juillet (17998, 51636) n'existent même
+plus. **C1 n'est pas « à faire » : il est non implémentable en l'état** — plus aucun angle
+documentaire, la seule preuve serait de tenter un booking (`TESTLIVE`, fermé) ; à reprendre par une
+re-vérification du 422 ou une question à LobbyPMS. Le repli « informer sans filtrer » reste en
+place, désormais assumé. **C5** : `restrictions` existe (jamais observé jusqu'ici) et vaut
+`{0,0,0}` sur les six — n'appliquer que si `> 0` était la bonne règle, c'est maintenant un constat,
+et le job le surveille. **Bonus non cherché** : `plans[].prices[]` a autant d'entrées que la
+CAPACITÉ d'une unité (GLAMPING 2 → 2 prix, CAMPER Van 4 → 4, dortoirs 1 → 1) — les prix Lobby sont
+par niveau d'occupation, modèle que hifago n'a pas ; confirme « Lobby n'est jamais la source du
+prix ». Formes gelées dans `pmsFixtureServer.ts` et opposables par `lobbyContract.test.ts`.
+**NON FAIT, à reprendre** :
+(1) ⚠️ **`RELAY_SECRET` à FAIRE TOURNER** — il a transité par une conversation (§8 point 2).
+Procédure sûre, dans cet ordre : `openssl rand -base64 32` **sur le relais**, l'écrire dans
+`/etc/caddy/relay.env`, `systemctl restart caddy` (**restart**, pas reload : systemd ne relit
+l'`EnvironmentFile` qu'au démarrage), puis reposer la valeur sur Vercel (`hifago-web` +
+`hifago-admin`, **avec redéploiement**, sinon ils gardent l'ancienne) ET sur Supabase
+(`supabase secrets set`). (2) ⚠️ **`/etc/caddy/relay.env` a divergé** de ce que Caddy applique : la
+config en cours d'exécution fait foi (`curl localhost:2019/config/`), pas le fichier. **Un reboot du
+relais couperait LobbyPMS en préprod** tant que ce n'est pas réaligné — la rotation ci-dessus règle
+les deux d'un coup. (3) `vault.create_secret(<service_role_key>,'pms_service_role_key')` — débloque
+l'INVOCATION des jobs par pg_cron (les secrets de fonctions Lobby, eux, sont désormais posés) ;
+`RESEND_API_KEY` (email) reste en attente sur décision de Jérôme. (4) **Bruit du job nocturne** :
+l'établissement du seed (`b0000000-…-0002`) porte `lobby_connector_active` avec un jeton factice et
+produira une dérive `401` **chaque nuit** — exactement le « crier au loup » que ce job doit éviter.
+(5) **Lot B restant** : C2 propagation d'annulation **à re-spécifier entièrement** ; C4
+`products.unit` toujours inerte malgré `per_house`. (3) Modèle hébergement : T2 avancé
 (`unit_count` + `lodging_kind`), T1/T3/T4 non commencés — et le `mode` au niveau **établissement**
 (« a-t-il des chambres à choisir, ou se loue-t-il entier ? ») reste à porter, T1 en aura besoin.
 **Un jeton mort `LOBBY_PMS_TOKEN` retiré de `apps/admin/.env.local` — sa valeur a transité par une
 conversation, À RÉVOQUER chez LobbyPMS.** Détail complet : `hifago/docs/journal/2026-08.md`
-(2026-08-26 et 2026-08-27). 12 commits sur `main`, **rien poussé**.*
+(2026-08-26 et 2026-08-27). 15 commits sur `main`, **rien poussé**.*
 
 *2026-08-24 (suite 3, session distincte) — spec 23 (`docs/specs/23-notifications-email-
 transactionnelles.md`) écrite et implémentée intégralement, Tranche 1 + Tranche 2 (8 événements).

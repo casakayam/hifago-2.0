@@ -131,6 +131,52 @@ export const LOBBY_SERVICES_OBSERVED_2026_08_26 = {
   meta: { total_records: 3, total_pages: 1 },
 };
 
+// Forme réellement observée le 2026-08-27 sur le compte Casa Kayam — GET /api/v2/available-rooms
+// appelé SANS `category_id` (catalogue entier pour une nuit), relevé par la sonde de
+// pms-nightly-contract-check via le relais. Ce que ce relevé a tranché, et qui était ouvert depuis
+// le début du chantier :
+//
+//   C1 — RÉFUTÉ. L'hypothèse « Lobby ne cote que les catégories réservables » est fausse : les 6
+//        catégories du compte sont cotées, avec une signature de champs IDENTIQUE
+//        [available_rooms, category_id, name, plans, restrictions] et une disponibilité non nulle
+//        pour toutes. Cette réponse ne porte AUCUN discriminant. Y compris pour 18013 et 49823,
+//        qui figuraient parmi les catégories refusant un booking en 422 le 2026-07-06.
+//   C5 — RÉPONDU. `restrictions` existe (il n'avait jamais été observé) et vaut {0,0,0} sur les
+//        SIX. Aucune contrainte sur ce compte : lire défensivement et n'appliquer que si > 0 reste
+//        la bonne règle, désormais fondée sur un constat et non sur une précaution.
+//
+// Troisième constat, non cherché : `plans[].prices[]` compte AUTANT D'ENTRÉES QUE LA CAPACITÉ
+// d'une unité — GLAMPING (capacity 2) → 2 prix, CAMPER Van (capacity 4) → 4 prix, les dortoirs
+// (capacity 1) → 1 prix. Les prix Lobby sont donc par NIVEAU D'OCCUPATION, un modèle que hifago
+// n'a pas (unit = per_person | per_two | per_house). Confirme, plutôt qu'il ne l'infirme,
+// « Lobby n'est jamais la source du prix ».
+//
+// ⚠️ Ce qui est OBSERVÉ ici : les identifiants, `available_rooms`, `restrictions`, la liste des
+// clés, et le NOMBRE de plans et de prix. Ce qui ne l'est PAS : les valeurs de prix, les
+// identifiants de plan et les noms de catégorie ci-dessous — reconstruits pour donner un objet
+// complet. Le parseur ne lit que ce qui est observé (il compte les prix, ne les lit jamais), donc
+// la fixture reste opposable sur exactement ce dont elle témoigne.
+export const LOBBY_AVAILABILITY_OBSERVED_2026_08_27 = {
+  date: "2026-09-26",
+  categories: [
+    { category_id: 9629, name: "Dormitorio A", available_rooms: 4, restrictions: { min_stay: 0, max_stay: 0, lead_days: 0 },
+      plans: [{ plan_id: 1, prices: [{ people: 1, price: 45000 }] }] },
+    { category_id: 9631, name: "VIDPOVO", available_rooms: 8, restrictions: { min_stay: 0, max_stay: 0, lead_days: 0 },
+      plans: [{ plan_id: 1, prices: [{ people: 1, price: 45000 }] }] },
+    { category_id: 18013, name: "Dormitorio B", available_rooms: 12, restrictions: { min_stay: 0, max_stay: 0, lead_days: 0 },
+      plans: [{ plan_id: 1, prices: [{ people: 1, price: 45000 }] }] },
+    { category_id: 29376, name: "GLAMPING", available_rooms: 3, restrictions: { min_stay: 0, max_stay: 0, lead_days: 0 },
+      plans: [{ plan_id: 1, prices: [{ people: 1, price: 120000 }, { people: 2, price: 180000 }] }] },
+    { category_id: 36572, name: "Dormitorio C", available_rooms: 6, restrictions: { min_stay: 0, max_stay: 0, lead_days: 0 },
+      plans: [{ plan_id: 1, prices: [{ people: 1, price: 45000 }] }] },
+    { category_id: 49823, name: "CAMPER Van", available_rooms: 2, restrictions: { min_stay: 0, max_stay: 0, lead_days: 0 },
+      plans: [{ plan_id: 1, prices: [
+        { people: 1, price: 90000 }, { people: 2, price: 140000 },
+        { people: 3, price: 180000 }, { people: 4, price: 210000 },
+      ] }] },
+  ],
+};
+
 let scenario: PmsFixtureScenario = {};
 
 export function setPmsFixtureScenario(next: PmsFixtureScenario): void {
