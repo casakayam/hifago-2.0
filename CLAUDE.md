@@ -492,9 +492,14 @@ produit `alojamiento-pms-backed-demo` est encore `sellable` dans le catalogue pu
 alors qu'il est invendable — donnée de démo, décision de Jérôme. (4) Modèle hébergement : T2 avancé
 (`unit_count` + `lodging_kind`), T1/T3/T4 non commencés — et le `mode` au niveau **établissement**
 (« a-t-il des chambres à choisir, ou se loue-t-il entier ? ») reste à porter, T1 en aura besoin.
-**Un jeton mort `LOBBY_PMS_TOKEN` retiré de `apps/admin/.env.local` — sa valeur a transité par une
-conversation, À RÉVOQUER chez LobbyPMS.** Détail complet : `hifago/docs/journal/2026-08.md`
-(2026-08-26 et 2026-08-27). 21 commits sur `main`, **rien poussé**. **Secret du relais FAIT TOURNER** le 27/08 (il avait transité par une conversation) — et la rotation a réaligné `/etc/caddy/relay.env` sur ce que Caddy applique, ce qui n'était plus le cas : un reboot du relais aurait coupé LobbyPMS. `systemctl restart`, jamais `reload` — systemd ne relit l'`EnvironmentFile` qu'au démarrage. Vercel redéployé avec `vercel redeploy <url>` et **non** `vercel deploy`, qui aurait envoyé l'arbre local et donc `lodging_kind` sans sa migration.*
+**⚠️ `LOBBY_PMS_TOKEN` : révocation DIFFÉRÉE, décision explicite de Jérôme le 2026-08-27.** Sa valeur
+a transité par une conversation (§8 point 2 voudrait une rotation immédiate), et le jeton mort a bien
+été retiré de `apps/admin/.env.local` — mais la révocation chez LobbyPMS est repoussée **tant qu'on
+teste le connecteur** : la tourner maintenant couperait la chaîne relais→Lobby en pleine série de
+tests live. **Déclencheur de la révocation : la fin de la campagne de tests LobbyPMS.** À ne pas
+laisser filer — c'est le seul secret exposé de la journée qui n'a pas été tourné (celui du relais l'a
+été le 27/08). Détail complet : `hifago/docs/journal/2026-08.md`
+(2026-08-26 et 2026-08-27). **24 commits POUSSÉS sur `main`** (`26f28d9..8b78e03`, 2026-08-27) — la préprod Vercel n'est pas branchée sur Git, un push ne déploie donc rien. **Secret du relais FAIT TOURNER** le 27/08 (il avait transité par une conversation) — et la rotation a réaligné `/etc/caddy/relay.env` sur ce que Caddy applique, ce qui n'était plus le cas : un reboot du relais aurait coupé LobbyPMS. `systemctl restart`, jamais `reload` — systemd ne relit l'`EnvironmentFile` qu'au démarrage. Vercel redéployé avec `vercel redeploy <url>` et **non** `vercel deploy`, qui aurait envoyé l'arbre local et donc `lodging_kind` sans sa migration.*
 
 *2026-08-24 (suite 3, session distincte) — spec 23 (`docs/specs/23-notifications-email-
 transactionnelles.md`) écrite et implémentée intégralement, Tranche 1 + Tranche 2 (8 événements).
