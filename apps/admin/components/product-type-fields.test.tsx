@@ -101,20 +101,20 @@ describe("ProductTypeFields — champs d'une chambre liée à LobbyPMS (préremp
   it("Cantidad est un champ à part entière, distinct de Capacidad", () => {
     render(<Harness type="lodging" />);
     const capacityInput = screen.getByTestId("capacity-input");
-    const quantityInput = screen.getByTestId("quantity-input");
-    expect(quantityInput).toBeTruthy();
-    expect(quantityInput).not.toBe(capacityInput);
+    const unitCountInput = screen.getByTestId("unit-count-input");
+    expect(unitCountInput).toBeTruthy();
+    expect(unitCountInput).not.toBe(capacityInput);
   });
 
   it("Cantidad se préremplit depuis la valeur persistée, sans écraser Capacidad", () => {
-    render(<Harness type="lodging" init={{ capacity: 1, quantity: 8 }} />);
+    render(<Harness type="lodging" init={{ capacity: 1, unitCount: 8 }} />);
     expect((screen.getByTestId("capacity-input") as HTMLInputElement).value).toBe("1");
-    expect((screen.getByTestId("quantity-input") as HTMLInputElement).value).toBe("8");
+    expect((screen.getByTestId("unit-count-input") as HTMLInputElement).value).toBe("8");
   });
 
   it("Cantidad n'existe que pour un logement — jamais pour une activité", () => {
     render(<Harness type="activity" />);
-    expect(screen.queryByTestId("quantity-input")).toBeNull();
+    expect(screen.queryByTestId("unit-count-input")).toBeNull();
   });
 
   it("la note dit ce que l'écran fait vraiment — Lobby gère la disponibilité, pas les champs", () => {

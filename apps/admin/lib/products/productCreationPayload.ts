@@ -61,11 +61,11 @@ export function buildProductCreationPayload(
     ...(isLodging
       ? {
           capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
-          // `quantity` (2026-08-26) : nombre d'unités du type, à côté de la capacité qui est le
+          // `unit_count` (renommé le 2026-08-27) : nombre d'unités du type, à côté de la capacité qui est
           // nombre d'occupants d'UNE unité. Whitelisté par submit_product_creation_proposal ET
           // submit_product_proposal (migration 20260826190000) — les deux, sinon le champ se
           // remplirait à la création puis disparaîtrait à la première modification.
-          quantity: fields.quantity.trim() ? Number(fields.quantity) : null,
+          unit_count: fields.unitCount.trim() ? Number(fields.unitCount) : null,
           stay_rates: toStayRatesColumn(fields.stayRates),
           // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — la RPC elle-même ignore ce champ
           // si l'établissement n'est pas connecté (cf. submit_product_creation_proposal), donc

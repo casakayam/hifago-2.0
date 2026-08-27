@@ -395,9 +395,9 @@ export function ProductTypeFields({
               depuis Lobby comme la capacité juste à côté ; le libellé nomme les deux unités
               possibles parce que « cantidad » seul se confondrait avec la capacité. */}
           {isLodging ? (
-            <TextField fullWidth name="quantity" value={state.quantity} onChange={state.setQuantity}>
+            <TextField fullWidth name="unit-count" value={state.unitCount} onChange={state.setUnitCount}>
               <Label>Cantidad (habitaciones o camas) — opcional</Label>
-              <Input type="number" min={1} data-testid="quantity-input" />
+              <Input type="number" min={1} data-testid="unit-count-input" />
             </TextField>
           ) : null}
         </div>

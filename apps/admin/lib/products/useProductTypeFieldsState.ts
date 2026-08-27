@@ -40,8 +40,8 @@ export type ProductTypeFieldsInit = {
   capacity?: number | null;
   // Nombre d'unités de ce type (3 cabañas, 8 lits) — descriptif, jamais un quota de réservation.
   // À ne pas confondre avec defaultCapacity, qui amorce product_availability (cf. migration
-  // 20260826190000_product_quantity.sql, qui détaille les trois colonnes voisines).
-  quantity?: number | null;
+  // 20260827100000_products_unit_count.sql, qui détaille les trois colonnes voisines).
+  unitCount?: number | null;
   defaultCapacity?: number | null;
   stayRates?: unknown;
   roomTypes?: unknown;
@@ -84,7 +84,7 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
   const [checkInTime, setCheckInTime] = useState(toTimeInputValue(init.checkInTime));
   const [checkOutTime, setCheckOutTime] = useState(toTimeInputValue(init.checkOutTime));
   const [capacity, setCapacity] = useState(init.capacity != null ? String(init.capacity) : "");
-  const [quantity, setQuantity] = useState(init.quantity != null ? String(init.quantity) : "");
+  const [unitCount, setUnitCount] = useState(init.unitCount != null ? String(init.unitCount) : "");
   const [defaultCapacity, setDefaultCapacity] = useState(
     init.defaultCapacity != null ? String(init.defaultCapacity) : "",
   );
@@ -138,7 +138,7 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
     priceMode, setPriceMode, priceCop, setPriceCop, priceTiers, setPriceTiers,
     minQty, setMinQty, maxQty, setMaxQty,
     checkInTime, setCheckInTime, checkOutTime, setCheckOutTime,
-    capacity, setCapacity, quantity, setQuantity,
+    capacity, setCapacity, unitCount, setUnitCount,
     defaultCapacity, setDefaultCapacity, stayRates, setStayRates,
     hotelRooms, setHotelRooms,
     durationDays, setDurationDays,
@@ -178,7 +178,7 @@ export type RawProductFieldsPayload = {
   check_in_time?: string | null;
   check_out_time?: string | null;
   capacity?: number | null;
-  quantity?: number | null;
+  unit_count?: number | null;
   default_capacity?: number | null;
   stay_rates?: unknown;
   room_types?: unknown;
@@ -210,7 +210,7 @@ export function payloadToFieldsInit(payload: RawProductFieldsPayload): ProductTy
     checkInTime: payload.check_in_time,
     checkOutTime: payload.check_out_time,
     capacity: payload.capacity,
-    quantity: payload.quantity,
+    unitCount: payload.unit_count,
     defaultCapacity: payload.default_capacity,
     stayRates: payload.stay_rates,
     roomTypes: payload.room_types,

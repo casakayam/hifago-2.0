@@ -39,7 +39,7 @@ export function ProductDetailView({
   priceDisplay,
   unit,
   capacity,
-  quantity,
+  unitCount,
   reservationMode,
   occurrenceLabel,
   externalBookingUrl,
@@ -70,7 +70,7 @@ export function ProductDetailView({
   /** Occupants d'UNE unité (Lobby : `capacity`). Facultatif — beaucoup de produits ne le portent pas. */
   capacity: number | null;
   /** Nombre d'unités de ce type (Lobby : `quantity`). Un TOTAL, jamais une disponibilité du jour. */
-  quantity: number | null;
+  unitCount: number | null;
   reservationMode: "evento" | "hotel" | "lodging" | "slot" | "date";
   occurrenceLabel: string | null;
   externalBookingUrl: string | null;
@@ -121,11 +121,11 @@ export function ProductDetailView({
               orphelin. `quantity` est libellé « en total » et non « disponibles » : c'est le parc
               total du type, jamais ce qui reste libre cette nuit (pour un logement PMS-backed,
               cette réponse-là vient de LobbyPMS en direct, cf. LodgingReservationForm). */}
-          {capacity !== null || quantity !== null ? (
+          {capacity !== null || unitCount !== null ? (
             <p className="text-sm text-muted" data-testid="product-lodging-facts">
               {[
                 capacity !== null ? t("lodgingCapacity", { count: capacity }) : null,
-                quantity !== null ? t("lodgingQuantity", { count: quantity }) : null,
+                unitCount !== null ? t("lodgingUnitCount", { count: unitCount }) : null,
               ]
                 .filter(Boolean)
                 .join(" · ")}

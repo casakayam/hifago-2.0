@@ -49,7 +49,7 @@ export type EditableProduct = {
   check_in_time: string | null;
   check_out_time: string | null;
   capacity: number | null;
-  quantity: number | null;
+  unit_count: number | null;
   default_capacity: number | null;
   stay_rates: unknown;
   type: string;
@@ -137,7 +137,7 @@ export function ProductForm({
           checkInTime: product.check_in_time,
           checkOutTime: product.check_out_time,
           capacity: product.capacity,
-          quantity: product.quantity,
+          unitCount: product.unit_count,
           defaultCapacity: product.default_capacity,
           stayRates: product.stay_rates,
           lobbyCategoryId: product.lobby_category_id,
@@ -178,7 +178,7 @@ export function ProductForm({
     // `quantity` (2026-08-26) : Lobby le renseigne sur les 6 catégories réelles de Casa Kayam
     // (spec 24 §11.1). Il était parsé et affiché dans la carte depuis le 25/08, puis jeté faute de
     // colonne d'accueil — elle existe depuis la migration 20260826190000.
-    if (data.quantity !== null) fields.setQuantity(String(data.quantity));
+    if (data.quantity !== null) fields.setUnitCount(String(data.quantity));
     setName((current) => (current.es?.trim() ? current : { ...current, es: data.name }));
 
     // Les photos ne peuvent pas être « recopiées » comme un texte : il faut aller les chercher chez
@@ -301,9 +301,9 @@ export function ProductForm({
         toast.danger("La capacidad (número de couchage) debe ser un número entero mayor a 0.");
         return;
       }
-      // Même garde que la capacité — products_quantity_positive refuserait de toute façon la
+      // Même garde que la capacité — products_unit_count_positive refuserait de toute façon la
       // valeur côté base, mais un message clair vaut mieux qu'une erreur SQL remontée brute.
-      if (fields.quantity.trim() && (!Number.isInteger(Number(fields.quantity)) || Number(fields.quantity) <= 0)) {
+      if (fields.unitCount.trim() && (!Number.isInteger(Number(fields.unitCount)) || Number(fields.unitCount) <= 0)) {
         toast.danger("La cantidad (habitaciones o camas) debe ser un número entero mayor a 0.");
         return;
       }
@@ -346,7 +346,7 @@ export function ProductForm({
           ...(isLodging
             ? {
                 capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
-                quantity: fields.quantity.trim() ? Number(fields.quantity) : null,
+                unit_count: fields.unitCount.trim() ? Number(fields.unitCount) : null,
                 stay_rates: toStayRatesColumn(fields.stayRates),
                 lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
               }
@@ -457,7 +457,7 @@ export function ProductForm({
         ...(isLodging
           ? {
               capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
-              quantity: fields.quantity.trim() ? Number(fields.quantity) : null,
+              unit_count: fields.unitCount.trim() ? Number(fields.unitCount) : null,
               stay_rates: toStayRatesColumn(fields.stayRates),
               lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
             }

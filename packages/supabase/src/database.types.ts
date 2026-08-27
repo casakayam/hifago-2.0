@@ -1743,7 +1743,6 @@ export type Database = {
           price_label: string | null
           price_tiers: Json | null
           qty_unit: string
-          quantity: number | null
           recurrence_end_count: number | null
           recurrence_end_date: string | null
           recurrence_frequency_days: number | null
@@ -1756,6 +1755,7 @@ export type Database = {
           stay_rates: Json | null
           type: string
           unit: string | null
+          unit_count: number | null
           updated_at: string
         }
         Insert: {
@@ -1789,7 +1789,6 @@ export type Database = {
           price_label?: string | null
           price_tiers?: Json | null
           qty_unit?: string
-          quantity?: number | null
           recurrence_end_count?: number | null
           recurrence_end_date?: string | null
           recurrence_frequency_days?: number | null
@@ -1802,6 +1801,7 @@ export type Database = {
           stay_rates?: Json | null
           type: string
           unit?: string | null
+          unit_count?: number | null
           updated_at?: string
         }
         Update: {
@@ -1835,7 +1835,6 @@ export type Database = {
           price_label?: string | null
           price_tiers?: Json | null
           qty_unit?: string
-          quantity?: number | null
           recurrence_end_count?: number | null
           recurrence_end_date?: string | null
           recurrence_frequency_days?: number | null
@@ -1848,6 +1847,7 @@ export type Database = {
           stay_rates?: Json | null
           type?: string
           unit?: string | null
+          unit_count?: number | null
           updated_at?: string
         }
         Relationships: [

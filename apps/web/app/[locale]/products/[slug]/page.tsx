@@ -23,7 +23,7 @@ import { ProductDetailView } from "./ProductDetailView";
 // capacity/quantity ajoutés le 2026-08-26 : ils étaient écrits en base (et, pour un logement lié,
 // importés depuis LobbyPMS) mais ABSENTS de ce select — donc lus par aucun écran public, exactement
 // comme `unit`. Une chambre affichait son prix sans jamais dire pour combien de personnes.
-const PRODUCT_COLUMNS = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, capacity, quantity, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, lobby_category_id, establishment:establishments(id, name, description, address)`;
+const PRODUCT_COLUMNS = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, capacity, unit_count, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, lobby_category_id, establishment:establishments(id, name, description, address)`;
 
 const getProduct = cache(async (slug: string) => {
   const supabase = await createClient();
@@ -307,7 +307,7 @@ export default async function ProductPage({
       priceDisplay={priceDisplay}
       unit={product.unit}
       capacity={product.capacity}
-      quantity={product.quantity}
+      unitCount={product.unit_count}
       reservationMode={reservationMode}
       occurrenceLabel={occurrenceLabel}
       externalBookingUrl={product.external_booking_url}

@@ -25,7 +25,7 @@ vi.mock("./SlotReservationForm", () => ({ SlotReservationForm: () => null }));
 vi.mock("./ProductPhotos", () => ({ ProductPhotos: () => null }));
 
 // Pas de @testing-library/jest-dom dans ce monorepo — assertions DOM natives uniquement.
-function renderView(overrides: { capacity: number | null; quantity: number | null }) {
+function renderView(overrides: { capacity: number | null; unitCount: number | null }) {
   return render(
     <NextIntlClientProvider locale="es" messages={{ ProductPage: messages.ProductPage, Common: messages.Common }}>
       <ProductDetailView
@@ -35,7 +35,7 @@ function renderView(overrides: { capacity: number | null; quantity: number | nul
         priceDisplay="$ 120.000"
         unit={null}
         capacity={overrides.capacity}
-        quantity={overrides.quantity}
+        unitCount={overrides.unitCount}
         reservationMode="lodging"
         occurrenceLabel={null}
         externalBookingUrl={null}
@@ -61,7 +61,7 @@ function renderView(overrides: { capacity: number | null; quantity: number | nul
 
 describe("ProductDetailView — capacité et nombre d'unités (2026-08-26)", () => {
   it("affiche les deux quand LobbyPMS les a fournis", () => {
-    renderView({ capacity: 2, quantity: 3 });
+    renderView({ capacity: 2, unitCount: 3 });
     const facts = screen.getByTestId("product-lodging-facts").textContent ?? "";
     expect(facts).toContain("2 personas");
     expect(facts).toContain("3");
@@ -71,14 +71,14 @@ describe("ProductDetailView — capacité et nombre d'unités (2026-08-26)", () 
   // reste libre cette nuit (pour un logement PMS-backed, cette réponse vient de Lobby en direct).
   // Annoncer « disponibles » serait un mensonge au client, d'où cette garde explicite.
   it("dit « en total », jamais « disponibles »", () => {
-    renderView({ capacity: 2, quantity: 3 });
+    renderView({ capacity: 2, unitCount: 3 });
     const facts = screen.getByTestId("product-lodging-facts").textContent ?? "";
     expect(facts).toContain("en total");
     expect(facts).not.toContain("disponible");
   });
 
   it("affiche la moitié présente sans séparateur orphelin", () => {
-    renderView({ capacity: 2, quantity: null });
+    renderView({ capacity: 2, unitCount: null });
     const facts = screen.getByTestId("product-lodging-facts").textContent ?? "";
     expect(facts).toContain("2 personas");
     expect(facts).not.toContain("·");
@@ -86,12 +86,12 @@ describe("ProductDetailView — capacité et nombre d'unités (2026-08-26)", () 
 
   // Cas majoritaire du catalogue : la ligne entière disparaît, jamais un bloc vide.
   it("ne rend rien quand le produit n'a ni capacité ni quantité", () => {
-    renderView({ capacity: null, quantity: null });
+    renderView({ capacity: null, unitCount: null });
     expect(screen.queryByTestId("product-lodging-facts")).toBeNull();
   });
 
   it("accorde le singulier", () => {
-    renderView({ capacity: 1, quantity: 8 });
+    renderView({ capacity: 1, unitCount: 8 });
     const facts = screen.getByTestId("product-lodging-facts").textContent ?? "";
     expect(facts).toContain("1 persona");
     expect(facts).not.toContain("1 personas");

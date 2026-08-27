@@ -168,7 +168,7 @@ export function ModerateProposalForm({
           {isLodging ? (
             <div>
               <dt className="inline font-medium text-foreground">Cantidad: </dt>
-              <dd className="inline">{currentPayload.quantity ?? "—"}</dd>
+              <dd className="inline">{currentPayload.unit_count ?? "—"}</dd>
             </div>
           ) : null}
         </dl>
