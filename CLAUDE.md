@@ -439,19 +439,30 @@ ignorer `error` transformait une panne transitoire en **403 silencieux** ; déso
 `503 authorization_unavailable`. **Infra** : les 3 Edge Functions n'avaient **jamais été déployées**
 et le **Vault de la préprod était vide** — les 4 `invoke_*` sortaient en `raise warning` sans jamais
 appeler, donc les crons tournaient à vide en silence depuis leur création. Fonctions déployées,
-2 entrées Vault non secrètes posées. **NON FAIT, à reprendre** :
-(1) `vault.create_secret(<service_role_key>,'pms_service_role_key')` — **bloque `pms-poll-bookings`
-et `pms-nightly-contract-check`, c'est du Lobby, pas de l'email** ; `RESEND_API_KEY` (email) mis en
-attente sur décision de Jérôme. (2) **Lot B entier** : C1 filtrage des catégories non réservables
-(on n'a qu'une corrélation « a des photos », pas un attribut — la lecture de
-`GET /api/v2/available-rooms` sur les 6 catégories le trancherait, et donnerait C5 au passage),
-C2 propagation d'annulation **à re-spécifier entièrement**, C4 `products.unit` toujours inerte,
-C5 `restrictions{min_stay,lead_days}` jamais observé. (3) Modèle hébergement : T2 avancé
+2 entrées Vault non secrètes posées. **Sonde C1/C5** construite et déployée (`available-rooms` sans `category_id`, dans le job nocturne
+plutôt qu'en script jetable : la réponse arrive sans humain et reste surveillée). Elle a fait
+tomber DEUX obstacles d'infra, tous deux vérifiés et non supposés. (a) L'extraction de
+`parseHelpers.ts` avait écrit un import SANS extension — Node/Vite s'en moquent, **Deno l'exige** :
+la fonction ne bootait plus, et ni typecheck ni lint ni les 378 tests ne le voyaient (tous en
+résolution bundler). Attrapé en la servant en local AVANT de la pousser. (b) `supabase secrets list`
+ne renvoie que les 7 variables auto-provisionnées : **ni `LOBBY_API_BASE_URL`, ni
+`LOBBY_RELAY_SECRET`** — les Edge Functions n'ont JAMAIS eu la configuration Lobby que Vercel
+possède, et appellent en direct depuis une IP non whitelistée. Prouvé par différentiel : même
+établissement, même jeton, `night-availability` répond **200** depuis Vercel préprod pendant que
+l'Edge Function reçoit **403**. **NON FAIT, à reprendre** :
+(1) **DEUX verrous sur les jobs PMS, pas un** — `vault.create_secret(<service_role_key>,
+'pms_service_role_key')` débloque l'INVOCATION par pg_cron, mais `npx supabase secrets set
+LOBBY_API_BASE_URL=… LOBBY_RELAY_SECRET=…` (valeurs à reprendre de l'env `staging` de Vercel) est
+ce qui leur donne de quoi JOINDRE Lobby. Poser le premier sans le second produirait un job qui
+s'exécute enfin… pour collectionner des 403. `RESEND_API_KEY` (email) reste en attente sur décision
+de Jérôme. (2) **Lot B** : C1 et C5 restent **ouverts** — la sonde est en place et répondra dès que
+les deux secrets seront posés, sans rien réécrire ; C2 propagation d'annulation **à re-spécifier
+entièrement** ; C4 `products.unit` toujours inerte malgré `per_house`. (3) Modèle hébergement : T2 avancé
 (`unit_count` + `lodging_kind`), T1/T3/T4 non commencés — et le `mode` au niveau **établissement**
 (« a-t-il des chambres à choisir, ou se loue-t-il entier ? ») reste à porter, T1 en aura besoin.
 **Un jeton mort `LOBBY_PMS_TOKEN` retiré de `apps/admin/.env.local` — sa valeur a transité par une
 conversation, À RÉVOQUER chez LobbyPMS.** Détail complet : `hifago/docs/journal/2026-08.md`
-(2026-08-26 et 2026-08-27). 8 commits sur `main`, **rien poussé**.*
+(2026-08-26 et 2026-08-27). 12 commits sur `main`, **rien poussé**.*
 
 *2026-08-24 (suite 3, session distincte) — spec 23 (`docs/specs/23-notifications-email-
 transactionnelles.md`) écrite et implémentée intégralement, Tranche 1 + Tranche 2 (8 événements).
