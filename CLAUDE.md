@@ -480,7 +480,7 @@ ailleurs — une unité fausse rend une fiche fausse sans la rendre suspecte. Le
 (3) **Bruit du job nocturne réglé** : le seed portait `lobby_connector_active` avec un jeton factice
 et produisait une dérive `401` chaque nuit ; connecteur désactivé en préprod. ⚠️ Reste que son
 produit `alojamiento-pms-backed-demo` est encore `sellable` dans le catalogue public de préprod
-alors qu'il est invendable — donnée de démo, décision de Jérôme. (3) Modèle hébergement : T2 avancé
+alors qu'il est invendable — donnée de démo, décision de Jérôme. (4) Modèle hébergement : T2 avancé
 (`unit_count` + `lodging_kind`), T1/T3/T4 non commencés — et le `mode` au niveau **établissement**
 (« a-t-il des chambres à choisir, ou se loue-t-il entier ? ») reste à porter, T1 en aura besoin.
 **Un jeton mort `LOBBY_PMS_TOKEN` retiré de `apps/admin/.env.local` — sa valeur a transité par une

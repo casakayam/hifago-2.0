@@ -184,6 +184,19 @@ Deno.serve(async () => {
 
   const drifts: string[] = [];
   const observations: string[] = [];
+
+  // C2 (spec 25) — supervision de la file d'annulation. Une entrée définitivement 'failed' n'envoie
+  // AUCUN e-mail par conception : pms_reconciliation_entries déclenche notify_all_admins sans dédup
+  // (défaut C9). La supervision d'une file est un problème de COMPTAGE, et ce job nocturne est
+  // l'endroit pour le faire — une seule ligne par nuit, jamais une par entrée.
+  const { count: failedCancellations } = await supabase
+    .from("pms_cancellation_queue")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "failed");
+  if ((failedCancellations ?? 0) > 0) {
+    drifts.push(`${failedCancellations} annulation(s) LobbyPMS abandonnée(s) après ${3} tentatives — chambres possiblement encore bloquées`);
+  }
+
   const { date, nextDate } = probeNights();
   for (const establishment of establishments ?? []) {
     if (!establishment.lobby_api_token) continue;
