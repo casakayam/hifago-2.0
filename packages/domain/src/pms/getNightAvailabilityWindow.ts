@@ -1,5 +1,5 @@
-import { getLobbyNightAvailability } from "./lobbyClient";
-import { parseLobbyNightAvailability } from "./parseLobbyNightAvailability";
+import { getLobbyNightAvailability } from "./lobbyClient.ts";
+import { parseLobbyNightAvailability } from "./parseLobbyNightAvailability.ts";
 
 export interface NightAvailabilityRow {
   date: string;

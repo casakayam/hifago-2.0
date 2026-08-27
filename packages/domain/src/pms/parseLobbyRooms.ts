@@ -8,7 +8,7 @@
 // type, capacity, quantity, descriptions[] multilingues, photos[], et les chambres physiques.
 // Ce module l'expose sans un seul appel réseau supplémentaire.
 
-import { asNonEmptyString, asPositiveInt, asRecord } from "./parseHelpers";
+import { asNonEmptyString, asPositiveInt, asRecord } from "./parseHelpers.ts";
 
 // Langues de CONTENU réellement éditables dans hifago (LocalizedTextField est fermé à es/en, et
 // activeLang s'initialise à "es") — importer une clé hors de ce jeu produirait une valeur publiée

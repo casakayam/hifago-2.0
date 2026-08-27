@@ -13,7 +13,7 @@
 // Confirmé en conditions réelles le 2026-08-26 (14 services du compte Casa Kayam, spec 24 §11.3) —
 // c'est la raison pour laquelle lier une ACTIVITÉ à un service ne peut rien rapatrier d'autre.
 
-import { asNonEmptyString, asPositiveInt, asRecord } from "./parseHelpers";
+import { asNonEmptyString, asPositiveInt, asRecord } from "./parseHelpers.ts";
 
 export interface LobbyService {
   serviceId: number;
