@@ -19,7 +19,6 @@ import { StagedProductPhotos, type StagedPhoto } from "@/components/product-phot
 import { lowestTierPrice, toPriceTiersColumn, validatePriceTiers } from "@/lib/products/priceTiers";
 import { validateSlotRules, toSlotRuleRows } from "@/lib/products/slotRules";
 import { toStayRatesColumn, validateStayRates } from "@/lib/products/stayRates";
-import { toRoomTypeRow, validateRoomTypes } from "@/lib/products/hotelRooms";
 import { buildProductCreationPayload } from "@/lib/products/productCreationPayload";
 import { mergeLobbyRoom } from "@/lib/products/lobbyRoomImport";
 import { asLodgingKind, asLodgingUnit } from "@hifago/domain";
@@ -156,7 +155,7 @@ export function ProductForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
-    isEvento, isCamp, isActivity, isLodging, isHotel, isTransport,
+    isEvento, isCamp, isActivity, isLodging, isTransport,
     hasLocationAndTags, hasPriceQtyFields, hasCheckInOut, hasDefaultCapacity,
   } = productTypeGating(type);
 
@@ -246,7 +245,7 @@ export function ProductForm({
     const usesTiers = hasPriceQtyFields && fields.priceMode === "tiers";
     // Un hôtel n'a pas de prix propre (il vit sur ses chambres, product_room_types) — exempté du
     // prix obligatoire comme l'evento, cf. products_price_cop_required_unless_evento (spec 13).
-    const needsOwnPrice = !isEvento && !isHotel;
+    const needsOwnPrice = !isEvento;
 
     if (!isEditing) {
       // partner_id n'est jamais saisi indépendamment — dérivé de l'établissement choisi.
@@ -283,13 +282,6 @@ export function ProductForm({
         const slotRulesError = validateSlotRules(fields.slotRules);
         if (slotRulesError) {
           toast.danger(slotRulesError);
-          return;
-        }
-      }
-      if (isHotel) {
-        const roomsError = validateRoomTypes(fields.hotelRooms);
-        if (roomsError) {
-          toast.danger(roomsError);
           return;
         }
       }
@@ -348,7 +340,7 @@ export function ProductForm({
                 lon: fields.lon.trim() ? Number(fields.lon) : null,
               }
             : {}),
-          price_cop: isHotel ? null : usesTiers ? lowestTierPrice(fields.priceTiers) : price,
+          price_cop: usesTiers ? lowestTierPrice(fields.priceTiers) : price,
           price_tiers: usesTiers ? toPriceTiersColumn(fields.priceTiers) : null,
           ...(hasPriceQtyFields
             ? {
@@ -432,7 +424,7 @@ export function ProductForm({
         // l'admin est publié tout de suite, même principe que create_establishment/
         // create_product_from_proposal (retour Jérôme, 2026-08-20) — l'ancien geste de publication
         // séparée (feature 4) est abandonné pour toute création déjà initiée par un admin.
-        price_cop: isEvento || isHotel ? null : price,
+        price_cop: isEvento ? null : price,
         duration_days: isCamp ? Number(fields.durationDays) : null,
         ...(isEvento
           ? {
@@ -498,8 +490,6 @@ export function ProductForm({
           ? "No se pudo crear el evento."
           : isLodging
             ? "No se pudo crear el alojamiento."
-            : isHotel
-              ? "No se pudo crear el hotel."
               : isTransport
                 ? "No se pudo crear el transporte."
                 : "No se pudo crear la actividad.",
@@ -543,34 +533,6 @@ export function ProductForm({
           toast.danger("El producto se creó, pero los horarios no se pudieron guardar.");
         }
       })(),
-      (async () => {
-        if (!isHotel) return;
-        // Une chambre à la fois (pas un insert en bloc) : son id est nécessaire pour y attacher
-        // ses photos stagées juste après, exactement comme le rattachement photos/tags du produit
-        // ci-dessus — non-bloquant, un échec sur une chambre n'annule pas les autres.
-        for (const [index, room] of fields.hotelRooms.entries()) {
-          const row = toRoomTypeRow(room, index);
-          const { data: newRoom, error: roomError } = await supabase
-            .from("product_room_types")
-            .insert({ product_id: newProduct.id, ...row })
-            .select("id")
-            .single();
-          if (roomError || !newRoom) {
-            toast.danger("El producto se creó, pero una habitación no se pudo guardar.");
-            continue;
-          }
-          for (const photo of room.photos) {
-            const { error: mediaError } = await supabase.rpc("add_catalog_media", {
-              p_entity_type: "room_type",
-              p_entity_id: newRoom.id,
-              p_storage_path: photo.path,
-            });
-            if (mediaError) {
-              toast.danger("El producto se creó, pero una foto de habitación no se pudo asociar.");
-            }
-          }
-        }
-      })(),
     ]);
 
     toast.success(
@@ -578,8 +540,6 @@ export function ProductForm({
         ? "Evento creado."
         : isLodging
           ? "Alojamiento creado."
-          : isHotel
-            ? "Hotel creado."
             : isTransport
               ? "Transporte creado."
               : "Actividad creada.",
@@ -697,7 +657,6 @@ export function ProductForm({
         type={type}
         state={fields}
         showTags={!isEditing}
-        showHotelRoomsEditor={!isEditing}
         showSlotRulesEditor={!isEditing}
         allowCreateTags={variant === "admin"}
         establishmentId={activeEstablishmentId}
@@ -708,7 +667,6 @@ export function ProductForm({
         // aussi côté socio — les masquer ici était la seule raison pour laquelle elles ne
         // pouvaient jamais en avoir (buildProductCreationPayload transporte désormais ces photos,
         // moderate_product_proposal/create_product_from_proposal les persistent à l'approbation).
-        hidePhotosInHotelRooms={false}
         availableTags={allTags}
       />
 
@@ -747,8 +705,6 @@ export function ProductForm({
                 ? "Crear evento"
                 : isLodging
                   ? "Crear alojamiento"
-                  : isHotel
-                    ? "Crear hotel"
                     : isTransport
                       ? "Crear transporte"
                       : "Crear actividad"}

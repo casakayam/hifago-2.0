@@ -66,8 +66,10 @@ describe("ProductTypeFields — sélecteur LobbyPMS", () => {
     expect(screen.getByText("¿Cómo cargar este transporte?")).toBeTruthy();
   });
 
-  it("n'apparaît jamais pour evento, campamento ou hotel, même connecté (incompatibilité démontrée, pas un oubli)", () => {
-    for (const type of ["evento", "camp", "hotel"] as const) {
+  it("n'apparaît jamais pour evento ni campamento, même connecté (incompatibilité démontrée, pas un oubli)", () => {
+    // `hotel` retiré de cette liste avec le type lui-même (T3, 2026-08-27) — il ne s'agissait pas
+    // d'une incompatibilité de plus mais d'un étage entier qui n'existe plus.
+    for (const type of ["evento", "camp"] as const) {
       const { unmount } = render(<Harness type={type} />);
       expect(screen.queryByTestId("lobby-link-mode-select")).toBeNull();
       unmount();

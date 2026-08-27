@@ -191,15 +191,6 @@ export function EstablishmentActivities({
                     Calendario
                   </Link>
                 ) : null}
-                {availabilityScreen === "room" ? (
-                  <Link
-                    href={`/partner/products/${product.id}/room-availability`}
-                    className={buttonVariants({ variant: "outline", size: "sm" })}
-                    data-testid={`room-availability-link-${product.id}`}
-                  >
-                    Cupos por habitación
-                  </Link>
-                ) : null}
                 {availabilityScreen === "slot" ? (
                   <Link
                     href={`/partner/products/${product.id}/slot-availability`}

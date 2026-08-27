@@ -17,7 +17,7 @@ export default async function PartnerProductSlotAvailabilityPage({
   const { from: fromParam } = await searchParams;
 
   // products_select_own (feature 15) : ne renvoie cette fiche que si elle appartient au
-  // partenaire connecté (ou si elle est publiée) — même patron que room-availability/page.tsx.
+  // partenaire connecté (ou si elle est publiée) — même patron que availability/page.tsx.
   const data = await loadSlotAvailabilityPageData(id, fromParam);
 
   if (!data) {

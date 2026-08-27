@@ -194,7 +194,6 @@ export function CheckoutForm({
         qty: line.qty,
         // Absents pour toute ligne à date unique (comportement inchangé) — présents uniquement
         // pour une ligne par plage (chambre d'hôtel/alojamiento, spec 17 §0 Tranche 2).
-        ...(line.roomTypeId ? { room_type_id: line.roomTypeId } : {}),
         ...(line.endDate ? { end_date: line.endDate } : {}),
         ...(line.slotStartTime ? { slot_start_time: line.slotStartTime } : {}),
       })),

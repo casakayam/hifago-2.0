@@ -1,3 +1,4 @@
+import type { ProductType } from "@/lib/products/productTypeGating";
 import { notFound } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
@@ -78,7 +79,7 @@ export default async function AdminProposalDetailPage({
           <ModerateProductCreationProposalForm
             proposalId={proposal.id}
             expectedVersion={proposal.version}
-            type={proposal.type as "activity" | "evento" | "camp" | "lodging" | "hotel" | "transport"}
+            type={proposal.type as ProductType}
             payload={proposal.payload}
             availableTags={availableTags}
             establishmentId={proposal.establishment_id ?? ""}
@@ -127,7 +128,7 @@ export default async function AdminProposalDetailPage({
         <ModerateProposalForm
           proposalId={proposal.id}
           expectedVersion={proposal.version}
-          type={proposal.product.type as "activity" | "evento" | "camp" | "lodging" | "hotel" | "transport"}
+          type={proposal.product.type as ProductType}
           currentPayload={proposal.product}
           proposedPayload={proposal.payload as Record<string, unknown>}
         />

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { tiersFromColumn, type PriceTier } from "@/lib/products/priceTiers";
 import { emptyStayRates, stayRatesFromColumn, type DraftStayRates } from "@/lib/products/stayRates";
 import { slotRulesFromColumn, type DraftSlotRule } from "@/lib/products/slotRules";
-import { roomTypesFromColumn, type DraftRoomType } from "@/lib/products/hotelRooms";
 import { asLodgingKind, asLodgingUnit, type LodgingKind, type LodgingUnit } from "@hifago/domain";
 
 // Correctif (spec 21, trouvé en vérifiant, sans lien avec elle — cf. productTypeGating.ts) :
@@ -51,7 +50,6 @@ export type ProductTypeFieldsInit = {
   unit?: LodgingUnit | null;
   defaultCapacity?: number | null;
   stayRates?: unknown;
-  roomTypes?: unknown;
   durationDays?: number | null;
   slotRules?: unknown;
   priceLabel?: string | null;
@@ -102,7 +100,6 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
   const [stayRates, setStayRates] = useState<DraftStayRates>(() =>
     init.stayRates ? stayRatesFromColumn(init.stayRates) : emptyStayRates(),
   );
-  const [hotelRooms, setHotelRooms] = useState<DraftRoomType[]>(() => roomTypesFromColumn(init.roomTypes));
   const [durationDays, setDurationDays] = useState(init.durationDays != null ? String(init.durationDays) : "");
   const [slotRules, setSlotRules] = useState<DraftSlotRule[]>(() => slotRulesFromColumn(init.slotRules));
 
@@ -152,7 +149,6 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
     capacity, setCapacity, unitCount, setUnitCount,
     lodgingKind, setLodgingKind, unit, setUnit,
     defaultCapacity, setDefaultCapacity, stayRates, setStayRates,
-    hotelRooms, setHotelRooms,
     durationDays, setDurationDays,
     slotRules, setSlotRules,
     priceLabel, setPriceLabel,
@@ -195,7 +191,6 @@ export type RawProductFieldsPayload = {
   unit?: string | null;
   default_capacity?: number | null;
   stay_rates?: unknown;
-  room_types?: unknown;
   duration_days?: number | null;
   slot_rules?: unknown;
   price_label?: string | null;
@@ -231,7 +226,6 @@ export function payloadToFieldsInit(payload: RawProductFieldsPayload): ProductTy
     unit: asLodgingUnit(payload.unit),
     defaultCapacity: payload.default_capacity,
     stayRates: payload.stay_rates,
-    roomTypes: payload.room_types,
     durationDays: payload.duration_days,
     slotRules: payload.slot_rules,
     priceLabel: payload.price_label,

@@ -6,7 +6,6 @@ import { TagsMultiSelect, type TagOption } from "@/components/tags-multiselect";
 import { LobbyOptionPicker, type LobbyRoomOption } from "@/components/lobby-option-picker";
 import { SlotRulesEditor } from "@/components/slot-rules-editor";
 import { StayRatesEditor } from "@/components/stay-rates-editor";
-import { HotelRoomsEditor } from "@/components/hotel-rooms-editor";
 import { PriceTiersEditor } from "@/components/price-tiers-editor";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
 import { productTypeGating, type ProductType, type ProductTypeFieldsState } from "@/lib/products/useProductTypeFieldsState";
@@ -75,10 +74,8 @@ export function ProductTypeFields({
   type,
   state,
   showTags,
-  showHotelRoomsEditor,
   showSlotRulesEditor,
   allowCreateTags,
-  hidePhotosInHotelRooms,
   availableTags,
   establishmentId,
   establishmentLobbyConnected,
@@ -94,10 +91,8 @@ export function ProductTypeFields({
   // address/lat/lon/prix/tramos/min-max/check-in-out/capacité/stay_rates restent, eux, affichés
   // dans les deux modes, donc jamais gatés par ces props.
   showTags?: boolean;
-  showHotelRoomsEditor?: boolean;
   showSlotRulesEditor?: boolean;
   allowCreateTags?: boolean;
-  hidePhotosInHotelRooms?: boolean;
   availableTags?: TagOption[];
   // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — remplace l'ancien showLobbyFields
   // (booléen unique, admin-only). establishmentLobbyConnected (dérivé de
@@ -121,7 +116,7 @@ export function ProductTypeFields({
   lobbyLinkReadOnly?: boolean;
 }) {
   const {
-    isEvento, isCamp, isActivity, isLodging, isHotel, isTransport,
+    isEvento, isCamp, isActivity, isLodging, isTransport,
     hasLocationAndTags, hasTags, hasPriceQtyFields, hasCheckInOut, hasDefaultCapacity,
   } = productTypeGating(type);
 
@@ -494,13 +489,6 @@ export function ProductTypeFields({
       ) : null}
 
       {isLodging ? <StayRatesEditor value={state.stayRates} onChange={state.setStayRates} /> : null}
-
-      {showHotelRoomsEditor && isHotel ? (
-        <div className="flex flex-col gap-1.5">
-          <Label>Habitaciones — opcional</Label>
-          <HotelRoomsEditor rooms={state.hotelRooms} onChange={state.setHotelRooms} hidePhotos={hidePhotosInHotelRooms} />
-        </div>
-      ) : null}
 
       {isCamp ? (
         <TextField

@@ -7,7 +7,6 @@ import { Card, buttonVariants } from "@hifago/ui";
 import type { PriceTier } from "@/lib/products/reservationRange";
 import { ProductPhotos } from "./ProductPhotos";
 import { ReservationForm } from "./ReservationForm";
-import { HotelReservationForm, type RoomTypeOption } from "./HotelReservationForm";
 import { LodgingReservationForm } from "./LodgingReservationForm";
 import { SlotReservationForm } from "./SlotReservationForm";
 
@@ -16,8 +15,6 @@ import { SlotReservationForm } from "./SlotReservationForm";
 // partagé) — pas une invention propre à ce fichier.
 type AvailabilityRow = { date: string; capacity: number; booked: number };
 type DateRateRow = { date: string; price_cop: number };
-type RoomAvailabilityRow = { room_type_id: string; date: string; capacity: number; booked: number };
-type RoomRateRow = { room_type_id: string; date: string; price_cop: number };
 type SlotRow = {
   slot_date: string;
   slot_start_time: string;
@@ -51,9 +48,6 @@ export function ProductDetailView({
   establishmentDescription,
   establishmentAddress,
   establishmentPhotoSlides,
-  roomTypes,
-  roomAvailability,
-  roomRates,
   // Un seul de lodging/slot/date se rend jamais par appel (reservationMode le discrimine) — les
   // trois ex-props lodgingPriceCop/slotPriceCop/datePriceCop portaient systématiquement la même
   // valeur (product.price_cop) sous des noms différents, collapsées ici en une seule (/simplify).
@@ -76,7 +70,7 @@ export function ProductDetailView({
   unitCount: number | null;
   /** Nature du couchage. `whole_house` ne vient jamais de Lobby — toujours un choix du partenaire. */
   lodgingKind: LodgingKind | null;
-  reservationMode: "evento" | "hotel" | "lodging" | "slot" | "date";
+  reservationMode: "evento" | "lodging" | "slot" | "date";
   occurrenceLabel: string | null;
   externalBookingUrl: string | null;
   productId: string;
@@ -86,9 +80,6 @@ export function ProductDetailView({
   establishmentDescription: string | null;
   establishmentAddress: string | null;
   establishmentPhotoSlides: PhotoSlide[];
-  roomTypes: RoomTypeOption[];
-  roomAvailability: RoomAvailabilityRow[];
-  roomRates: RoomRateRow[];
   priceCop: number;
   lodgingPriceTiers: PriceTier[] | null;
   lodgingMaxQty: number;
@@ -176,15 +167,6 @@ export function ProductDetailView({
                 </a>
               ) : null}
             </div>
-          ) : reservationMode === "hotel" ? (
-            <HotelReservationForm
-              productId={productId}
-              productName={name}
-              establishmentName={establishmentName}
-              roomTypes={roomTypes}
-              availability={roomAvailability}
-              rates={roomRates}
-            />
           ) : reservationMode === "lodging" ? (
             <LodgingReservationForm
               productId={productId}

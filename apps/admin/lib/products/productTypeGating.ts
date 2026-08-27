@@ -14,7 +14,14 @@
 // sans state, dans CE fichier SANS "use client" — utilisable aussi bien depuis un Server Component
 // que depuis un Client Component. useProductTypeFieldsState.ts réexporte ce module pour ne casser
 // aucun import existant côté client.
-export type ProductType = "activity" | "evento" | "camp" | "lodging" | "hotel" | "transport";
+// T3 (spec 24 §4) — `hotel` retiré le 2026-08-27. Cet étage dupliquait l'établissement au niveau
+// produit : il n'existe ni chez LobbyPMS (propriété → catégories, sans intermédiaire) ni dans la
+// v1, et il rendait un hôtel structurellement inconnectable à un PMS (isPmsBacked = lodging +
+// lobby_category_id). Une chambre est désormais un `lodging` portant son `lodging_kind`, et
+// c'est l'établissement qui porte le lieu. La création était fermée depuis le 2026-08-26 ; la
+// préprod ne comptait aucun hôtel, aucun type de chambre, aucune commande — code mort, pas une
+// migration de données.
+export type ProductType = "activity" | "evento" | "camp" | "lodging" | "transport";
 
 // Gating par type — miroir exact de ProductForm (spec 11/12/13/14), la SEULE définition de ces 3
 // booléens dans tout le projet : ProductForm, ProductTypeFields et
@@ -25,28 +32,26 @@ export function productTypeGating(type: ProductType) {
   const isCamp = type === "camp";
   const isActivity = type === "activity";
   const isLodging = type === "lodging";
-  const isHotel = type === "hotel";
   const isTransport = type === "transport";
   return {
     isEvento,
     isCamp,
     isActivity,
     isLodging,
-    isHotel,
     isTransport,
-    hasLocationAndTags: isActivity || isLodging || isHotel || isTransport,
+    hasLocationAndTags: isActivity || isLodging || isTransport,
     // Retour Jérôme (2026-08-18) : un camp a aussi des "servicios incluidos" (desayuno, transporte,
     // guía…) qui doivent être des tags comme pour les autres types, pour pouvoir un jour trier/
     // filtrer dessus — camp n'a en revanche pas besoin d'adresse propre (déjà celle de son
     // établissement), d'où un booléen SÉPARÉ de hasLocationAndTags plutôt qu'un ajout à ce dernier
     // (qui aurait aussi fait apparaître les champs adresse/lat/lon, jamais demandés pour camp).
-    hasTags: isActivity || isLodging || isHotel || isTransport || isCamp,
+    hasTags: isActivity || isLodging || isTransport || isCamp,
     hasPriceQtyFields: isActivity || isLodging || isTransport,
-    hasCheckInOut: isLodging || isHotel,
+    hasCheckInOut: isLodging,
     // Types qui matérialisent product_availability à date unique (create_order /
     // modify_order_line) — seuls ceux-là peuvent porter un cupo par défaut. evento : pas encore
-    // réellement réservable côté client. lodging/hotel : ont déjà leurs propres modèles de
-    // capacité (capacity/couchage, room_type_availability) — hors périmètre.
+    // réellement réservable côté client. lodging : a déjà son propre modèle de capacité
+    // (capacity/couchage) — hors périmètre.
     hasDefaultCapacity: isActivity || isCamp || isTransport,
   };
 }
@@ -66,7 +71,7 @@ export function availabilityScreenFor(
   type: ProductType,
   hasSlotRules: boolean,
   isPmsBacked: boolean,
-): "generic" | "room" | "slot" | "none" | "pms" {
+): "generic" | "slot" | "none" | "pms" {
   // Ajouté le 2026-08-26. Un logement PMS-backed (lodging + lobby_category_id) ne décrémente
   // JAMAIS product_availability : create_order saute explicitement verrou et décrément pour lui,
   // Lobby étant seule source de vérité de la capacité (20260819130000_create_order_pms_backed.sql).
@@ -79,7 +84,6 @@ export function availabilityScreenFor(
   // seule définition de ce gating et elle a deux appelants (admin et socio). Un défaut aurait
   // laissé le portail socio compiler en gardant l'ancien comportement, sans que rien ne le signale.
   if (isPmsBacked) return "pms";
-  if (type === "hotel") return "room";
   if (type === "evento") return "none";
   if (type === "activity" && hasSlotRules) return "slot";
   return "generic";

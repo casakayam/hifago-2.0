@@ -39,7 +39,6 @@ describe("resolveActiveNavTitle", () => {
       "/partner/products/new",
       "/partner/products/abc-123/edit",
       "/partner/products/abc-123/availability",
-      "/partner/products/abc-123/room-availability",
       "/partner/products/abc-123/slot-availability",
     ];
     for (const pathname of productsRoutes) {

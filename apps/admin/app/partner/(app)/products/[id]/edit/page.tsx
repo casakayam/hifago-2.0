@@ -1,3 +1,4 @@
+import type { ProductType } from "@/lib/products/productTypeGating";
 import { notFound } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
@@ -93,7 +94,7 @@ export default async function EditProductProposalPage({
 
       <EditProposalForm
         productId={product.id}
-        type={product.type as "activity" | "evento" | "camp" | "lodging" | "hotel" | "transport"}
+        type={product.type as ProductType}
         currentPayload={product}
         pendingProposal={pendingProposal}
         establishmentId={product.establishment_id}

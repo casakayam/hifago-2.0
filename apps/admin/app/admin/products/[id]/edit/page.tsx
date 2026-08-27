@@ -13,15 +13,11 @@ import {
   type ProductType,
 } from "@/lib/products/productTypeGating";
 import type { DraftSlotRule } from "@/lib/products/slotRules";
-import type { DraftRoomType } from "@/lib/products/hotelRooms";
-import { tiersFromColumn } from "@/lib/products/priceTiers";
-import { stayRatesFromColumn } from "@/lib/products/stayRates";
 import { ProductStatusBlock } from "./ProductStatusBlock";
 import { ProductPhotosBlock } from "./ProductPhotosBlock";
 import { ImportLobbyPhotosBlock } from "./ImportLobbyPhotosBlock";
 import { ProductTagsBlock } from "./ProductTagsBlock";
 import { ProductSlotRulesBlock } from "./ProductSlotRulesBlock";
-import { ProductHotelRoomsBlock } from "./ProductHotelRoomsBlock";
 
 // "HH:MM:SS" (sérialisation Postgres d'une colonne time) → "HH:MM" (valeur attendue par
 // <Input type="time">, cf. slot-rules-editor.tsx).
@@ -60,7 +56,7 @@ export default async function EditProductPage({
   // conservé, champ conditionnel). productTypeGating : SEULE définition de ces booléens dans tout
   // le projet (cf. apps/admin/lib/products/useProductTypeFieldsState.ts), partagée avec ProductForm
   // et ModerateProductCreationProposalForm.
-  const { isActivity, isLodging, isHotel, isTransport, hasTags } = productTypeGating(
+  const { isActivity, isLodging, isTransport, hasTags } = productTypeGating(
     product.type as ProductType,
   );
   // Refonte parcours produit ↔ LobbyPMS (2026-08-26) — même condition que product-type-fields.tsx/
@@ -76,7 +72,6 @@ export default async function EditProductPage({
     { data: tagsRaw },
     { data: assignments },
     { data: slotRulesRaw },
-    { data: roomTypesRaw },
   ] = await Promise.all([
     supabase
       .from("product_media")
@@ -97,16 +92,6 @@ export default async function EditProductPage({
           .eq("product_id", product.id)
           .order("start_time")
       : Promise.resolve({ data: [] as never[] }),
-    // Spec 13 — chambres : réservées à "hotel", même gating que tags/tramos/créneaux.
-    isHotel
-      ? supabase
-          .from("product_room_types")
-          .select(
-            "id, kind, name, description, capacity, quantity, price_cop, price_tiers, min_qty, max_qty, stay_rates",
-          )
-          .eq("product_id", product.id)
-          .order("sort")
-      : Promise.resolve({ data: [] as never[] }),
   ]);
 
   // Spec 17 §0 Tranche 0 (générique) + Spec 18 Tranche 1 (créneaux) — SEULE définition de ce
@@ -117,18 +102,6 @@ export default async function EditProductPage({
     (slotRulesRaw ?? []).length > 0,
     isRoomLinkedToLobby,
   );
-
-  // Photos des chambres : dépend des id de roomTypesRaw, donc une 2e vague après le Promise.all
-  // ci-dessus (dépendance réelle, pas parallélisable avec le reste).
-  const roomIds = (roomTypesRaw ?? []).map((r) => r.id);
-  const { data: roomMediaRaw } =
-    roomIds.length > 0
-      ? await supabase
-          .from("room_media")
-          .select("id, room_type_id, storage_path")
-          .in("room_type_id", roomIds)
-          .order("sort", { ascending: true })
-      : { data: [] as { id: string; room_type_id: string; storage_path: string }[] };
 
   const photos = (media ?? []).map((m) => ({
     id: m.id,
@@ -149,27 +122,6 @@ export default async function EditProductPage({
     capacity: String(rule.capacity),
   }));
 
-  const initialHotelRooms: DraftRoomType[] = (roomTypesRaw ?? []).map((room) => ({
-    id: room.id,
-    kind: room.kind as DraftRoomType["kind"],
-    name: asLocalizedField(room.name) ?? {},
-    description: asLocalizedField(room.description) ?? {},
-    capacity: String(room.capacity),
-    quantity: room.quantity != null ? String(room.quantity) : "",
-    priceMode: Array.isArray(room.price_tiers) && room.price_tiers.length > 0 ? "tiers" : "simple",
-    priceCop: String(room.price_cop),
-    priceTiers: tiersFromColumn(room.price_tiers),
-    minQty: room.min_qty != null ? String(room.min_qty) : "",
-    maxQty: room.max_qty != null ? String(room.max_qty) : "",
-    stayRates: stayRatesFromColumn(room.stay_rates),
-    photos: [],
-    savedPhotos: (roomMediaRaw ?? [])
-      .filter((m) => m.room_type_id === room.id)
-      .map((m) => ({
-        id: m.id,
-        url: supabase.storage.from("catalog-media").getPublicUrl(m.storage_path).data.publicUrl,
-      })),
-  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -177,8 +129,6 @@ export default async function EditProductPage({
         <h1 className="text-2xl font-semibold">
           {isLodging
             ? "Editar alojamiento"
-            : isHotel
-              ? "Editar hotel"
               : isTransport
                 ? "Editar transporte"
                 : "Editar actividad"}
@@ -196,16 +146,6 @@ export default async function EditProductPage({
           <p className="text-sm text-muted" data-testid="availability-managed-by-pms">
             La disponibilidad se gestiona en LobbyPMS.
           </p>
-        ) : null}
-        {/* Spec 17 §0 Tranche 2 — le calendrier générique (product_availability, lien ci-dessus)
-            ne représente aucune chambre réelle pour un hôtel : grille dédiée chambres×dates. */}
-        {availabilityScreen === "room" ? (
-          <Link
-            href={`/admin/products/${product.id}/room-availability`}
-            className={buttonVariants({ variant: "outline" })}
-          >
-            Cupos por habitación
-          </Link>
         ) : null}
         {/* Spec 18 Tranche 1 — même raisonnement : product_availability ne représente pas la
             capacité par créneau horaire d'une activité qui porte des product_slot_rules (ex.
@@ -236,9 +176,6 @@ export default async function EditProductPage({
       {isRoomLinkedToLobby ? <ImportLobbyPhotosBlock productId={product.id} /> : null}
       {isActivity ? (
         <ProductSlotRulesBlock productId={product.id} initialRules={initialSlotRules} />
-      ) : null}
-      {isHotel ? (
-        <ProductHotelRoomsBlock productId={product.id} initialRooms={initialHotelRooms} />
       ) : null}
       <ProductForm product={product} />
     </div>

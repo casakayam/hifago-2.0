@@ -3,14 +3,13 @@ import type { StagedPhoto } from "@/components/product-photos-staged";
 import { lowestTierPrice, toPriceTiersColumn } from "@/lib/products/priceTiers";
 import { toStayRatesColumn } from "@/lib/products/stayRates";
 import { toSlotRuleRows } from "@/lib/products/slotRules";
-import { toRoomTypeRows } from "@/lib/products/hotelRooms";
 import { productTypeGating, type ProductType, type ProductTypeFieldsState } from "@/lib/products/useProductTypeFieldsState";
 
 // Construit le payload jsonb attendu par submit_product_creation_proposal / le
 // p_corrected_payload de moderate_product_proposal (kind='create') — miroir exact de ce que
 // handleSubmit écrit directement dans `products` pour l'admin-direct (product-form.tsx), mêmes
 // fonctions de conversion (toPriceTiersColumn/toStayRatesColumn/toSlotRuleRows/toRoomTypeRows),
-// donc price_cop/price_tiers/room_types/slot_rules arrivent déjà dans la forme EXACTE des colonnes
+// donc price_cop/price_tiers/slot_rules arrivent déjà dans la forme EXACTE des colonnes
 // cibles — create_product_from_proposal (SQL) ne fait plus aucun calcul, seulement une transposition.
 // `photos` (spec 15, révisé 2026-08-17) : les fichiers sont déjà uploadés vers Storage au moment
 // de l'appel (StagedProductPhotos, réutilisé tel quel côté socio) — seul le storage_path traverse
@@ -25,7 +24,7 @@ export function buildProductCreationPayload(
   stagedPhotos: StagedPhoto[] = [],
 ): Record<string, unknown> {
   const {
-    isEvento, isCamp, isHotel, isLodging, isActivity, isTransport,
+    isEvento, isCamp, isLodging, isActivity, isTransport,
     hasLocationAndTags, hasTags, hasPriceQtyFields, hasCheckInOut, hasDefaultCapacity,
   } = productTypeGating(type);
   const usesTiers = hasPriceQtyFields && fields.priceMode === "tiers";
@@ -84,21 +83,6 @@ export function buildProductCreationPayload(
       : {}),
     ...(hasDefaultCapacity
       ? { default_capacity: fields.defaultCapacity.trim() ? Number(fields.defaultCapacity) : null }
-      : {}),
-    // Photos par chambre (retour Jérôme 2026-08-18 : "les chambres et dortoires n'ont toujours pas
-    // la possibilité d'avoir des images" côté socio) — même principe que `photos` au niveau produit
-    // ci-dessus (storage_path seul, déjà uploadé au moment de l'appel via HotelRoomsEditor). Ajouté
-    // ICI (pas dans toRoomTypeRow/hotelRooms.ts) : ce champ n'existe QUE dans le payload de
-    // proposition, jamais dans la ligne insérée directement dans product_room_types côté
-    // admin-direct (qui n'a pas de colonne `photos`, cf. product-form.tsx qui gère ses photos de
-    // chambre séparément après l'insert).
-    ...(isHotel
-      ? {
-          room_types: toRoomTypeRows(fields.hotelRooms).map((row, index) => ({
-            ...row,
-            photos: fields.hotelRooms[index].photos.map((photo) => ({ storage_path: photo.path })),
-          })),
-        }
       : {}),
     ...(isActivity ? { slot_rules: toSlotRuleRows(fields.slotRules) } : {}),
     ...(isEvento

@@ -22,7 +22,9 @@ export type CatalogProduct = {
 // Types réels de products.type (supabase/migrations/20260817160000_calendar_tranche0_fixes.sql,
 // dernière redéfinition du CHECK — 'tour' retiré) : ne pas resynchroniser depuis une migration
 // plus ancienne.
-const PRODUCT_TYPES = ["lodging", "activity", "transport", "camp", "evento", "hotel"] as const;
+// `hotel` retiré le 2026-08-27 avec l'étage lui-même (T3) : une chambre est un `lodging`, et le
+// lieu est l'établissement.
+const PRODUCT_TYPES = ["lodging", "activity", "transport", "camp", "evento"] as const;
 
 export function CatalogBrowser({ products }: { products: CatalogProduct[] }) {
   const t = useTranslations("HomePage");

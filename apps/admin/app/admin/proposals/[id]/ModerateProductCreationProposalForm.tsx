@@ -183,10 +183,8 @@ export function ModerateProductCreationProposalForm({
         type={type}
         state={fields}
         showTags
-        showHotelRoomsEditor
         showSlotRulesEditor
         allowCreateTags
-        hidePhotosInHotelRooms
         availableTags={availableTags}
         establishmentId={establishmentId}
         establishmentLobbyConnected={establishmentLobbyConnected}

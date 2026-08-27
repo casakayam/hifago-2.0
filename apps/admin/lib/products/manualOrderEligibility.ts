@@ -8,4 +8,6 @@ import type { ProductType } from "@/lib/products/useProductTypeFieldsState";
 // RPC). Ce littéral n'existe qu'ici côté TS : toute divergence future avec la migration SQL doit
 // être répercutée aux deux endroits à la main (pas de dérivation automatique depuis un signal
 // serveur — hors périmètre de ce nettoyage, cf. AGENTS.md/le commentaire de page.tsx qui l'utilise).
-export const MANUAL_ORDER_INELIGIBLE_TYPES: readonly ProductType[] = ["hotel", "lodging", "camp"];
+// `hotel` retiré de cette liste le 2026-08-27 avec l'étage lui-même (T3) — la RPC continue de le
+// filtrer côté base, mais le type n'existe plus côté application.
+export const MANUAL_ORDER_INELIGIBLE_TYPES: readonly ProductType[] = ["lodging", "camp"];

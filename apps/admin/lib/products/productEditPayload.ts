@@ -6,7 +6,7 @@ import { productTypeGating, type ProductType, type ProductTypeFieldsState } from
 // Construit le payload jsonb attendu par submit_product_proposal / le p_corrected_payload de
 // moderate_product_proposal (kind='content') — miroir exact du bloc `if (isEditing && product)` de
 // ProductForm.handleSubmit (product-form.tsx) : mêmes champs, jamais tags/photos/slot_rules/
-// room_types (délégués à des blocs séparés à sauvegarde immédiate côté admin, jamais couverts par
+// (délégués à des blocs séparés à sauvegarde immédiate côté admin, jamais couverts par
 // ce même submit là non plus — cf. tête de migration 20260817150000).
 export function buildProductEditPayload(
   type: ProductType,
@@ -14,10 +14,10 @@ export function buildProductEditPayload(
   description: LocalizedValue,
   fields: ProductTypeFieldsState,
 ): Record<string, unknown> {
-  const { isHotel, isEvento, hasLocationAndTags, hasPriceQtyFields, hasCheckInOut, isLodging, hasDefaultCapacity } =
+  const { isEvento, hasLocationAndTags, hasPriceQtyFields, hasCheckInOut, isLodging, hasDefaultCapacity } =
     productTypeGating(type);
   const usesTiers = hasPriceQtyFields && fields.priceMode === "tiers";
-  const needsOwnPrice = !isEvento && !isHotel;
+  const needsOwnPrice = !isEvento;
 
   return {
     name: buildLocalizedPayload(name) ?? { es: name.es?.trim() ?? "" },

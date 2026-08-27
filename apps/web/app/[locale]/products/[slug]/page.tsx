@@ -77,9 +77,10 @@ export default async function ProductPage({
   // Le rendu JSX vit désormais dans ProductDetailView.tsx ("use client"), qui appelle
   // useTranslations lui-même — une fonction traducteur next-intl obtenue côté serveur
   // (getTranslations) n'est pas sérialisable à travers la frontière Server → Client Component.
-  // `t`/`tOccurrence` restent nécessaires ICI uniquement pour composer des chaînes déjà
-  // finalisées (hotelPriceLabel, occurrenceLabel) avant de les passer en props.
-  const t = await getTranslations("ProductPage");
+  // `tOccurrence` reste nécessaire ICI uniquement pour composer occurrenceLabel, une chaîne déjà
+  // finalisée avant d'être passée en prop. `t` ne l'est plus depuis le retrait de l'étage hôtel
+  // (T3, 2026-08-27) : il ne servait qu'au « Desde {prix le plus bas} » d'un hôtel, dont le prix
+  // vivait sur ses chambres.
   const tOccurrence = await getTranslations("ProductPage.occurrence");
 
   const supabase = await createClient();
@@ -95,7 +96,6 @@ export default async function ProductPage({
   // Spec 17 §0 Tranche 2 : un hôtel ne se réserve jamais "en gros" (product_availability générique
   // ne représente aucune chambre réelle, cf. create_order room_type_required) — écran dédié avec
   // sélecteur de chambre, jamais le ReservationForm générique.
-  const isHotel = product.type === "hotel";
   // Spec 17 §0 Tranche 2 : un alojamiento se réserve par plage de nuits (check-in/check-out), pas
   // par date unique — écran dédié (LodgingReservationForm, pendant de HotelReservationForm sans
   // sélecteur de chambre), jamais le ReservationForm générique non plus.
@@ -129,9 +129,9 @@ export default async function ProductPage({
   // de suite (même tick), donc en vrai parallèle malgré l'`await` interne à chacun. Les vrais
   // enchaînements dépendants restent APRÈS ce Promise.all : productSlots (a besoin du résultat de
   // slotRulesCount/isSlotBased ci-dessous) et roomAvailability/roomRates (déjà groupés eux-mêmes,
-  // ont besoin de roomTypeIds issu de roomTypesRaw).
+  // slotRulesCount/isSlotBased ci-dessous).
   const fetchAvailability = async () =>
-    isEvento || isHotel
+    isEvento
       ? { data: [] }
       : await supabase
           .from("product_availability")
@@ -149,21 +149,12 @@ export default async function ProductPage({
   // requête gaspillée. (Un commentaire précédent affirmait à tort "même conditionnel que
   // availability" — la divergence documentée ici est le comportement correct, pas un bug.)
   const fetchSlotRulesCount = async () =>
-    isEvento || isHotel || isLodging
+    isEvento || isLodging
       ? { count: 0 }
       : await supabase
           .from("product_slot_rules")
           .select("id", { count: "exact", head: true })
           .eq("product_id", product.id);
-
-  const fetchRoomTypesRaw = async () =>
-    isHotel
-      ? await supabase
-          .from("product_room_types")
-          .select("id, kind, name, capacity, price_cop, price_tiers, min_qty, max_qty")
-          .eq("product_id", product.id)
-          .order("sort")
-      : { data: [] };
 
   // Spec 17 §0 Tranche 2 : override de prix par nuit pour un alojamiento (mécanique identique à
   // room_type_date_rates ci-dessous, mais sur product_id directement — pas de chambre à filtrer).
@@ -179,14 +170,12 @@ export default async function ProductPage({
   const [
     { data: availability },
     { count: slotRulesCount },
-    { data: roomTypesRaw },
     { data: productDateRates },
     { data: media },
     { data: establishmentMedia },
   ] = await Promise.all([
     fetchAvailability(),
     fetchSlotRulesCount(),
-    fetchRoomTypesRaw(),
     fetchProductDateRates(),
     supabase
       .from("product_media")
@@ -205,15 +194,13 @@ export default async function ProductPage({
   // cf. commentaire plus haut) — consommé partout ensuite (fetch dépendant de productSlots,
   // priceDisplay, tout le rendu ci-dessous) au lieu de recomposer isEvento/isHotel/isLodging/
   // isSlotBased à chaque site. Ordre de priorité identique à l'ancien enchaînement de ternaires du
-  // rendu (evento > hotel > lodging > slot > date), préservé à l'identique.
-  const reservationMode: "evento" | "hotel" | "lodging" | "slot" | "date" = isEvento
+  // rendu (evento > lodging > slot > date), préservé à l'identique.
+  const reservationMode: "evento" | "lodging" | "slot" | "date" = isEvento
     ? "evento"
-    : isHotel
-      ? "hotel"
-      : isLodging
-        ? "lodging"
-        : isSlotBased
-          ? "slot"
+    : isLodging
+      ? "lodging"
+      : isSlotBased
+        ? "slot"
           : "date";
 
   const { data: productSlots } =
@@ -224,23 +211,6 @@ export default async function ProductPage({
           p_to: addDays(today, 180).toISOString().slice(0, 10),
         })
       : { data: [] };
-
-  const roomTypeIds = (roomTypesRaw ?? []).map((r) => r.id);
-  const [{ data: roomAvailability }, { data: roomRates }] =
-    roomTypeIds.length > 0
-      ? await Promise.all([
-          supabase
-            .from("room_type_availability")
-            .select("room_type_id, date, capacity, booked")
-            .in("room_type_id", roomTypeIds)
-            .gte("date", todayIso),
-          supabase
-            .from("room_type_date_rates")
-            .select("room_type_id, date, price_cop")
-            .in("room_type_id", roomTypeIds)
-            .gte("date", todayIso),
-        ])
-      : [{ data: [] }, { data: [] }];
 
   const name = resolveLocalizedField(asLocalizedField(product.name), locale) ?? product.slug;
   const description = resolveLocalizedField(asLocalizedField(product.description), locale);
@@ -253,21 +223,11 @@ export default async function ProductPage({
   const establishmentAddress = product.establishment?.address ?? null;
 
   // price_label affiché tel quel pour un evento (texte libre, admin §3c) — jamais formaté en COP,
-  // à la différence de price_cop pour tous les autres types. Un hôtel n'a pas de price_cop propre
-  // (le prix vit sur ses chambres, cf. products_price_cop_required_unless_evento) : "Desde {prix
-  // le plus bas}" plutôt qu'un $0 trompeur si aucune chambre n'a encore été définie.
-  const cheapestRoomPriceCop =
-    roomTypesRaw && roomTypesRaw.length > 0
-      ? Math.min(...roomTypesRaw.map((r) => r.price_cop))
-      : null;
-  const hotelPriceLabel =
-    cheapestRoomPriceCop !== null ? `${t("fromPrice")} ${formatCop(cheapestRoomPriceCop, locale)}` : null;
+  // à la différence de price_cop pour tous les autres types.
   const priceDisplay =
     reservationMode === "evento"
       ? product.price_label
-      : reservationMode === "hotel"
-        ? hotelPriceLabel
-        : formatCop(product.price_cop ?? 0, locale);
+      : formatCop(product.price_cop ?? 0, locale);
 
   const occurrenceLabel =
     reservationMode === "evento"
@@ -318,20 +278,6 @@ export default async function ProductPage({
       establishmentDescription={establishmentDescription}
       establishmentAddress={establishmentAddress}
       establishmentPhotoSlides={establishmentPhotoSlides}
-      roomTypes={(roomTypesRaw ?? []).map((room) => ({
-        id: room.id,
-        name: resolveLocalizedField(asLocalizedField(room.name), locale) ?? room.id,
-        kind: room.kind as "dorm" | "private",
-        capacity: room.capacity,
-        priceCop: room.price_cop,
-        priceTiers: room.price_tiers as
-          | { min_qty: number; max_qty: number; price_cop: number }[]
-          | null,
-        minQty: room.min_qty ?? 1,
-        maxQty: room.max_qty ?? 20,
-      }))}
-      roomAvailability={roomAvailability ?? []}
-      roomRates={roomRates ?? []}
       priceCop={product.price_cop ?? 0}
       lodgingPriceTiers={
         product.price_tiers as { min_qty: number; max_qty: number; price_cop: number }[] | null

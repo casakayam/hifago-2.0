@@ -59,9 +59,9 @@ export function ModerateProposalForm({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { hasLocationAndTags, hasPriceQtyFields, hasCheckInOut, isLodging, isHotel, isEvento } =
+  const { hasLocationAndTags, hasPriceQtyFields, hasCheckInOut, isLodging, isEvento } =
     productTypeGating(type);
-  const needsOwnPrice = !isEvento && !isHotel;
+  const needsOwnPrice = !isEvento;
 
   async function handleDecision(decision: "approve" | "reject") {
     if (decision === "approve" && !(name.es ?? "").trim()) {

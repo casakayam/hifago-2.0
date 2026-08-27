@@ -52,9 +52,6 @@ function renderView(overrides: {
         establishmentDescription={null}
         establishmentAddress={null}
         establishmentPhotoSlides={[]}
-        roomTypes={[]}
-        roomAvailability={[]}
-        roomRates={[]}
         priceCop={120000}
         lodgingPriceTiers={null}
         lodgingMaxQty={1}
