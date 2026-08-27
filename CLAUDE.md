@@ -402,6 +402,34 @@ En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
 nouvelle entrée.
 
+*2026-08-27 (suite) — **la CI ne testait rien de la base, et pas seulement depuis un oubli.**
+`hifago-ci / integration` était rouge à CHAQUE push depuis le 2026-08-15 (10 runs) : `supabase db
+reset` appelé sans `supabase start`. Mais réparer ça n'aurait fait que révéler la marche suivante —
+**`supabase start` applique lui-même le seed** à la création du volume et n'a PAS de `--no-seed`
+(CLI 2.116.0), or `seed.sql` viole la FK `partner_accounts.id -> auth.users(id)` tant que
+`seed_auth_users.mjs` n'est pas passé. Même piège pour tout clone neuf : `[db.seed] enabled = true`
+contredisait la procédure écrite dans l'en-tête de `seed.sql` depuis le 21/08. **Corrigé à la
+source** : `enabled = false` + `npm run db:setup` (`scripts/db-setup.sh`, les 3 étapes ordonnées une
+fois pour toutes). ⚠️ **Ce que le blocage masquait** : 44 fichiers pgTAP (dont les 6 RLS et
+`rls_rpc_only_checklist`), 10 tests de concurrence, 57 specs Playwright, les deux suites
+d'intégration et `docs:check` n'avaient **jamais** tourné en CI — ~100 migrations poussées sans
+qu'aucun invariant de sécurité base ne soit vérifié autrement qu'à la main. Nouveau job `db` :
+`start` → `supabase test db` → `db lint --schema public --level error --fail-on error`. **Sans
+seed, délibérément** : 0 des 44 fichiers pgTAP ne référence le seed, et plusieurs comptent des
+lignes en ABSOLU (`count(*) from audit_log` = 0) — ils exigent une base vierge non seedée (ce qui
+reconfirme, par un second chemin, que les 4 fichiers qui tombent en local tombent sur la pollution).
+Le lint est restreint à `public` : les erreurs du schéma `extensions` sont celles de pgTAP
+lui-même. Durcissement : `permissions: contents: read`, `concurrency`, `timeout-minutes`, 4 actions
+épinglées par SHA, CLI figée à `2.116.0`. Nouveau job `secrets` (gitleaks, historique complet) —
+scan lancé en local AVANT de le rendre bloquant : 4 détections, toutes bénignes et vérifiées une par
+une (clé `service_role` LOCALE publique `iss: supabase-demo`, secret TOTP et comptes seedés),
+consignées avec justification dans `.gitleaksignore`, re-scan `no leaks found`. ⚠️ **Non prouvé** :
+le job `db` n'a jamais tourné, c'est le prochain push qui dira si `supabase start` passe sur un
+runner ; et `npm run db:setup` n'a pas été exécuté ici (il lance `db reset`, qui effacerait la base
+locale partagée avec les autres sessions). **Reste ouvert** : job `concurrency`, `deno check` sur
+les 4 Edge Functions (ni compilées ni vérifiées à ce jour), `docs:check`, `npm audit`/Dependabot,
+Playwright, et `scripts/check-design-system.sh` que plus aucun workflow n'appelle.*
+
 *2026-08-27 — journée en trois temps : connecteur LobbyPMS vérifié de bout en bout (spec 24), C2
 livré et testé en réel (spec 25), puis **le modèle hébergement mené à son terme (T1 → T3)**.
 **T3 : `products.type='hotel'` n'existe plus.** Étape 1 (38c1b55, −2 395 lignes) a retiré l'étage de

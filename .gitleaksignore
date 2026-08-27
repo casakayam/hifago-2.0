@@ -1,0 +1,18 @@
+# Détections gitleaks connues et volontairement tolérées, vérifiées une par une le 2026-08-27.
+# Format : <commit>:<fichier>:<règle>:<ligne>. Toute NOUVELLE détection fait échouer la CI —
+# n'ajouter une ligne ici qu'après avoir ouvert le fichier et confirmé que la valeur n'est pas
+# un vrai secret. Si c'en est un : le révoquer d'abord, purger ensuite, jamais l'inverse.
+
+# Clé `service_role` de la stack Supabase LOCALE, utilisée en valeur de repli quand
+# SUPABASE_SERVICE_ROLE_KEY n'est pas fourni. C'est une constante publique, identique sur toutes
+# les installations (`iss: supabase-demo`) — celle qu'affiche `supabase status` chez n'importe
+# qui. Elle ne donne accès à rien d'autre qu'à un conteneur Docker sur 127.0.0.1.
+4b36522b39a1edc07cd9b0908ab207c3469d7532:tests/notification-integration/send_notification_emails.integration.mjs:jwt:19
+207698f4551fc57bb76d170c704c871d39615017:tests/pms-integration/pms_poll_bookings.integration.mjs:jwt:22
+
+# Secret TOTP du compte seedé admin@hifago.test, nécessairement identique à celui de seed.sql
+# pour que les tests e2e passent la 2FA. Base locale recréée à chaque `db setup`.
+6a3808faf10990c3ae64c4084cdbd5cfb4f1f972:packages/e2e-support/src/mfa.ts:generic-api-key:11
+
+# Identifiants des comptes synthétiques @hifago.test du seed, utilisés par les tests e2e.
+6a3808faf10990c3ae64c4084cdbd5cfb4f1f972:packages/e2e-support/src/auth.ts:jwt:63

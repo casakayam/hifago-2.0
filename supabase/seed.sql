@@ -4,14 +4,15 @@
 --
 -- Ordre d'exécution (2026-08-21, depuis que les auth.users de ce fichier sont créés via l'API
 -- Admin Auth plutôt qu'en SQL direct — cf. plus bas) :
---   Local  : `npx supabase db reset --no-seed` (migrations seules) puis
---            `node supabase/scripts/seed_auth_users.mjs` (variables d'env : voir ce script) puis
---            `psql "$(npx supabase status -o env | grep DB_URL | cut -d'"' -f2)" -f supabase/seed.sql`.
+--   Local  : `npm run db:setup` (scripts/db-setup.sh) — enchaîne les trois étapes dans l'ordre :
+--            `db reset --no-seed`, puis `seed_auth_users.mjs`, puis ce fichier via psql.
 --   Préprod/prod : migrations déjà à jour (`supabase db push`), puis le même
 --            `seed_auth_users.mjs` contre le projet cible (jamais sans /hifago-verify-compte au
---            préalable), puis `supabase db push --include-seed` (applique ce fichier).
---   `supabase db reset`/`db push --include-seed` seuls (sans le script au milieu) échoueront tant
---   que les auth.users référencés ci-dessous n'existent pas encore.
+--            préalable), puis `psql "$URL_DU_PROJET" -f supabase/seed.sql`.
+--   Depuis le 2026-08-27, le seed AUTOMATIQUE est désactivé (`[db.seed] enabled = false` dans
+--   config.toml) : un `supabase start` ou un `db reset` nu ne joue plus ce fichier, et ne peut
+--   donc plus échouer sur des auth.users manquants. Pour le forcer quand même, une fois le
+--   script passé : `supabase db reset --sql-paths ./seed.sql`.
 --
 -- 4 profils demandés par le plan de la Tranche 1 :
 --   1. Invitation en attente (jamais consommée)

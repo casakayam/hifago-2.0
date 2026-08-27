@@ -6,12 +6,27 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Le GITHUB_TOKEN n'a besoin que de lire le code : aucun job ici ne publie, ne commente ni ne
+# pousse quoi que ce soit. Sans ce bloc, il hérite du réglage du dépôt, souvent permissif.
+permissions:
+  contents: read
+
+# Deux pushs rapprochés : le run du premier est annulé plutôt que de payer une seconde stack
+# Supabase pour un état de main déjà dépassé.
+concurrency:
+  group: hifago-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Actions épinglées par SHA de commit (le commentaire donne la version lisible) : un tag comme
+# `v4` est déplaçable, donc une action compromise en amont s'exécuterait ici sans qu'un seul
+# commit ne change de ce côté.
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -20,9 +35,10 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -31,40 +47,72 @@ jobs:
 
   unit:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
       - run: npm ci
       - run: npm run test --workspaces --if-present
 
-  integration:
+  # Scan de secrets sur tout l'historique, pas seulement sur le dernier diff : un secret
+  # introduit puis « retiré » par un commit suivant reste extractible du dépôt. Les détections
+  # déjà auditées vivent dans .gitleaksignore, à la racine.
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pas de commentaire automatique sur les PR : ça demanderait `pull-requests: write`,
+          # et le compte casakayam est un compte personnel, donc pas de licence à fournir.
+          GITLEAKS_ENABLE_COMMENTS: false
+
+  # Garde-fou base de données. C'est ici que tournent les 44 fichiers pgTAP, dont
+  # rls_rpc_only_checklist.test.sql, qui vérifie sur TOUT le schéma public que chaque fonction
+  # SECURITY DEFINER fixe search_path='', qu'aucune fonction appelée dans une policy n'est
+  # VOLATILE, et que auth.uid() est toujours enveloppé.
+  db:
     needs: [lint, typecheck, unit]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # GoTrue démarre avec [auth.external.google].enabled = true : deux valeurs bidon lui
+      # évitent de booter sur une configuration vide. Aucun test ici ne passe par Google.
+      SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: ci-dummy.apps.googleusercontent.com
+      SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: ci-dummy
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1
+        # Version figée, jamais `latest` : sinon une release de la CLI casse la CI un mardi
+        # matin sans qu'aucun commit de ce dépôt n'ait bougé.
         with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
-      # Stack Supabase locale du runner (jamais un projet cloud partagé, cf.
-      # CLAUDE.md § 6). Applique les migrations versionnées ; les futurs
-      # tests RPC/RLS et le test de concurrence anti-survente (barrière de
-      # synchronisation, cf. hifago-rpc-critique/hifago-test) s'exécutent ici.
-      - run: supabase db reset
+          version: 2.116.0
+      # Pas de seed ici, et ce n'est pas un raccourci : aucun des 44 fichiers pgTAP ne référence
+      # un UUID ou un e-mail de seed.sql, et plusieurs comptent des lignes en absolu
+      # (`select count(*) from audit_log` = 0). Ils EXIGENT une base vierge non seedée — c'est
+      # d'ailleurs pourquoi ils échouent sur une base de dev vivante. Le seed reste nécessaire
+      # aux tests de concurrence, qui viendront dans leur propre job.
+      - run: supabase start
+      - run: supabase test db
+      # Restreint à `public` : le schéma `extensions` contient les fonctions de pgTAP
+      # elles-mêmes, dont l'analyse statique remonte des erreurs qui ne sont pas les nôtres
+      # (proisagg, spclocation, __tcache__ — vérifié le 2026-08-27).
+      - run: supabase db lint --schema public --level error --fail-on error
 
   build:
-    needs: [integration]
+    needs: [db]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm

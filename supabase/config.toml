@@ -64,8 +64,14 @@ enabled = true
 schema_paths = []
 
 [db.seed]
-# If enabled, seeds the database after migrations during a db reset.
-enabled = true
+# Désactivé le 2026-08-27. seed.sql référence des auth.users que seul
+# supabase/scripts/seed_auth_users.mjs sait créer (API Admin Auth — l'INSERT direct dans
+# auth.users est bloqué sur Supabase Cloud, constaté le 2026-08-21). Un seed AUTOMATIQUE, au
+# premier `supabase start` comme à chaque `db reset`, viole donc la FK
+# partner_accounts.id -> auth.users(id) sur une base vierge : c'est ce qui cassait la CI depuis
+# le 2026-08-15 et cassait aussi tout clone neuf. La séquence complète et ordonnée est
+# `npm run db:setup`. Pour forcer le seed ponctuellement : `db reset --sql-paths ./seed.sql`.
+enabled = false
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory: "./seeds/*.sql"
 sql_paths = ["./seed.sql"]
