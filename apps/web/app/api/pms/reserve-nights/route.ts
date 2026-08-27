@@ -55,11 +55,30 @@ interface EstablishmentRow {
   lobby_api_token: string | null;
 }
 
+// `detail` répond à « pourquoi », que cette entrée ne disait pas jusqu'au 2026-08-27 : elle ne
+// portait que l'order_line, donc l'e-mail envoyé à chaque admin (notify_all_admins) et l'écran de
+// réconciliation disaient « quelque chose a échoué » sans plus. Une création de booking a échoué en
+// préprod ce jour-là et il a fallu changer une variable à l'aveugle pour comprendre — la réponse de
+// Lobby n'était nulle part.
+//
+// ⚠️ SEULEMENT des corps de réponse, jamais l'URL de la requête : elle porte `api_token` en query
+// string (hifago/CLAUDE.md §8). Tronqué à 300 caractères — un motif utile tient en deux lignes, et
+// une page d'erreur HTML d'un proxy amont n'a pas à remplir la colonne.
 async function recordFailure(
   service: ReturnType<typeof createServiceRoleClient>,
-  orderLineId: string
+  orderLineId: string,
+  detail: string
 ) {
-  await service.from("pms_reconciliation_entries").insert({ order_line_id: orderLineId });
+  console.error(`reserve-nights : échec PMS (order_line ${orderLineId}) — ${detail}`);
+  await service.from("pms_reconciliation_entries").insert({
+    order_line_id: orderLineId,
+    detail: detail.length > 300 ? `${detail.slice(0, 300)}…` : detail,
+  });
+}
+
+function describeLobbyResponse(status: number, body: unknown): string {
+  const text = typeof body === "string" ? body : JSON.stringify(body);
+  return `HTTP ${status} — ${text || "corps vide"}`;
 }
 
 export async function POST(request: Request) {
@@ -162,7 +181,10 @@ export async function POST(request: Request) {
     for (const line of group.lodgingLines) {
       const product = productsById.get(line.product_id)!;
       if (!line.end_date || product.lobby_category_id == null) {
-        await recordFailure(service, line.id);
+        await recordFailure(
+          service, line.id,
+          `ligne inexploitable : end_date=${line.end_date ?? "null"}, lobby_category_id=${product.lobby_category_id ?? "null"}`
+        );
         continue;
       }
       try {
@@ -188,14 +210,19 @@ export async function POST(request: Request) {
         );
         const parsed = parseLobbyBookingResponse(response.body);
         if (!parsed) {
-          await recordFailure(service, line.id);
+          // LE cas qui a coûté une heure de diagnostic le 2026-08-27 : la réponse n'est pas
+          // exploitable et rien ne disait laquelle. C'est ici que le motif de refus de Lobby
+          // (catégorie non réservable par API, paramètre invalide…) devient visible.
+          await recordFailure(
+            service, line.id,
+            `POST /bookings sans booking_id exploitable — ${describeLobbyResponse(response.status, response.body)}`
+          );
           continue;
         }
         await service.from("order_lines").update({ pms_booking_id: String(parsed.bookingId) }).eq("id", line.id);
         primaryBookingId ??= parsed.bookingId;
       } catch (error) {
-        console.error(`createLobbyBooking a échoué (order_line ${line.id})`, error);
-        await recordFailure(service, line.id);
+        await recordFailure(service, line.id, `createLobbyBooking a levé — ${String(error)}`);
       }
     }
 
@@ -221,7 +248,10 @@ export async function POST(request: Request) {
           );
           continue;
         }
-        await recordFailure(service, line.id);
+        await recordFailure(
+          service, line.id,
+          "aucun booking porteur : toutes les nuits de cet établissement ont échoué"
+        );
         continue;
       }
       try {
@@ -233,13 +263,15 @@ export async function POST(request: Request) {
           relaySecret
         );
         if (response.status !== 200) {
-          await recordFailure(service, line.id);
+          await recordFailure(
+            service, line.id,
+            `add-product-service refusé — ${describeLobbyResponse(response.status, response.body)}`
+          );
           continue;
         }
         await service.from("order_lines").update({ pms_booking_id: String(primaryBookingId) }).eq("id", line.id);
       } catch (error) {
-        console.error(`addLobbyProductService a échoué (order_line ${line.id})`, error);
-        await recordFailure(service, line.id);
+        await recordFailure(service, line.id, `addLobbyProductService a levé — ${String(error)}`);
       }
     }
   }

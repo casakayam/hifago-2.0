@@ -10,6 +10,7 @@ type ReconciliationEntryQueryRow = {
   id: string;
   status: string;
   attempts: number;
+  detail: string | null;
   order_line: {
     order_id: string;
     order: { holder_name: string } | null;
@@ -25,7 +26,7 @@ export default async function AdminReconciliationPage() {
   const { data: entries } = await supabase
     .from("pms_reconciliation_entries")
     .select(
-      `id, status, attempts,
+      `id, status, attempts, detail,
        order_line:order_lines(
          order_id,
          order:orders(holder_name),
@@ -37,6 +38,7 @@ export default async function AdminReconciliationPage() {
 
   const rows: ReconciliationEntryRow[] = (entries ?? []).map((entry) => ({
     id: entry.id,
+    detail: entry.detail,
     status: entry.status,
     attempts: entry.attempts,
     orderId: entry.order_line?.order_id ?? "",

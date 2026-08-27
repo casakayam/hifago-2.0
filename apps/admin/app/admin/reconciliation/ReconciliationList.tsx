@@ -10,6 +10,8 @@ export type ReconciliationEntryRow = {
   id: string;
   status: string;
   attempts: number;
+  /** Motif machine de l'échec (statut + corps LobbyPMS). `null` sur les entrées d'avant 2026-08-27. */
+  detail: string | null;
   orderId: string;
   holderName: string;
   establishmentName: string;
@@ -53,6 +55,15 @@ function EntryCard({
         <p className="text-sm text-muted">
           {entry.establishmentName} · {entry.attempts} intento{entry.attempts === 1 ? "" : "s"}
         </p>
+        {/* Le motif de l'échec (2026-08-27). Sans lui, cet écran demandait à un admin d'enquêter
+            sans lui donner le seul élément que la machine avait sous les yeux — la réponse de
+            LobbyPMS. `null` sur les entrées créées avant l'ajout de la colonne : on n'affiche alors
+            rien, plutôt qu'une ligne vide qui laisserait croire à une absence de motif. */}
+        {entry.detail ? (
+          <p className="text-xs text-muted break-all" data-testid="reconciliation-entry-detail">
+            {entry.detail}
+          </p>
+        ) : null}
       </div>
       <div className="flex items-center gap-3">
         <Chip color={chipStyle.color} variant={chipStyle.variant}>

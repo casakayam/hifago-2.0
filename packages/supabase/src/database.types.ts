@@ -1274,10 +1274,58 @@ export type Database = {
           },
         ]
       }
+      pms_cancellation_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          establishment_id: string
+          hifago_status: string | null
+          id: string
+          last_error: string | null
+          lobby_status_code: number | null
+          pms_booking_id: string
+          processed_at: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          establishment_id: string
+          hifago_status?: string | null
+          id?: string
+          last_error?: string | null
+          lobby_status_code?: number | null
+          pms_booking_id: string
+          processed_at?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          establishment_id?: string
+          hifago_status?: string | null
+          id?: string
+          last_error?: string | null
+          lobby_status_code?: number | null
+          pms_booking_id?: string
+          processed_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pms_cancellation_queue_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pms_reconciliation_entries: {
         Row: {
           attempts: number
           created_at: string
+          detail: string | null
           id: string
           last_attempt_at: string | null
           order_line_id: string
@@ -1289,6 +1337,7 @@ export type Database = {
         Insert: {
           attempts?: number
           created_at?: string
+          detail?: string | null
           id?: string
           last_attempt_at?: string | null
           order_line_id: string
@@ -1300,6 +1349,7 @@ export type Database = {
         Update: {
           attempts?: number
           created_at?: string
+          detail?: string | null
           id?: string
           last_attempt_at?: string | null
           order_line_id?: string
@@ -2110,6 +2160,16 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_pms_cancellation_batch: {
+        Args: { p_limit?: number }
+        Returns: {
+          entry_id: string
+          establishment_id: string
+          hifago_status: string
+          lobby_api_token: string
+          pms_booking_id: string
+        }[]
+      }
       claim_pms_poll_batch: {
         Args: { p_limit?: number }
         Returns: {
@@ -2274,6 +2334,7 @@ export type Database = {
         Args: { p_lat1: number; p_lat2: number; p_lon1: number; p_lon2: number }
         Returns: number
       }
+      invoke_pms_cancel_bookings: { Args: never; Returns: undefined }
       invoke_pms_nightly_contract_check: { Args: never; Returns: undefined }
       invoke_pms_poll_bookings: { Args: never; Returns: undefined }
       invoke_send_notification_emails: { Args: never; Returns: undefined }
@@ -2457,6 +2518,10 @@ export type Database = {
         }
         Returns: Json
       }
+      requeue_pms_cancellation: {
+        Args: { p_entry_id: string; p_error?: string }
+        Returns: undefined
+      }
       resolve_date_price: {
         Args: {
           p_date: string
@@ -2470,6 +2535,15 @@ export type Database = {
       resolve_payment_reconciliation_entry: {
         Args: { p_entry_id: string; p_note: string }
         Returns: Json
+      }
+      resolve_pms_cancellation: {
+        Args: {
+          p_entry_id: string
+          p_error?: string
+          p_lobby_status_code?: number
+          p_outcome: string
+        }
+        Returns: undefined
       }
       resolve_reconciliation_entry: {
         Args: { p_entry_id: string; p_note: string }
