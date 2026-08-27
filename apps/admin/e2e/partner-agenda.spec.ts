@@ -175,3 +175,113 @@ test("un socio voit une réservation réelle dans son agenda, clique dessus pour
   // besoin de le reprouver ici au prix d'un test fragile au volume de données accumulé.
   await expect(page.getByRole("alertdialog").filter({ hasText: "Reserva creada." })).toBeVisible();
 });
+
+// C2 (spec 25) + agenda — ajouté le 2026-08-27 sur demande de Jérôme, après le test live du
+// connecteur. Le test ci-dessus couvre une ACTIVITÉ ; celui-ci couvre le cas qui manquait, un
+// LOGEMENT PMS-backed, et surtout le lien entre les deux mécanismes : une annulation doit à la fois
+// retirer la réservation de l'agenda ET enfiler l'annulation chez LobbyPMS.
+//
+// C'est précisément l'angle qui aurait attrapé, depuis l'écran, le défaut trouvé en préprod le même
+// jour : le trigger enfilait sur tout statut ≠ `reserved`, donc aussi sur `fulfilled` — hifago
+// aurait demandé à Lobby d'annuler un séjour déjà effectué.
+//
+// La réservation est posée en base plutôt que par le parcours client : celui-ci est déjà couvert
+// (test ci-dessus pour l'agenda, reserve-lodging-range/reserve-lodging-pms-availability pour le
+// logement), et `pms_booking_id` est simulé — ce que ce test prouve, c'est la chaîne
+// agenda ↔ statut ↔ file d'annulation, pas l'appel réseau à Lobby.
+test("un logement PMS-backed apparaît dans l'agenda socio, et son annulation l'en retire ET enfile l'annulation LobbyPMS", async ({
+  page,
+  context,
+}) => {
+  const stamp = Date.now();
+  const productName = `Alojamiento Agenda PMS E2E ${stamp}`;
+  const holderName = `Cliente PMS Agenda ${stamp}`;
+  const bookingId = `9${String(stamp).slice(-7)}`;
+  const date = futureDateInCurrentMonth(stamp);
+  const endDate = new Date(`${date}T00:00:00Z`);
+  endDate.setUTCDate(endDate.getUTCDate() + 1);
+  const endDateIso = endDate.toISOString().slice(0, 10);
+
+  // Le trigger d'enfilement exige un établissement CONNECTÉ. Celui du socio de test ne l'est pas :
+  // on l'active pour la durée du test, avec un jeton factice (aucun appel réseau n'est fait ici),
+  // et on restaure à la fin — l'état d'un établissement partagé ne doit pas fuir vers les autres
+  // specs.
+  await withDb((client) =>
+    client.query(
+      "update establishments set lobby_connector_active = true, lobby_api_token = coalesce(lobby_api_token, 'e2e-fake-token') where id = $1",
+      [ESTABLISHMENT_ID]
+    )
+  );
+
+  try {
+    const orderLineId = await withDb(async (client) => {
+      const product = await client.query(
+        `insert into products (partner_id, establishment_id, type, name, slug, sellable, price_cop,
+                               capacity, unit_count, lodging_kind, lobby_category_id)
+         values ($1, $2, 'lodging', $3::jsonb, $4, true, 120000, 2, 3, 'private', 29376)
+         returning id`,
+        [PARTNER_ID, ESTABLISHMENT_ID, JSON.stringify({ es: productName }), slugify(productName)]
+      );
+      const order = await client.query(
+        `insert into orders (holder_name, holder_email, status) values ($1, $2, 'reserved') returning id`,
+        [holderName, `cliente.pms.agenda.${stamp}@example.com`]
+      );
+      const line = await client.query(
+        `insert into order_lines (order_id, product_id, status, qty, date, end_date, price_cop, total_cop,
+                                  commission_case, acompte_pct, referrer_pct, app_pct, acompte_cop,
+                                  referrer_commission_cop, app_commission_cop, holder_name, pms_booking_id)
+         values ($1, $2, 'reserved', 1, $3, $4, 120000, 120000, 'direct', 0.15, 0, 0.10, 18000, 0, 12000, $5, $6)
+         returning id`,
+        [order.rows[0].id, product.rows[0].id, date, endDateIso, holderName, bookingId]
+      );
+      return line.rows[0].id as string;
+    });
+
+    // --- L'agenda montre la réservation ---------------------------------------------------------
+    await loginAs(context, SEEDED_ACCOUNTS.operadorPropuestas, SEEDED_PASSWORD);
+    await page.goto("/partner");
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByText(holderName, { exact: false })).toBeVisible();
+
+    // --- Un séjour TERMINÉ reste à l'agenda et n'enfile RIEN ------------------------------------
+    // Le cas qui a été cassé en préprod : `fulfilled` n'est pas une annulation. La réservation doit
+    // rester visible (le séjour a eu lieu) et LobbyPMS ne doit surtout pas être sollicité.
+    await withDb((client) =>
+      client.query("update order_lines set status = 'fulfilled' where id = $1", [orderLineId])
+    );
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByText(holderName, { exact: false })).toBeVisible();
+    expect(await pendingCancellations(bookingId)).toBe(0);
+
+    // --- L'annulation la retire de l'agenda ET enfile l'annulation Lobby -----------------------
+    await withDb((client) =>
+      client.query("update order_lines set status = 'cancelled_by_client' where id = $1", [orderLineId])
+    );
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByText(holderName, { exact: false })).toHaveCount(0);
+    expect(await pendingCancellations(bookingId)).toBe(1);
+
+    // Le statut hifago est conservé : il détermine le CODE de motif envoyé à Lobby (liste fermée
+    // NS/RC/RE/TTC/CC/OTH — `cancelled_by_client` donne TTC).
+    const queued = await withDb((client) =>
+      client.query("select hifago_status from pms_cancellation_queue where pms_booking_id = $1", [bookingId])
+    );
+    expect(queued.rows[0].hifago_status).toBe("cancelled_by_client");
+  } finally {
+    await withDb((client) =>
+      client.query("update establishments set lobby_connector_active = false where id = $1", [ESTABLISHMENT_ID])
+    );
+    await withDb((client) =>
+      client.query("delete from pms_cancellation_queue where pms_booking_id = $1", [bookingId])
+    );
+  }
+});
+
+async function pendingCancellations(bookingId: string): Promise<number> {
+  const result = await withDb((client) =>
+    client.query("select count(*)::int as n from pms_cancellation_queue where pms_booking_id = $1", [bookingId])
+  );
+  return result.rows[0].n as number;
+}
