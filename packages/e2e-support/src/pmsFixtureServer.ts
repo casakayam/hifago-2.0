@@ -177,6 +177,11 @@ export const LOBBY_AVAILABILITY_OBSERVED_2026_08_27 = {
   ],
 };
 
+// Codes de motif d'annulation acceptés par LobbyPMS — liste FERMÉE
+// (docs/3-integrations/lobby_pms_api.md § Cancel Booking). Envoyer autre chose, y compris une
+// phrase parfaitement claire en espagnol, donne un 422 INPUT_PARAMETERS.
+const LOBBY_CANCELLATION_REASONS = new Set(["NS", "RC", "RE", "TTC", "CC", "OTH"]);
+
 let scenario: PmsFixtureScenario = {};
 
 export function setPmsFixtureScenario(next: PmsFixtureScenario): void {
@@ -191,11 +196,18 @@ function send(res: import("node:http").ServerResponse, status: number, body: unk
 export function startPmsFixtureServer(port: number): Promise<{ url: string; close: () => Promise<void> }> {
   const server: Server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
-    // Le listener est nécessaire (il met le flux en mode « flowing » pour que "end" se déclenche) ;
-    // l'accumulation ne l'était pas — `raw` n'était jamais lu et bufferisait sans borne un corps
-    // que personne ne consomme (/simplify 2026-08-26).
-    req.on("data", () => {});
+    // Le corps était jeté jusqu'au 2026-08-27 (« personne ne le consomme »). Il est désormais lu
+    // pour UNE raison précise : valider `cancellation_reason` comme le vrai LobbyPMS le fait — voir
+    // la route cancel-booking plus bas. Borné à 64 Ko, ce qui est très au-delà de tout corps réel
+    // de cette API et évite de rebufferiser sans limite.
+    const chunks: Buffer[] = [];
+    let received = 0;
+    req.on("data", (chunk: Buffer) => {
+      received += chunk.length;
+      if (received <= 65536) chunks.push(chunk);
+    });
     req.on("end", () => {
+      const rawBody = Buffer.concat(chunks).toString("utf8");
       if (req.method === "GET" && url.pathname === "/api/v1/rooms") {
         send(res, 200, scenario.rooms ?? { data: [], meta: { total_records: 0 } });
         return;
@@ -258,7 +270,40 @@ export function startPmsFixtureServer(port: number): Promise<{ url: string; clos
       if (req.method === "POST" && cancelBookingMatch) {
         const bookingId = Number(cancelBookingMatch[1]);
         const entry = scenario.cancelBookingByStatus?.get(bookingId);
-        send(res, entry?.status ?? 200, entry?.body ?? { cancel_booking: bookingId });
+        if (entry) {
+          send(res, entry.status, entry.body);
+          return;
+        }
+
+        // DURCI LE 2026-08-27, APRÈS QUE CETTE FIXTURE A LAISSÉ PASSER DEUX BUGS EN PRODUCTION DE
+        // TEST. Elle répondait `200 {cancel_booking}` à absolument tout : plus polie que le vrai
+        // LobbyPMS, donc incapable de révéler que (a) `cancellation_reason` est un CODE fermé et
+        // non du texte libre, et (b) le succès ne revient PAS avec un statut 200. Les deux ont été
+        // découverts contre le compte réel, après déploiement — exactement ce qu'une fixture existe
+        // pour éviter.
+        //
+        // Une fixture qui accepte plus que le vrai service ne teste pas le service : elle teste
+        // qu'on sait parler à une version imaginaire et complaisante de celui-ci.
+        let reason: unknown;
+        try {
+          reason = (JSON.parse(rawBody || "{}") as { cancellation_reason?: unknown }).cancellation_reason;
+        } catch {
+          reason = undefined;
+        }
+        if (typeof reason !== "string" || !LOBBY_CANCELLATION_REASONS.has(reason)) {
+          send(res, 422, {
+            error_code: "INPUT_PARAMETERS",
+            error: "The selected cancellation reason is invalid.",
+          });
+          return;
+        }
+
+        // Statut délibérément ≠ 200 : observé le 2026-08-27 contre le compte réel, un succès
+        // n'arrive pas en 200. La valeur EXACTE n'a pas été capturée — et c'est sans importance,
+        // parce que c'est précisément le point : un client correct lit le corps
+        // (`{"cancel_booking": id}`), jamais le statut. Si un jour ce test rougit parce que
+        // quelqu'un a recodé `status === 201`, il aura fait son travail.
+        send(res, 201, { cancel_booking: bookingId });
         return;
       }
 
