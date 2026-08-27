@@ -7,8 +7,10 @@ import {
   startPmsFixtureServer,
 } from "@hifago/e2e-support";
 import {
+  getLobbyAvailableRooms,
   getLobbyProducts,
   getLobbyRooms,
+  parseLobbyAvailabilityContract,
   parseLobbyRooms,
   parseLobbyServices,
   type LobbyRoomCategory,
@@ -26,6 +28,25 @@ import { collectLobbyPages } from "./lobbyEstablishment";
 // capacity × quantity (opposée entre une privée et un dortoir), le rejet des langues non éditables,
 // et le fait qu'une catégorie sans contenu éditorial reste une catégorie valide.
 
+// ⚠️ Forme DOCUMENTÉE, pas observée — la nuance est load-bearing dans ce fichier, dont tout le
+// reste vient du compte réel. GET /api/v2/available-rooms sans `category_id` n'a jamais été appelé
+// contre le vrai compte : c'est précisément ce que la sonde du job nocturne va faire. En attendant,
+// ce scénario prouve seulement que la chaîne TIENT — client → parseur → agrégation — pas que Lobby
+// renvoie ceci. Deux catégories sur les trois du catalogue, à dessein : la troisième absente rejoue
+// l'hypothèse C1 (« Lobby ne cote que les catégories réservables »).
+const AVAILABILITY_CATALOG_DOCUMENTED = {
+  date: "2026-09-26",
+  categories: [
+    {
+      category_id: 29376,
+      available_rooms: 2,
+      restrictions: { min_stay: 2, max_stay: null, lead_days: 1 },
+      plans: [{ plan_id: 1, prices: [{ date: "2026-09-26", price: 180000 }] }],
+    },
+    { category_id: 9631, available_rooms: 8, plans: [] },
+  ],
+};
+
 const PORT = 45311;
 let fixtureUrl: string;
 let close: () => Promise<void>;
@@ -37,12 +58,23 @@ beforeAll(async () => {
   setPmsFixtureScenario({
     rooms: LOBBY_ROOMS_OBSERVED_2026_08_26,
     services: LOBBY_SERVICES_OBSERVED_2026_08_26,
+    availableRoomsCatalog: AVAILABILITY_CATALOG_DOCUMENTED,
   });
 });
 
 afterAll(async () => {
   await close();
 });
+
+async function collectAllRoomIds(): Promise<number[]> {
+  const collected = await collectLobbyPages<LobbyRoomCategory>(
+    (page) => getLobbyRooms(fixtureUrl, "jeton-de-fixture", page),
+    parseLobbyRooms,
+    (category) => category.categoryId,
+  );
+  if (!collected.ok) throw new Error(`la fixture a répondu ${collected.status}`);
+  return collected.items.map((category) => category.categoryId);
+}
 
 describe("Contrat LobbyPMS observé — GET /rooms de bout en bout", () => {
   async function collectRooms() {
@@ -106,6 +138,43 @@ describe("Contrat LobbyPMS observé — GET /rooms de bout en bout", () => {
     const glamping = (await collectRooms()).find((c) => c.categoryId === 29376)!;
     expect(glamping.photos).toHaveLength(2);
     expect(glamping.photos[0]).toMatch(/^https:\/\/app\.lobbypms\.com\//);
+  });
+});
+
+// La chaîne de la sonde de contrat (C1/C5), exercée sur du vrai HTTP comme les deux autres. Ce
+// n'est pas un test de LobbyPMS — c'est la garantie que le jour où le compte réel répondra, rien
+// entre le client et l'agrégation ne perdra l'information en route.
+describe("Sonde de contrat — GET /available-rooms sans category_id", () => {
+  async function probe() {
+    const response = await getLobbyAvailableRooms(fixtureUrl, "jeton-de-fixture", "2026-09-26", "2026-09-27");
+    expect(response.status).toBe(200);
+    return parseLobbyAvailabilityContract(response.body);
+  }
+
+  // LE point de C1 : si Lobby ne cote qu'une partie du catalogue, la différence avec GET /rooms est
+  // le filtre cherché — et on n'a alors jamais à coder un identifiant de catégorie en dur.
+  it("permet de nommer les catégories que Lobby ne cote pas", async () => {
+    const contract = await probe();
+    // Tri NUMÉRIQUE explicite : le tri par défaut de JS est lexicographique, et rangerait 29376
+    // avant 9631.
+    const byValue = (a: number, b: number) => a - b;
+    const known = (await collectAllRoomIds()).sort(byValue);
+    const absent = known.filter((id) => !contract.categoryIds.includes(id));
+    expect([...contract.categoryIds].sort(byValue)).toEqual([9631, 29376]);
+    expect(absent).toEqual([49823]);
+  });
+
+  it("remonte `restrictions` telles quelles, sans les interpréter (C5)", async () => {
+    const contract = await probe();
+    const glamping = contract.categories.find((c) => c.categoryId === 29376)!;
+    expect(glamping.restrictions).toEqual({ min_stay: 2, max_stay: null, lead_days: 1 });
+    expect(contract.categories.find((c) => c.categoryId === 9631)!.restrictions).toBeNull();
+  });
+
+  it("distingue deux signatures de champs, l'autre angle de C1", async () => {
+    const contract = await probe();
+    const signatures = new Set(contract.categories.map((c) => c.keys.join(",")));
+    expect(signatures.size).toBe(2);
   });
 });
 

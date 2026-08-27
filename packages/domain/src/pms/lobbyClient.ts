@@ -90,6 +90,29 @@ export function getLobbyNightAvailability(
   });
 }
 
+// GET /api/v2/available-rooms SANS `category_id` — la réponse porte un tableau `categories[]`, donc
+// omettre le filtre revient à demander le catalogue entier pour la nuit. Lecture d'OBSERVATION,
+// réservée au job nocturne de contrôle de contrat : getLobbyNightAvailability juste au-dessus reste
+// la seule fonction du parcours de réservation, et n'est pas touchée.
+//
+// Ce que cet appel doit trancher, et que rien d'autre ne peut (les deux points sont ouverts depuis
+// le début du chantier, faute d'observation) :
+//   C1 — si Lobby n'énumère ici QUE les catégories réservables, la réponse EST le filtre cherché,
+//        et on n'a jamais à coder un identifiant en dur.
+//   C5 — les valeurs réelles de restrictions{min_stay, max_stay, lead_days}.
+export function getLobbyAvailableRooms(
+  baseUrl: string,
+  apiToken: string,
+  date: string,
+  nextDate: string,
+  relaySecret?: string
+) {
+  return lobbyCall("GET", baseUrl, "/api/v2/available-rooms", apiToken, {
+    params: { start_date: date, end_date: nextDate },
+    relaySecret,
+  });
+}
+
 export interface CreateLobbyBookingInput {
   categoryId: number;
   startDate: string;

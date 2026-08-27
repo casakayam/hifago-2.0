@@ -11,8 +11,13 @@
 // jamais en CI/en test (aucun test automatisé de ce fichier ne doit jamais l'invoquer contre le
 // vrai baseUrl — seulement contre un serveur de fixtures via LOBBY_API_BASE_URL).
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { getLobbyRooms, LOBBY_DEFAULT_BASE_URL } from "../../../packages/domain/src/pms/lobbyClient.ts";
+import {
+  getLobbyAvailableRooms,
+  getLobbyRooms,
+  LOBBY_DEFAULT_BASE_URL,
+} from "../../../packages/domain/src/pms/lobbyClient.ts";
 import { parseLobbyRooms } from "../../../packages/domain/src/pms/parseLobbyRooms.ts";
+import { parseLobbyAvailabilityContract } from "../../../packages/domain/src/pms/parseLobbyAvailabilityContract.ts";
 
 interface EstablishmentRow {
   id: string;
@@ -63,6 +68,76 @@ function describeRoomsFieldCoverage(body: unknown): string[] {
   return notes;
 }
 
+// Sonde de contrat sur GET /api/v2/available-rooms (2026-08-27). Ce job était déjà le bon endroit :
+// il tourne en préprod, il tient le jeton par la BASE (jamais par une variable d'environnement, et
+// jamais dans un poste de dev), et sa raison d'être est de dire ce que Lobby renvoie. Deux points
+// du plan attendaient une observation que personne ne pouvait faire depuis un poste de dev :
+//
+//   C1 — quel attribut sépare une catégorie réservable par API d'une qui refuse en 422 ? Si Lobby
+//        n'énumère ici QUE les réservables, la réponse EST le filtre, et on n'a jamais à coder un
+//        identifiant en dur. Sinon, les signatures de champs ci-dessous sont le seul autre angle.
+//   C5 — les valeurs réelles de restrictions{min_stay, max_stay, lead_days}, jamais observées.
+//
+// Les rendre visibles ICI plutôt que par une sonde jetable a un effet durable : la réponse arrive
+// sans intervention humaine, et reste SURVEILLÉE ensuite. Une sonde manuelle aurait répondu une
+// fois puis serait devenue une capture périmée dans un document.
+//
+// Ces lignes vont dans `observations`, JAMAIS dans `drifts` : une dérive dit « quelque chose a
+// cassé », une observation dit « voici la tête du contrat aujourd'hui ». Les confondre ferait crier
+// au loup ce job à chaque nuit, et la prochaine vraie dérive passerait inaperçue.
+function describeAvailabilityContract(body: unknown, knownCategoryIds: number[]): string[] {
+  const contract = parseLobbyAvailabilityContract(body);
+  if (!contract.ok) return ["GET /available-rooms : corps inexploitable (aucun `categories[]`)"];
+
+  const notes: string[] = [];
+  const listed = new Set(contract.categoryIds);
+  const absent = knownCategoryIds.filter((id) => !listed.has(id));
+  const extra = contract.categoryIds.filter((id) => !knownCategoryIds.includes(id));
+
+  notes.push(
+    `available-rooms cote ${contract.categoryIds.length}/${knownCategoryIds.length} catégories : ${contract.categoryIds.join(", ")}`
+  );
+  if (absent.length > 0) {
+    notes.push(`absentes d'available-rooms (candidat C1 — non réservables par API ?) : ${absent.join(", ")}`);
+  }
+  if (extra.length > 0) {
+    notes.push(`cotées ici mais absentes de GET /rooms : ${extra.join(", ")}`);
+  }
+
+  const withRestrictions = contract.categories.filter((c) => c.restrictions !== null);
+  if (withRestrictions.length === 0) {
+    notes.push("aucune catégorie ne porte `restrictions` — C5 reste sans valeur observée");
+  } else {
+    for (const category of withRestrictions) {
+      notes.push(`restrictions[${category.categoryId}] = ${JSON.stringify(category.restrictions)}`);
+    }
+  }
+
+  // Deux familles de catégories, si elles existent, se voient comme deux signatures distinctes.
+  const signatures = new Map<string, number[]>();
+  for (const category of contract.categories) {
+    const key = category.keys.join(",");
+    signatures.set(key, [...(signatures.get(key) ?? []), category.categoryId]);
+  }
+  for (const [keys, ids] of signatures) {
+    notes.push(`signature [${keys}] → catégories ${ids.join(", ")}`);
+  }
+
+  return notes;
+}
+
+// Nuit sondée : J+30. Assez loin pour qu'un `lead_days` ne puisse pas masquer une catégorie (ce
+// serait confondre « non réservable » avec « pas encore ouvert », exactement l'erreur que C1 doit
+// éviter), assez proche pour rester dans l'horizon de réservation de n'importe quel plan tarifaire.
+function probeNights(): { date: string; nextDate: string } {
+  const start = new Date();
+  start.setUTCDate(start.getUTCDate() + 30);
+  const next = new Date(start);
+  next.setUTCDate(next.getUTCDate() + 1);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return { date: iso(start), nextDate: iso(next) };
+}
+
 Deno.serve(async () => {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
@@ -83,19 +158,45 @@ Deno.serve(async () => {
   }
 
   const drifts: string[] = [];
+  const observations: string[] = [];
+  const { date, nextDate } = probeNights();
   for (const establishment of establishments ?? []) {
     if (!establishment.lobby_api_token) continue;
+    let knownCategoryIds: number[] = [];
     try {
       const rooms = await getLobbyRooms(baseUrl, establishment.lobby_api_token, undefined, relaySecret);
       if (rooms.status !== 200 || !hasExpectedRoomsShape(rooms.body)) {
         drifts.push(`établissement ${establishment.id} : GET /rooms forme inattendue (status ${rooms.status})`);
       } else {
+        knownCategoryIds = parseLobbyRooms(rooms.body).map((category) => category.categoryId);
         for (const note of describeRoomsFieldCoverage(rooms.body)) {
           drifts.push(`établissement ${establishment.id} : ${note}`);
         }
       }
     } catch (err) {
       drifts.push(`établissement ${establishment.id} : GET /rooms injoignable (${err})`);
+    }
+
+    // UNE requête par établissement, pas une par catégorie : sans `category_id`, Lobby renvoie tout
+    // le catalogue pour la nuit. Coût total du job : +1 appel par nuit et par établissement connecté.
+    // Sautée si GET /rooms n'a rien donné — sans la liste de référence, « absente d'available-rooms »
+    // ne voudrait rien dire.
+    if (knownCategoryIds.length === 0) continue;
+    try {
+      const availability = await getLobbyAvailableRooms(
+        baseUrl, establishment.lobby_api_token, date, nextDate, relaySecret
+      );
+      if (availability.status !== 200) {
+        observations.push(
+          `établissement ${establishment.id} : GET /available-rooms (nuit ${date}) a répondu ${availability.status}`
+        );
+      } else {
+        for (const note of describeAvailabilityContract(availability.body, knownCategoryIds)) {
+          observations.push(`établissement ${establishment.id} : ${note}`);
+        }
+      }
+    } catch (err) {
+      observations.push(`établissement ${establishment.id} : GET /available-rooms injoignable (${err})`);
     }
   }
 
@@ -104,9 +205,15 @@ Deno.serve(async () => {
   if (drifts.length > 0) {
     console.warn("pms-nightly-contract-check : dérive de contrat détectée", drifts);
   }
+  // Journalisé en `info` et non en `warn` : ce n'est pas une alerte, c'est le relevé de la nuit.
+  // Il laisse une trace dans les logs de la fonction même quand personne ne lit la réponse HTTP —
+  // ce qui est le cas nominal, le job étant déclenché par pg_cron.
+  if (observations.length > 0) {
+    console.info("pms-nightly-contract-check : contrat observé", observations);
+  }
 
   return new Response(
-    JSON.stringify({ ok: true, checked: (establishments ?? []).length, drifts }),
+    JSON.stringify({ ok: true, checked: (establishments ?? []).length, drifts, observations }),
     { headers: { "Content-Type": "application/json" } }
   );
 });

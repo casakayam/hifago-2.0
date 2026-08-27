@@ -13,6 +13,7 @@ export * from "./pms/mapLobbyErrorCode";
 export * from "./pms/buildEvenRatesPerDay";
 export * from "./pms/parseLobbyNightAvailability";
 export * from "./pms/getNightAvailabilityWindow";
+export * from "./pms/parseLobbyAvailabilityContract";
 export * from "./pms/ttlCache";
 export * from "./pms/parseLobbyRooms";
 export * from "./pms/parseLobbyServices";

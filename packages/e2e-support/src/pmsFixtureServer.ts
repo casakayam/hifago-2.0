@@ -27,6 +27,11 @@ export interface PmsFixtureScenario {
   // "RESTRICTED_RESERVATION" } } pour rejouer le cas « booking portant déjà une charge », qui est
   // un cas ATTENDU et documenté (spec 21 §0), jamais une exception.
   cancelBookingByStatus?: Map<number, { status: number; body: unknown }>;
+  // GET /api/v2/available-rooms appelé SANS `category_id` — forme « catalogue entier pour la nuit »,
+  // utilisée par le job nocturne de contrôle de contrat (jamais par le parcours de réservation, qui
+  // filtre toujours sur une catégorie). Servie telle quelle, sans synthèse : ce scénario existe
+  // précisément pour rejouer une charge utile OBSERVÉE, restrictions comprises.
+  availableRoomsCatalog?: unknown;
 }
 
 // Forme RÉELLEMENT OBSERVÉE le 2026-08-26 sur le compte Lobby de Casa Kayam, via la préprod
@@ -172,6 +177,13 @@ export function startPmsFixtureServer(port: number): Promise<{ url: string; clos
       }
 
       if (req.method === "GET" && url.pathname === "/api/v2/available-rooms") {
+        // Sans `category_id`, Lobby renvoie le catalogue entier — branche distincte, ajoutée le
+        // 2026-08-27. Placée AVANT l'ancienne : `Number(null)` vaut NaN, la branche historique
+        // aurait donc répondu une catégorie fantôme `category_id: null` au lieu d'un catalogue.
+        if (!url.searchParams.has("category_id")) {
+          send(res, 200, scenario.availableRoomsCatalog ?? { date: url.searchParams.get("start_date") ?? "", categories: [] });
+          return;
+        }
         const categoryId = Number(url.searchParams.get("category_id"));
         const startDate = url.searchParams.get("start_date") ?? "";
         const entry = scenario.nightAvailabilityByDate?.[startDate];
