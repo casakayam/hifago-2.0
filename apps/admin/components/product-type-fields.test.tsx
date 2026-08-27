@@ -117,6 +117,40 @@ describe("ProductTypeFields — champs d'une chambre liée à LobbyPMS (préremp
     expect(screen.queryByTestId("unit-count-input")).toBeNull();
   });
 
+  // products.lodging_kind (2026-08-27). Trois valeurs, et une seule des trois ne peut PAS venir
+  // d'un import : Lobby ne connaît que privada/compartida. La mention est donc du même ordre que
+  // la note ci-dessus — l'écran doit dire ce qu'il fait, sinon on cherche longtemps pourquoi
+  // « Usar estos datos » ne remplit jamais « Casa entera ».
+  it("Tipo de alojamiento propose les trois natures, dont celle que Lobby n'a pas", () => {
+    render(<Harness type="lodging" />);
+    const select = screen.getByTestId("lodging-kind-select");
+    expect(select).toBeTruthy();
+    expect(select.textContent).toContain("Sin especificar");
+  });
+
+  it("Tipo de alojamiento se préremplit depuis la valeur persistée", () => {
+    render(<Harness type="lodging" init={{ lodgingKind: "whole_house" }} />);
+    expect(screen.getByTestId("lodging-kind-select").textContent).toContain("Casa entera");
+  });
+
+  it("prévient que « Casa entera » n'existe pas dans LobbyPMS", () => {
+    render(<Harness type="lodging" />);
+    expect(screen.getByText(/no existe en LobbyPMS/i)).toBeTruthy();
+  });
+
+  // Sur un établissement non connecté, la phrase n'aurait aucun sens : elle parle d'un outil que
+  // ce partenaire n'utilise pas.
+  it("ne parle pas de LobbyPMS à un établissement non connecté", () => {
+    render(<Harness type="lodging" establishmentLobbyConnected={false} />);
+    expect(screen.getByTestId("lodging-kind-select")).toBeTruthy();
+    expect(screen.queryByText(/no existe en LobbyPMS/i)).toBeNull();
+  });
+
+  it("Tipo de alojamiento n'existe que pour un logement", () => {
+    render(<Harness type="activity" />);
+    expect(screen.queryByTestId("lodging-kind-select")).toBeNull();
+  });
+
   it("la note dit ce que l'écran fait vraiment — Lobby gère la disponibilité, pas les champs", () => {
     render(<Harness type="lodging" init={{ lobbyCategoryId: 9631 }} />);
     const note = screen.getByTestId("lobby-room-managed-fields-note").textContent ?? "";

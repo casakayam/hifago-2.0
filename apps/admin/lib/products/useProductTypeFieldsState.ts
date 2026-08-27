@@ -5,6 +5,7 @@ import { tiersFromColumn, type PriceTier } from "@/lib/products/priceTiers";
 import { emptyStayRates, stayRatesFromColumn, type DraftStayRates } from "@/lib/products/stayRates";
 import { slotRulesFromColumn, type DraftSlotRule } from "@/lib/products/slotRules";
 import { roomTypesFromColumn, type DraftRoomType } from "@/lib/products/hotelRooms";
+import { asLodgingKind, type LodgingKind } from "@hifago/domain";
 
 // Correctif (spec 21, trouvé en vérifiant, sans lien avec elle — cf. productTypeGating.ts) :
 // productTypeGating/ProductType/availabilityScreenFor vivent désormais dans un module SANS
@@ -42,6 +43,9 @@ export type ProductTypeFieldsInit = {
   // À ne pas confondre avec defaultCapacity, qui amorce product_availability (cf. migration
   // 20260827100000_products_unit_count.sql, qui détaille les trois colonnes voisines).
   unitCount?: number | null;
+  // Nature du couchage (migration 20260827120000). Prérempli depuis LobbyPMS pour dorm/private ;
+  // whole_house est toujours un choix manuel — Lobby n'a pas ce terme.
+  lodgingKind?: LodgingKind | null;
   defaultCapacity?: number | null;
   stayRates?: unknown;
   roomTypes?: unknown;
@@ -85,6 +89,9 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
   const [checkOutTime, setCheckOutTime] = useState(toTimeInputValue(init.checkOutTime));
   const [capacity, setCapacity] = useState(init.capacity != null ? String(init.capacity) : "");
   const [unitCount, setUnitCount] = useState(init.unitCount != null ? String(init.unitCount) : "");
+  // "" = « sin especificar ». La colonne est facultative : ne rien choisir est un état légitime,
+  // pas un formulaire incomplet.
+  const [lodgingKind, setLodgingKind] = useState<LodgingKind | "">(init.lodgingKind ?? "");
   const [defaultCapacity, setDefaultCapacity] = useState(
     init.defaultCapacity != null ? String(init.defaultCapacity) : "",
   );
@@ -139,6 +146,7 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
     minQty, setMinQty, maxQty, setMaxQty,
     checkInTime, setCheckInTime, checkOutTime, setCheckOutTime,
     capacity, setCapacity, unitCount, setUnitCount,
+    lodgingKind, setLodgingKind,
     defaultCapacity, setDefaultCapacity, stayRates, setStayRates,
     hotelRooms, setHotelRooms,
     durationDays, setDurationDays,
@@ -179,6 +187,7 @@ export type RawProductFieldsPayload = {
   check_out_time?: string | null;
   capacity?: number | null;
   unit_count?: number | null;
+  lodging_kind?: string | null;
   default_capacity?: number | null;
   stay_rates?: unknown;
   room_types?: unknown;
@@ -211,6 +220,9 @@ export function payloadToFieldsInit(payload: RawProductFieldsPayload): ProductTy
     checkOutTime: payload.check_out_time,
     capacity: payload.capacity,
     unitCount: payload.unit_count,
+    // asLodgingKind et non un cast : le payload d'une proposition est du jsonb libre, une valeur
+    // hors domaine y arriverait sans erreur de type et ne sélectionnerait alors AUCUNE option.
+    lodgingKind: asLodgingKind(payload.lodging_kind),
     defaultCapacity: payload.default_capacity,
     stayRates: payload.stay_rates,
     roomTypes: payload.room_types,

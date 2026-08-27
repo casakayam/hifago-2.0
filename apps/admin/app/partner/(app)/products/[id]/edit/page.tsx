@@ -19,7 +19,7 @@ export default async function EditProductProposalPage({
   const { data: product } = await supabase
     .from("products")
     .select(
-      "id, type, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, unit_count, default_capacity, stay_rates, establishment_id, lobby_category_id, lobby_product_id, establishment:establishments(lobby_connector_active, lobby_has_token)"
+      "id, type, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, unit_count, lodging_kind, default_capacity, stay_rates, establishment_id, lobby_category_id, lobby_product_id, establishment:establishments(lobby_connector_active, lobby_has_token)"
     )
     .eq("id", id)
     .maybeSingle();

@@ -10,10 +10,17 @@ import { HotelRoomsEditor } from "@/components/hotel-rooms-editor";
 import { PriceTiersEditor } from "@/components/price-tiers-editor";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
 import { productTypeGating, type ProductType, type ProductTypeFieldsState } from "@/lib/products/useProductTypeFieldsState";
+import { LODGING_KINDS, type LodgingKind } from "@hifago/domain";
+import { LODGING_KIND_LABELS } from "@/lib/products/lodgingKindLabels";
 
 // apps/admin n'est pas localisé (hifago/CLAUDE.md §2 point 1) — locale "es" fixe, même convention
 // que tout le reste de ce formulaire (labels en dur, pas de next-intl).
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat("es", { weekday: "long" });
+
+// Le sentinel « none » existe parce que products.lodging_kind est facultative et que react-aria ne
+// sait pas représenter « aucune option » avec une clé vide. Les libellés, eux, sont partagés avec
+// l'écran de modération (lib/products/lodgingKindLabels.ts) — jamais redéclarés ici.
+const LODGING_KIND_NONE = "none";
 
 // Confirme sur quel jour de semaine tombe la première occurrence d'un evento récurrent — sans ça,
 // "cada 14 días" ne dit jamais si c'est un mardi ou un jeudi (gap réel signalé par Jérôme,
@@ -399,6 +406,51 @@ export function ProductTypeFields({
               <Label>Cantidad (habitaciones o camas) — opcional</Label>
               <Input type="number" min={1} data-testid="unit-count-input" />
             </TextField>
+          ) : null}
+
+          {/* Nature du couchage (2026-08-27) — TROIS valeurs, pas deux. « Casa entera » n'est pas
+              théorique : la v1 en production loue déjà Bania Travel comme maison entière. Elle ne
+              viendra JAMAIS d'un import, le vocabulaire de Lobby n'ayant que privada/compartida —
+              d'où la mention sous le champ quand l'établissement est connecté, sans quoi on
+              chercherait longtemps pourquoi « Usar estos datos » ne la remplit pas. Descriptif :
+              aucune RPC de commande ne le lit (cf. migration 20260827120000). */}
+          {isLodging ? (
+            <div className="flex flex-col gap-1">
+              <Select
+                fullWidth
+                value={state.lodgingKind || LODGING_KIND_NONE}
+                onChange={(value) =>
+                  state.setLodgingKind(
+                    !value || value === LODGING_KIND_NONE ? "" : (value as LodgingKind),
+                  )
+                }
+              >
+                <Label>Tipo de alojamiento — opcional</Label>
+                <Select.Trigger data-testid="lodging-kind-select">
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    <ListBox.Item id={LODGING_KIND_NONE} textValue="Sin especificar">
+                      Sin especificar
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                    {LODGING_KINDS.map((kind) => (
+                      <ListBox.Item key={kind} id={kind} textValue={LODGING_KIND_LABELS[kind]}>
+                        {LODGING_KIND_LABELS[kind]}
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+              {establishmentLobbyConnected ? (
+                <p className="text-xs text-muted">
+                  «Casa entera» no existe en LobbyPMS: siempre se elige a mano.
+                </p>
+              ) : null}
+            </div>
           ) : null}
         </div>
       ) : null}

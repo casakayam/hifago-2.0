@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import type { LodgingKind } from "@hifago/domain";
 import { ProductDetailView } from "./ProductDetailView";
 import messages from "@/messages/es.json";
 
@@ -25,7 +26,12 @@ vi.mock("./SlotReservationForm", () => ({ SlotReservationForm: () => null }));
 vi.mock("./ProductPhotos", () => ({ ProductPhotos: () => null }));
 
 // Pas de @testing-library/jest-dom dans ce monorepo — assertions DOM natives uniquement.
-function renderView(overrides: { capacity: number | null; unitCount: number | null }) {
+function renderView(overrides: {
+  capacity: number | null;
+  unitCount: number | null;
+  lodgingKind?: LodgingKind | null;
+  unit?: string | null;
+}) {
   return render(
     <NextIntlClientProvider locale="es" messages={{ ProductPage: messages.ProductPage, Common: messages.Common }}>
       <ProductDetailView
@@ -33,9 +39,10 @@ function renderView(overrides: { capacity: number | null; unitCount: number | nu
         description={null}
         photoSlides={[]}
         priceDisplay="$ 120.000"
-        unit={null}
+        unit={overrides.unit ?? null}
         capacity={overrides.capacity}
         unitCount={overrides.unitCount}
+        lodgingKind={overrides.lodgingKind ?? null}
         reservationMode="lodging"
         occurrenceLabel={null}
         externalBookingUrl={null}
@@ -95,5 +102,58 @@ describe("ProductDetailView — capacité et nombre d'unités (2026-08-26)", () 
     const facts = screen.getByTestId("product-lodging-facts").textContent ?? "";
     expect(facts).toContain("1 persona");
     expect(facts).not.toContain("1 personas");
+  });
+});
+
+// products.lodging_kind (2026-08-27). C'est l'information la plus structurante d'une fiche
+// d'hébergement — « on y dort seul ou à huit ? » — et elle arrivait jusqu'ici depuis LobbyPMS pour
+// être jetée au moment de lier.
+describe("ProductDetailView — nature du couchage", () => {
+  it("nomme le dortoir avant la capacité", () => {
+    renderView({ capacity: 1, unitCount: 8, lodgingKind: "dorm" });
+    const facts = screen.getByTestId("product-lodging-facts").textContent ?? "";
+    expect(facts.startsWith("Cama en dormitorio")).toBe(true);
+    expect(facts).toContain("8 en total");
+  });
+
+  it("nomme la chambre privée", () => {
+    renderView({ capacity: 2, unitCount: 3, lodgingKind: "private" });
+    expect(screen.getByTestId("product-lodging-facts").textContent).toContain("Habitación privada");
+  });
+
+  // La valeur que LobbyPMS ne peut pas fournir : elle n'arrive que d'un choix manuel du partenaire,
+  // et c'est justement le cas réel de la v1 en production (Bania Travel).
+  it("nomme la maison entière", () => {
+    renderView({ capacity: 8, unitCount: 1, lodgingKind: "whole_house" });
+    expect(screen.getByTestId("product-lodging-facts").textContent).toContain("Casa entera");
+  });
+
+  // Une chambre peut n'avoir que ça : la ligne doit apparaître pour elle seule, sans séparateur.
+  it("s'affiche seule quand ni capacité ni quantité ne sont connues", () => {
+    renderView({ capacity: null, unitCount: null, lodgingKind: "private" });
+    const facts = screen.getByTestId("product-lodging-facts").textContent ?? "";
+    expect(facts).toBe("Habitación privada");
+  });
+});
+
+// `unit` est une unité de PRIX, distincte de lodging_kind. `per_house` a été ajouté à la contrainte
+// le 2026-08-27 (la v1 l'a depuis toujours) ; rien ne l'écrit encore côté application, mais la
+// fiche doit savoir l'afficher le jour où quelque chose le fera — sinon un prix de maison entière
+// se lirait comme un prix par personne.
+describe("ProductDetailView — unité de prix", () => {
+  it("dit « por persona » pour per_person", () => {
+    renderView({ capacity: null, unitCount: null, unit: "per_person" });
+    expect(screen.getByTestId("product-price").textContent).toContain("por persona");
+  });
+
+  it("dit « por la casa entera » pour per_house", () => {
+    renderView({ capacity: null, unitCount: null, unit: "per_house" });
+    expect(screen.getByTestId("product-price").textContent).toContain("por la casa entera");
+  });
+
+  // per_two reste délibérément sans suffixe : le prix d'une chambre double n'a rien à préciser.
+  it("n'ajoute aucun suffixe pour per_two", () => {
+    renderView({ capacity: null, unitCount: null, unit: "per_two" });
+    expect(screen.getByTestId("product-price").textContent).toBe("$ 120.000");
   });
 });

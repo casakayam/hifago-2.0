@@ -1,5 +1,6 @@
 import type { LocalizedValue } from "@/components/localized-text-field";
 import type { LobbyRoomOption } from "@/lib/pms/lobbyOptions";
+import type { LodgingKind } from "@hifago/domain";
 
 // Politique d'import « Lobby PROPOSE, hifago fait foi » (arbitrage Jérôme du 2026-08-26), extraite
 // de product-form.tsx le 2026-08-27. C'est une RÈGLE MÉTIER, pas du câblage de formulaire : elle
@@ -16,8 +17,12 @@ import type { LobbyRoomOption } from "@/lib/pms/lobbyOptions";
 //      porte le slug de la fiche — donc jamais quelque chose qu'on écrase derrière l'utilisateur.
 //   3. Les descriptions sont FUSIONNÉES par langue, pas remplacées en bloc : Lobby peut n'avoir
 //      que l'espagnol alors que l'anglais a été écrit ici.
-//   4. Capacité et nombre d'unités sont écrasés quand Lobby les fournit — ce sont des faits
-//      physiques sur la chambre, et c'est précisément ce qu'on vient chercher chez eux.
+//   4. Capacité, nombre d'unités et nature du couchage sont écrasés quand Lobby les fournit —
+//      ce sont des faits physiques sur la chambre, et c'est précisément ce qu'on vient chercher
+//      chez eux. Pour la nature du couchage, l'import ne peut produire que `dorm` ou `private` :
+//      `whole_house` n'existe pas dans le vocabulaire de Lobby, il ne sera donc jamais proposé
+//      ici, et une valeur `whole_house` posée à la main survit à un import sur une catégorie dont
+//      Lobby ne donne pas le type (règle 1).
 //
 // Les photos ne passent PAS par ici : elles exigent un aller-retour serveur (téléchargement chez
 // Lobby, décodage, écriture Storage) qu'une fonction pure ne peut pas faire. Elles restent dans
@@ -30,6 +35,8 @@ export type LobbyImportableFields = {
   /** Chaîne, parce que c'est la forme de l'état de formulaire (Input type="number"). */
   capacity: string;
   unitCount: string;
+  /** "" = non renseigné. Seules `dorm`/`private` peuvent venir de Lobby (cf. règle 4). */
+  lodgingKind: LodgingKind | "";
 };
 
 /**
@@ -47,6 +54,7 @@ export function mergeLobbyRoom(
     description: mergeDescription(current.description, data.descriptions),
     capacity: data.capacity !== null ? String(data.capacity) : current.capacity,
     unitCount: data.quantity !== null ? String(data.quantity) : current.unitCount,
+    lodgingKind: data.kind !== null ? data.kind : current.lodgingKind,
   };
 }
 

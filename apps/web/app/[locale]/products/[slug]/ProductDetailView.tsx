@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import type { LodgingKind } from "@hifago/domain";
 import { Link } from "@/i18n/navigation";
 import { Card, buttonVariants } from "@hifago/ui";
 import type { PriceTier } from "@/lib/products/reservationRange";
@@ -40,6 +41,7 @@ export function ProductDetailView({
   unit,
   capacity,
   unitCount,
+  lodgingKind,
   reservationMode,
   occurrenceLabel,
   externalBookingUrl,
@@ -71,6 +73,8 @@ export function ProductDetailView({
   capacity: number | null;
   /** Nombre d'unités de ce type (Lobby : `quantity`). Un TOTAL, jamais une disponibilité du jour. */
   unitCount: number | null;
+  /** Nature du couchage. `whole_house` ne vient jamais de Lobby — toujours un choix du partenaire. */
+  lodgingKind: LodgingKind | null;
   reservationMode: "evento" | "hotel" | "lodging" | "slot" | "date";
   occurrenceLabel: string | null;
   externalBookingUrl: string | null;
@@ -93,6 +97,23 @@ export function ProductDetailView({
   const t = useTranslations("ProductPage");
   const tCommon = useTranslations("Common");
 
+  // `unit` est une unité de PRIX — à ne pas confondre avec lodgingKind, qui est une nature de
+  // couchage (products.lodging_kind, migration 20260827120000). `per_two` reste délibérément sans
+  // suffixe : « por dos personas » n'ajoute rien à un prix de chambre déjà décrit par la fiche.
+  const unitSuffix =
+    unit === "per_person" ? t("perPerson") : unit === "per_house" ? t("perHouse") : null;
+
+  // Table explicite plutôt qu'une clé i18n construite dynamiquement : next-intl ne vérifierait plus
+  // l'existence de la clé, et une valeur inattendue afficherait son propre nom brut au client.
+  const lodgingKindLabel =
+    lodgingKind === "dorm"
+      ? t("lodgingKindDorm")
+      : lodgingKind === "private"
+        ? t("lodgingKindPrivate")
+        : lodgingKind === "whole_house"
+          ? t("lodgingKindWholeHouse")
+          : null;
+
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 p-8">
       <Link href="/" className="text-sm text-muted hover:underline">
@@ -110,8 +131,8 @@ export function ProductDetailView({
 
           <p className="text-lg font-medium" data-testid="product-price">
             {priceDisplay}
-            {reservationMode !== "evento" && unit === "per_person" ? (
-              <span className="ml-1 text-sm font-normal text-muted">{t("perPerson")}</span>
+            {reservationMode !== "evento" && unitSuffix ? (
+              <span className="ml-1 text-sm font-normal text-muted">{unitSuffix}</span>
             ) : null}
           </p>
 
@@ -121,9 +142,10 @@ export function ProductDetailView({
               orphelin. `quantity` est libellé « en total » et non « disponibles » : c'est le parc
               total du type, jamais ce qui reste libre cette nuit (pour un logement PMS-backed,
               cette réponse-là vient de LobbyPMS en direct, cf. LodgingReservationForm). */}
-          {capacity !== null || unitCount !== null ? (
+          {lodgingKindLabel !== null || capacity !== null || unitCount !== null ? (
             <p className="text-sm text-muted" data-testid="product-lodging-facts">
               {[
+                lodgingKindLabel,
                 capacity !== null ? t("lodgingCapacity", { count: capacity }) : null,
                 unitCount !== null ? t("lodgingUnitCount", { count: unitCount }) : null,
               ]

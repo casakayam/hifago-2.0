@@ -423,7 +423,14 @@ select is(
   'camp : product_tag_assignments contient le tag proposé (servicios incluidos)'
 );
 
--- lodging : capacity + stay_rates + tramos de prix ---------------------------------------------
+-- lodging : capacity + unit_count + lodging_kind + stay_rates + tramos de prix -----------------
+-- unit_count et lodging_kind rejoignent cette assertion le 2026-08-27. C'est LE test qui manquait :
+-- ces deux clés traversent une whitelist jsonb (submit_product_creation_proposal) puis un insert
+-- explicite (create_product_from_proposal), et un oubli dans l'une ou l'autre les jette EN SILENCE —
+-- aucune erreur, aucun type qui rougit, juste une valeur qui n'arrive jamais en base. Aucun test
+-- TypeScript ne peut voir ça : la perte se produit entièrement côté Postgres.
+-- `lodging_kind` vaut ici 'whole_house' à dessein — la seule des trois valeurs que LobbyPMS ne peut
+-- pas fournir, donc celle qui ne dépend QUE de ce chemin-là pour exister.
 select test_login('88880000-0000-4000-8000-000000000021');
 create temp table tmp_lodging as
   select (submit_product_creation_proposal(
@@ -431,6 +438,8 @@ create temp table tmp_lodging as
     jsonb_build_object(
       'name', jsonb_build_object('es', 'Alojamiento Aprobado'),
       'capacity', 8,
+      'unit_count', 3,
+      'lodging_kind', 'whole_house',
       'price_tiers', jsonb_build_array(
         jsonb_build_object('min_qty', 1, 'max_qty', 4, 'price_cop', 200000),
         jsonb_build_object('min_qty', 5, 'max_qty', 8, 'price_cop', 320000)
@@ -451,11 +460,14 @@ select is(
   'approbation de la création lodging réussit'
 );
 select is(
-  (select jsonb_build_object('capacity', p.capacity, 'price_cop', p.price_cop, 'has_stay_rates', p.stay_rates is not null)
+  (select jsonb_build_object('capacity', p.capacity, 'unit_count', p.unit_count,
+                             'lodging_kind', p.lodging_kind, 'price_cop', p.price_cop,
+                             'has_stay_rates', p.stay_rates is not null)
      from product_proposals pp join products p on p.id = pp.product_id
     where pp.id = (select id from tmp_lodging)),
-  jsonb_build_object('capacity', 8, 'price_cop', 200000, 'has_stay_rates', true),
-  'products (lodging) porte capacity/price_cop (plus bas tramo)/stay_rates'
+  jsonb_build_object('capacity', 8, 'unit_count', 3, 'lodging_kind', 'whole_house',
+                     'price_cop', 200000, 'has_stay_rates', true),
+  'products (lodging) porte capacity/unit_count/lodging_kind/price_cop (plus bas tramo)/stay_rates'
 );
 
 -- Rejet d'une création : aucun produit créé, product_id reste null ---------------------------------

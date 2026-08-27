@@ -1731,6 +1731,7 @@ export type Database = {
           lat: number | null
           lobby_category_id: number | null
           lobby_product_id: number | null
+          lodging_kind: string | null
           lon: number | null
           max_qty: number | null
           max_units: number | null
@@ -1777,6 +1778,7 @@ export type Database = {
           lat?: number | null
           lobby_category_id?: number | null
           lobby_product_id?: number | null
+          lodging_kind?: string | null
           lon?: number | null
           max_qty?: number | null
           max_units?: number | null
@@ -1823,6 +1825,7 @@ export type Database = {
           lat?: number | null
           lobby_category_id?: number | null
           lobby_product_id?: number | null
+          lodging_kind?: string | null
           lon?: number | null
           max_qty?: number | null
           max_units?: number | null

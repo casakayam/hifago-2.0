@@ -22,6 +22,7 @@ import { toStayRatesColumn, validateStayRates } from "@/lib/products/stayRates";
 import { toRoomTypeRow, validateRoomTypes } from "@/lib/products/hotelRooms";
 import { buildProductCreationPayload } from "@/lib/products/productCreationPayload";
 import { mergeLobbyRoom } from "@/lib/products/lobbyRoomImport";
+import { asLodgingKind } from "@hifago/domain";
 import {
   productTypeGating,
   useProductTypeFieldsState,
@@ -51,6 +52,7 @@ export type EditableProduct = {
   check_out_time: string | null;
   capacity: number | null;
   unit_count: number | null;
+  lodging_kind: string | null;
   default_capacity: number | null;
   stay_rates: unknown;
   type: string;
@@ -139,6 +141,7 @@ export function ProductForm({
           checkOutTime: product.check_out_time,
           capacity: product.capacity,
           unitCount: product.unit_count,
+          lodgingKind: asLodgingKind(product.lodging_kind),
           defaultCapacity: product.default_capacity,
           stayRates: product.stay_rates,
           lobbyCategoryId: product.lobby_category_id,
@@ -175,13 +178,20 @@ export function ProductForm({
   // couvert par lobbyRoomImport.test.ts, pour qu'on ne remette pas ici les `if` qu'on en a sortis).
   async function applyLobbyRoomData(data: LobbyRoomOption) {
     const next = mergeLobbyRoom(
-      { name, description, capacity: fields.capacity, unitCount: fields.unitCount },
+      {
+        name,
+        description,
+        capacity: fields.capacity,
+        unitCount: fields.unitCount,
+        lodgingKind: fields.lodgingKind,
+      },
       data,
     );
     setName(next.name);
     setDescription(next.description);
     fields.setCapacity(next.capacity);
     fields.setUnitCount(next.unitCount);
+    fields.setLodgingKind(next.lodgingKind);
 
     // Les photos ne peuvent pas être « recopiées » comme un texte : il faut aller les chercher chez
     // Lobby côté serveur (téléchargement, décodage, réécriture dans Storage), ce qu'un formulaire
@@ -349,6 +359,7 @@ export function ProductForm({
             ? {
                 capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
                 unit_count: fields.unitCount.trim() ? Number(fields.unitCount) : null,
+                lodging_kind: fields.lodgingKind || null,
                 stay_rates: toStayRatesColumn(fields.stayRates),
                 lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
               }
@@ -460,6 +471,7 @@ export function ProductForm({
           ? {
               capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
               unit_count: fields.unitCount.trim() ? Number(fields.unitCount) : null,
+              lodging_kind: fields.lodgingKind || null,
               stay_rates: toStayRatesColumn(fields.stayRates),
               lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
             }

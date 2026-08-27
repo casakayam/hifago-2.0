@@ -19,7 +19,13 @@ function lobbyRoom(overrides: Partial<LobbyRoomOption> = {}): LobbyRoomOption {
   };
 }
 
-const EMPTY: LobbyImportableFields = { name: {}, description: {}, capacity: "", unitCount: "" };
+const EMPTY: LobbyImportableFields = {
+  name: {},
+  description: {},
+  capacity: "",
+  unitCount: "",
+  lodgingKind: "",
+};
 
 describe("mergeLobbyRoom — ce que Lobby a le droit d'écraser", () => {
   it("remplit tout sur une fiche vierge", () => {
@@ -29,6 +35,7 @@ describe("mergeLobbyRoom — ce que Lobby a le droit d'écraser", () => {
     expect(next.description.en).toBe("Located at the top of the hill");
     expect(next.capacity).toBe("2");
     expect(next.unitCount).toBe("3");
+    expect(next.lodgingKind).toBe("private");
   });
 
   // LA règle la plus coûteuse à violer : le nom porte le slug de la fiche publique. L'écraser
@@ -57,14 +64,19 @@ describe("mergeLobbyRoom — ce que Lobby a le droit d'écraser", () => {
       description: { es: "Texte écrit à la main" },
       capacity: "4",
       unitCount: "9",
+      lodgingKind: "whole_house",
     };
     const next = mergeLobbyRoom(
       current,
-      lobbyRoom({ capacity: null, quantity: null, descriptions: {} }),
+      lobbyRoom({ capacity: null, quantity: null, descriptions: {}, kind: null }),
     );
     expect(next.description.es).toBe("Texte écrit à la main");
     expect(next.capacity).toBe("4");
     expect(next.unitCount).toBe("9");
+    // `whole_house` n'existe pas chez Lobby : un import sur une catégorie dont ils ne donnent pas
+    // le type ne doit surtout pas le rétrograder — c'est le seul choix que le partenaire ne peut
+    // faire qu'à la main, donc le plus facile à perdre sans s'en apercevoir.
+    expect(next.lodgingKind).toBe("whole_house");
   });
 
   // Règle 3 : fusion par langue, jamais remplacement en bloc.
@@ -81,6 +93,20 @@ describe("mergeLobbyRoom — ce que Lobby a le droit d'écraser", () => {
     const next = mergeLobbyRoom(EMPTY, lobbyRoom({ kind: "dorm", capacity: 1, quantity: 8 }));
     expect(next.capacity).toBe("1");
     expect(next.unitCount).toBe("8");
+    expect(next.lodgingKind).toBe("dorm");
+  });
+
+  // Le vocabulaire de Lobby n'a que deux termes (privada/compartida) : un import ne peut JAMAIS
+  // produire `whole_house`, quelle que soit la catégorie. C'est ce qui oblige l'écran à le dire.
+  it("ne produit jamais whole_house depuis un import", () => {
+    for (const kind of ["private", "dorm", null] as const) {
+      expect(mergeLobbyRoom(EMPTY, lobbyRoom({ kind })).lodgingKind).not.toBe("whole_house");
+    }
+  });
+
+  it("écrase une nature de couchage saisie à la main quand Lobby en donne une", () => {
+    const current = { ...EMPTY, lodgingKind: "private" as const };
+    expect(mergeLobbyRoom(current, lobbyRoom({ kind: "dorm" })).lodgingKind).toBe("dorm");
   });
 
   it("écrase capacité et nombre d'unités quand Lobby les fournit", () => {
@@ -99,6 +125,7 @@ describe("mergeLobbyRoom — ce que Lobby a le droit d'écraser", () => {
       description: { es: "Texte" },
       capacity: "4",
       unitCount: "9",
+      lodgingKind: "",
     };
     const next = mergeLobbyRoom(
       current,

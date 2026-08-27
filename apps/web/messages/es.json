@@ -56,6 +56,10 @@
   "ProductPage": {
     "backToCatalog": "← Volver al catálogo",
     "perPerson": "por persona",
+    "perHouse": "por la casa entera",
+    "lodgingKindDorm": "Cama en dormitorio",
+    "lodgingKindPrivate": "Habitación privada",
+    "lodgingKindWholeHouse": "Casa entera",
     "lodgingCapacity": "Hasta {count, plural, one {# persona} other {# personas}}",
     "lodgingUnitCount": "{count} en total",
     "fromPrice": "Desde",

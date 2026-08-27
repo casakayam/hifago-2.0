@@ -4,7 +4,7 @@ import { addDays } from "date-fns";
 import { notFound } from "next/navigation";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@hifago/supabase/server";
-import { asLocalizedField, isPmsBacked, resolveLocalizedField } from "@hifago/domain";
+import { asLocalizedField, asLodgingKind, isPmsBacked, resolveLocalizedField } from "@hifago/domain";
 import { formatOccurrenceLabel } from "@/lib/products/formatOccurrenceLabel";
 import { formatCop } from "@hifago/domain";
 import { ProductDetailView } from "./ProductDetailView";
@@ -23,7 +23,7 @@ import { ProductDetailView } from "./ProductDetailView";
 // capacity/quantity ajoutés le 2026-08-26 : ils étaient écrits en base (et, pour un logement lié,
 // importés depuis LobbyPMS) mais ABSENTS de ce select — donc lus par aucun écran public, exactement
 // comme `unit`. Une chambre affichait son prix sans jamais dire pour combien de personnes.
-const PRODUCT_COLUMNS = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, capacity, unit_count, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, lobby_category_id, establishment:establishments(id, name, description, address)`;
+const PRODUCT_COLUMNS = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, capacity, unit_count, lodging_kind, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, lobby_category_id, establishment:establishments(id, name, description, address)`;
 
 const getProduct = cache(async (slug: string) => {
   const supabase = await createClient();
@@ -308,6 +308,7 @@ export default async function ProductPage({
       unit={product.unit}
       capacity={product.capacity}
       unitCount={product.unit_count}
+      lodgingKind={asLodgingKind(product.lodging_kind)}
       reservationMode={reservationMode}
       occurrenceLabel={occurrenceLabel}
       externalBookingUrl={product.external_booking_url}

@@ -56,6 +56,10 @@
   "ProductPage": {
     "backToCatalog": "← Back to catalog",
     "perPerson": "per person",
+    "perHouse": "for the entire house",
+    "lodgingKindDorm": "Dorm bed",
+    "lodgingKindPrivate": "Private room",
+    "lodgingKindWholeHouse": "Entire house",
     "lodgingCapacity": "Up to {count, plural, one {# person} other {# people}}",
     "lodgingUnitCount": "{count} in total",
     "fromPrice": "From",

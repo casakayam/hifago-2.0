@@ -9,6 +9,7 @@ import { Button, Label, TextArea, TextField, toast } from "@hifago/ui";
 import { LocalizedTextField, type LocalizedValue } from "@/components/localized-text-field";
 import { ProductTypeFields } from "@/components/product-type-fields";
 import { buildProductEditPayload } from "@/lib/products/productEditPayload";
+import { lodgingKindLabel } from "@/lib/products/lodgingKindLabels";
 import {
   payloadToFieldsInit,
   productTypeGating,
@@ -169,6 +170,12 @@ export function ModerateProposalForm({
             <div>
               <dt className="inline font-medium text-foreground">Cantidad: </dt>
               <dd className="inline">{currentPayload.unit_count ?? "—"}</dd>
+            </div>
+          ) : null}
+          {isLodging ? (
+            <div>
+              <dt className="inline font-medium text-foreground">Tipo de alojamiento: </dt>
+              <dd className="inline">{lodgingKindLabel(currentPayload.lodging_kind) ?? "—"}</dd>
             </div>
           ) : null}
         </dl>

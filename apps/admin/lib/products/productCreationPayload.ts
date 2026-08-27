@@ -66,6 +66,9 @@ export function buildProductCreationPayload(
           // submit_product_proposal (migration 20260826190000) — les deux, sinon le champ se
           // remplirait à la création puis disparaîtrait à la première modification.
           unit_count: fields.unitCount.trim() ? Number(fields.unitCount) : null,
+          // `lodging_kind` (2026-08-27) : dortoir / chambre privée / maison entière. Whitelisté par
+          // les DEUX RPC de proposition (migration 20260827120000), même raison que ci-dessus.
+          lodging_kind: fields.lodgingKind || null,
           stay_rates: toStayRatesColumn(fields.stayRates),
           // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — la RPC elle-même ignore ce champ
           // si l'établissement n'est pas connecté (cf. submit_product_creation_proposal), donc
