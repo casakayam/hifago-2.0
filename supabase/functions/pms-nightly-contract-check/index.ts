@@ -29,9 +29,11 @@ function hasExpectedRoomsShape(body: unknown): boolean {
 // liaison affiche et prérremplit le contenu Lobby (type/capacity/descriptions[]/photos[]), la
 // disparition SILENCIEUSE d'un de ces champs ne casserait rien — les parseurs sont défensifs, ils
 // omettent proprement — mais viderait l'écran sans que personne ne le sache. C'est exactement le
-// genre de dérive que ce job existe pour attraper, et la seule vigie possible tant que ces formes
-// n'ont pas été observées en conditions réelles (elles viennent de la doc, déjà prise en défaut
-// une fois sur POST /bookings).
+// genre de dérive que ce job existe pour attraper. Les formes ONT depuis été observées en
+// conditions réelles (2026-08-26, compte Casa Kayam — spec 24 §11.1 : 6/6 catégories portent
+// type/capacity/quantity, 4/6 portent descriptions[]/photos[]) : ce job ne surveille donc plus une
+// hypothèse tirée de la doc, mais un contrat constaté. Raison de plus pour qu'il tourne — sa
+// vigilance porte désormais sur une régression réelle, pas sur une supposition.
 //
 // Aucune de ces absences n'est une panne : ce sont des signalements. Un compte peut légitimement
 // n'avoir aucune photo. Le but est de distinguer « Lobby ne renvoie plus ce champ » de « le champ
@@ -41,12 +43,14 @@ function describeRoomsFieldCoverage(body: unknown): string[] {
   if (categories.length === 0) return ["aucune catégorie exploitable dans GET /rooms"];
 
   const notes: string[] = [];
-  const withKind = categories.filter((c) => c.rawType !== null).length;
+  // Compte `rawType`, pas `kind` : c'est la PRÉSENCE du champ Lobby qu'on surveille, pas notre
+  // capacité à le normaliser. Renommé le 2026-08-26 — il s'appelait withKind et mesurait rawType.
+  const withRawType = categories.filter((c) => c.rawType !== null).length;
   const withCapacity = categories.filter((c) => c.capacity !== null).length;
   const withDescription = categories.filter((c) => Object.keys(c.descriptions).length > 0).length;
   const withPhotos = categories.filter((c) => c.photos.length > 0).length;
 
-  if (withKind === 0) notes.push("aucune catégorie ne porte `type`");
+  if (withRawType === 0) notes.push("aucune catégorie ne porte `type`");
   if (withCapacity === 0) notes.push("aucune catégorie ne porte `capacity`");
   if (withDescription === 0) notes.push("aucune catégorie ne porte `descriptions[]`");
   if (withPhotos === 0) notes.push("aucune catégorie ne porte `photos[]`");

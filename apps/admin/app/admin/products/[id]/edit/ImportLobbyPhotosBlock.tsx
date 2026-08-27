@@ -13,7 +13,7 @@ const REASON_LABELS: Record<string, string> = {
   gallery_full: "La galería ya tiene 6 fotos.",
   no_photos_in_lobby: "LobbyPMS no tiene fotos para esta categoría.",
   pms_not_connected: "Este establecimiento no está conectado a LobbyPMS.",
-  not_pms_backed: "Esta actividad no está vinculada a una categoría de LobbyPMS.",
+  not_pms_backed: "Esta habitación no está vinculada a una categoría de LobbyPMS.",
   lobby_rejected: "LobbyPMS rechazó la consulta.",
   lobby_unreachable: "No se pudo contactar con LobbyPMS.",
   not_authorized: "Solo un administrador puede importar fotos.",

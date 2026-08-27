@@ -31,7 +31,17 @@ export interface PmsFixtureScenario {
 
 // Forme RÉELLEMENT OBSERVÉE le 2026-08-26 sur le compte Lobby de Casa Kayam, via la préprod
 // (spec 24 §11.1) — et non plus une transcription de leur documentation, qui s'était déjà révélée
-// fausse une fois sur `POST /bookings`. Les tests qui consomment ceci prouvent donc le contrat réel.
+// fausse une fois sur `POST /bookings`.
+//
+// ⚠️ HONNÊTETÉ SUR CE QUE CECI VAUT AUJOURD'HUI : **aucun test ne consomme encore ce module**.
+// J'avais écrit ici que « les tests qui consomment ceci prouvent le contrat réel » — c'était faux
+// au moment où je l'écrivais, et le /simplify du 2026-08-26 l'a relevé. Ni ce serveur de fixtures
+// ni ces deux constantes ne sont importés nulle part (les specs Playwright passent par
+// createPmsBackedEstablishmentFixture/mockPmsNightAvailability, et le test d'intégration
+// pms_poll_bookings démarre son propre serveur inline). Ces valeurs sont donc une RÉFÉRENCE ÉCRITE,
+// exacte à la date d'observation, mais que rien ne fait respecter : elles peuvent diverger de Lobby
+// sans qu'aucun test ne rougisse. À brancher sur un test (via LOBBY_API_BASE_URL) ou à supprimer —
+// ne pas les lire comme une garantie.
 //
 // Les quatre traits que cette fixture doit conserver, parce que chacun a cassé ou aurait pu casser
 // quelque chose :
@@ -130,8 +140,10 @@ function send(res: import("node:http").ServerResponse, status: number, body: unk
 export function startPmsFixtureServer(port: number): Promise<{ url: string; close: () => Promise<void> }> {
   const server: Server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
-    let raw = "";
-    req.on("data", (chunk) => (raw += chunk));
+    // Le listener est nécessaire (il met le flux en mode « flowing » pour que "end" se déclenche) ;
+    // l'accumulation ne l'était pas — `raw` n'était jamais lu et bufferisait sans borne un corps
+    // que personne ne consomme (/simplify 2026-08-26).
+    req.on("data", () => {});
     req.on("end", () => {
       if (req.method === "GET" && url.pathname === "/api/v1/rooms") {
         send(res, 200, scenario.rooms ?? { data: [], meta: { total_records: 0 } });

@@ -8,6 +8,8 @@
 // type, capacity, quantity, descriptions[] multilingues, photos[], et les chambres physiques.
 // Ce module l'expose sans un seul appel réseau supplémentaire.
 
+import { asNonEmptyString, asPositiveInt, asRecord } from "./parseHelpers";
+
 // Langues de CONTENU réellement éditables dans hifago (LocalizedTextField est fermé à es/en, et
 // activeLang s'initialise à "es") — importer une clé hors de ce jeu produirait une valeur publiée
 // par repli mais invisible et non supprimable dans l'éditeur. On les collecte donc à part plutôt
@@ -15,15 +17,12 @@
 const SUPPORTED_LANGS = ["es", "en"] as const;
 export type SupportedLang = (typeof SUPPORTED_LANGS)[number];
 
-// Le vocabulaire `type` de Lobby n'est documenté que pour "privada" ; aucune valeur dortoir n'a
-// jamais été observée. On ne devine donc jamais : un type inconnu donne kind=null et rawType est
-// conservé tel quel, pour que l'écran puisse l'afficher et qu'une sonde réelle puisse le relever.
+// Vocabulaire `type` OBSERVÉ en conditions réelles le 2026-08-26 (compte Casa Kayam, préprod —
+// spec 24 §11.1) : "privada" et "compartida", en espagnol. Ce n'est plus une hypothèse — 4 des 6
+// catégories réelles sont "compartida", donc la branche dorm ci-dessous couvre la MAJORITÉ du parc
+// et ne doit pas être prise pour du code spéculatif. Un type inconnu donne toujours kind=null, et
+// rawType est conservé tel quel pour que l'écran puisse l'afficher plutôt que de deviner.
 export type LobbyRoomKind = "private" | "dorm";
-
-export interface LobbyRoomPhoto {
-  photoId: number | null;
-  url: string;
-}
 
 export interface LobbyRoomCategory {
   categoryId: number;
@@ -36,33 +35,10 @@ export interface LobbyRoomCategory {
   descriptions: Partial<Record<SupportedLang, string>>;
   /** Codes `lang` renvoyés par Lobby mais non éditables ici — jamais écrits, seulement signalés. */
   unsupportedLangs: string[];
-  photos: LobbyRoomPhoto[];
+  /** URLs des photos. `photo_id` est délibérément jeté : aucun écran n'en a d'usage. */
+  photos: string[];
   /** Numéros des chambres physiques de la catégorie (rooms[].name), à titre informatif. */
   roomLabels: string[];
-}
-
-export interface LobbyPageMeta {
-  currentPage: number | null;
-  totalPages: number | null;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function asPositiveInt(value: unknown): number | null {
-  const parsed = typeof value === "string" ? Number(value) : value;
-  if (typeof parsed !== "number" || !Number.isFinite(parsed)) return null;
-  const rounded = Math.trunc(parsed);
-  return rounded > 0 ? rounded : null;
-}
-
-function asNonEmptyString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 
 // "es-CO" / "ES" / " es " → "es". Un code non reconnu n'est jamais transformé en es par défaut :
@@ -114,17 +90,16 @@ function parseDescriptions(value: unknown): {
   return { descriptions, unsupportedLangs: [...unsupported].sort() };
 }
 
-function parsePhotos(value: unknown): LobbyRoomPhoto[] {
+function parsePhotos(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  const photos: LobbyRoomPhoto[] = [];
+  const urls: string[] = [];
   for (const entry of value) {
     const row = asRecord(entry);
     if (!row) continue;
     const url = asNonEmptyString(row.url);
-    if (!url) continue;
-    photos.push({ photoId: asPositiveInt(row.photo_id), url });
+    if (url) urls.push(url);
   }
-  return photos;
+  return urls;
 }
 
 function parseRoomLabels(value: unknown): string[] {
@@ -175,15 +150,18 @@ export function parseLobbyRooms(body: unknown): LobbyRoomCategory[] {
 
 /**
  * Pagination : `meta.total_pages` permet d'arrêter la boucle dès la dernière page réelle, au lieu
- * de taper systématiquement jusqu'au plafond de sécurité (un appel de picker déclenchait jusqu'à
- * 20 requêtes chez Lobby, pour un compte qui n'a qu'une page).
+ * de taper systématiquement jusqu'au plafond de sécurité.
+ *
+ * ⚠️ Cette clé vient de la DOC de Lobby et n'a jamais été observée dans une réponse réelle : la
+ * sonde du 2026-08-26 n'a capturé que le début du corps, qui ne contenait que `data`. Elle renvoie
+ * donc `null` sans drame, et l'appelant NE DOIT PAS en dépendre seul — `collectLobbyPages`
+ * (apps/admin/lib/pms/lobbyEstablishment.ts) s'arrête aussi quand une page n'apporte aucun
+ * identifiant nouveau, ce qui ne suppose rien de Lobby.
+ *
+ * `current_page` était parsé et renvoyé : aucun appelant ne l'a jamais lu, retiré le 2026-08-26.
  */
-export function parseLobbyPageMeta(body: unknown): LobbyPageMeta {
+export function parseLobbyPageMeta(body: unknown): { totalPages: number | null } {
   const root = asRecord(body);
   const meta = root ? asRecord(root.meta) : null;
-  if (!meta) return { currentPage: null, totalPages: null };
-  return {
-    currentPage: asPositiveInt(meta.current_page),
-    totalPages: asPositiveInt(meta.total_pages),
-  };
+  return { totalPages: meta ? asPositiveInt(meta.total_pages) : null };
 }

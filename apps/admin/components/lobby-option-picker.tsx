@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@hifago/ui";
 import { formatCop } from "@hifago/domain";
 import { SearchableCombobox } from "@/components/searchable-combobox";
+import type { LobbyRoomOption, LobbyServiceOption } from "@/lib/pms/lobbyOptions";
 
 // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — alimente le mode "Elegir de la lista" de
 // ProductTypeFields : jamais une saisie libre côté socio (frontière de confiance décidée avec
@@ -21,26 +22,11 @@ import { SearchableCombobox } from "@/components/searchable-combobox";
 // aucun — cas réel, 2 des 6 catégories du compte Casa Kayam n'ont ni description ni photo
 // (forme observée en préprod le 2026-08-26, consignée dans docs/specs/24 §11).
 
-export type LobbyRoomOption = {
-  id: number;
-  name: string;
-  kind: "private" | "dorm" | null;
-  rawType: string | null;
-  capacity: number | null;
-  quantity: number | null;
-  descriptions: { es?: string; en?: string };
-  unsupportedLangs: string[];
-  photoUrls: string[];
-  roomLabels: string[];
-};
-
-export type LobbyServiceOption = {
-  id: number;
-  name: string;
-  valueCop: number | null;
-  infiniteInventory: boolean | null;
-  stock: number | null;
-};
+// Les deux formes viennent de @/lib/pms/lobbyOptions, déclarées UNE fois et partagées avec les
+// Route Handlers qui les produisent (/simplify 2026-08-26 : elles étaient écrites deux fois, et
+// pouvaient diverger sans erreur de compilation). Réexportées ici parce que product-type-fields.tsx
+// et product-form.tsx les importent déjà par ce chemin.
+export type { LobbyRoomOption, LobbyServiceOption } from "@/lib/pms/lobbyOptions";
 
 type LobbyOption = LobbyRoomOption | LobbyServiceOption;
 
@@ -203,8 +189,14 @@ function LobbyRoomPreview({
   if (option.roomLabels.length > 0) facts.push(`Nº ${option.roomLabels.join(", ")}`);
 
   const description = option.descriptions.es ?? option.descriptions.en ?? null;
+  // `quantity` fait partie de ce qu'« Usar estos datos » importe réellement (product-form.tsx) —
+  // il manquait ici, si bien qu'une catégorie ne portant QUE la quantité n'obtenait pas le bouton
+  // alors qu'elle avait bien une donnée à donner (/simplify 2026-08-26).
   const hasImportableData =
-    Boolean(description) || option.capacity !== null || option.photoUrls.length > 0;
+    Boolean(description) ||
+    option.capacity !== null ||
+    option.quantity !== null ||
+    option.photoUrls.length > 0;
 
   return (
     <>

@@ -1,13 +1,24 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ProductTypeFields } from "./product-type-fields";
 import { useProductTypeFieldsState, type ProductTypeFieldsInit, type ProductType } from "@/lib/products/useProductTypeFieldsState";
 
-// Refonte parcours produit ↔ LobbyPMS (2026-08-26) — composant purement contrôlé (spec 15), sans
-// I/O réseau tant que lobbyLinkMode !== "picker" (LobbyOptionPicker ne fetch que dans ce mode) :
-// tous les scénarios ci-dessous partent d'une valeur déjà présente (lobbyLinkMode s'initialise à
-// "manual" dès qu'un lobby_category_id/lobby_product_id préexiste, cf. useProductTypeFieldsState),
-// jamais "picker" — pas besoin de mock fetch.
+// Refonte parcours produit ↔ LobbyPMS (2026-08-26) — composant purement contrôlé (spec 15).
+//
+// ⚠️ `lobbyLinkMode` s'initialise à **"picker"** dès qu'un lobby_category_id/lobby_product_id
+// préexiste (useProductTypeFieldsState, changé le 2026-08-26 pour afficher le NOM et non l'ID brut).
+// Tout scénario qui part d'un id existant monte donc LobbyOptionPicker, dont l'effet appelle
+// `fetch`. L'en-tête de ce fichier affirmait le contraire — « pas besoin de mock fetch » — et les
+// tests passaient uniquement parce que le `.catch()` du picker avalait l'échec et qu'aucune
+// assertion ne visait le picker. Un test qui certifie « aucune I/O » en en faisant une, c'est le
+// pire des deux mondes : `fetch` est donc réellement neutralisé ci-dessous.
+beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify({ ok: true, items: [] }), { status: 200 })),
+  );
+});
+
 function Harness({
   type,
   init,

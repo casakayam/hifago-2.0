@@ -10,6 +10,10 @@
 // ingresos[] et que `product_id` de POST /booking/add-product-service — mappé vers ce que hifago
 // nomme lobby_product_id. Aucune photo, aucune description, aucune catégorie, aucun horaire n'est
 // exposé par cet endpoint : un service Lobby est un couple identifiant/prix, rien de plus.
+// Confirmé en conditions réelles le 2026-08-26 (14 services du compte Casa Kayam, spec 24 §11.3) —
+// c'est la raison pour laquelle lier une ACTIVITÉ à un service ne peut rien rapatrier d'autre.
+
+import { asNonEmptyString, asPositiveInt, asRecord } from "./parseHelpers";
 
 export interface LobbyService {
   serviceId: number;
@@ -18,27 +22,14 @@ export interface LobbyService {
   valueCop: number | null;
   /** `infinite_inventory` à 1 → stock illimité. null si Lobby ne le renseigne pas. */
   infiniteInventory: boolean | null;
-  /** Stock restant. null si illimité ou non renseigné (le cas le plus fréquent observé). */
+  /**
+   * Stock restant. null si illimité, non renseigné — ou ÉPUISÉ : `asPositiveInt` ramène 0 à null,
+   * si bien qu'un service à stock 0 n'est pas distingué d'un service sans stock. Sans conséquence
+   * aujourd'hui (les 14 services réels sont tous `infinite_inventory`), et l'écran n'affiche de
+   * toute façon « Stock: n » que si `infiniteInventory` est faux. À revoir le jour où un compte
+   * utilisera un stock fini.
+   */
   stock: number | null;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function asPositiveInt(value: unknown): number | null {
-  const parsed = typeof value === "string" ? Number(value) : value;
-  if (typeof parsed !== "number" || !Number.isFinite(parsed)) return null;
-  const rounded = Math.trunc(parsed);
-  return rounded > 0 ? rounded : null;
-}
-
-function asNonEmptyString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 
 // "120000.00" → 120000. Un montant nul ou négatif est traité comme absent : un service à 0 n'a
@@ -71,13 +62,14 @@ export function parseLobbyServices(body: unknown): LobbyService[] {
     const name = asNonEmptyString(row.name);
     if (serviceId === null || name === null) continue;
 
-    const stockRaw = row.stock;
     services.push({
       serviceId,
       name,
       valueCop: asMoney(row.value),
       infiniteInventory: asFlag(row.infinite_inventory),
-      stock: stockRaw === null || stockRaw === undefined ? null : asPositiveInt(stockRaw),
+      // La garde `stockRaw === null || undefined` qui entourait ceci était redondante :
+      // asPositiveInt renvoie déjà null pour l'un comme pour l'autre (/simplify 2026-08-26).
+      stock: asPositiveInt(row.stock),
     });
   }
   return services;

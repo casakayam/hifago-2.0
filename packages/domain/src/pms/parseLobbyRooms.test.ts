@@ -32,7 +32,7 @@ describe("parseLobbyRooms", () => {
         quantity: 5,
         descriptions: { en: "Double room with Queen Size bed." },
         unsupportedLangs: [],
-        photos: [{ photoId: 5150, url: "https://app.lobbypms.com/permanent/uploads/file.jpg" }],
+        photos: ["https://app.lobbypms.com/permanent/uploads/file.jpg"],
         roomLabels: ["101"],
       },
     ]);
@@ -120,7 +120,7 @@ describe("parseLobbyRooms", () => {
         },
       ],
     });
-    expect(parsed[0].photos).toEqual([{ photoId: null, url: "https://app.lobbypms.com/a.jpg" }]);
+    expect(parsed[0].photos).toEqual(["https://app.lobbypms.com/a.jpg"]);
     expect(parsed[0].roomLabels).toEqual(["102"]);
   });
 
@@ -151,13 +151,13 @@ describe("normalizeLobbyRoomKind", () => {
 
 describe("parseLobbyPageMeta", () => {
   it("lit la pagination documentée", () => {
-    expect(parseLobbyPageMeta(DOCUMENTED_PAGE)).toEqual({ currentPage: 1, totalPages: 1 });
+    expect(parseLobbyPageMeta(DOCUMENTED_PAGE)).toEqual({ totalPages: 1 });
   });
 
   it.each([null, {}, { meta: null }, { meta: "oops" }, { meta: {} }])(
     "meta absent ou illisible %j → nulls (l'appelant retombe sur son plafond de sécurité)",
     (body) => {
-      expect(parseLobbyPageMeta(body)).toEqual({ currentPage: null, totalPages: null });
+      expect(parseLobbyPageMeta(body)).toEqual({ totalPages: null });
     }
   );
 });

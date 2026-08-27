@@ -103,7 +103,11 @@ export function ProductTypeFields({
   // Arbitrage Jérôme du 2026-08-26 (« import à la liaison ») — fourni uniquement par les écrans qui
   // détiennent réellement le nom et la description du produit (ProductForm). Absent → le bouton
   // « Usar estos datos » ne s'affiche pas, plutôt qu'un bouton sans effet.
-  onApplyLobbyRoomData?: (data: LobbyRoomOption) => void;
+  // Asynchrone depuis le 2026-08-26 : le handler réel importe aussi les photos, et le picker
+  // l'`await` pour afficher « Importando… ». Le type le disait synchrone — TypeScript l'acceptait
+  // (bivariance du retour void), mais le seul fichier qu'on ouvre pour comprendre le câblage
+  // affirmait l'inverse de ce qui se passe.
+  onApplyLobbyRoomData?: (data: LobbyRoomOption) => void | Promise<void>;
   // Arbitrage Jérôme du 2026-08-26 : le socio VOIT le lien, ne le modifie pas (cf. le commentaire
   // de `readOnly` dans lobby-option-picker.tsx).
   lobbyLinkReadOnly?: boolean;
@@ -240,15 +244,15 @@ export function ProductTypeFields({
             )
           ) : null}
 
+          </>
+          )}
+
           {/* Réécrite le 2026-08-26 avec l'arbitrage « import à la liaison ». L'ancienne version
               affirmait que capacité/description/photos « se gestionan allí, no aquí » alors
               qu'aucun code ne les lisait chez Lobby : les champs étaient masqués ET vides, donc la
               fiche publique d'une chambre PMS-backed était un nom nu. Ne jamais rétablir une des
               deux moitiés sans l'autre — un bloc photos rendu sous une phrase qui dit le contraire
               est pire que les deux états cohérents. */}
-          </>
-          )}
-
           {isRoomLinkedToLobby ? (
             <p className="text-xs text-muted" data-testid="lobby-room-managed-fields-note">
               LobbyPMS gestiona la disponibilidad de esta habitación. El nombre, la descripción, la
