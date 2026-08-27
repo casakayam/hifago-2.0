@@ -4,7 +4,7 @@
 -- log_admin_action conditionnée à un appelant admin. Verrouillage FOR UPDATE et logique de
 -- capacité inchangés — déjà couverts par le test de concurrence du correctif, rien à ajouter ici.
 begin;
-select plan(16);
+select plan(18);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -198,7 +198,32 @@ select is(
 select is(
   (set_product_availability('77770000-0000-4000-8000-000000000031', '2027-06-01', 99)->>'ok')::boolean,
   true,
-  'activité : aucun lodging_kind, chemin strictement inchangé'
+  'activité : aucun unit_count, chemin strictement inchangé'
+);
+
+-- Le cas qui manquait, et que la revue /simplify a trouvé : lodging_kind est FACULTATIVE. Elle vaut
+-- null sur tout logement dont le socio n'a pas renseigné le type — c'était le cas des cinq
+-- logements existants au moment d'écrire ceci. La première version du garde (20260827230000)
+-- exigeait `lodging_kind is not null` pour s'armer : elle ne protégeait donc à peu près personne.
+-- Corrigé par 20260827250000, armé sur unit_count seul.
+reset role;
+insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug,
+                      lodging_kind, capacity, unit_count)
+values ('77770000-0000-4000-8000-000000000044', '77770000-0000-4000-8000-000000000001',
+        '77770000-0000-4000-8000-000000000011', 'lodging', jsonb_build_object('es', 'Sin Tipo'),
+        50000, true, 'avail-socio-notype', null, 4, 2);
+set local role authenticated;
+select test_login('77770000-0000-4000-8000-000000000021');
+
+select is(
+  (set_product_availability('77770000-0000-4000-8000-000000000044', '2027-06-01', 999)->>'reason'),
+  'capacity_exceeds_physical',
+  'lodging_kind null : le garde s''arme QUAND MÊME (unit_count suffit) — le cas que la v1 ratait'
+);
+select is(
+  (set_product_availability('77770000-0000-4000-8000-000000000044', '2027-06-01', 8)->>'ok')::boolean,
+  true,
+  'lodging_kind null : borne HAUTE retenue (2 × 4 = 8), pour ne pas bloquer un dortoir non typé'
 );
 
 select * from finish();

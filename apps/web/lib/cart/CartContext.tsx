@@ -23,8 +23,7 @@ export type CartLine = {
   // (`priceCop * qty`, cf. total du panier/CheckoutForm) : aucune formule spéciale à ajouter pour
   // ce cas, le total réellement facturé reste de toute façon résolu par create_order.
   priceCop: number;
-  roomTypeName?: string; // Affichage panier/checkout uniquement.
-  endDate?: string; // ISO — présent seulement pour une ligne par plage (chambre ou alojamiento).
+  endDate?: string; // ISO — présent seulement pour une ligne par plage (alojamiento).
   slotStartTime?: string; // "HH:MM" — présent seulement pour une ligne à créneau horaire (spec 18 Tranche 1), toujours une chaîne opaque, jamais combinée à une Date JS.
 };
 

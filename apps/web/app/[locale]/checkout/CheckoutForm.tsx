@@ -302,7 +302,6 @@ export function CheckoutForm({
               <div className="flex flex-col">
                 <span className="font-medium">
                   {line.productName}
-                  {line.roomTypeName ? ` — ${line.roomTypeName}` : ""}
                 </span>
                 <span className="text-muted">
                   {line.establishmentName} ·{" "}

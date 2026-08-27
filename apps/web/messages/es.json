@@ -15,8 +15,7 @@
       "activity": "Actividad",
       "transport": "Transporte",
       "camp": "Camp",
-      "evento": "Evento",
-      "hotel": "Hotel"
+      "evento": "Evento"
     },
     "lodgingCount": "{count, plural, one {# alojamiento} other {# alojamientos}}"
   },
@@ -76,7 +75,6 @@
     "addedToCart": "Añadido al carrito.",
     "goToCheckout": "Ir a finalizar compra",
     "reserveExternal": "Reservar",
-    "roomTypeTitle": "Elige una habitación",
     "dormKind": "Dormitorio compartido",
     "privateKind": "Habitación privada",
     "roomsQtyLabel": "Habitaciones",

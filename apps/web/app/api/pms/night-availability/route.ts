@@ -55,10 +55,15 @@ export async function GET(request: Request) {
 
   const service = createServiceRoleClient();
 
+  // `sellable` : cette route tourne en service_role, donc HORS RLS. `products_select_public`
+  // (20260813190232) n'expose qu'un produit publié ; sans ce filtre, la disponibilité Lobby EN
+  // DIRECT d'un logement non publié serait interrogeable par quiconque connaît son UUID. La
+  // relecture autoritative doit reproduire la règle de la base, pas seulement s'y substituer.
   const { data: product } = await service
     .from("products")
     .select("id, type, lobby_category_id, establishment_id")
     .eq("id", productId)
+    .eq("sellable", true)
     .maybeSingle<ProductRow>();
 
   if (!product) {
@@ -87,7 +92,12 @@ export async function GET(request: Request) {
     const categoryId = product.lobby_category_id as number;
     const apiToken = establishment.lobby_api_token;
 
-    const rows = await cache.getOrFetch(`${categoryId}:${month}`, () =>
+    // La clé porte l'établissement, et ce n'est pas décoratif : `lobby_category_id` est un entier
+    // LOCAL au compte Lobby de chaque établissement. Deux établissements connectés à deux comptes
+    // différents ont trivialement la même catégorie 1 — sans ce préfixe, le second visiteur reçoit
+    // la disponibilité du premier. Le cache jumeau côté admin (lobbyEstablishment.ts) est clé par
+    // établissement depuis toujours ; c'est ici que la discipline manquait.
+    const rows = await cache.getOrFetch(`${establishment.id}:${categoryId}:${month}`, () =>
       getNightAvailabilityWindow(baseUrl, apiToken, categoryId, nights, relaySecret)
     );
 

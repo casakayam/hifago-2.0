@@ -43,7 +43,6 @@ const TYPE_LABELS: Record<string, string> = {
   evento: "Evento",
   camp: "Campamento",
   lodging: "Alojamiento",
-  hotel: "Hotel",
   transport: "Transporte",
 };
 

@@ -42,7 +42,7 @@ export const ORDERS_FILTERS: DataListFilter[] = [
 // §0 Tranche 0). Pas de traduction ES établie dans le projet pour ces 6 valeurs (la colonne "Tipo"
 // de la liste affiche déjà la valeur brute telle quelle, cf. ProductsList.tsx) — le filtre reprend
 // la même convention plutôt que d'inventer une traduction non tranchée.
-const PRODUCT_TYPES = ["lodging", "activity", "transport", "hotel", "camp", "evento"] as const;
+const PRODUCT_TYPES = ["lodging", "activity", "transport", "camp", "evento"] as const;
 
 // Revue admin catalogo (Jérôme, 2026-08-19) — labels/couleur extraits en constantes partagées
 // (déjà utilisés en texte brut dans ProductsList.tsx: product.sellable ? "Publicado" : "Borrador")

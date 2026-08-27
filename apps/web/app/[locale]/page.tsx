@@ -66,7 +66,14 @@ export default async function HomePage({
   ];
   const { data: establishments } =
     establishmentIds.length > 0
-      ? await supabase.from("establishments").select("id, slug, name, description").in("id", establishmentIds)
+      ? await supabase
+          .from("establishments")
+          // `status` : sans lui, un établissement archivé garde une carte groupée dans le catalogue
+          // alors que sa page publique répond 404 (elle filtre, elle, sur status='active'). Un
+          // établissement non résolu ici retombe simplement sur des cartes produit individuelles.
+          .select("id, slug, name, description")
+          .eq("status", "active")
+          .in("id", establishmentIds)
       : { data: [] };
   const establishmentById = new Map((establishments ?? []).map((e) => [e.id, e]));
 

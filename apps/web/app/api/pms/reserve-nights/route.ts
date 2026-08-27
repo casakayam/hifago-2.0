@@ -96,11 +96,18 @@ export async function POST(request: Request) {
 
   const service = createServiceRoleClient();
 
+  // `pms_booking_id is null` : la route est NON authentifiée, et son unicité d'appel ne tenait
+  // qu'au `void fetch(...)` unique de CheckoutForm. Un second POST recréait un booking chez Lobby.
+  // C'était bénin ; ça ne l'est plus depuis la file d'annulation (spec 25) : elle remonte les
+  // bookings à annuler DEPUIS `order_lines`, donc un booking doublon qu'aucune ligne ne référence
+  // ne serait jamais annulé et resterait bloqué chez le partenaire. L'idempotence appartient à
+  // l'appelé, pas à la discipline de l'appelant.
   const { data: lines } = await service
     .from("order_lines")
     .select("id, product_id, date, end_date, qty, holder_name, holder_email, holder_phone, price_cop, total_cop")
     .eq("order_id", orderId)
     .eq("status", "reserved")
+    .is("pms_booking_id", null)
     .returns<OrderLineRow[]>();
 
   if (!lines || lines.length === 0) {

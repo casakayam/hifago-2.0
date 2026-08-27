@@ -18,6 +18,8 @@ interface CancellationRow {
   establishment_id: string;
   lobby_api_token: string;
   hifago_status: string | null;
+  // Retourné par claim_pms_cancellation_batch depuis 20260827260000 — déjà incrémenté par le claim.
+  attempts: number;
 }
 
 // LobbyPMS n'accepte PAS un motif libre : `cancellation_reason` est un CODE pris dans une liste
@@ -173,14 +175,11 @@ async function recordFailure(
   statusCode: number | null,
   error: string
 ) {
-  // `attempts` a déjà été incrémenté par claim_pms_cancellation_batch : on compare donc au nombre
-  // de passages effectués, pas à celui d'avant l'appel.
-  const { data: entry } = await supabase
-    .from("pms_cancellation_queue")
-    .select("attempts")
-    .eq("id", row.entry_id)
-    .maybeSingle();
-  const attempts = (entry as { attempts?: number } | null)?.attempts ?? MAX_ATTEMPTS;
+  // `attempts` vient du claim, qui l'a incrémenté dans son propre UPDATE et le RETOURNE depuis
+  // 20260827260000 : plus de relecture de la table ici — elle est RPC-only, et cette lecture
+  // directe était le seul endroit du job qui l'ignorait. On compare donc au nombre de passages
+  // effectués, pas à celui d'avant l'appel.
+  const attempts = row.attempts;
 
   if (attempts >= MAX_ATTEMPTS) {
     summary.failed++;
