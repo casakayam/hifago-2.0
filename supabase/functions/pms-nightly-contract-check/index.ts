@@ -24,6 +24,20 @@ interface EstablishmentRow {
   lobby_api_token: string | null;
 }
 
+// Un 403 de Caddy (relais : en-tête X-Relay-Secret refusé, corps « forbidden ») et un 403 de
+// LobbyPMS (IP non whitelistée, corps JSON) sont INDISCERNABLES quand on ne rapporte que le statut.
+// Le 2026-08-27 ça a coûté plusieurs allers-retours de diagnostic à l'aveugle. Le corps tranche en
+// un coup d'œil, et il ne coûte rien : il est déjà lu et parsé par lobbyCall.
+//
+// SÛRETÉ : on n'imprime QUE le corps de la RÉPONSE. Jamais l'URL de la requête — elle porte
+// `api_token` en query string (hifago/CLAUDE.md §8). Tronqué court : un corps d'erreur utile tient
+// en deux lignes, et une page HTML d'erreur d'un proxy amont n'a pas à noyer les logs.
+function describeErrorBody(body: unknown): string {
+  const text = typeof body === "string" ? body : JSON.stringify(body);
+  if (!text) return "corps vide";
+  return text.length > 200 ? `${text.slice(0, 200)}…` : text;
+}
+
 function hasExpectedRoomsShape(body: unknown): boolean {
   if (typeof body !== "object" || body === null) return false;
   const data = (body as { data?: unknown }).data;
@@ -166,7 +180,9 @@ Deno.serve(async () => {
     try {
       const rooms = await getLobbyRooms(baseUrl, establishment.lobby_api_token, undefined, relaySecret);
       if (rooms.status !== 200 || !hasExpectedRoomsShape(rooms.body)) {
-        drifts.push(`établissement ${establishment.id} : GET /rooms forme inattendue (status ${rooms.status})`);
+        drifts.push(
+          `établissement ${establishment.id} : GET /rooms forme inattendue (status ${rooms.status}) — ${describeErrorBody(rooms.body)}`
+        );
       } else {
         knownCategoryIds = parseLobbyRooms(rooms.body).map((category) => category.categoryId);
         for (const note of describeRoomsFieldCoverage(rooms.body)) {
@@ -188,7 +204,7 @@ Deno.serve(async () => {
       );
       if (availability.status !== 200) {
         observations.push(
-          `établissement ${establishment.id} : GET /available-rooms (nuit ${date}) a répondu ${availability.status}`
+          `établissement ${establishment.id} : GET /available-rooms (nuit ${date}) a répondu ${availability.status} — ${describeErrorBody(availability.body)}`
         );
       } else {
         for (const note of describeAvailabilityContract(availability.body, knownCategoryIds)) {
