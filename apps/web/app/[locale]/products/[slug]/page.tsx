@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@hifago/supabase/server";
 import {
-  addDaysIso,
+  lastBookableDateIso,
   asLocalizedField,
   asLodgingKind,
   isPmsBacked,
@@ -211,7 +211,7 @@ export default async function ProductPage({
       ? await supabase.rpc("get_product_slots", {
           p_product_id: product.id,
           p_from: todayIso,
-          p_to: addDaysIso(todayIso, 180),
+          p_to: lastBookableDateIso(todayIso),
         })
       : { data: [] };
 

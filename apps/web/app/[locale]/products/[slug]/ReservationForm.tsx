@@ -17,7 +17,7 @@ import {
   TextField,
   dateTaggedDayButtonComponents,
 } from "@hifago/ui";
-import { startOfTodayInBogota } from "@hifago/domain";
+import { isoDateToLocalMidnight, lastBookableDateIso, startOfTodayInBogota } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
 
 type AvailabilityRow = { date: string; capacity: number; booked: number };
@@ -37,6 +37,10 @@ export function ReservationForm({
 }) {
   const t = useTranslations("ProductPage");
   const { lines, addLine } = useCart();
+  // Borne HAUTE de l'horizon produit (six mois, décidé le 2026-08-28). Calculée une fois au montage
+  // plutôt qu'à chaque rendu, pour que react-day-picker reçoive la même référence.
+  const dernierJourReservable = useMemo(() => isoDateToLocalMidnight(lastBookableDateIso()), []);
+
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [qty, setQty] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
@@ -130,6 +134,9 @@ export function ReservationForm({
             // européen ouvrant la fiche le 1er du mois à 2 h du matin voyait le dernier jour du mois
             // précédent barré, alors qu'à Guatapé il était encore réservable.
             { before: startOfTodayInBogota() },
+            // Borne HAUTE : au-delà de l'horizon produit, rien n'est vendable. Sans elle, ces
+            // dates paraissaient sélectionnables et n'étaient refusées qu'après coup.
+            { after: dernierJourReservable },
             (date) => !byDate.has(format(date, "yyyy-MM-dd")),
           ]}
           modifiers={{ lastSpot: lastSpotDates, full: fullDates }}

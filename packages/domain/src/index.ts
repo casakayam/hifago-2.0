@@ -24,6 +24,7 @@ export * from "./pms/fetchLobbyPhoto";
 export * from "./products/lodgingKind";
 export * from "./products/lodgingUnit";
 export * from "./products/lodgingCupos";
+export * from "./products/reservationHorizon";
 export * from "./http/resolveOrigin";
 export * from "./http/buildAuthCallbackRedirect";
 // Fuseau de l'exploitation (America/Bogota) — `todayInBogota()` et ses variantes sont l'UNIQUE

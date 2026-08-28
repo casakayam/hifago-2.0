@@ -7,6 +7,7 @@ import {
   LOBBY_DEFAULT_BASE_URL,
   nightsOfMonth,
   pickCategoryNights,
+  isMonthWithinHorizon,
   todayInBogota,
   type NightAvailabilityRow,
   type NightCatalogRow,
@@ -52,18 +53,13 @@ interface EstablishmentRow {
 //     `{ok:true, nights:[]}` — un SUCCÈS sur un mois qui n'existe pas, mis en cache par-dessus.
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 
-// Horizon interrogeable, en mois. CE N'EST PAS L'HORIZON PRODUIT (jusqu'où on accepte de vendre —
-// question ouverte, à trancher par Jérôme) : c'est un garde-fou d'ABUS. Cette route est publique et
-// anonyme, chaque mois distinct est une clé de cache neuve, donc un vrai appel LobbyPMS : soixante
-// requêtes sur soixante mois futurs suffisaient à consommer le plafond mesuré (60 par minute) et à
-// mettre le calendrier réel en 429 pour tout le monde. Volontairement TRÈS large — il borne une
-// attaque, il n'arbitre pas un produit.
-const MAX_MONTHS_AHEAD = 36;
-
-function monthIndex(month: string): number {
-  const [year, monthNumber] = month.split("-");
-  return Number(year) * 12 + Number(monthNumber) - 1;
-}
+// Horizon : `isMonthWithinHorizon` (packages/domain), six mois, décidé le 2026-08-28. Ce garde
+// jouait jusqu'ici DEUX rôles avec un seul nombre volontairement très large (36 mois) : borner un
+// abus, faute d'horizon produit tranché. Cette route est publique et anonyme, et chaque mois distinct
+// est une clé de cache neuve donc un vrai appel LobbyPMS — soixante requêtes sur soixante mois
+// futurs suffisaient à consommer le plafond mesuré (60/min) et à mettre le calendrier réel en 429
+// pour tout le monde. L'horizon produit étant strictement plus serré, il couvre l'abus au passage :
+// un garde d'abus n'a aucune raison d'être plus large que ce qu'on accepte de vendre.
 
 // Cache 60s en mémoire, une seule instance par process serverless (spec 21 §0 : "cache 60s autorisé
 // uniquement pour l'affichage" — jamais au moment de réserver, reserve-nights relit toujours à
@@ -121,13 +117,18 @@ export async function GET(request: Request) {
     return Response.json({ ok: false, reason: "invalid_params" }, { status: 400 });
   }
 
-  // Le mois demandé doit rester dans une fenêtre plausible autour d'aujourd'hui À BOGOTÁ. Un mois
-  // passé ne coûte aucun appel Lobby (toutes ses nuits sont filtrées) mais occupe une entrée de
-  // cache ; un mois lointain, lui, coûte un vrai appel. Les deux sont refusés en 400, avant la
-  // moindre lecture en base.
-  const currentMonth = todayInBogota().slice(0, 7);
-  const monthsAhead = monthIndex(month) - monthIndex(currentMonth);
-  if (monthsAhead < 0 || monthsAhead > MAX_MONTHS_AHEAD) {
+  // « Aujourd'hui » à GUATAPÉ, résolu UNE fois pour toute la requête — le garde ci-dessous et le
+  // plancher de `nightsOfMonth` plus bas doivent répondre à la même question au même instant. Avec
+  // `new Date().toISOString().slice(0, 10)`, qui était ici jusqu'au 2026-08-28, la Colombie étant à
+  // UTC−5 : passé 19 h à Guatapé ce plancher valait DÉJÀ demain, et la nuit EN COURS n'était même
+  // pas DEMANDÉE à Lobby. Donc absente du calendrier, donc non réservable — tous les soirs, sans un
+  // seul message d'erreur.
+  const today = todayInBogota();
+
+  // Le mois demandé doit rester dans l'horizon produit. Un mois passé ne coûte aucun appel Lobby
+  // (toutes ses nuits sont filtrées) mais occupe une entrée de cache ; un mois lointain, lui, coûte
+  // un vrai appel. Les deux sont refusés en 400, avant la moindre lecture en base.
+  if (!isMonthWithinHorizon(month, today)) {
     return Response.json({ ok: false, reason: "month_out_of_range" }, { status: 400 });
   }
 
@@ -164,11 +165,6 @@ export async function GET(request: Request) {
 
   try {
     // ⚠️ LA DATE DE BOGOTÁ, JAMAIS CELLE D'UTC. Cette valeur est le plancher « ne rien demander
-    // avant aujourd'hui » de nightsOfMonth. Avec `new Date().toISOString().slice(0, 10)`, qui était
-    // ici jusqu'au 2026-08-28, la Colombie étant à UTC−5 : passé 19 h à Guatapé, ce plancher valait
-    // DÉJÀ demain, et la nuit EN COURS n'était même pas DEMANDÉE à Lobby. Donc absente du
-    // calendrier, donc non réservable — tous les soirs, sans un seul message d'erreur.
-    const today = todayInBogota();
     const nights = nightsOfMonth(month, today);
     const baseUrl = process.env.LOBBY_API_BASE_URL || LOBBY_DEFAULT_BASE_URL;
     const relaySecret = process.env.LOBBY_RELAY_SECRET;

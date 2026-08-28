@@ -13,7 +13,13 @@ import {
   Label,
   TextField,
 } from "@hifago/ui";
-import { formatCop, startOfTodayInBogota, type LodgingKind } from "@hifago/domain";
+import {
+  formatCop,
+  isoDateToLocalMidnight,
+  lastBookableDateIso,
+  startOfTodayInBogota,
+  type LodgingKind,
+} from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
 import {
   buildInCartNightsMap,
@@ -59,6 +65,10 @@ export function LodgingReservationForm({
 }) {
   const t = useTranslations("ProductPage");
   const { lines, addLine } = useCart();
+
+  // Borne HAUTE de l'horizon produit (six mois, décidé le 2026-08-28). Calculée une fois au montage
+  // plutôt qu'à chaque rendu, pour que react-day-picker reçoive la même référence.
+  const dernierJourReservable = useMemo(() => isoDateToLocalMidnight(lastBookableDateIso()), []);
 
   const [range, setRange] = useState<DateRange | undefined>();
   const [qty, setQty] = useState(1);
@@ -309,6 +319,12 @@ export function LodgingReservationForm({
           onSelect={handleSelectRange}
           month={visibleMonth}
           onMonthChange={setVisibleMonth}
+          // La NAVIGATION elle-même est bornée, pas seulement la sélection : `visibleMonth` pilote
+          // la clé du fetch, et la route refuse en 400 `month_out_of_range` tout mois hors horizon.
+          // Sans ces deux bornes, paginer au septième mois affichait une erreur de disponibilité
+          // pour ce qui n'est en réalité qu'une limite de vente.
+          startMonth={startOfTodayInBogota()}
+          endMonth={dernierJourReservable}
           // Le jour « aujourd'hui » mis en avant par react-day-picker vient sinon de son propre
           // `dateLib.today()` = `new Date()` du runtime (DayPicker.js:167), donc du NAVIGATEUR.
           // Sans cette prop, le correctif de `disabled` ci-dessous et le surlignage se
@@ -326,6 +342,9 @@ export function LodgingReservationForm({
             // européen ouvrant la fiche le 1er du mois à 2 h du matin voyait le dernier jour du mois
             // précédent barré, alors qu'à Guatapé il était encore réservable.
             { before: startOfTodayInBogota() },
+            // Borne HAUTE : au-delà de l'horizon produit, rien n'est vendable. Sans elle, ces
+            // dates paraissaient sélectionnables et n'étaient refusées qu'après coup.
+            { after: dernierJourReservable },
             (date) => !byDate.has(format(date, "yyyy-MM-dd")),
           ]}
           modifiers={{ unavailable: unavailableDates }}

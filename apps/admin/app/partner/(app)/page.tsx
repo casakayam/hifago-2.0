@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
-import { addDaysIso, asLocalizedField, resolveLocalizedField, todayInBogota } from "@hifago/domain";
+import {
+  addDaysIso,
+  asLocalizedField,
+  lastBookableDateIso,
+  resolveLocalizedField,
+  todayInBogota,
+} from "@hifago/domain";
 import { Card, Chip } from "@hifago/ui";
 import { EmptyStateCta } from "@/components/EmptyStateCta";
 import { positionOrderLines, type OrderLineForAgenda, type SlotDuration } from "@/lib/agenda/positionOrderLines";
@@ -58,9 +64,13 @@ type OrderLineRow = {
 // Lot fuseau (2026-08-28) : la fenêtre mélangeait arithmétique LOCALE (setDate) et formatage UTC
 // (toISOString) — deux fuseaux dans la même fonction de six lignes. Elle part désormais du jour
 // civil de Guatapé, et l'arithmétique est purement civile.
+// L'AVANT part de l'horizon produit (six mois, 2026-08-28) et non plus d'un « 183 jours » écrit à
+// la main : le socio doit voir exactement ce que le client peut réserver, ni un jour de plus ni un
+// de moins. Le RECUL (30 jours) reste un choix d'affichage propre à cet écran — c'est l'historique
+// récent, pas une fenêtre de vente, et il n'a rien à dériver de l'horizon.
 function agendaWindow(): { from: string; to: string } {
   const today = todayInBogota();
-  return { from: addDaysIso(today, -30), to: addDaysIso(today, 183) };
+  return { from: addDaysIso(today, -30), to: lastBookableDateIso(today) };
 }
 
 // Spec 20 — remplace la page de statut d'onboarding pure par l'agenda de réservations (vue

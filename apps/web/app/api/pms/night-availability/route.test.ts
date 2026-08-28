@@ -71,8 +71,12 @@ vi.mock("@hifago/supabase/service", () => ({
 let close: () => Promise<void>;
 let GET: (request: Request) => Promise<Response>;
 
-// Un mois toujours dans l'horizon accepté, calculé depuis la date de Bogotá — jamais une constante
-// figée, qui périmerait le test.
+// Un mois calculé depuis la date de Bogotá, jamais une constante figée qui périmerait le test.
+// ⚠️ Depuis le 2026-08-28, l'horizon produit vaut SIX mois (RESERVATION_HORIZON_MONTHS) : un offset
+// au-delà de 6 se fait refuser en 400 `month_out_of_range` par la route, avant toute lecture. Les
+// deux tests ci-dessous employaient 7 et 8 du temps où le garde était à 36 mois ; ils partagent
+// désormais le même mois, ce qui est sans effet puisque chacun crée son propre établissement et que
+// la clé de cache porte `${establishmentId}:${month}`.
 function monthAhead(offset: number): string {
   const [year, month] = todayInBogota().split("-").map(Number);
   const index = year * 12 + (month - 1) + offset;
@@ -212,7 +216,7 @@ describe("une catégorie non cotée n'est jamais lue comme « complet »", () =>
   it("JAMAIS cotée sur le mois → 502 typé, jamais un calendrier vide et muet", async () => {
     const establishmentId = freshEstablishment();
     const productId = addProduct(establishmentId, { lobby_category_id: 999999 });
-    const response = await call(productId, monthAhead(7));
+    const response = await call(productId, monthAhead(1));
     expect(response.status).toBe(502);
     expect(await response.json()).toMatchObject({ ok: false, reason: "pms_category_not_quoted" });
   });
@@ -223,7 +227,7 @@ describe("une catégorie non cotée n'est jamais lue comme « complet »", () =>
     // sélectionnable à l'écran, donc la sûreté est identique.
     const establishmentId = freshEstablishment();
     const productId = addProduct(establishmentId);
-    const month = monthAhead(8);
+    const month = monthAhead(1);
     const trou = `${month}-15`;
     setPmsFixtureScenario({
       catalogCategoryIds: [CATEGORY],

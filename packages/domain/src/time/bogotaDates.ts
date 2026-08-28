@@ -168,3 +168,51 @@ export function formatDateTimeInBogota(instant: Date | string | number, locale?:
 function toInstant(value: Date | string | number): Date {
   return value instanceof Date ? value : new Date(value);
 }
+
+/**
+ * Arithmétique de date CIVILE en MOIS : `2026-08-31` + 6 mois = `2027-02-28`.
+ *
+ * Existe parce que « six mois » n'est pas « 180 jours ». Les deux expressions du dépôt divergeaient
+ * de trois jours (`addDaysIso(today, 180)` côté catalogue, `183` côté agenda socio), ce qui suffit à
+ * ouvrir une nuit d'un côté et à la fermer de l'autre. Un horizon exprimé en mois se calcule en
+ * mois.
+ *
+ * ⚠️ Le jour est BORNÉ au dernier du mois d'arrivée, jamais reporté sur le mois suivant :
+ * `2026-08-31` + 6 mois donne le 28 février, pas le 3 mars. Un horizon qui déborde serait un horizon
+ * qui ment. Aucun objet `Date` ici — le nombre de jours d'un mois est arithmétique, et le faire
+ * passer par `Date` rouvrirait la porte au fuseau que tout ce module sert à fermer.
+ */
+export function addMonthsIso(dateIso: string, months: number): string {
+  const { year, month, day } = splitIsoDate(dateIso);
+  const rang = year * 12 + (month - 1) + months;
+  const anneeCible = Math.floor(rang / 12);
+  const moisCible = (rang % 12) + 1;
+  if (!Number.isFinite(anneeCible) || anneeCible < 1 || anneeCible > 9999) {
+    throw new RangeError(
+      `addMonthsIso(${JSON.stringify(dateIso)}, ${months}) sort du domaine yyyy-MM-dd (année ${anneeCible}).`,
+    );
+  }
+  const jourCible = Math.min(day, joursDansLeMois(anneeCible, moisCible));
+  return [
+    String(anneeCible).padStart(4, "0"),
+    String(moisCible).padStart(2, "0"),
+    String(jourCible).padStart(2, "0"),
+  ].join("-");
+}
+
+/** Le rang absolu d'un mois `yyyy-MM`, pour comparer deux mois sans passer par une date. */
+export function monthRank(month: string): number {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(month);
+  if (!match) {
+    throw new RangeError(`Mois attendu au format yyyy-MM, reçu : ${JSON.stringify(month)}`);
+  }
+  return Number(match[1]) * 12 + Number(match[2]) - 1;
+}
+
+const JOURS_PAR_MOIS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function joursDansLeMois(year: number, month: number): number {
+  if (month !== 2) return JOURS_PAR_MOIS[month - 1];
+  const bissextile = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  return bissextile ? 29 : 28;
+}
