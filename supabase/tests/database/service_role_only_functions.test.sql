@@ -30,7 +30,16 @@ select is(
         'mark_notification_email_failed',
         'mark_notification_email_sent',
         'requeue_pms_cancellation',
-        'resolve_pms_cancellation'
+        'resolve_pms_cancellation',
+        -- Deuxième vague (20260828010000) : appelée uniquement par set_order_line_status, écrit
+        -- dans ledger_entries sans aucun contrôle propre.
+        'apply_order_line_ledger_transition',
+        -- Fonctions de cron (`cron.schedule`) : aucun appelant humain légitime.
+        'expire_stale_payment_orders',
+        'invoke_pms_poll_bookings',
+        'invoke_pms_cancel_bookings',
+        'invoke_pms_nightly_contract_check',
+        'invoke_send_notification_emails'
       )
       and (
         has_function_privilege('anon', p.oid, 'EXECUTE')
