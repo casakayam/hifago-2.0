@@ -28,7 +28,11 @@ import pg from "pg";
 
 const { Client } = pg;
 
-const CONNECTION_STRING = "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+// Surchargeable par PGURL : ces tests ÉCRIVENT. Les pointer ailleurs que sur la stack locale
+// partagée est le seul moyen de les vérifier sans écraser le travail d'une autre session
+// (cf. AGENTS-PARALLELES.md §3). Défaut inchangé : la stack locale.
+const CONNECTION_STRING =
+  process.env.PGURL ?? "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
 const RUNS = 5;
 
 // Préfixe UUID dédié (80000000-…) — distinct des préfixes déjà utilisés par les autres fichiers de

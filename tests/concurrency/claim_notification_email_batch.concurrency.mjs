@@ -12,7 +12,12 @@
 import pg from "pg";
 
 const { Client } = pg;
-const CONNECTION_STRING = "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+// Surchargeable par PGURL : ce test ÉCRIT (il réclame des lignes en attente). Le pointer
+// ailleurs que sur la stack locale partagée est le seul moyen de le vérifier sans consommer
+// les e-mails en attente d'une autre session (cf. AGENTS-PARALLELES.md §3). Les 9 autres
+// tests de ce dossier codent encore le port en dur.
+const CONNECTION_STRING =
+  process.env.PGURL ?? "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
 const N = 5; // connexions concurrentes
 const ROWS_PER_CLAIM = 10; // 5 * 10 = 50 potentiel vs 25 lignes réelles → chevauchement forcé
 const TOTAL_ROWS = 25;
@@ -32,10 +37,15 @@ async function main() {
       values.push(`('partner_invitation', $${i + 1}, 'Concurrency test', '<p>c</p>')`);
       params.push(`concurrency-claim-${i}@test.local`);
     }
-    await setupClient.query(
-      `insert into notification_emails (event_type, recipient_email, subject, body_html) values ${values.join(",")}`,
+    // `returning id` : les assertions doivent porter sur NOS lignes, pas sur tout ce que la file
+    // contient. La base seedée a ses propres notification_emails en attente, que le claim ramasse
+    // légitimement — compter le total donnait 27 pour 25 lignes insérées, et faisait tomber le
+    // test en CI alors que la RPC se comportait correctement (constaté le 2026-08-28).
+    const inserted = await setupClient.query(
+      `insert into notification_emails (event_type, recipient_email, subject, body_html) values ${values.join(",")} returning id`,
       params
     );
+    const mesIds = new Set(inserted.rows.map((r) => r.id));
 
     for (let i = 0; i < N; i++) {
       const client = new Client({ connectionString: CONNECTION_STRING });
@@ -64,7 +74,11 @@ async function main() {
 
     const checks = [
       [allIds.length === uniqueIds.size, `aucun id réclamé deux fois (obtenu : ${allIds.length} claims, ${uniqueIds.size} ids uniques)`],
-      [allIds.length === TOTAL_ROWS, `les ${TOTAL_ROWS} lignes seedées sont toutes réclamées exactement une fois (obtenu : ${allIds.length})`],
+      [
+        allIds.filter((id) => mesIds.has(id)).length === TOTAL_ROWS,
+        `les ${TOTAL_ROWS} lignes insérées par CE test sont toutes réclamées exactement une fois ` +
+          `(obtenu : ${allIds.filter((id) => mesIds.has(id)).length} sur ${allIds.length} claims au total)`,
+      ],
     ];
 
     let failed = false;
