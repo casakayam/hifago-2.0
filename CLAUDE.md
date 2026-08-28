@@ -402,37 +402,42 @@ En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
 nouvelle entrée.
 
-*2026-08-27 (suite) — **la CI ne testait rien, et ce qu'elle ne testait pas cachait une faille de
-paiement en production.** `hifago-ci / integration` était rouge à CHAQUE push depuis le 2026-08-15
-(10 runs) : `db reset` sans `supabase start`. Réparer ça n'aurait révélé que la marche suivante —
-**`supabase start` applique lui-même le seed** et n'a pas de `--no-seed` (CLI 2.116.0), or `seed.sql`
-viole la FK `partner_accounts.id -> auth.users(id)` tant que `seed_auth_users.mjs` n'est pas passé.
-Corrigé à la source : `[db.seed] enabled = false` + `npm run db:setup`. ⚠️ **Ce que le blocage
-masquait** : 44 fichiers pgTAP (dont les 6 RLS et `rls_rpc_only_checklist`), 10 tests de
-concurrence, 57 specs Playwright, deux suites d'intégration et `docs:check` n'avaient JAMAIS tourné
-en CI, et `build` non plus. **Le job `db` (start → `test db` → `db lint --schema public`) a trouvé
-une faille au premier run** : `apply_payment_webhook`, SECURITY DEFINER sans garde interne, était
-exécutable par `anon` — connaître l'UUID d'un paiement suffisait pour marquer une commande `paid`,
-et chaque client connaît le sien. **Confirmée sur le cloud** (`hqldjdzgvhfwoqypwzqx`, SEULE instance,
-branchée sur le VRAI Mercado Pago), corrigée le soir même (migration `20260828000103`, relue après
+*2026-08-27/28 (suite) — **la CI ne testait rien, et ce qu'elle ne testait pas cachait DEUX failles
+d'argent en production.** `hifago-ci / integration` était rouge à chaque push depuis le 2026-08-15 :
+`db reset` sans `supabase start`. Réparer ça n'aurait révélé que la marche suivante — **`supabase
+start` applique lui-même le seed** et n'a pas de `--no-seed`, or `seed.sql` viole la FK vers
+`auth.users` tant que `seed_auth_users.mjs` n'est pas passé. Corrigé à la source :
+`[db.seed] enabled = false` + `npm run db:setup` (les 3 étapes ordonnées, vérifiées de bout en bout).
+**Les failles.** (1) `apply_payment_webhook`, SECURITY DEFINER sans garde interne, exécutable par
+`anon` : connaître l'UUID d'un paiement suffisait pour marquer une commande `paid`, et chaque client
+connaît le sien. (2) `apply_order_line_ledger_transition`, qui écrit dans `ledger_entries`
+(commissions `due`/`void`, insertion de compensations) sur des ids fournis par l'appelant, sans
+contrôle propre. Plus 4 fonctions de cron déclenchables par n'importe qui (e-mails, appels Lobby,
+annulations). **Toutes confirmées sur `hqldjdzgvhfwoqypwzqx` — SEULE instance cloud, branchée sur le
+VRAI Mercado Pago — et corrigées** (migrations `20260828000103` et `20260828002053`, relues après
 application). ⚠️ **CAUSE À RETENIR** : sur Supabase, `pg_default_acl` accorde EXECUTE
 **explicitement** à anon/authenticated/service_role sur les fonctions de `public` — un
 `revoke execute … from public` ne leur retire RIEN. Toujours nommer les rôles :
 `from public, authenticated, anon`. ⚠️ **Corollaire** : recréer une fonction sous une NOUVELLE
 signature repart des privilèges par défaut (un `create or replace` à signature identique les
 conserve) — c'est ainsi que `claim_pms_cancellation_batch`, correcte deux fois, a reperdu sa
-protection dans `20260827260000` le jour même, invisible en local. Garde-fou permanent :
-`service_role_only_functions.test.sql` épingle les 8 RPC dont le grant EST la protection — **y
-ajouter toute nouvelle RPC appelée uniquement par une Edge Function, un cron ou un Route Handler**.
-Durcissement CI au passage : `permissions: contents: read`, `concurrency`, `timeout-minutes`, 4
-actions épinglées par SHA, CLI figée à 2.116.0, et un job `secrets` (gitleaks, historique complet ;
-4 détections auditées une par une et justifiées dans `.gitleaksignore`, toutes bénignes). `build`
-réparé aussi (`NEXT_PUBLIC_WEB_APP_URL` factice : la CI vérifie que le code compile, pas qu'il est
-configuré). **CI intégralement verte** (run 33128739365). **Reste ouvert** : les 69 RPC SECURITY
-DEFINER exécutables par anon reposent sur un garde interne `is_admin(auth.uid())` qu'AUCUN test ne
-vérifie — candidat sérieux au prochain garde-fou ; `auth_leaked_password_protection` désactivé ;
-job `concurrency`, `deno check` sur les 4 Edge Functions, `docs:check`, `npm audit`/Dependabot,
-Playwright ; et `scripts/check-design-system.sh` que plus aucun workflow n'appelle.*
+protection le jour même. **Garde-fou automatique** : `security_definer_exposure.test.sql` exige que
+toute RPC SECURITY DEFINER exposée à anon/authenticated porte un garde interne, ou figure dans une
+liste d'exceptions NOMMÉES avec leur raison — c'est le point (5) de la checklist, enfin automatisé.
+**CI complète et verte** (8 jobs) : lint (+ design-system bloquant, `docs:check`, `npm audit`),
+typecheck, unit, `secrets` (gitleaks, historique complet), `functions` (`deno check` — les 4 Edge
+Functions n'avaient jamais été typecheckées, une annotation y désactivait silencieusement la
+vérification de deux `rpc()`), `db` (44 pgTAP + `db lint`), `concurrence` (les 10 tests
+anti-survente), `build`. Durcissement : `permissions: contents: read`, `concurrency`,
+`timeout-minutes`, actions épinglées par SHA, CLI figée, Node 22. ⚠️ **Trois fois dans la journée, le
+même piège** : une assertion sur un compte GLOBAL de table suppose une base vide, ce qu'aucune base
+réelle n'est (4 pgTAP en local, puis `claim_notification_email_batch` en CI). ⚠️ **Et deux fois** :
+une vérification locale ne prouve que la machine locale — il a fallu reproduire l'absence de
+`node_modules` et l'absence de Node 22 pour trouver. Les 10 tests de concurrence acceptent désormais
+`PGURL` pour être lançables hors de la stack partagée. **Reste ouvert** :
+`auth_leaked_password_protection` désactivé sur le cloud — activation laissée à Jérôme, ça change le
+comportement d'inscription de vrais utilisateurs ; Dependabot ; Playwright en CI (57 specs, chantier
+à part).*
 
 *2026-08-27 — journée en trois temps : connecteur LobbyPMS vérifié de bout en bout (spec 24), C2
 livré et testé en réel (spec 25), puis **le modèle hébergement mené à son terme (T1 → T3)**.
