@@ -5,6 +5,7 @@ import { RevokeInvitationButton } from "./RevokeInvitationButton";
 import { InvitationStatusChip } from "./InvitationStatusChip";
 import { ONBOARDING_PATH_LABELS } from "./invitationLabels";
 import { INVITATIONS_FILTERS } from "@/lib/lists/filters";
+import { formatDateInBogota } from "@hifago/domain";
 
 export type InvitationRow = {
   id: string;
@@ -58,19 +59,19 @@ export function InvitationsList({
       id: "created_at",
       header: "Creada",
       sortable: true,
-      cell: (row) => new Date(row.createdAt).toLocaleDateString("es"),
+      cell: (row) => formatDateInBogota(row.createdAt, "es"),
     },
     {
       id: "expires_at",
       header: "Expira",
       sortable: true,
-      cell: (row) => new Date(row.expiresAt).toLocaleDateString("es"),
+      cell: (row) => formatDateInBogota(row.expiresAt, "es"),
     },
     {
       id: "consumed_at",
       header: "Consumida",
       sortable: true,
-      cell: (row) => (row.consumedAt ? new Date(row.consumedAt).toLocaleDateString("es") : "—"),
+      cell: (row) => (row.consumedAt ? formatDateInBogota(row.consumedAt, "es") : "—"),
     },
   ];
 

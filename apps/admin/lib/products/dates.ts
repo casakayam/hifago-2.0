@@ -1,11 +1,12 @@
-// addDays — arithmétique de date en UTC (parse la date comme minuit UTC plutôt que minuit local),
-// pour éviter tout décalage de fuseau horaire dans les calendriers admin/socio (grille de cupos,
-// pagination des fenêtres de dates). SEULE définition de cet helper dans tout le projet —
-// auparavant redéclaré verbatim dans availability-calendar.tsx ET dans les pages
-// slot-availability (admin + partner), désormais toutes importées d'ici (via le loader
-// apps/admin/lib/products/slotAvailabilityPage.ts, et les pages elles-mêmes pour ?from=).
-export function addDays(dateStr: string, days: number): string {
-  const date = new Date(`${dateStr}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
+// addDays — arithmétique de date CIVILE (yyyy-MM-dd + n jours), sans fuseau, pour les calendriers
+// admin/socio (grille de cupos, pagination des fenêtres de dates).
+//
+// Lot fuseau (2026-08-28) : l'implémentation vivait ici (parse en minuit UTC, setUTCDate,
+// toISOString). Elle était juste — l'aller-retour UTC est auto-cohérent — mais c'était une SECONDE
+// définition du même geste, indiscernable à l'œil (et pour un lint) des huit autres sites qui,
+// eux, tronquaient un INSTANT et rendaient donc la date d'UTC. Elle est désormais celle de
+// packages/domain/src/time/bogotaDates.ts : une seule implémentation dans tout le dépôt, une seule
+// échappatoire à la règle de lint. Le nom local `addDays` est conservé — quatre appelants
+// (les deux pages slot-availability, availability-calendar.tsx, slotAvailabilityPage.ts) le
+// consomment déjà sous ce nom.
+export { addDaysIso as addDays } from "@hifago/domain";

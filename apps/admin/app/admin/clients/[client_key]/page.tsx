@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
-import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
+import { asLocalizedField, formatDateInBogota, resolveLocalizedField } from "@hifago/domain";
 import { ContactClientButton } from "@/components/ContactClientButton";
 import { ClientOrderCard, type ClientOrderLineRow } from "./ClientOrderCard";
 
@@ -133,7 +133,7 @@ export default async function AdminClientDetailPage({
             <ClientOrderCard
               key={order.order_id}
               orderId={order.order_id}
-              createdAtLabel={new Date(order.created_at).toLocaleDateString("es")}
+              createdAtLabel={formatDateInBogota(order.created_at, "es")}
               referrerDisplayName={order.referrer_display_name}
               paymentStatus={order.payment_status}
               payment={

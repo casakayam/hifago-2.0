@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { webProductUrl, mockMercadoPagoCheckout } from "@hifago/e2e-support";
+import { webProductUrl, mockMercadoPagoCheckout, nextMonthIsoDate } from "@hifago/e2e-support";
 import { slugify } from "../lib/utils";
 
 // Feature 20 (Admin : créer et réserver un camp multi-jours) — chemin admin-direct de bout en
@@ -12,14 +12,11 @@ import { slugify } from "../lib/utils";
 // lui-même, dont le nombre de jours restants dépend de la date d'exécution) — garantit que les 5
 // jours sont dans le futur ET dans le MÊME mois affiché par FullCalendar après un seul clic sur
 // "suivant", sans jamais chevaucher une frontière de mois.
+// Mois suivant celui de GUATAPÉ depuis le lot fuseau (2026-08-28) : cette copie locale partait de
+// `getUTCMonth()`, qui bascule au mois suivant dès 19 h heure locale le dernier jour du mois — le
+// test visait alors un mois de plus que celui qu'un clic sur « suivant » affiche.
 function nextMonthFirstFiveDates(): string[] {
-  const now = new Date();
-  const firstOfNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-  return Array.from({ length: 5 }, (_, i) => {
-    const d = new Date(firstOfNextMonth);
-    d.setUTCDate(d.getUTCDate() + i);
-    return d.toISOString().slice(0, 10);
-  });
+  return Array.from({ length: 5 }, (_, i) => nextMonthIsoDate(i + 1));
 }
 
 async function goToNextMonth(page: import("@playwright/test").Page) {

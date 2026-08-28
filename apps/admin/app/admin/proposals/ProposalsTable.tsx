@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { formatDateInBogota } from "@hifago/domain";
 import {
   buttonVariants,
   SimpleTable,
@@ -55,7 +56,7 @@ export function ProposalsTable({ proposals }: { proposals: ProposalRow[] }) {
               </SimpleTableCell>
               <SimpleTableCell data-label="Partner">{proposal.partner?.display_name ?? "—"}</SimpleTableCell>
               <SimpleTableCell data-label="Enviada">
-                {new Date(proposal.created_at).toLocaleDateString("es")}
+                {formatDateInBogota(proposal.created_at, "es")}
               </SimpleTableCell>
               <SimpleTableCell>
                 <Link

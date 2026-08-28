@@ -3,6 +3,7 @@
 import { DataList, type DataListAction, type DataListColumn, type DataListSort } from "@hifago/ui";
 import { RenameTagButton } from "./RenameTagButton";
 import { TAGS_FILTERS } from "@/lib/lists/filters";
+import { formatDateInBogota } from "@hifago/domain";
 
 export type TagRow = {
   id: string;
@@ -47,7 +48,7 @@ export function TagsList({
       id: "created_at",
       header: "Creada",
       sortable: true,
-      cell: (row) => new Date(row.createdAt).toLocaleDateString("es"),
+      cell: (row) => formatDateInBogota(row.createdAt, "es"),
     },
   ];
 

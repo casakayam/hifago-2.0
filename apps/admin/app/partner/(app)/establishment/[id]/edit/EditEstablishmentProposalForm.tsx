@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@hifago/supabase/client";
-import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
+import { asLocalizedField, nowIsoInstant, resolveLocalizedField } from "@hifago/domain";
 import { Button, Input, Label, TextArea, TextField, cn, toast } from "@hifago/ui";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
 
@@ -123,7 +123,7 @@ export function EditEstablishmentProposalForm({
     }
 
     if (result.proposal_id) {
-      setProposal({ id: result.proposal_id, payload, created_at: new Date().toISOString() });
+      setProposal({ id: result.proposal_id, payload, created_at: nowIsoInstant() });
     }
     setLobbyApiToken("");
     toast.success("Propuesta enviada.");

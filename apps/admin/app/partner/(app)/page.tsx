@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
-import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
+import { addDaysIso, asLocalizedField, resolveLocalizedField, todayInBogota } from "@hifago/domain";
 import { Card, Chip } from "@hifago/ui";
 import { EmptyStateCta } from "@/components/EmptyStateCta";
 import { positionOrderLines, type OrderLineForAgenda, type SlotDuration } from "@/lib/agenda/positionOrderLines";
@@ -55,14 +55,12 @@ type OrderLineRow = {
 // Fenêtre de lecture initiale de l'agenda — pas de refetch au changement de vue/date côté client
 // en V1 (gap documenté, spec 20 §10 : lazy loading par plage visible renvoyé à une itération
 // future). ±183 jours couvre largement l'usage réel (aujourd'hui, cette semaine, ce mois).
+// Lot fuseau (2026-08-28) : la fenêtre mélangeait arithmétique LOCALE (setDate) et formatage UTC
+// (toISOString) — deux fuseaux dans la même fonction de six lignes. Elle part désormais du jour
+// civil de Guatapé, et l'arithmétique est purement civile.
 function agendaWindow(): { from: string; to: string } {
-  const now = new Date();
-  const from = new Date(now);
-  from.setDate(from.getDate() - 30);
-  const to = new Date(now);
-  to.setDate(to.getDate() + 183);
-  const toIso = (d: Date) => d.toISOString().slice(0, 10);
-  return { from: toIso(from), to: toIso(to) };
+  const today = todayInBogota();
+  return { from: addDaysIso(today, -30), to: addDaysIso(today, 183) };
 }
 
 // Spec 20 — remplace la page de statut d'onboarding pure par l'agenda de réservations (vue

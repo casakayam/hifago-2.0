@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { createClient } from "@hifago/supabase/client";
+import { formatDateInBogota } from "@hifago/domain";
 import { Button, Card } from "@hifago/ui";
 
 type OrderLine = { id: string; status: string };
@@ -12,6 +13,12 @@ type CancelOrderResult = { ok: boolean; reason?: string; cancelled_lines?: numbe
 
 export function OrdersList({ orders: initialOrders }: { orders: Order[] }) {
   const t = useTranslations("AccountOrdersPage");
+  // Lot fuseau (2026-08-28). Cette ligne cumulait DEUX défauts. (1) Le fuseau : `created_at` est un
+  // instant, projeté sans `timeZone` — donc en UTC au rendu serveur, dans le fuseau du visiteur à
+  // l'hydratation. (2) La locale : `toLocaleDateString()` sans argument prenait celle du serveur au
+  // SSR puis celle du NAVIGATEUR ensuite — la date affichée changeait entre le HTML initial et
+  // l'écran final. `useLocale()` (next-intl) rend la même des deux côtés.
+  const locale = useLocale();
   const [orders, setOrders] = useState(initialOrders);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [errorId, setErrorId] = useState<string | null>(null);
@@ -69,7 +76,7 @@ export function OrdersList({ orders: initialOrders }: { orders: Order[] }) {
                 <Card.Title className="flex items-center justify-between text-base">
                   <span>{order.holder_name}</span>
                   <span className="text-sm font-normal text-muted">
-                    {new Date(order.created_at).toLocaleDateString()}
+                    {formatDateInBogota(order.created_at, locale)}
                   </span>
                 </Card.Title>
               </Card.Header>

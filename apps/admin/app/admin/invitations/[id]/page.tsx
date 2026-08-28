@@ -5,6 +5,7 @@ import { RevokeInvitationButton } from "../RevokeInvitationButton";
 import { InvitationStatusChip } from "../InvitationStatusChip";
 import { ONBOARDING_PATH_LABELS } from "../invitationLabels";
 import { resolveMissingEstablishmentPartners } from "@/lib/invitations/resolveMissingEstablishment";
+import { formatDateTimeInBogota } from "@hifago/domain";
 
 // docs/specs/10-listes-standardisees-admin-socio.md §5.4 — fiche minimale, n'existait pas avant
 // (seule la liste montrait ces champs). Contenu = colonnes déjà connues + partner_hint/created_by,
@@ -67,15 +68,15 @@ export default async function AdminInvitationDetailPage({
         </div>
         <div>
           <dt className="text-muted">Creada</dt>
-          <dd>{new Date(invitation.created_at).toLocaleString("es")}</dd>
+          <dd>{formatDateTimeInBogota(invitation.created_at, "es")}</dd>
         </div>
         <div>
           <dt className="text-muted">Expira</dt>
-          <dd>{new Date(invitation.expires_at).toLocaleString("es")}</dd>
+          <dd>{formatDateTimeInBogota(invitation.expires_at, "es")}</dd>
         </div>
         <div>
           <dt className="text-muted">Consumida</dt>
-          <dd>{invitation.consumed_at ? new Date(invitation.consumed_at).toLocaleString("es") : "—"}</dd>
+          <dd>{invitation.consumed_at ? formatDateTimeInBogota(invitation.consumed_at, "es") : "—"}</dd>
         </div>
         <div>
           <dt className="text-muted">Creada por</dt>

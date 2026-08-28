@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { Button, Checkbox, Input, Label, TextArea, TextField, toast } from "@hifago/ui";
+import { formatDateTimeInBogota } from "@hifago/domain";
 
 // Spec 21 §5 — bloc "Connecteur PMS" de la fiche établissement. Le jeton LobbyPMS n'est jamais
 // relu depuis la base (illisible même pour l'admin via PostgREST, cf. migration
@@ -98,7 +99,7 @@ export function EstablishmentPmsBlock({
         </p>
         <p data-testid="pms-last-synced-status">
           Última sincronización:{" "}
-          {initialLastSyncedAt ? new Date(initialLastSyncedAt).toLocaleString("es-CO") : "nunca"}
+          {initialLastSyncedAt ? formatDateTimeInBogota(initialLastSyncedAt, "es-CO") : "nunca"}
         </p>
       </div>
 

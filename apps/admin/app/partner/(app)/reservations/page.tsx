@@ -1,5 +1,11 @@
 import { createClient } from "@hifago/supabase/server";
-import { asLocalizedField, resolveLocalizedField, resolveListParams } from "@hifago/domain";
+import {
+  addDaysIso,
+  asLocalizedField,
+  resolveLocalizedField,
+  resolveListParams,
+  todayInBogota,
+} from "@hifago/domain";
 import { getActiveOperatorEstablishmentIds } from "@/lib/agenda/activeOperatorEstablishments";
 import { RESERVATIONS_FILTER_DEFINITIONS } from "@/lib/lists/filters";
 import { RESERVATIONS_DEFAULT_SORT, RESERVATIONS_SORT_WHITELIST } from "@/lib/lists/sortable-columns";
@@ -17,15 +23,11 @@ type OrderLineQueryRow = {
   product: { name: unknown; establishment: { name: unknown } | null } | null;
 };
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function isoPlusDays(iso: string, days: number): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
+// Lot fuseau (2026-08-28) : ces deux helpers étaient une copie locale de plus. La fenêtre par
+// défaut de « Mis Reservas » (aujourd'hui → +6 j) partait de la date UTC, donc du LENDEMAIN passé
+// 19 h à Guatapé — le socio qui ouvrait son écran le soir ne voyait plus les réservations du jour
+// même. C'est le second des deux écrans consultés quotidiennement. `todayInBogota`/`addDaysIso`
+// (packages/domain) remplacent les deux, sans redéclaration locale.
 
 // Spec 17 §0 Tranche 1 — « Mis Reservas ». Refonte vue prestataire (2026-08-19) : migration vers
 // resolveListParams/DataList (pagination+tri serveur, filtres date/activité/client ou email/statut,
@@ -66,8 +68,8 @@ export default async function PartnerReservationsPage({
   // dates par défaut plutôt que des champs vides, et que ServerPagination les préserve d'une page
   // à l'autre.
   const hasExplicitDateFilter = filters.date_from !== undefined || filters.date_to !== undefined;
-  const dateFrom = filters.date_from ?? (hasExplicitDateFilter ? undefined : todayIso());
-  const dateTo = filters.date_to ?? (hasExplicitDateFilter ? undefined : isoPlusDays(dateFrom ?? todayIso(), 6));
+  const dateFrom = filters.date_from ?? (hasExplicitDateFilter ? undefined : todayInBogota());
+  const dateTo = filters.date_to ?? (hasExplicitDateFilter ? undefined : addDaysIso(dateFrom ?? todayInBogota(), 6));
   const filterValues = { ...filters, ...(dateFrom ? { date_from: dateFrom } : {}), ...(dateTo ? { date_to: dateTo } : {}) };
   const effectiveExtraParams = { ...extraParams, ...filterValues };
 

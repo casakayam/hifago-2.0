@@ -13,6 +13,7 @@ import {
   cn,
   dateTaggedDayButtonComponents,
 } from "@hifago/ui";
+import { startOfTodayInBogota } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
 
 // Spec 18 §0 Tranche 1 : produit à créneaux horaires (product_slot_rules côté admin, ex. jetski —
@@ -108,7 +109,9 @@ export function SlotReservationForm({
 
   // Ouvre le calendrier sur le mois du premier créneau configuré plutôt que sur le mois courant —
   // même raisonnement que ReservationForm.tsx.
-  const defaultMonth = slots[0] ? parseISO(slots[0].slot_date) : undefined;
+  // Même repli que ReservationForm.tsx : `undefined` renverrait react-day-picker sur le mois du
+  // navigateur (cf. le commentaire détaillé là-bas).
+  const defaultMonth = slots[0] ? parseISO(slots[0].slot_date) : startOfTodayInBogota();
 
   const selectedIso = selectedDate ? format(selectedDate, "yyyy-MM-dd") : null;
   const daySlots = selectedIso ? (byDate.get(selectedIso) ?? []) : [];
@@ -157,9 +160,18 @@ export function SlotReservationForm({
           mode="single"
           defaultMonth={defaultMonth}
           selected={selectedDate}
+          // Le jour « aujourd'hui » mis en avant par react-day-picker vient sinon de son propre
+          // `dateLib.today()` = `new Date()` du runtime (DayPicker.js:167), donc du NAVIGATEUR.
+          // Sans cette prop, le correctif de `disabled` ci-dessous et le surlignage se
+          // contrediraient pour un visiteur hors Colombie : le 27 resterait cliquable mais le 28
+          // serait peint comme « aujourd'hui ».
+          today={startOfTodayInBogota()}
           onSelect={handleSelectDate}
           disabled={[
-            { before: new Date() },
+            // Minuit à GUATAPÉ, jamais l'heure du NAVIGATEUR (lot fuseau, 2026-08-28) : un visiteur
+            // européen ouvrant la fiche le 1er du mois à 2 h du matin voyait le dernier jour du mois
+            // précédent barré, alors qu'à Guatapé il était encore réservable.
+            { before: startOfTodayInBogota() },
             (date) => {
               const daySlotsForDate = byDate.get(format(date, "yyyy-MM-dd"));
               if (!daySlotsForDate) return true;

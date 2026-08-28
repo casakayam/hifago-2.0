@@ -1,4 +1,5 @@
 import { createClient } from "@hifago/supabase/server";
+import { todayInBogota } from "@hifago/domain";
 import { addDays } from "./dates";
 import type { SlotAvailabilityRow } from "@/components/slot-availability-grid";
 
@@ -48,7 +49,10 @@ export async function loadSlotAvailabilityPageData(
   const from =
     typeof fromParam === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fromParam)
       ? fromParam
-      : new Date().toISOString().slice(0, 10);
+      // Lot fuseau (2026-08-28) : sans ?from= explicite, la grille de disponibilité s'ouvrait sur
+      // la date UTC — donc sur DEMAIN passé 19 h à Guatapé, la journée en cours disparaissant de
+      // la fenêtre de 14 jours.
+      : todayInBogota();
   const dates = Array.from({ length: SLOT_AVAILABILITY_WINDOW_DAYS }, (_, i) => addDays(from, i));
   const windowEnd = addDays(from, SLOT_AVAILABILITY_WINDOW_DAYS - 1);
 

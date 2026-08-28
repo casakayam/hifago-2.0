@@ -17,6 +17,7 @@ import {
   TextField,
   dateTaggedDayButtonComponents,
 } from "@hifago/ui";
+import { startOfTodayInBogota } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
 
 type AvailabilityRow = { date: string; capacity: number; booked: number };
@@ -78,7 +79,12 @@ export function ReservationForm({
   // Ouvre le calendrier sur le mois de la première date configurée plutôt que sur le mois
   // courant — sans ça, un visiteur (ou un test e2e) devrait naviguer manuellement jusqu'à la
   // première disponibilité réelle.
-  const defaultMonth = availability[0] ? parseISO(availability[0].date) : undefined;
+  // Repli sur le mois de GUATAPÉ, jamais `undefined` : sans disponibilité en base, react-day-picker
+  // retombe sur son propre `new Date()`, c'est-à-dire sur le mois du NAVIGATEUR. Le visiteur
+  // européen du 1er du mois à 2 h voyait alors le mois suivant s'ouvrir, avec le dernier jour du
+  // mois précédent — pourtant réservable — présenté comme déjà passé. (Angle mort trouvé par la
+  // relecture adversariale du lot fuseau, pas par la liste initiale.)
+  const defaultMonth = availability[0] ? parseISO(availability[0].date) : startOfTodayInBogota();
 
   function handleSelectDate(date: Date | undefined) {
     setSelectedDate(date);
@@ -112,9 +118,18 @@ export function ReservationForm({
           mode="single"
           defaultMonth={defaultMonth}
           selected={selectedDate}
+          // Le jour « aujourd'hui » mis en avant par react-day-picker vient sinon de son propre
+          // `dateLib.today()` = `new Date()` du runtime (DayPicker.js:167), donc du NAVIGATEUR.
+          // Sans cette prop, le correctif de `disabled` ci-dessous et le surlignage se
+          // contrediraient pour un visiteur hors Colombie : le 27 resterait cliquable mais le 28
+          // serait peint comme « aujourd'hui ».
+          today={startOfTodayInBogota()}
           onSelect={handleSelectDate}
           disabled={[
-            { before: new Date() },
+            // Minuit à GUATAPÉ, jamais l'heure du NAVIGATEUR (lot fuseau, 2026-08-28) : un visiteur
+            // européen ouvrant la fiche le 1er du mois à 2 h du matin voyait le dernier jour du mois
+            // précédent barré, alors qu'à Guatapé il était encore réservable.
+            { before: startOfTodayInBogota() },
             (date) => !byDate.has(format(date, "yyyy-MM-dd")),
           ]}
           modifiers={{ lastSpot: lastSpotDates, full: fullDates }}

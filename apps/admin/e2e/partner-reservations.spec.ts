@@ -1,6 +1,11 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { createSignedInClient, webProductUrl, mockMercadoPagoCheckout } from "@hifago/e2e-support";
+import {
+  createSignedInClient,
+  webProductUrl,
+  mockMercadoPagoCheckout,
+  nextMonthIsoDate,
+} from "@hifago/e2e-support";
 import { slugify } from "../lib/utils";
 
 // Spec 17 §0 Tranche 1 (« Mis Reservas » + lien calendrier→commandes) — établissement/partenaire
@@ -10,14 +15,10 @@ import { slugify } from "../lib/utils";
 const ESTABLISHMENT_ID = "b0000000-0000-4000-8000-000000000004";
 const PARTNER_ID = "b0000000-0000-4000-8000-000000000003";
 
-// Le 15 du mois SUIVANT (jamais le mois courant, dont le nombre de jours restants dépend de la
-// date d'exécution) — même raisonnement que nextMonthFirstFiveDates() de admin-camp-booking.spec.ts,
-// réduit à une seule date : un clic "mois suivant" suffit pour l'atteindre sur le calendrier admin.
-function nextMonthMidDate(): string {
-  const now = new Date();
-  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 15));
-  return d.toISOString().slice(0, 10);
-}
+// Le 15 du mois SUIVANT (jamais le mois courant, dont le nombre de jours restants dépend de la date
+// d'exécution) : un clic "mois suivant" suffit pour l'atteindre sur le calendrier admin. Le mois est
+// désormais celui de GUATAPÉ (lot fuseau, 2026-08-28) — cette copie locale partait de
+// `getUTCMonth()`, donc du mois suivant d'UTC, qui diverge du mois affiché à l'écran le 31 au soir.
 
 test("un socio voit dans Mis reservas une réservation réelle sur son produit, avec le téléphone du client visible ; l'admin y accède aussi depuis le calendrier", async ({
   page,
@@ -27,7 +28,7 @@ test("un socio voit dans Mis reservas une réservation réelle sur son produit, 
   const productName = `Actividad Reservas E2E ${stamp}`;
   const holderName = `Cliente Reservas E2E ${stamp}`;
   const holderPhone = "+57 300 111 2233";
-  const date = nextMonthMidDate();
+  const date = nextMonthIsoDate(15);
 
   const adminClient = await createSignedInClient(SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
   const { data: product, error: insertError } = await adminClient

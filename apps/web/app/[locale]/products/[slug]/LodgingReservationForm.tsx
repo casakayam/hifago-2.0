@@ -13,7 +13,7 @@ import {
   Label,
   TextField,
 } from "@hifago/ui";
-import { formatCop, type LodgingKind } from "@hifago/domain";
+import { formatCop, startOfTodayInBogota, type LodgingKind } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
 import {
   buildInCartNightsMap,
@@ -77,7 +77,11 @@ export function LodgingReservationForm({
     | { status: "ready" }
     | { status: "error"; reason: string; retryAfterSeconds: number | null };
 
-  const [visibleMonth, setVisibleMonth] = useState(() => new Date());
+  // Mois ouvert au premier rendu — et donc CLÉ DU FETCH (`monthKey` juste en dessous, envoyé tel
+  // quel à /api/pms/night-availability). C'était le pire des dix sites du lot fuseau : avec
+  // `new Date()`, un visiteur européen le 1er du mois à 2 h du matin demandait à LobbyPMS le mois
+  // SUIVANT, et le calendrier qu'il regardait n'était jamais celui qu'on venait de charger.
+  const [visibleMonth, setVisibleMonth] = useState(() => startOfTodayInBogota());
   const [pmsAvailability, setPmsAvailability] = useState<Map<string, AvailabilityRow>>(new Map());
   const [pmsMonths, setPmsMonths] = useState<Map<string, PmsMonthState>>(new Map());
   const [attempt, setAttempt] = useState(0);
@@ -305,6 +309,12 @@ export function LodgingReservationForm({
           onSelect={handleSelectRange}
           month={visibleMonth}
           onMonthChange={setVisibleMonth}
+          // Le jour « aujourd'hui » mis en avant par react-day-picker vient sinon de son propre
+          // `dateLib.today()` = `new Date()` du runtime (DayPicker.js:167), donc du NAVIGATEUR.
+          // Sans cette prop, le correctif de `disabled` ci-dessous et le surlignage se
+          // contrediraient pour un visiteur hors Colombie : le 27 resterait cliquable mais le 28
+          // serait peint comme « aujourd'hui ».
+          today={startOfTodayInBogota()}
           // SYMÉTRIE AFFICHAGE / VERDICT, corrigée le 2026-08-28. `hasUnavailableNightInRange`
           // traite depuis toujours une nuit ABSENTE comme indisponible ; l'affichage, lui, ne
           // regardait que les nuits REÇUES — une nuit jamais résolue s'affichait donc normale et
@@ -312,7 +322,10 @@ export function LodgingReservationForm({
           // côté, dans ReservationForm : on la reprend, on ne l'invente pas. Vaut aussi pour le
           // chemin non-PMS, où le même trou existait sans que personne ne l'ait vu.
           disabled={[
-            { before: new Date() },
+            // Minuit à GUATAPÉ, jamais l'heure du NAVIGATEUR (lot fuseau, 2026-08-28) : un visiteur
+            // européen ouvrant la fiche le 1er du mois à 2 h du matin voyait le dernier jour du mois
+            // précédent barré, alors qu'à Guatapé il était encore réservable.
+            { before: startOfTodayInBogota() },
             (date) => !byDate.has(format(date, "yyyy-MM-dd")),
           ]}
           modifiers={{ unavailable: unavailableDates }}

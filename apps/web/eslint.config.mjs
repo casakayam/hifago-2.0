@@ -1,6 +1,7 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import { reglesFuseau } from "../../eslint.rules.mjs";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -12,6 +13,8 @@ const eslintConfig = defineConfig([
       // jamais @heroui/react directement dans une app (hifago/CLAUDE.md § 2). Rend cette règle
       // vérifiée en continu plutôt que documentée seule.
       "no-restricted-imports": ["error", { paths: [{ name: "@heroui/react", message: "Importer depuis \"@hifago/ui\", pas directement depuis \"@heroui/react\"." }] }],
+      // Fuseau de l'exploitation — cf. eslint.rules.mjs (lot du 2026-08-28).
+      ...reglesFuseau,
     },
   },
 ]);

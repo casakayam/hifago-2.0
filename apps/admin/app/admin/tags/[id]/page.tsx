@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@hifago/supabase/server";
-import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
+import { asLocalizedField, formatDateTimeInBogota, resolveLocalizedField } from "@hifago/domain";
 import { RenameTagButton } from "../RenameTagButton";
 import { DeleteTagButton } from "../DeleteTagButton";
 
@@ -49,7 +49,7 @@ export default async function AdminTagDetailPage({ params }: PageProps<"/admin/t
         </div>
         <div>
           <dt className="text-muted">Creada</dt>
-          <dd>{new Date(tag.created_at).toLocaleString("es")}</dd>
+          <dd>{formatDateTimeInBogota(tag.created_at, "es")}</dd>
         </div>
       </dl>
 

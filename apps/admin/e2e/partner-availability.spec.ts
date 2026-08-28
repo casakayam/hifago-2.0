@@ -21,7 +21,8 @@ test("un socio édite le calendrier de son propre produit, l'effet est visible c
 
   // Dernière cellule du mois affiché : toujours dans le mois suivant (padding de fin de grille),
   // donc toujours dans le futur par rapport à "aujourd'hui" — nécessaire pour que la date soit
-  // sélectionnable côté public ensuite (Calendar public désactive { before: new Date() }).
+  // sélectionnable côté public ensuite (le Calendar public désactive tout ce qui précède
+  // startOfTodayInBogota(), cf. lot fuseau du 2026-08-28).
   const dayCells = page.locator(".fc-daygrid-day");
   const lastCell = dayCells.last();
   const targetDate = await lastCell.getAttribute("data-date");

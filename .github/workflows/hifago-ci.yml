@@ -36,6 +36,11 @@ jobs:
       # Table.Body/Table.Content non sérialisable que le lint no-restricted-imports ne voit pas.
       - name: Design system (HeroUI unique, composants sérialisables)
         run: bash scripts/check-design-system.sh
+      # Bloquant depuis le 2026-08-28. La règle eslint (eslint.rules.mjs) ne couvre que les deux
+      # apps ; ce script couvre packages/, supabase/functions/ (Deno), tests/ et le SQL — c'est-à-
+      # dire l'angle mort où vivait le dixième site du lot fuseau (packages/e2e-support/src/date.ts).
+      - name: Fuseau de Guatapé (aucune date civile calculée en UTC)
+        run: bash scripts/check-timezone.sh
       # Le manifeste docs/ai-index.json est ce que lisent les agents pour s'orienter : périmé, il
       # les envoie lire le mauvais document. `npm run docs:index` le régénère.
       - name: Manifeste documentaire à jour

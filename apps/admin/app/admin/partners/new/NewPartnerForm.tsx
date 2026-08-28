@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
+import { nowIsoInstant } from "@hifago/domain";
 import {
   Button,
   Checkbox,
@@ -125,7 +126,7 @@ export function NewPartnerForm() {
     if (bankNombre.trim() || bankMethod !== "none") {
       const bank: { [key: string]: Json } = {
         nombre: bankNombre.trim(),
-        received_at: new Date().toISOString(),
+        received_at: nowIsoInstant(),
       };
       if (bankMethod === "bancolombia") {
         bank.bancolombia = {

@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
 import { cache } from "react";
-import { addDays } from "date-fns";
 import { notFound } from "next/navigation";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@hifago/supabase/server";
-import { asLocalizedField, asLodgingKind, isPmsBacked, resolveLocalizedField } from "@hifago/domain";
+import {
+  addDaysIso,
+  asLocalizedField,
+  asLodgingKind,
+  isPmsBacked,
+  resolveLocalizedField,
+  todayInBogota,
+} from "@hifago/domain";
 import { formatOccurrenceLabel } from "@/lib/products/formatOccurrenceLabel";
 import { formatCop } from "@hifago/domain";
 import { ProductDetailView } from "./ProductDetailView";
@@ -107,14 +113,16 @@ export default async function ProductPage({
   // AVANT de savoir si le produit est à créneaux (slotRulesCount, résultat du Promise.all) — le
   // reservationMode qui les unifie tous les deux (cf. plus bas) ne peut donc être résolu qu'après.
 
-  // today lié une seule fois (pas un new Date() par site) — new Date() seul reste toléré en corps
-  // de composant par la règle react-hooks/purity, jamais Date.now()/l'arithmétique associée.
-  // todayIso (cutoff "à partir d'aujourd'hui") est dérivé une seule fois ici et réutilisé aux 4
-  // sites qui en ont besoin ci-dessous (get_product_slots p_from, et les gte("date", …) sur
-  // product_availability/product_date_rates) — addDays(today, 180) (fenêtre slots, plus bas) reste
-  // un calcul séparé, ce n'est pas le même cutoff.
-  const today = new Date();
-  const todayIso = today.toISOString().slice(0, 10);
+  // « Aujourd'hui » = le jour civil à GUATAPÉ, jamais celui d'UTC (lot fuseau, 2026-08-28). Cette
+  // page est un Server Component : elle s'exécutait sur un serveur Vercel réglé en UTC, donc passé
+  // 19 h heure locale `todayIso` désignait déjà DEMAIN — et les trois `gte("date", todayIso)`
+  // ci-dessous retiraient du catalogue les créneaux et les tarifs de la soirée en cours.
+  //
+  // todayIso est dérivé une seule fois ici et réutilisé aux 4 sites qui en ont besoin ci-dessous
+  // (get_product_slots p_from, et les gte("date", …) sur product_availability/product_date_rates).
+  // La fenêtre +180 j des créneaux (plus bas) part de la même date mais reste un calcul séparé :
+  // ce n'est pas le même cutoff.
+  const todayIso = todayInBogota();
 
   // availability/slotRulesCount/roomTypesRaw/productDateRates/media ne dépendent QUE de
   // product.type/product.id (connus synchronement dès getProduct() ci-dessus) — aucune dépendance
@@ -203,7 +211,7 @@ export default async function ProductPage({
       ? await supabase.rpc("get_product_slots", {
           p_product_id: product.id,
           p_from: todayIso,
-          p_to: addDays(today, 180).toISOString().slice(0, 10),
+          p_to: addDaysIso(todayIso, 180),
         })
       : { data: [] };
 

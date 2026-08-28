@@ -3,6 +3,11 @@
 -- (proxima/en_casa/pasada/cancelada), la règle "le stade le plus actif l'emporte" sur un client à
 -- statuts mixtes, l'exclusion des lignes superseded, le filtre p_status, la pagination.
 --
+-- Lot fuseau (2026-08-28) : les dates de fixtures partent de public.today_in_bogota(), pas de
+-- current_date. list_clients compare désormais à la date de GUATAPÉ ; une fixture calée sur la
+-- date de la SESSION exprimerait un autre référentiel que la fonction qu'elle teste, et se
+-- mettrait à osciller pendant les cinq heures quotidiennes où les deux diffèrent.
+--
 -- Fixtures marquées 'QAETABCLI' pour scoper recherche/pagination indépendamment des données de
 -- supabase/seed.sql déjà présentes sur cette instance locale partagée (même précaution que
 -- list_establishments_admin_rpc.test.sql).
@@ -49,7 +54,7 @@ insert into order_lines (
   holder_name
 ) values (
   'ecA00000-0000-4000-8000-000000000001', 'ec000000-0000-4000-8000-000000000002',
-  current_date + 10, 'reserved', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
+  public.today_in_bogota() + 10, 'reserved', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
   'Cliente Proxima QAETABCLI'
 );
 
@@ -63,7 +68,7 @@ insert into order_lines (
   holder_name
 ) values (
   'ecB00000-0000-4000-8000-000000000001', 'ec000000-0000-4000-8000-000000000002',
-  current_date - 1, current_date + 1, 'reserved', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
+  public.today_in_bogota() - 1, public.today_in_bogota() + 1, 'reserved', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
   'Cliente Encasa QAETABCLI'
 );
 
@@ -77,7 +82,7 @@ insert into order_lines (
   holder_name
 ) values (
   'ecC00000-0000-4000-8000-000000000001', 'ec000000-0000-4000-8000-000000000002',
-  current_date - 10, 'fulfilled', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
+  public.today_in_bogota() - 10, 'fulfilled', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
   'Cliente Pasada QAETABCLI'
 );
 
@@ -91,7 +96,7 @@ insert into order_lines (
   holder_name
 ) values (
   'ecD00000-0000-4000-8000-000000000001', 'ec000000-0000-4000-8000-000000000002',
-  current_date - 5, 'cancelled_by_client', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
+  public.today_in_bogota() - 5, 'cancelled_by_client', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
   'Cliente Cancelada QAETABCLI'
 );
 
@@ -108,10 +113,10 @@ insert into order_lines (
   holder_name
 ) values
   ('ecE00000-0000-4000-8000-000000000001', 'ec000000-0000-4000-8000-000000000002',
-   current_date - 5, 'cancelled_by_client', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
+   public.today_in_bogota() - 5, 'cancelled_by_client', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
    'Cliente Mixto QAETABCLI'),
   ('ecE00000-0000-4000-8000-000000000002', 'ec000000-0000-4000-8000-000000000002',
-   current_date + 5, 'reserved', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
+   public.today_in_bogota() + 5, 'reserved', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
    'Cliente Mixto QAETABCLI');
 
 -- Client F — une ligne superseded qui SERAIT proxima si elle comptait, mais sa seule ligne
@@ -126,10 +131,10 @@ insert into order_lines (
   holder_name
 ) values
   ('ecF00000-0000-4000-8000-000000000001', 'ec000000-0000-4000-8000-000000000002',
-   current_date + 100, 'superseded', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
+   public.today_in_bogota() + 100, 'superseded', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
    'Cliente Superseded QAETABCLI'),
   ('ecF00000-0000-4000-8000-000000000001', 'ec000000-0000-4000-8000-000000000002',
-   current_date - 20, 'fulfilled', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
+   public.today_in_bogota() - 20, 'fulfilled', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
    'Cliente Superseded QAETABCLI');
 
 set local role authenticated;

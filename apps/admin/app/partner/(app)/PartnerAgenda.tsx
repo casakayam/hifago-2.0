@@ -7,6 +7,7 @@ import { Calendar, Willow, type CalendarInstanceApi } from "@svar-ui/react-calen
 // boutons/toolbar/icônes (constaté en comparant dist/index.css à dist-full/index.css : 119 vs 309
 // sélecteurs uniques). "all.css" est le CSS complet du thème Willow — c'est celui qu'il faut.
 import "@svar-ui/react-calendar/all.css";
+import { startOfTodayInBogota } from "@hifago/domain";
 import { Button } from "@hifago/ui";
 import type { AgendaEvent } from "@/lib/agenda/positionOrderLines";
 import { AddReservationDialog, type ProductOption } from "./AddReservationDialog";
@@ -54,7 +55,9 @@ export function PartnerAgenda({
         <Button
           size="sm"
           data-testid="new-reservation-button"
-          onPress={() => setAddDialog({ date: new Date() })}
+          // Jour de Guatapé, jamais celui du navigateur du socio (lot fuseau, 2026-08-28) : la
+          // date pré-remplie du dialogue « Nueva reserva » est une date CIVILE de réservation.
+          onPress={() => setAddDialog({ date: startOfTodayInBogota() })}
         >
           Nueva reserva
         </Button>
@@ -73,7 +76,7 @@ export function PartnerAgenda({
               }
             }}
             onAddEvent={(ev: { event: { start?: Date } }) => {
-              setAddDialog({ date: ev.event.start ?? new Date() });
+              setAddDialog({ date: ev.event.start ?? startOfTodayInBogota() });
             }}
           />
         </div>

@@ -1,6 +1,15 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { createSignedInClient, webProductUrl, mockMercadoPagoCheckout, withDb } from "@hifago/e2e-support";
+import {
+  createSignedInClient,
+  webProductUrl,
+  mockMercadoPagoCheckout,
+  withDb,
+  addDaysIso,
+  daysInCurrentMonthInBogota,
+  dayOfMonthInBogota,
+  todayInBogota,
+} from "@hifago/e2e-support";
 import { slugify } from "../lib/utils";
 
 // Spec 20 — agenda de réservations socio (remplace la page d'accueil /partner). Établissement/
@@ -98,13 +107,13 @@ test.beforeEach(async () => {
   });
 });
 
+// Jour civil de GUATAPÉ depuis le lot fuseau (2026-08-28) : la version précédente lisait le jour du
+// PROCESSUS (getDate/getMonth), donc celui d'UTC en CI — le 31 au soir, `offset` était calculé sur
+// un mois déjà tourné et la date visée sortait du mois affiché par FullCalendar.
 function futureDateInCurrentMonth(stamp: number): string {
-  const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const remainingDays = Math.max(daysInMonth - now.getDate(), 1);
+  const remainingDays = Math.max(daysInCurrentMonthInBogota() - dayOfMonthInBogota(), 1);
   const offset = 1 + (stamp % remainingDays);
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return addDaysIso(todayInBogota(), offset);
 }
 
 test("un socio voit une réservation réelle dans son agenda, clique dessus pour ouvrir la fiche, marque une ausencia, puis ajoute une réservation manuelle", async ({
@@ -279,9 +288,7 @@ test("un logement PMS-backed apparaît dans l'agenda socio, et son annulation l'
   const holderName = `Cliente PMS Agenda ${stamp}`;
   const bookingId = `9${String(stamp).slice(-7)}`;
   const date = futureDateInCurrentMonth(stamp);
-  const endDate = new Date(`${date}T00:00:00Z`);
-  endDate.setUTCDate(endDate.getUTCDate() + 1);
-  const endDateIso = endDate.toISOString().slice(0, 10);
+  const endDateIso = addDaysIso(date, 1);
 
   // Le trigger d'enfilement exige un établissement CONNECTÉ. Celui du socio de test ne l'est pas :
   // on l'active pour la durée du test, avec un jeton factice (aucun appel réseau n'est fait ici),

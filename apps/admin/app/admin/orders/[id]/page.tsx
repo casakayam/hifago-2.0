@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
 import { LedgerLinesTable, type OrderLineQueryRow } from "./LedgerLinesTable";
+import { formatDateInBogota } from "@hifago/domain";
 
 export default async function AdminOrderDetailPage({
   params,
@@ -59,7 +60,7 @@ export default async function AdminOrderDetailPage({
         <h1 className="text-2xl font-semibold">{order.holder_name}</h1>
         <p className="text-sm text-muted" data-testid="order-meta">
           Referente: {order.referrer?.display_name ?? "Directo"} · Creado el{" "}
-          {new Date(order.created_at).toLocaleDateString("es")}
+          {formatDateInBogota(order.created_at, "es")}
         </p>
         {hasReconciliationEntry ? (
           <Link

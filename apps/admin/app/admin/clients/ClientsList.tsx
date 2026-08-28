@@ -3,6 +3,7 @@
 import { DataList, type DataListColumn, type DataListSort, viewAction } from "@hifago/ui";
 import { StatusChip } from "@/components/status-chip";
 import { CLIENTS_FILTERS, CLIENT_STAGE_CHIP_STYLE, CLIENT_STAGE_LABELS } from "@/lib/lists/filters";
+import { formatDateInBogota } from "@hifago/domain";
 
 export type ClientRow = {
   id: string; // encodeURIComponent(client_key) — jamais le client_key brut, cf. page.tsx
@@ -57,7 +58,7 @@ export function ClientsList({
       id: "lastOrderAt",
       header: "Último pedido",
       sortable: true,
-      cell: (row) => (row.lastOrderAt ? new Date(row.lastOrderAt).toLocaleDateString("es") : "—"),
+      cell: (row) => (row.lastOrderAt ? formatDateInBogota(row.lastOrderAt, "es") : "—"),
     },
   ];
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@hifago/supabase/client";
 import type { Json } from "@hifago/supabase/database.types";
-import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
+import { asLocalizedField, nowIsoInstant, resolveLocalizedField } from "@hifago/domain";
 import { Button, toast } from "@hifago/ui";
 import { LocalizedTextField, type LocalizedValue } from "@/components/localized-text-field";
 import { ProductTypeFields } from "@/components/product-type-fields";
@@ -103,7 +103,7 @@ export function EditProposalForm({
       setProposal({
         id: result.proposal_id,
         payload,
-        created_at: new Date().toISOString(),
+        created_at: nowIsoInstant(),
       });
     }
     toast.success("Propuesta enviada.");

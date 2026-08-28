@@ -3,6 +3,7 @@
 import { Chip, DataList, type DataListAction, type DataListColumn, type DataListSort, viewAction } from "@hifago/ui";
 import { AUDIENCE_LABELS, CAMPAIGN_STATUS_CHIP_COLOR, CAMPAIGN_STATUS_LABELS, CHANNEL_LABELS } from "./campaignLabels";
 import { CAMPAIGNS_FILTERS } from "@/lib/lists/filters";
+import { formatDateInBogota } from "@hifago/domain";
 
 export type CampaignRow = {
   id: string;
@@ -64,7 +65,7 @@ export function CampaignsList({
       id: "created_at",
       header: "Creada",
       sortable: true,
-      cell: (row) => new Date(row.createdAt).toLocaleDateString("es"),
+      cell: (row) => formatDateInBogota(row.createdAt, "es"),
     },
   ];
 

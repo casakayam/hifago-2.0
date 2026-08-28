@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
-import { asLocalizedField, resolveLocalizedField, formatCop } from "@hifago/domain";
+import { asLocalizedField, formatCop, formatDateTimeInBogota, resolveLocalizedField } from "@hifago/domain";
 import { Card, Chip } from "@hifago/ui";
 import { ContactClientButton } from "@/components/ContactClientButton";
 import { isRealClientEmail } from "@/lib/whatsapp";
@@ -91,7 +91,7 @@ export default async function PartnerReservationDetailPage({
           ) : null}
           <Field label="Cantidad" value={`${line.qty} pers.`} />
           <Field label="Monto total" value={formatCop(line.total_cop)} />
-          <Field label="Creada el" value={new Date(line.created_at).toLocaleString("es-CO")} />
+          <Field label="Creada el" value={formatDateTimeInBogota(line.created_at, "es-CO")} />
         </Card.Content>
       </Card>
 
