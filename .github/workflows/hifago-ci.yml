@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run lint --workspaces --if-present
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run typecheck --workspaces --if-present
@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run test --workspaces --if-present
@@ -130,7 +130,10 @@ jobs:
           deno-version: v2.x
       # Depuis la RACINE : les fonctions importent packages/domain en chemin relatif, un check
       # lancé depuis supabase/functions ne résout pas ces modules et fabrique de fausses erreurs.
-      - run: deno check supabase/functions/*/index.ts
+      # --node-modules-dir=auto : le runner n'a pas de node_modules (ce job ne fait pas de
+      # `npm ci`), et la présence d'un package.json à la racine met Deno en mode node_modules,
+      # où il refuse de résoudre npm:@supabase/supabase-js tout seul.
+      - run: deno check --node-modules-dir=auto supabase/functions/*/index.ts
 
   # Preuve concurrente anti-survente (barrière de synchronisation, driver `pg` direct). Contrairement
   # au job `db`, celui-ci a besoin du seed : 6 des 10 tests s'appuient sur des données seedées.
@@ -146,7 +149,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1
@@ -174,7 +177,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run build --workspaces --if-present
