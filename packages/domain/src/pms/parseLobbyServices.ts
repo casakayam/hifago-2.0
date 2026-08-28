@@ -3,7 +3,7 @@
 //
 // Rappel de cadrage, pour que personne ne rebranche le prix par erreur : `value` est le prix
 // configuré CHEZ LOBBY, exposé ici à titre purement indicatif. hifago reste la source du prix
-// (règle actée, cf. buildEvenRatesPerDay.ts et parseLobbyNightAvailability.ts) — au mieux ce
+// (règle actée, cf. buildEvenRatesPerDay.ts et parseLobbyNightCatalog.ts) — au mieux ce
 // chiffre sert de valeur suggérée au moment d'établir le lien, jamais de prix de vente.
 //
 // Le champ identifiant est `service_id` côté Lobby ; c'est le même entier que `id_producto` dans

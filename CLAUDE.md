@@ -395,6 +395,25 @@ l'export comptable/fiscal · fournisseur email final (Resend vs Postmark).
     manuellement — contacter le support Mercado Pago proactivement plutôt que de découvrir le
     problème en prod.
 
+20. **Une règle documentée que rien ne vérifie n'est pas une règle** (constaté 2026-08-28, lot
+    fuseau). « Toutes les dates sont en heure de Colombie » était écrit dans la doc depuis des mois.
+    Au moment de la vérifier, la chaîne `"America/Bogota"` n'apparaissait **nulle part dans le
+    code** — dans trois commentaires, et rien d'autre — et **dix sites** calculaient « aujourd'hui »
+    en UTC ou dans le fuseau du navigateur. Deux mécanismes expliquent une telle longévité, et tous
+    deux sont généralisables : (a) **le bug n'est visible que 5 h par jour** (Guatapé est à UTC−5 :
+    `new Date().toISOString().slice(0, 10)` ne se trompe qu'entre 19 h et minuit heure locale), donc
+    aucune vérification manuelle de journée ne le rencontre ; (b) **les tests portaient la même
+    faute** (`packages/e2e-support/src/date.ts` calculait sa date exactement comme le code testé),
+    donc les deux côtés de l'assertion se trompaient ensemble et la suite restait verte. ⚠️ La
+    machine de développement de ce projet est réglée sur `America/Bogota` et le serveur Vercel sur
+    UTC : **un test qui ne force pas explicitement un troisième fuseau ne peut rien prouver ici**
+    (cf. `LodgingReservationForm.timezone.test.tsx`, qui pose `process.env.TZ = "Europe/Paris"`).
+    ⚠️ `timezoneId` dans `playwright.config.ts` ne couvre **que le navigateur** — le processus Node
+    du runner et le serveur Next gardent le leur ; les deux gestes sont nécessaires et ne couvrent
+    pas la même moitié. Outillage posé en conséquence, à ne pas retirer : `eslint.rules.mjs`
+    (les deux apps) + `scripts/check-timezone.sh` (packages/, supabase/functions/, tests/, SQL),
+    avec `packages/domain/src/time/` pour unique échappatoire.
+
 ## 12. Curseur — dernière session
 
 En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
@@ -402,42 +421,91 @@ En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
 nouvelle entrée.
 
-*2026-08-27/28 (suite) — **la CI ne testait rien, et ce qu'elle ne testait pas cachait DEUX failles
-d'argent en production.** `hifago-ci / integration` était rouge à chaque push depuis le 2026-08-15 :
-`db reset` sans `supabase start`. Réparer ça n'aurait révélé que la marche suivante — **`supabase
-start` applique lui-même le seed** et n'a pas de `--no-seed`, or `seed.sql` viole la FK vers
-`auth.users` tant que `seed_auth_users.mjs` n'est pas passé. Corrigé à la source :
-`[db.seed] enabled = false` + `npm run db:setup` (les 3 étapes ordonnées, vérifiées de bout en bout).
-**Les failles.** (1) `apply_payment_webhook`, SECURITY DEFINER sans garde interne, exécutable par
-`anon` : connaître l'UUID d'un paiement suffisait pour marquer une commande `paid`, et chaque client
-connaît le sien. (2) `apply_order_line_ledger_transition`, qui écrit dans `ledger_entries`
-(commissions `due`/`void`, insertion de compensations) sur des ids fournis par l'appelant, sans
-contrôle propre. Plus 4 fonctions de cron déclenchables par n'importe qui (e-mails, appels Lobby,
-annulations). **Toutes confirmées sur `hqldjdzgvhfwoqypwzqx` — SEULE instance cloud, branchée sur le
-VRAI Mercado Pago — et corrigées** (migrations `20260828000103` et `20260828002053`, relues après
-application). ⚠️ **CAUSE À RETENIR** : sur Supabase, `pg_default_acl` accorde EXECUTE
-**explicitement** à anon/authenticated/service_role sur les fonctions de `public` — un
-`revoke execute … from public` ne leur retire RIEN. Toujours nommer les rôles :
-`from public, authenticated, anon`. ⚠️ **Corollaire** : recréer une fonction sous une NOUVELLE
-signature repart des privilèges par défaut (un `create or replace` à signature identique les
-conserve) — c'est ainsi que `claim_pms_cancellation_batch`, correcte deux fois, a reperdu sa
-protection le jour même. **Garde-fou automatique** : `security_definer_exposure.test.sql` exige que
-toute RPC SECURITY DEFINER exposée à anon/authenticated porte un garde interne, ou figure dans une
-liste d'exceptions NOMMÉES avec leur raison — c'est le point (5) de la checklist, enfin automatisé.
-**CI complète et verte** (8 jobs) : lint (+ design-system bloquant, `docs:check`, `npm audit`),
-typecheck, unit, `secrets` (gitleaks, historique complet), `functions` (`deno check` — les 4 Edge
-Functions n'avaient jamais été typecheckées, une annotation y désactivait silencieusement la
-vérification de deux `rpc()`), `db` (44 pgTAP + `db lint`), `concurrence` (les 10 tests
-anti-survente), `build`. Durcissement : `permissions: contents: read`, `concurrency`,
-`timeout-minutes`, actions épinglées par SHA, CLI figée, Node 22. ⚠️ **Trois fois dans la journée, le
-même piège** : une assertion sur un compte GLOBAL de table suppose une base vide, ce qu'aucune base
-réelle n'est (4 pgTAP en local, puis `claim_notification_email_batch` en CI). ⚠️ **Et deux fois** :
-une vérification locale ne prouve que la machine locale — il a fallu reproduire l'absence de
-`node_modules` et l'absence de Node 22 pour trouver. Les 10 tests de concurrence acceptent désormais
-`PGURL` pour être lançables hors de la stack partagée. **Reste ouvert** :
-`auth_leaked_password_protection` désactivé sur le cloud — activation laissée à Jérôme, ça change le
-comportement d'inscription de vrais utilisateurs ; Dependabot ; Playwright en CI (57 specs, chantier
-à part).*
+*2026-08-28 (tâche 3, session parallèle au lot fuseau) — **le calendrier d'un logement coûtait
+180 appels LobbyPMS par mois affiché, sous un plafond de 60 par minute. Il en coûte 1.** Deux
+réductions indépendantes qui se composent. **R1** : le filtre `category_id` retiré du chemin de
+réservation — `available-rooms` cote TOUT le catalogue d'un établissement en une réponse, donc
+6 produits liés coûtent 1 appel par nuit au lieu de 6. Le cache passe donc à
+`(établissement, mois)` et porte le catalogue brut ; ⚠️ `cuposPerUnit` reste appliqué PAR PRODUIT
+APRÈS la lecture (deux produits sur la même catégorie peuvent avoir des `lodging_kind`/`capacity`
+différents). **La plage** : sonde ajoutée à `pms-nightly-contract-check` en opt-in par le CORPS de
+la requête (le cron poste `{}`, nominal inchangé — vérifié en réel), qui a mesuré trois choses sur
+le compte de Casa Kayam. ⚠️ **`end_date` est INCLUSIF** (demandé J→J+5 : SIX enregistrements), alors
+que la production supposait exclusif depuis le premier jour ; elle n'en a jamais souffert par
+CHANCE, en ne lisant que `data[0]`. La plage EST honorée (`{data:[{date,categories}], meta}`) et
+`records_per_page` vaut 100 — donc un mois tient dans un appel. Et la prémisse de R1 est confirmée :
+disponibilité identique avec et sans `category_id`. ⚠️ **LE PIÈGE, fermé avant d'élargir quoi que
+ce soit** : `data[0]` + étiquetage par la date DEMANDÉE aurait écrit la dispo du 1er jour sur
+30 nuits sans rien casser de visible. La date d'une ligne vient désormais de la RÉPONSE
+(`parseLobbyNightCatalog` + `alignLobbyCatalogEntries`, qui échoue bruyamment plutôt que de compter
+les rangs) ; `parseLobbyNightAvailability` est SUPPRIMÉ pour qu'on ne puisse plus y revenir.
+⚠️ **`pmsFixtureServer` IGNORAIT `end_date`** — un test « un appel pour 30 nuits » y aurait été
+faussement vert ; prouvé en exécutant l'ancienne version, réécrit, et `endDateInclusive` mis à
+`true` par défaut (une fixture plus complaisante que le vrai service ne teste rien). **Ni robot ni
+table de cache** : à 1 appel par mois, le dossier est clos. **Reste ouvert** : sonde à un appel sur
+`start_date == end_date` (la production envoie encore `dernière nuit + 1`, verrue sans conséquence
+car la nuit en trop est écartée par sa date) ; `pms_category_not_quoted` devrait rejoindre
+`connector_inactive` dans les motifs non retentables de `LodgingReservationForm.tsx`, laissé
+intact parce qu'une autre session l'éditait. **Relu par une revue adversariale dédiée, qui a trouvé
+huit défauts dont sept corrigés.** ⚠️ Le plus grave démentait ma propre documentation : la nuit
+surnuméraire due à la borne inclusive avait un **droit de veto sur le mois entier** (validation
+AVANT filtrage), or le 1er du mois suivant est exactement la borne où un PMS a le plus de raisons de
+dévier — on écarte désormais avant de valider. ⚠️ Une disponibilité ILLISIBLE valait « complet »
+(`Number("")` vaut 0) : elle vaut désormais « non cotée ». ⚠️ Le Route Handler n'était exercé par
+AUCUN test (le e2e l'intercepte au niveau NAVIGATEUR) — `route.test.ts` le couvre, et ses invariants
+sont vérifiés par MUTATION, pas seulement par des tests verts. **Non corrigé, signalé** :
+`createTtlCache` ne purge jamais les entrées expirées (Map non bornée sur clés d'appelant), et
+`addDaysIso` (`bogotaDates.ts:56`) porte le même débordement d'année que corrigé ici.*
+
+*2026-08-28 — **lot fuseau horaire : « toutes les dates sont en heure de Colombie » était documenté
+depuis des mois et n'avait jamais été outillé — d'où DIX sites.** La chaîne `"America/Bogota"`
+n'existait NULLE PART dans le code (trois commentaires, rien d'autre). Guatapé est à UTC−5 toute
+l'année : `new Date().toISOString().slice(0, 10)` rend DÉJÀ demain entre 19 h et minuit heure locale
+— **le bug n'est faux que 5 h par jour**, donc aucune vérification manuelle ne le rencontrait. Et
+`packages/e2e-support/src/date.ts` **portait la même faute** : les deux côtés de chaque assertion se
+trompaient ensemble, 57 specs restaient vertes. Corrigés : la fiche produit (`gte("date", …)`
+retirait la soirée en cours du catalogue), les 4 sites de calendrier d'`apps/web` — dont
+`LodgingReservationForm`, le pire, où le mois d'ouverture **pilote la clé du fetch** (un visiteur
+européen le 1ᵉʳ à 2 h demandait à Lobby le mois SUIVANT) —, les 6 sites d'`apps/admin` dont les deux
+écrans que le socio ouvre quotidiennement, les tests, et les six comparaisons `current_date` de
+`list_clients` (l'admin voyait `pasada` un client qui dort dans la maison ce soir-là). Échappatoire
+unique : `packages/domain/src/time/` (`todayInBogota`, `startOfTodayInBogota`, `addDaysIso`,
+`nowIsoInstant`) + `public.today_in_bogota()` côté SQL (migration `20260828150000`, `create or
+replace` à signature identique pour conserver les privilèges). **CRITÈRE DE FIN OUTILLÉ, le cœur du
+lot** : `eslint.rules.mjs` (les 2 apps) + `scripts/check-timezone.sh` (packages/, supabase/functions/
+Deno, tests/, SQL — l'angle mort où vivait justement le 10ᵉ site), les deux bloquants en CI,
+exceptions NOMMÉES avec leur raison. **DIX-SEPT sites de plus** trouvés au second passage, par
+relecture adversariale : `new Date(order.created_at).toLocaleDateString("es")` est le même défaut
+écrit avec `Intl`, invisible au grep qui avait établi la liste. Sur les 5 **Server Components** de ce
+lot il n'y a aucune question produit — Vercel est en UTC, donc le résultat n'est le bon fuseau de
+personne (« Creada el 28/8/2026, 1:15:00 a. m. » pour une réservation de 20 h 15). Repris via
+`formatDateInBogota()`/`formatDateTimeInBogota()`, qui ne font que passer `timeZone` : format rendu
+**rigoureusement identique**. **427 tests unitaires verts**, pgTAP ciblé (35 assertions), typecheck,
+lint, `deno check`, build des deux apps. **Témoins tous rejoués sans le correctif** : horloge figée à
+`2026-08-28T02:30Z` (Bogotá est encore le 27) ; `process.env.TZ = "Europe/Paris"` forcé côté
+composant — sans ça le test ne prouve rien, la machine de dev étant à `America/Bogota` — 3 tests sur
+4 tombent ; et un pgTAP **déterministe sans figer d'horloge** (Kiritimati UTC+14 vs Midway UTC−11,
+25 h d'écart : leurs `current_date` diffèrent toujours, Bogotá coïncide toujours avec exactement
+l'un des deux) — témoin `have: pasada, want: en_casa`. ⚠️ `timezoneId` dans `playwright.config.ts` ne
+couvre **que le navigateur** : le runner Node et le serveur Next gardent le leur, les deux gestes
+sont nécessaires. ⚠️ **Le lot s'est trompé une fois, et le test le disait** : l'en-tête du pgTAP
+affirmait « Bogotá coïncide toujours avec exactement l'un des deux extrêmes » — faux entre 10 h et
+10 h 59 UTC, la CI aurait rougi une heure par jour et on l'aurait mis sur le compte d'un test
+instable. Le bon invariant est plus faible (« diffère toujours d'AU MOINS un ») et suffit. ⚠️ **Aléa de concurrence** : la session parallèle (tâche 3 LobbyPMS) a créé
+`time/todayInBogota.ts` pendant ce lot ; ses ajouts vivent donc dans un fichier VOISIN
+(`bogotaDates.ts`) pour ne pas risquer d'écraser un fichier ouvert ailleurs ; **fusionnés depuis**,
+une fois la tâche 3 posée — il n'y a plus qu'un module `time/bogotaDates.ts`. ⚠️ `public.today_in_bogota()` était exposée à `anon`/`authenticated` — **révoquée**
+(`from public, anon, authenticated`), verrouillée par deux assertions pgTAP, et rien ne casse
+(prouvé sous `set role authenticated` : EXECUTE refusé, `list_clients` répond — frontière SECURITY
+DEFINER). ⚠️ Le mécanisme n'était PAS celui de `20260828000103` : `proacl` était NULL, donc défaut
+Postgres intégré (`EXECUTE TO PUBLIC`) ; les `pg_default_acl` qui nomment anon/authenticated
+n'existent que pour les objets créés par `supabase_admin`, pas par `postgres`. Nommer les rôles
+reste juste, mais pour l'autre raison (un grant explicite ne part pas avec `from public`).
+**Reste ouvert** : `pms-nightly-contract-check/index.ts` sonde en UTC (vraie dette, exemptée
+nommément) ; deux curseurs UTC en ligne (`buildEvenRatesPerDay.ts`, `pmsFixtureServer.ts`) à faire
+converger vers `addDaysIso` — petit, et tous deux corrects en l'état. Le lot précédent du
+jour (tâche 1 — le calendrier dit sa cause et sait redemander, vérifié en préprod) est décrit dans
+`docs/journal/2026-08.md`.*
 
 *2026-08-27 — journée en trois temps : connecteur LobbyPMS vérifié de bout en bout (spec 24), C2
 livré et testé en réel (spec 25), puis **le modèle hébergement mené à son terme (T1 → T3)**.

@@ -1,0 +1,294 @@
+import { describe, expect, it } from "vitest";
+import { parseLobbyNightCatalog } from "./parseLobbyNightCatalog";
+import { alignLobbyCatalogEntries } from "./alignLobbyCatalogEntries";
+
+const GLAMPING = 29376;
+const VIDPOVO = 9631;
+const GUSTO = 36572;
+
+// Réponse de PLAGE telle qu'elle est HYPOTHÉTIQUEMENT rendue si `available-rooms` honore vraiment
+// start_date/end_date (« over a date range » dans la doc, jamais essayé par personne — c'est ce que
+// la sonde doit trancher). La forme mono-nuit, elle, est observée.
+const rangeBody = (dates: string[], availableByDate: Record<string, number>) => ({
+  data: dates.map((date) => ({
+    date,
+    categories: [
+      { category_id: GLAMPING, available_rooms: availableByDate[date] ?? 3 },
+      { category_id: VIDPOVO, available_rooms: 8 },
+    ],
+  })),
+});
+
+describe("parseLobbyNightCatalog — le piège de l'index", () => {
+  // ⚠️ LE TEST QUI JUSTIFIE TOUT CE MODULE. Il porte un TÉMOIN : l'implémentation naïve, celle qui
+  // était en place jusqu'au 2026-08-28 (`data[0]` + étiquetage par la date demandée). Les deux
+  // tournent sur la MÊME charge utile. Sans le témoin, ce test passerait tout aussi bien avec le
+  // code fautif — il ne prouverait rien.
+  it("lit CHAQUE enregistrement d'une plage, et n'écrit jamais le premier jour sur tout le mois", () => {
+    const dates = ["2026-12-21", "2026-12-22", "2026-12-23", "2026-12-24", "2026-12-25"];
+    // Le 21 est libre, les suivants non : exactement le cas où l'erreur coûte de l'argent, puisque
+    // le calendrier afficherait « disponible » sur des nuits pleines.
+    const body = rangeBody(dates, {
+      "2026-12-21": 3,
+      "2026-12-22": 0,
+      "2026-12-23": 0,
+      "2026-12-24": 1,
+      "2026-12-25": 0,
+    });
+
+    const parsed = parseLobbyNightCatalog(body);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const aligned = alignLobbyCatalogEntries(parsed.entries, dates);
+    expect(aligned.ok).toBe(true);
+    if (!aligned.ok) return;
+    expect(aligned.nights.map((night) => night.availableByCategory.get(GLAMPING))).toEqual([3, 0, 0, 1, 0]);
+
+    // TÉMOIN — l'ancien idiome, reproduit littéralement. Il rend un calendrier d'apparence
+    // parfaitement normale : 5 nuits, toutes étiquetées, toutes « disponibles ». Et faux 4 fois sur 5.
+    const naif = dates.map((date) => {
+      const root = Array.isArray(body.data) ? body.data[0] : body;
+      const category = root.categories.find((entry) => entry.category_id === GLAMPING);
+      return { date, available: category?.available_rooms ?? 0 };
+    });
+    expect(naif.map((night) => night.available)).toEqual([3, 3, 3, 3, 3]);
+    expect(naif).toHaveLength(5); // ⚠️ même longueur, mêmes dates : rien ne signale l'erreur.
+  });
+
+  it("refuse une plage dont un enregistrement ne porte pas de date, plutôt que de compter les rangs", () => {
+    const body = {
+      data: [
+        { date: "2026-12-21", categories: [{ category_id: GLAMPING, available_rooms: 3 }] },
+        { categories: [{ category_id: GLAMPING, available_rooms: 0 }] },
+      ],
+    };
+    const parsed = parseLobbyNightCatalog(body);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.entries[1].date).toBeNull();
+
+    const aligned = alignLobbyCatalogEntries(parsed.entries, ["2026-12-21", "2026-12-22"]);
+    expect(aligned).toMatchObject({ ok: false, reason: "missing_date" });
+  });
+
+  it("refuse une réponse qui ne couvre pas toutes les nuits demandées", () => {
+    const parsed = parseLobbyNightCatalog(rangeBody(["2026-12-21", "2026-12-22"], {}));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const aligned = alignLobbyCatalogEntries(parsed.entries, ["2026-12-21", "2026-12-22", "2026-12-23"]);
+    expect(aligned).toMatchObject({ ok: false, reason: "incomplete_coverage" });
+  });
+
+  it("refuse deux enregistrements pour la même date plutôt que d'en élire un", () => {
+    const parsed = parseLobbyNightCatalog(rangeBody(["2026-12-21", "2026-12-21"], {}));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(alignLobbyCatalogEntries(parsed.entries, ["2026-12-21"])).toMatchObject({
+      ok: false,
+      reason: "duplicate_date",
+    });
+  });
+
+  it("⚠️ la nuit surnuméraire n'a AUCUN droit de veto : 31 nuits parfaites + une anomalie hors demande", () => {
+    // LE DÉFAUT CORRIGÉ LE 2026-08-28 (revue adversariale). `end_date` étant inclusif et la
+    // production envoyant « dernière nuit + 1 », il arrive SYSTÉMATIQUEMENT un enregistrement non
+    // demandé : le 1er du mois suivant — précisément la borne où un PMS a le plus de raisons de se
+    // comporter autrement. La première version validait AVANT de filtrer, donc cette nuit-là
+    // pouvait condamner le mois entier.
+    const nights = ["2026-12-21", "2026-12-22"];
+    const bons = nights.map((date) => ({ date, availableByCategory: new Map([[GLAMPING, 3]]) }));
+
+    // (a) la nuit en trop n'est pas datée
+    expect(
+      alignLobbyCatalogEntries([...bons, { date: null, availableByCategory: new Map() }], nights)
+    ).toMatchObject({ ok: true });
+
+    // (b) la nuit en trop est rendue DEUX FOIS
+    const surplus = { date: "2026-12-23", availableByCategory: new Map([[GLAMPING, 1]]) };
+    const aligned = alignLobbyCatalogEntries([...bons, surplus, surplus], nights);
+    expect(aligned.ok).toBe(true);
+    if (!aligned.ok) return;
+    expect(aligned.nights.map((night) => night.date)).toEqual(nights);
+  });
+
+  it("mais un doublon sur une nuit DEMANDÉE échoue toujours — on ne parie pas sur une dispo", () => {
+    const doublon = { date: "2026-12-21", availableByCategory: new Map([[GLAMPING, 3]]) };
+    expect(alignLobbyCatalogEntries([doublon, doublon], ["2026-12-21"])).toMatchObject({
+      ok: false,
+      reason: "duplicate_date",
+    });
+  });
+
+  it("un enregistrement non daté qui EMPORTE une nuit demandée échoue, et le dit", () => {
+    // L'enregistrement sans date est écarté ; c'est la vérification de COUVERTURE qui tranche, et
+    // elle nomme la cause probable plutôt que de compter les enregistrements.
+    const aligned = alignLobbyCatalogEntries(
+      [
+        { date: "2026-12-21", availableByCategory: new Map([[GLAMPING, 3]]) },
+        { date: null, availableByCategory: new Map([[GLAMPING, 0]]) },
+      ],
+      ["2026-12-21", "2026-12-22"]
+    );
+    expect(aligned).toMatchObject({ ok: false, reason: "missing_date" });
+    if (aligned.ok) return;
+    expect(aligned.detail).toContain("2026-12-22");
+  });
+
+  it("écarte une nuit rendue mais non demandée — donc `end_date` inclusif ne décale rien", () => {
+    // Si Lobby s'avère INCLUSIF, une demande 21→22 pour la seule nuit du 21 rend deux
+    // enregistrements. Le 22 est écarté, le 21 reste correct. C'est ce qui empêche la question
+    // inclusif/exclusif de pouvoir décaler une grille en silence.
+    const parsed = parseLobbyNightCatalog(rangeBody(["2026-12-21", "2026-12-22"], { "2026-12-22": 0 }));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const aligned = alignLobbyCatalogEntries(parsed.entries, ["2026-12-21"]);
+    expect(aligned.ok).toBe(true);
+    if (!aligned.ok) return;
+    expect(aligned.nights).toHaveLength(1);
+    expect(aligned.nights[0].date).toBe("2026-12-21");
+    expect(aligned.nights[0].availableByCategory.get(GLAMPING)).toBe(3);
+  });
+});
+
+describe("parseLobbyNightCatalog — forme mono-nuit observée", () => {
+  it("lit le catalogue entier d'une nuit : 6 catégories en une réponse", () => {
+    // Signature de la réponse OBSERVÉE le 2026-08-27 (compte Casa Kayam, appel sans category_id).
+    const body = {
+      date: "2026-09-26",
+      categories: [
+        { category_id: 9629, available_rooms: 4 },
+        { category_id: VIDPOVO, available_rooms: 8 },
+        { category_id: 18013, available_rooms: 12 },
+        { category_id: GLAMPING, available_rooms: 3 },
+        { category_id: GUSTO, available_rooms: 6 },
+        { category_id: 49823, available_rooms: 2 },
+      ],
+    };
+    const parsed = parseLobbyNightCatalog(body);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.entries).toHaveLength(1);
+    expect(parsed.entries[0].date).toBe("2026-09-26");
+    expect(parsed.entries[0].availableByCategory.size).toBe(6);
+    expect(parsed.entries[0].availableByCategory.get(GUSTO)).toBe(6);
+  });
+
+  it("une catégorie ABSENTE n'est pas une catégorie à zéro", () => {
+    const parsed = parseLobbyNightCatalog({
+      date: "2026-09-26",
+      categories: [{ category_id: VIDPOVO, available_rooms: 0 }],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    // Cotée à 0 = « complet », une réponse pleine et entière.
+    expect(parsed.entries[0].availableByCategory.get(VIDPOVO)).toBe(0);
+    // Absente = Lobby ne dit rien de cette catégorie. La distinction porte tout le dossier.
+    expect(parsed.entries[0].availableByCategory.has(GUSTO)).toBe(false);
+  });
+
+  it("étiquette avec la nuit demandée quand la réponse ne porte aucune date — et seulement là", () => {
+    const parsed = parseLobbyNightCatalog({ categories: [{ category_id: GUSTO, available_rooms: 5 }] });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const aligned = alignLobbyCatalogEntries(parsed.entries, ["2026-12-23"]);
+    expect(aligned).toMatchObject({ ok: true });
+    if (!aligned.ok) return;
+    expect(aligned.nights[0].date).toBe("2026-12-23");
+
+    // Deux nuits demandées : l'exception ne s'applique plus, la réponse sans date est refusée.
+    expect(alignLobbyCatalogEntries(parsed.entries, ["2026-12-23", "2026-12-24"])).toMatchObject({
+      ok: false,
+      reason: "missing_date",
+    });
+  });
+
+  it("préfère la valeur la plus basse quand une catégorie apparaît deux fois", () => {
+    const parsed = parseLobbyNightCatalog({
+      date: "2026-09-26",
+      categories: [
+        { category_id: GUSTO, available_rooms: 6 },
+        { category_id: GUSTO, available_rooms: 1 },
+      ],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    // Sur-vendre est la seule erreur qui coûte de l'argent : à défaut de savoir laquelle fait foi,
+    // on garde la plus prudente.
+    expect(parsed.entries[0].availableByCategory.get(GUSTO)).toBe(1);
+  });
+
+  it("tolère un horodatage complet et n'en garde que le jour", () => {
+    const parsed = parseLobbyNightCatalog({
+      date: "2026-09-26 00:00:00",
+      categories: [{ category_id: GUSTO, available_rooms: 6 }],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.entries[0].date).toBe("2026-09-26");
+  });
+
+  it("refuse un corps sans `categories[]` — jamais une fenêtre vide qui passerait pour un complet", () => {
+    expect(parseLobbyNightCatalog(null).ok).toBe(false);
+    expect(parseLobbyNightCatalog({ message: "Too Many Attempts." }).ok).toBe(false);
+    expect(parseLobbyNightCatalog({ data: [{ date: "2026-09-26" }] }).ok).toBe(false);
+    expect(parseLobbyNightCatalog({ date: "2026-09-26", categories: {} }).ok).toBe(false);
+  });
+
+  it("une disponibilité ILLISIBLE n'est pas un zéro : la catégorie est NON COTÉE", () => {
+    // ⚠️ CORRIGÉ LE 2026-08-28 APRÈS REVUE. La première version rendait 0 — c'est-à-dire
+    // « complet » — pour un champ absent, `null` ou `""`. Une nuit devenait donc non réservable
+    // SANS un seul log, ce qui est exactement le silence que ce lot existe pour supprimer, et
+    // contredit la règle du dossier : un échec de LECTURE n'est pas une disponibilité.
+    const parsed = parseLobbyNightCatalog({
+      date: "2026-09-26",
+      categories: [
+        { category_id: GUSTO, available_rooms: "beaucoup" },
+        { category_id: VIDPOVO },
+        { category_id: 9629, available_rooms: null },
+        { category_id: 18013, available_rooms: "" },
+      ],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const byCategory = parsed.entries[0].availableByCategory;
+    for (const id of [GUSTO, VIDPOVO, 9629, 18013]) {
+      expect(byCategory.has(id)).toBe(false);
+    }
+  });
+
+  it("une valeur négative reste bornée à 0 — celle-là EST lisible, elle dit « complet »", () => {
+    const parsed = parseLobbyNightCatalog({
+      date: "2026-09-26",
+      categories: [{ category_id: VIDPOVO, available_rooms: -3 }],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.entries[0].availableByCategory.get(VIDPOVO)).toBe(0);
+  });
+
+  it("tronque une valeur fractionnaire — jamais une demi-place à vendre", () => {
+    // `available_rooms` compte des unités physiques. Un 2.5 deviendrait 2.5 cupos après
+    // multiplication par cuposPerUnit, donc une demi-place mise en vente.
+    const parsed = parseLobbyNightCatalog({
+      date: "2026-09-26",
+      categories: [{ category_id: VIDPOVO, available_rooms: 2.5 }],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.entries[0].availableByCategory.get(VIDPOVO)).toBe(2);
+  });
+
+  it("ignore une entrée sans `category_id` plutôt que d'inventer la catégorie 0", () => {
+    // `Number(null)` vaut 0. Sans garde, cette entrée créerait une catégorie FANTÔME numéro 0 — à
+    // laquelle un produit pourrait réellement se raccrocher, `isPmsBacked` acceptant
+    // `lobby_category_id = 0` (il ne teste que `!= null`).
+    const parsed = parseLobbyNightCatalog({
+      date: "2026-09-26",
+      categories: [{ category_id: null, available_rooms: 7 }, { available_rooms: 7 }],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.entries[0].availableByCategory.size).toBe(0);
+  });
+});

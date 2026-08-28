@@ -425,7 +425,7 @@ restent la seule source de prix, y compris pour un produit PMS-backed. Nouveaux 
 `getNightAvailabilityWindow.ts` (port de `mapChunked`, lots de 6, chaque nuit dans son propre
 `try/catch` — un échec isolé OMET cette nuit du résultat, jamais une valeur fabriquée ;
 `hasUnavailableNightInRange` traite déjà toute nuit absente comme indisponible, fail-closed
-gratuit), `parseLobbyNightAvailability.ts`, `nightAvailabilityCache.ts` (cache TTL 60s en mémoire,
+gratuit), `parseLobbyNightCatalog.ts` (remplace `parseLobbyNightAvailability.ts`, supprimé le 2026-08-28 avec le filtre `category_id`), `nightAvailabilityCache.ts` (cache TTL 60s en mémoire,
 best-effort, non partagé entre instances Vercel — cohérent avec l'invariant « cache 60s autorisé
 pour l'affichage », jamais pour l'écriture). `createLobbyBooking`/`reserve-nights` restent inchangés
 : la protection anti-survente réelle reste `POST /bookings`, toujours juge final côté Lobby au

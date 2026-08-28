@@ -13,6 +13,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   getLobbyAvailableRooms,
+  getLobbyNightAvailability,
   getLobbyRooms,
   LOBBY_DEFAULT_BASE_URL,
 } from "../../../packages/domain/src/pms/lobbyClient.ts";
@@ -140,19 +141,106 @@ function describeAvailabilityContract(body: unknown, knownCategoryIds: number[])
   return notes;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// SONDES OPT-IN — 2026-08-28
+//
+// POURQUOI ICI, et pas dans un script jetable. Ce job est le seul endroit du projet qui réunit les
+// trois conditions nécessaires : il tourne en préprod (donc il PEUT joindre LobbyPMS, ce qu'un
+// poste de dev ne peut pas), il lit le jeton EN BASE (aucun secret manipulé à la main, aucune
+// variable d'environnement à poser), et sa raison d'être est déjà de dire ce que Lobby renvoie.
+//
+// OPT-IN PAR LE CORPS DE LA REQUÊTE, et c'est ce qui rend l'ajout sans risque : pg_cron poste `{}`,
+// donc le comportement nominal du job est INCHANGÉ, à l'appel près. Les sondes ne partent que si
+// quelqu'un les demande explicitement, depuis le SQL Editor via net.http_post.
+//
+// ⚠️ BUDGET D'APPELS. Le plafond mesuré est de 60 appels par fenêtre glissante d'une minute
+// (Retry-After décompté 55/54/53/52 en préprod le 2026-08-28 — signature d'un `throttle:60,1`
+// Laravel), et son mode d'échec est MUET : une fenêtre vide ne dit pas si Lobby a refusé ou si le
+// quota est épuisé. Les sondes sont donc espacées, et le nombre d'appels réellement émis est
+// RENDU dans la réponse — on ne devine jamais ce qu'on a consommé.
+const PROBE_SPACING_MS = 1500;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+type ProbeName = "range" | "category_filter";
+const KNOWN_PROBES: ProbeName[] = ["range", "category_filter"];
+
+// Lit la demande de sondes SANS jamais lever : un corps absent, vide, non-JSON ou inattendu vaut
+// « pas de sonde ». C'est ce qui garantit que le cron, qui poste `{}`, ne peut pas déclencher un
+// appel supplémentaire vers Lobby par accident.
+async function readRequestedProbes(req: Request): Promise<ProbeName[]> {
+  if (req.method !== "POST") return [];
+  let parsed: unknown;
+  try {
+    parsed = await req.json();
+  } catch {
+    return [];
+  }
+  if (typeof parsed !== "object" || parsed === null) return [];
+  const requested = (parsed as { probes?: unknown }).probes;
+  if (!Array.isArray(requested)) return [];
+  return KNOWN_PROBES.filter((name) => requested.includes(name));
+}
+
+// Décrit la FORME d'une réponse de plage sans jamais rendre le corps entier (il peut être gros) et
+// sans jamais rendre l'URL, qui porte `api_token` (CLAUDE.md §8).
+function describeRangeShape(body: unknown): string[] {
+  if (typeof body !== "object" || body === null) return ["corps non-objet"];
+  const record = body as Record<string, unknown>;
+  const notes = [`clés racine : ${Object.keys(record).sort().join(", ")}`];
+
+  const dataArray = Array.isArray(record.data) ? record.data : null;
+  if (dataArray === null) {
+    notes.push("pas de `data[]` — forme MONO-NUIT, donc la plage n'est PAS honorée");
+    notes.push(`date rendue : ${typeof record.date === "string" ? record.date : "(absente)"}`);
+    const categories = Array.isArray(record.categories) ? record.categories : [];
+    notes.push(`categories[] : ${categories.length} entrée(s)`);
+    return notes;
+  }
+
+  const dates = dataArray.map((entry) => {
+    const nested = typeof entry === "object" && entry !== null ? (entry as Record<string, unknown>) : {};
+    return typeof nested.date === "string" ? nested.date : "(sans date)";
+  });
+  notes.push(`\`data[]\` : ${dataArray.length} enregistrement(s)`);
+  notes.push(`dates rendues : ${dates.join(", ")}`);
+  const first = typeof dataArray[0] === "object" && dataArray[0] !== null
+    ? Object.keys(dataArray[0] as Record<string, unknown>).sort().join(", ")
+    : "(non-objet)";
+  notes.push(`clés d'un enregistrement : ${first}`);
+  if (record.meta !== undefined) notes.push(`meta : ${JSON.stringify(record.meta)}`);
+  return notes;
+}
+
+// Combien d'unités Lobby cote pour UNE catégorie dans un corps `available-rooms`, ou null si la
+// catégorie n'y figure pas. Volontairement local à la sonde : c'est une lecture d'observation, pas
+// le parseur du chemin de réservation.
+function availableForCategory(body: unknown, categoryId: number): number | null {
+  const contract = parseLobbyAvailabilityContract(body);
+  if (!contract.ok) return null;
+  const found = contract.categories.find((category) => category.categoryId === categoryId);
+  return found ? found.availableRooms : null;
+}
+
 // Nuit sondée : J+30. Assez loin pour qu'un `lead_days` ne puisse pas masquer une catégorie (ce
 // serait confondre « non réservable » avec « pas encore ouvert », exactement l'erreur que C1 doit
 // éviter), assez proche pour rester dans l'horizon de réservation de n'importe quel plan tarifaire.
-function probeNights(): { date: string; nextDate: string } {
+function probeNights(): { date: string; nextDate: string; rangeEnd: string } {
   const start = new Date();
   start.setUTCDate(start.getUTCDate() + 30);
   const next = new Date(start);
   next.setUTCDate(next.getUTCDate() + 1);
+  // Borne de la sonde de plage : D+5. Le chiffre est choisi pour que la RÉPONSE soit décisive —
+  // 5 enregistrements = `end_date` EXCLUSIF (ce que la production suppose sans l'avoir vérifié),
+  // 6 = INCLUSIF, 1 = la plage n'est pas honorée du tout. Aucune de ces trois réponses n'est
+  // devinable, et se tromper décalerait toute la grille d'un jour, silencieusement.
+  const rangeEnd = new Date(start);
+  rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 5);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
-  return { date: iso(start), nextDate: iso(next) };
+  return { date: iso(start), nextDate: iso(next), rangeEnd: iso(rangeEnd) };
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req: Request) => {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -186,7 +274,16 @@ Deno.serve(async () => {
     drifts.push(`${failedCancellations} annulation(s) LobbyPMS abandonnée(s) après ${3} tentatives — chambres possiblement encore bloquées`);
   }
 
-  const { date, nextDate } = probeNights();
+  const { date, nextDate, rangeEnd } = probeNights();
+  // Les catégories relevées par le passage nominal, réutilisées par la sonde 2 — pour ne PAS
+  // repayer un GET /rooms rien que pour connaître un identifiant de catégorie.
+  const probeCategoryIds = new Map<string, number[]>();
+  const requestedProbes = await readRequestedProbes(req);
+  const probeNotes: string[] = [];
+  // Compteur d'appels Lobby émis PAR LES SONDES. Il est rendu dans la réponse : le mode d'échec du
+  // quota étant muet, savoir exactement ce qu'on a consommé est la seule façon de ne pas
+  // rediagnostiquer un « horizon de calendrier » qui n'existe pas.
+  let probeCalls = 0;
   for (const establishment of establishments ?? []) {
     if (!establishment.lobby_api_token) continue;
     let knownCategoryIds: number[] = [];
@@ -198,6 +295,7 @@ Deno.serve(async () => {
         );
       } else {
         knownCategoryIds = parseLobbyRooms(rooms.body).map((category) => category.categoryId);
+        probeCategoryIds.set(establishment.id, knownCategoryIds);
         for (const note of describeRoomsFieldCoverage(rooms.body)) {
           drifts.push(`établissement ${establishment.id} : ${note}`);
         }
@@ -241,8 +339,83 @@ Deno.serve(async () => {
     console.info("pms-nightly-contract-check : contrat observé", observations);
   }
 
+  // ── SONDES, après le passage nominal et seulement sur demande explicite ──────────────────────
+  for (const establishment of requestedProbes.length > 0 ? (establishments ?? []) : []) {
+    if (!establishment.lobby_api_token) continue;
+
+    if (requestedProbes.includes("range")) {
+      // SONDE 1 — `end_date` est-il INCLUSIF ou EXCLUSIF ? C'est la première question à poser,
+      // avant toute autre : le code de production suppose EXCLUSIF sans l'avoir vérifié, et une
+      // erreur ici décale toute la grille d'un jour sans rien casser de visible.
+      // UN SEUL APPEL : D → D+5.
+      try {
+        await sleep(PROBE_SPACING_MS);
+        probeCalls += 1;
+        const range = await getLobbyAvailableRooms(
+          baseUrl, establishment.lobby_api_token, date, rangeEnd, relaySecret
+        );
+        if (range.status !== 200) {
+          probeNotes.push(
+            `sonde plage ${establishment.id} : ${range.status} — ${describeLobbyErrorBody(range.body)}`
+          );
+        } else {
+          probeNotes.push(`sonde plage ${establishment.id} : demandé ${date} → ${rangeEnd} (5 nuits si exclusif, 6 si inclusif)`);
+          for (const note of describeRangeShape(range.body)) {
+            probeNotes.push(`sonde plage ${establishment.id} : ${note}`);
+          }
+        }
+      } catch (err) {
+        probeNotes.push(`sonde plage ${establishment.id} : injoignable (${err})`);
+      }
+    }
+
+    if (requestedProbes.includes("category_filter")) {
+      // SONDE 2 — R1 repose sur une prémisse : la disponibilité rendue POUR UNE CATÉGORIE est la
+      // même qu'on filtre ou non par `category_id`. La forme a été observée le 2026-08-27 ;
+      // l'ÉGALITÉ DES VALEURS, elle, ne l'a jamais été. Deux appels sur la MÊME nuit la vérifient.
+      const knownCategoryIds = probeCategoryIds.get(establishment.id) ?? [];
+      const categoryId = knownCategoryIds[0];
+      if (categoryId === undefined) {
+        probeNotes.push(`sonde filtre ${establishment.id} : aucune catégorie connue, sonde sautée`);
+      } else {
+        try {
+          await sleep(PROBE_SPACING_MS);
+          probeCalls += 1;
+          const filtered = await getLobbyNightAvailability(
+            baseUrl, establishment.lobby_api_token, categoryId, date, nextDate, relaySecret
+          );
+          await sleep(PROBE_SPACING_MS);
+          probeCalls += 1;
+          const whole = await getLobbyAvailableRooms(
+            baseUrl, establishment.lobby_api_token, date, nextDate, relaySecret
+          );
+          const withFilter = filtered.status === 200 ? availableForCategory(filtered.body, categoryId) : null;
+          const withoutFilter = whole.status === 200 ? availableForCategory(whole.body, categoryId) : null;
+          probeNotes.push(
+            `sonde filtre ${establishment.id} : catégorie ${categoryId}, nuit ${date} — avec category_id = ${withFilter}, sans = ${withoutFilter}` +
+              (withFilter === withoutFilter ? " (IDENTIQUE : la prémisse de R1 tient)" : " ⚠️ DIVERGENT")
+          );
+        } catch (err) {
+          probeNotes.push(`sonde filtre ${establishment.id} : injoignable (${err})`);
+        }
+      }
+    }
+  }
+
+  if (probeNotes.length > 0) {
+    console.info("pms-nightly-contract-check : sondes", { probeCalls, probeNotes });
+  }
+
   return new Response(
-    JSON.stringify({ ok: true, checked: (establishments ?? []).length, drifts, observations }),
+    JSON.stringify({
+      ok: true,
+      checked: (establishments ?? []).length,
+      drifts,
+      observations,
+      // Absents en nominal (cron), donc la réponse du job ne change pas de forme tant que personne
+      // ne demande de sonde.
+      ...(requestedProbes.length > 0 ? { probes: requestedProbes, probeCalls, probeNotes } : {}),
+    }),
     { headers: { "Content-Type": "application/json" } }
   );
 });

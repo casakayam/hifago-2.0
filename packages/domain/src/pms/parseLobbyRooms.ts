@@ -1,4 +1,4 @@
-// Parseur défensif de GET /api/v1/rooms — même discipline que parseLobbyNightAvailability.ts :
+// Parseur défensif de GET /api/v1/rooms — même discipline que parseLobbyNightCatalog.ts :
 // la doc officielle de LobbyPMS s'est DÉJÀ révélée fausse une fois (la réponse de POST /bookings
 // est {"booking":{...}} et jamais le {"data":[{"idBooking":…}]} imprimé), donc aucun champ n'est
 // supposé présent, aucune exception n'est levée, et un champ absent est OMIS plutôt que fabriqué.
@@ -152,9 +152,12 @@ export function parseLobbyRooms(body: unknown): LobbyRoomCategory[] {
  * Pagination : `meta.total_pages` permet d'arrêter la boucle dès la dernière page réelle, au lieu
  * de taper systématiquement jusqu'au plafond de sécurité.
  *
- * ⚠️ Cette clé vient de la DOC de Lobby et n'a jamais été observée dans une réponse réelle : la
- * sonde du 2026-08-26 n'a capturé que le début du corps, qui ne contenait que `data`. Elle renvoie
- * donc `null` sans drame, et l'appelant NE DOIT PAS en dépendre seul — `collectLobbyPages`
+ * ⚠️ Cette clé vient de la DOC de Lobby et n'a toujours pas été observée SUR `/rooms` : la sonde du
+ * 2026-08-26 n'a capturé que le début du corps, qui ne contenait que `data`. Elle EXISTE en
+ * revanche sur `/api/v2/available-rooms` v2 (sonde du 2026-08-28 : `meta` = { total_records,
+ * current_page, records_per_page: 100, total_pages }) — ce qui rend son existence sur /rooms
+ * plausible, jamais acquise. Elle renvoie donc `null` sans drame, et l'appelant NE DOIT PAS en
+ * dépendre seul — `collectLobbyPages`
  * (apps/admin/lib/pms/lobbyEstablishment.ts) s'arrête aussi quand une page n'apporte aucun
  * identifiant nouveau, ce qui ne suppose rien de Lobby.
  *

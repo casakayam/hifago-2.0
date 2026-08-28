@@ -2,11 +2,14 @@ import {
   asLodgingKind,
   createTtlCache,
   cuposPerUnit,
-  getNightAvailabilityWindow,
+  getNightAvailabilityRange,
   isPmsBacked,
   LOBBY_DEFAULT_BASE_URL,
   nightsOfMonth,
+  pickCategoryNights,
+  todayInBogota,
   type NightAvailabilityRow,
+  type NightCatalogRow,
   type PmsFailure,
 } from "@hifago/domain";
 import { createServiceRoleClient } from "@hifago/supabase/service";
@@ -41,13 +44,38 @@ interface EstablishmentRow {
   lobby_api_token: string | null;
 }
 
-const MONTH_PATTERN = /^\d{4}-\d{2}$/;
+// ⚠️ LE NUMÉRO DE MOIS EST VALIDÉ, pas seulement sa forme — corrigé le 2026-08-28 après revue.
+// `/^\d{4}-\d{2}$/` acceptait `00` et `13` à `99`, et les deux échouaient MAL :
+//   - `2026-13` : `nightsOfMonth` fabriquait des dates impossibles, `new Date(...)` levait, et la
+//     route rendait un 502 `pms_unreachable` avec une pile en console — pour une faute de saisie.
+//   - `2026-00` : toutes les nuits étaient filtrées par la comparaison avec « aujourd'hui », donc
+//     `{ok:true, nights:[]}` — un SUCCÈS sur un mois qui n'existe pas, mis en cache par-dessus.
+const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+// Horizon interrogeable, en mois. CE N'EST PAS L'HORIZON PRODUIT (jusqu'où on accepte de vendre —
+// question ouverte, à trancher par Jérôme) : c'est un garde-fou d'ABUS. Cette route est publique et
+// anonyme, chaque mois distinct est une clé de cache neuve, donc un vrai appel LobbyPMS : soixante
+// requêtes sur soixante mois futurs suffisaient à consommer le plafond mesuré (60 par minute) et à
+// mettre le calendrier réel en 429 pour tout le monde. Volontairement TRÈS large — il borne une
+// attaque, il n'arbitre pas un produit.
+const MAX_MONTHS_AHEAD = 36;
+
+function monthIndex(month: string): number {
+  const [year, monthNumber] = month.split("-");
+  return Number(year) * 12 + Number(monthNumber) - 1;
+}
 
 // Cache 60s en mémoire, une seule instance par process serverless (spec 21 §0 : "cache 60s autorisé
 // uniquement pour l'affichage" — jamais au moment de réserver, reserve-nights relit toujours à
 // chaud). Best-effort, non partagé entre instances Vercel concurrentes — acceptable, ce cache n'a
 // qu'une valeur de réduction de charge sur Lobby, jamais de correction.
-const cache = createTtlCache<NightAvailabilityRow[]>(60_000);
+//
+// ⚠️ CE QUI EST MIS EN CACHE A CHANGÉ LE 2026-08-28 (R1) : ce n'est plus la disponibilité d'UNE
+// catégorie, mais le CATALOGUE ENTIER de l'établissement pour le mois — parce que c'est exactement
+// ce que Lobby rend quand on cesse de lui passer `category_id`. Une seule lecture sert donc tous
+// les produits de l'établissement. Cumulé à la lecture par plage juste en dessous : les 6 produits
+// de Casa Kayam consultés dans la même minute coûtent UN appel, contre 180 avant cette date.
+const cache = createTtlCache<NightCatalogRow[]>(60_000);
 
 // Le cache n'évince que sur promesse REJETÉE (cf. ttlCache.ts). Une fenêtre incomplète étant une
 // valeur RÉSOLUE, elle restait mémorisée 60 s et resservie à tous les visiteurs de l'instance —
@@ -93,6 +121,16 @@ export async function GET(request: Request) {
     return Response.json({ ok: false, reason: "invalid_params" }, { status: 400 });
   }
 
+  // Le mois demandé doit rester dans une fenêtre plausible autour d'aujourd'hui À BOGOTÁ. Un mois
+  // passé ne coûte aucun appel Lobby (toutes ses nuits sont filtrées) mais occupe une entrée de
+  // cache ; un mois lointain, lui, coûte un vrai appel. Les deux sont refusés en 400, avant la
+  // moindre lecture en base.
+  const currentMonth = todayInBogota().slice(0, 7);
+  const monthsAhead = monthIndex(month) - monthIndex(currentMonth);
+  if (monthsAhead < 0 || monthsAhead > MAX_MONTHS_AHEAD) {
+    return Response.json({ ok: false, reason: "month_out_of_range" }, { status: 400 });
+  }
+
   const service = createServiceRoleClient();
 
   // `sellable` : cette route tourne en service_role, donc HORS RLS. `products_select_public`
@@ -125,20 +163,33 @@ export async function GET(request: Request) {
   }
 
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    // ⚠️ LA DATE DE BOGOTÁ, JAMAIS CELLE D'UTC. Cette valeur est le plancher « ne rien demander
+    // avant aujourd'hui » de nightsOfMonth. Avec `new Date().toISOString().slice(0, 10)`, qui était
+    // ici jusqu'au 2026-08-28, la Colombie étant à UTC−5 : passé 19 h à Guatapé, ce plancher valait
+    // DÉJÀ demain, et la nuit EN COURS n'était même pas DEMANDÉE à Lobby. Donc absente du
+    // calendrier, donc non réservable — tous les soirs, sans un seul message d'erreur.
+    const today = todayInBogota();
     const nights = nightsOfMonth(month, today);
     const baseUrl = process.env.LOBBY_API_BASE_URL || LOBBY_DEFAULT_BASE_URL;
     const relaySecret = process.env.LOBBY_RELAY_SECRET;
     const categoryId = product.lobby_category_id as number;
     const apiToken = establishment.lobby_api_token;
 
-    // La clé porte l'établissement, et ce n'est pas décoratif : `lobby_category_id` est un entier
-    // LOCAL au compte Lobby de chaque établissement. Deux établissements connectés à deux comptes
-    // différents ont trivialement la même catégorie 1 — sans ce préfixe, le second visiteur reçoit
-    // la disponibilité du premier. Le cache jumeau côté admin (lobbyEstablishment.ts) est clé par
-    // établissement depuis toujours ; c'est ici que la discipline manquait.
-    const rows = await cache.getOrFetch(`${establishment.id}:${categoryId}:${month}`, async () => {
-      const window = await getNightAvailabilityWindow(baseUrl, apiToken, categoryId, nights, relaySecret);
+    // LA CLÉ NE PORTE PLUS LA CATÉGORIE (R1, 2026-08-28), et c'est le point : la lecture Lobby ne
+    // dépend plus d'un produit. Elle porte toujours l'établissement, et ce n'est pas décoratif —
+    // `lobby_category_id` est un entier LOCAL au compte Lobby de chaque établissement. Deux
+    // établissements connectés à deux comptes différents ont trivialement la même catégorie 1 ;
+    // sans ce préfixe, le second visiteur recevrait la disponibilité du premier.
+    const catalog = await cache.getOrFetch(`${establishment.id}:${month}`, async () => {
+      // UN SEUL APPEL POUR LE MOIS ENTIER, depuis que la sonde du 2026-08-28 a prouvé sur le compte
+      // réel que `available-rooms` honore start_date/end_date (racine `{data[], meta}`, un
+      // enregistrement daté par nuit, 100 par page — un mois tient donc dans une page). Avec R1
+      // au-dessus, le mois affiché passe de 180 appels à 1 chez Casa Kayam.
+      //
+      // getNightAvailabilityWindow (nuit par nuit) reste le repli documenté : il ne suppose rien
+      // d'une plage. On n'y bascule PAS automatiquement en cas d'échec — ce serait doubler le coût
+      // d'un incident et masquer une dérive de contrat que le job nocturne est là pour voir.
+      const window = await getNightAvailabilityRange(baseUrl, apiToken, nights, relaySecret);
       if (!window.ok) {
         // ⚠️ Le seuil est UNE nuit manquante, jamais « toutes manquantes ». La panne mesurée le
         // 2026-08-28 comportait des mois PARTIELS (novembre à 29 nuits sur 30) : un déclencheur
@@ -162,21 +213,52 @@ export async function GET(request: Request) {
       return window.nights;
     });
 
+    // EXTRACTION DE LA CATÉGORIE — ce qui remplace le filtre `category_id` retiré de l'appel HTTP.
+    // Elle est APRÈS le cache et ne coûte rien, mais elle échoue séparément, et c'est délibéré : un
+    // catalogue qui ne cote pas CE produit reste une réponse parfaitement valide pour les autres
+    // produits du même établissement. Le mémoriser est donc correct ; c'est cette lecture-ci qui
+    // refuse, jamais la fenêtre. Une catégorie absente n'est JAMAIS lue comme « complet » — un
+    // échec de lecture n'est pas une disponibilité (CLAUDE.md §4.4).
+    const picked = pickCategoryNights(catalog, categoryId);
+
+    // AUCUNE nuit cotée : signature d'un `lobby_category_id` faux ou d'une catégorie supprimée côté
+    // Lobby. Rendre un mois vide en `ok:true` serait un calendrier muet et sans explication.
+    if (picked.nights.length === 0 && catalog.length > 0) {
+      console.warn(
+        `GET /api/pms/night-availability — catégorie jamais cotée (product ${productId}, month ${month}) :`,
+        { categoryId, nights: catalog.length }
+      );
+      return Response.json({ ok: false, reason: "pms_category_not_quoted" }, { status: 502 });
+    }
+
+    // QUELQUES nuits non cotées : on sert les autres, et c'est le correctif du 2026-08-28 (revue).
+    // Refuser le mois entier pour une nuit lointaine non cotée rendait inaccessibles trente nuits
+    // parfaitement connues. Les nuits omises restent NON SÉLECTIONNABLES à l'écran (le calendrier
+    // refuse toute date absente de la carte) — donc la sûreté est identique, l'utilité non.
+    if (picked.missingDates.length > 0) {
+      console.warn(
+        `GET /api/pms/night-availability — nuits non cotées (product ${productId}, month ${month}) :`,
+        { categoryId, missing: picked.missingDates.length, firstMissing: picked.missingDates[0] }
+      );
+    }
+
     // CONVERSION UNITÉS LOBBY → CUPOS, et c'est le coeur de cette route. `available_rooms` compte
     // des chambres/tentes/lits-unités ; tout le reste de hifago (product_availability.capacity,
     // order_lines.qty, min_qty/max_qty, price_tiers) compte des cupos. La règle de conversion est
     // celle du garde-fou capacity_exceeds_physical, partagée dans le domaine plutôt que réécrite
     // ici — cf. cuposPerUnit.
     //
-    // La multiplication est APRÈS le cache, jamais avant : ce qui est mis en cache est la réponse
-    // brute de Lobby pour un couple (établissement, catégorie), légitimement partageable par deux
-    // produits pointant la même catégorie avec des capacités différentes. Nouveaux objets, jamais
-    // une mutation en place — les lignes en cache sont réutilisées telles quelles au prochain hit.
+    // ⚠️ ELLE RESTE APPLIQUÉE PAR PRODUIT, APRÈS LA LECTURE, et R1 rend ce point critique plutôt
+    // que théorique : ce qui est en cache appartient maintenant à l'ÉTABLISSEMENT, et deux produits
+    // pointant la même catégorie Lobby peuvent avoir des `lodging_kind`/`capacity` différents.
+    // Multiplier avant le cache écrirait la conversion du premier visiteur sur tous les suivants.
+    // Nouveaux objets, jamais une mutation en place — les lignes en cache sont réutilisées telles
+    // quelles au prochain hit.
     const perUnit = cuposPerUnit(asLodgingKind(product.lodging_kind), product.capacity);
     const cupos: NightAvailabilityRow[] =
       perUnit === 1
-        ? rows
-        : rows.map((row) => ({ ...row, capacity: row.capacity * perUnit }));
+        ? picked.nights
+        : picked.nights.map((row) => ({ ...row, capacity: row.capacity * perUnit }));
 
     return Response.json({ ok: true, nights: cupos });
   } catch (error) {

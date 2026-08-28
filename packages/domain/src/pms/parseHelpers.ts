@@ -7,9 +7,9 @@
 // doc officielle de LobbyPMS s'est déjà révélée fausse une fois, donc aucun champ n'est supposé
 // présent, aucune exception n'est levée, et un champ absent est OMIS plutôt que fabriqué.
 //
-// Les deux parseurs plus anciens du dossier (parseLobbyNightAvailability, parseLobbyBookingResponse)
-// appliquent le même principe avec un idiome inline. Ils ne sont volontairement PAS réécrits ici :
-// ils ont leurs tests, et les rétro-adapter n'achèterait rien aujourd'hui.
+// Le parseur plus ancien du dossier (parseLobbyBookingResponse) applique le même principe avec un
+// idiome inline. Il n'est volontairement PAS réécrit ici : il a ses tests, et le rétro-adapter
+// n'achèterait rien aujourd'hui.
 
 export function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)

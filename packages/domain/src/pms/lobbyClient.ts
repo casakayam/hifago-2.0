@@ -111,6 +111,12 @@ export function getLobbyProducts(baseUrl: string, apiToken: string, page?: numbe
 
 // GET /api/v2/available-rooms pour UNE nuit (start_date=date, end_date=date+1) — la forme V2 groupe
 // les prix par plan (plans[].prices[]), pas directement categories[].prices[] comme la V1.
+//
+// ⚠️ N'EST PLUS SUR LE CHEMIN DE RÉSERVATION depuis le 2026-08-28 (R1) : le calendrier lit
+// désormais le catalogue entier via getLobbyAvailableRooms, ce qui divise par six le coût d'un mois
+// affiché chez Casa Kayam. Cette fonction reste utilisée par la SONDE de contrôle de contrat, qui
+// compare précisément la réponse filtrée à la réponse non filtrée pour vérifier que la prémisse de
+// R1 tient sur un vrai compte.
 export function getLobbyNightAvailability(
   baseUrl: string,
   apiToken: string,
@@ -126,15 +132,17 @@ export function getLobbyNightAvailability(
 }
 
 // GET /api/v2/available-rooms SANS `category_id` — la réponse porte un tableau `categories[]`, donc
-// omettre le filtre revient à demander le catalogue entier pour la nuit. Lecture d'OBSERVATION,
-// réservée au job nocturne de contrôle de contrat : getLobbyNightAvailability juste au-dessus reste
-// la seule fonction du parcours de réservation, et n'est pas touchée.
+// omettre le filtre revient à demander le catalogue entier pour la nuit.
 //
-// Ce que cet appel doit trancher, et que rien d'autre ne peut (les deux points sont ouverts depuis
-// le début du chantier, faute d'observation) :
-//   C1 — si Lobby n'énumère ici QUE les catégories réservables, la réponse EST le filtre cherché,
-//        et on n'a jamais à coder un identifiant en dur.
-//   C5 — les valeurs réelles de restrictions{min_stay, max_stay, lead_days}.
+// PROMUE SUR LE CHEMIN DE RÉSERVATION le 2026-08-28 (R1). Elle était jusque-là réservée au job
+// nocturne d'observation ; sa forme ayant été OBSERVÉE le 2026-08-27 (les 6 catégories de Casa
+// Kayam cotées en une seule réponse, signature de champs identique), le calendrier s'en sert
+// désormais et un établissement de 6 produits liés passe de 6 appels par nuit à 1.
+//
+// Ce que cet appel a tranché, et que rien d'autre ne pouvait :
+//   C1 — RÉFUTÉ : Lobby cote TOUTES les catégories, y compris celles qui refusent un booking en
+//        422. La réponse ne porte aucun discriminant.
+//   C5 — RÉPONDU : restrictions{min_stay, max_stay, lead_days} = {0,0,0} sur les six.
 export function getLobbyAvailableRooms(
   baseUrl: string,
   apiToken: string,

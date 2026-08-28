@@ -14,10 +14,42 @@ export interface PmsFixtureScenario {
   addProductServiceStatus?: number;
   addProductServiceBody?: unknown;
   bookingDetailByStatus?: Map<number, { status: number; body: unknown }>;
-  // Spec 21 §13 (gap comblé) — clé = start_date (yyyy-MM-dd) envoyé par getLobbyNightAvailability.
+  // Spec 21 §13 (gap comblé) — clé = la NUIT (yyyy-MM-dd), pas le `start_date` de la requête.
   // Une date absente de cette map répond "disponible" par défaut (available_rooms: 5) : un scénario
   // n'a besoin d'énumérer que les exceptions (nuit pleine, nuit en erreur), pas tout le mois.
-  nightAvailabilityByDate?: Record<string, { status?: number; availableRooms?: number }>;
+  //
+  // ⚠️ RÉÉCRIT LE 2026-08-28. Jusque-là, ce serveur IGNORAIT PUREMENT ET SIMPLEMENT `end_date` : il
+  // répondait toujours UNE nuit, celle de `start_date`. Tant que la production demandait une nuit
+  // par appel, l'écart ne se voyait pas. Mais il rendait INDÉTECTABLE l'erreur la plus coûteuse du
+  // dossier : un test « un seul appel couvre 30 nuits » aurait été VERT contre un serveur qui n'en
+  // rend qu'une, et l'aurait été tout autant si le code de production avait recopié la disponibilité
+  // du 1er jour sur les 29 autres. Une fixture plus complaisante que le vrai service ne teste pas le
+  // service.
+  //
+  // `status` : une réponse HTTP n'a qu'un statut. Quand une requête couvre plusieurs nuits, la
+  // PREMIÈRE nuit de la plage qui en déclare un l'emporte pour toute la réponse.
+  // `availableByCategory` : le catalogue de cette nuit-là (categoryId → unités). C'est ce que Lobby
+  // rend quand on ne lui passe PAS `category_id`, et donc ce dont le chemin R1 a besoin.
+  nightAvailabilityByDate?: Record<
+    string,
+    { status?: number; availableRooms?: number; availableByCategory?: Record<number, number> }
+  >;
+  // Catégories cotées par défaut quand la requête ne filtre pas sur `category_id`. Volontairement
+  // SANS valeur par défaut : un scénario en mode catalogue doit dire quelles catégories existent,
+  // sinon la réponse ne cote rien — un test mal câblé échoue bruyamment au lieu de passer sur une
+  // disponibilité fabriquée.
+  catalogCategoryIds?: number[];
+  // `end_date` EST INCLUSIF — MESURÉ, plus supposé. Sonde du 2026-08-28 sur le compte réel de Casa
+  // Kayam : demandé 2026-09-27 → 2026-10-02, Lobby rend SIX enregistrements (du 27 au 2 compris),
+  // là où l'hypothèse exclusive en prévoyait cinq. Le défaut de cette fixture est donc `true`,
+  // parce qu'une fixture plus complaisante que le vrai service ne teste pas le service.
+  // Passer `false` rejoue le monde exclusif — utile pour prouver que le code marche dans les deux,
+  // jamais pour décrire Lobby tel qu'il est.
+  endDateInclusive?: boolean;
+  // `"ignores_end_date"` : le monde où Lobby ne saurait pas faire de plage et rendrait toujours la
+  // seule nuit de `start_date`. RÉFUTÉ par la même sonde, mais gardé : c'est CE monde-là qui rend
+  // un test de plage faussement vert, et un test doit prouver qu'on le détecte.
+  rangeBehaviour?: "honours" | "ignores_end_date";
   // Refonte parcours produit ↔ LobbyPMS — GET /api/v1/products (les « services » du compte). Sans
   // cette route, le picker de services (apps/admin/app/api/pms/lobby-services/route.ts) tombait en
   // 404 → 502 : il n'était ni testable ni exerçable en local, contrairement à son jumeau /rooms.
@@ -188,9 +220,80 @@ export function setPmsFixtureScenario(next: PmsFixtureScenario): void {
   scenario = next;
 }
 
+// COMPTEUR D'APPELS, par chemin. Ajouté le 2026-08-28 pour une raison précise : la réduction de
+// charge apportée par R1 (suppression du filtre `category_id`) est INVISIBLE autrement — le
+// résultat fonctionnel est identique, seul le nombre d'allers-retours change. Un gain qu'aucun test
+// ne compte est un gain qu'une refonte future annulera sans que rien ne rougisse.
+const callsByPath = new Map<string, number>();
+
+export function resetPmsFixtureCalls(): void {
+  callsByPath.clear();
+}
+
+export function getPmsFixtureCalls(path?: string): number {
+  if (path !== undefined) return callsByPath.get(path) ?? 0;
+  return [...callsByPath.values()].reduce((total, count) => total + count, 0);
+}
+
 function send(res: import("node:http").ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(body));
+}
+
+// Taille de page OBSERVÉE le 2026-08-28 sur GET /api/v2/available-rooms
+// (`meta.records_per_page`). Un mois (31 nuits, 32 avec la borne inclusive) tient donc largement
+// dans une page — c'est ce chiffre qui autorise l'appel unique par mois du chemin de réservation.
+const RECORDS_PER_PAGE = 100;
+
+// Énumère les nuits d'une plage. `endDateInclusive` vaut `true` par défaut parce que c'est ce que
+// LobbyPMS fait RÉELLEMENT (mesuré le 2026-08-28) ; la production envoie néanmoins
+// `end_date = dernière nuit + 1`, donc reçoit une nuit de plus qu'elle n'en demande — écartée par
+// sa date, jamais par son rang. Un scénario peut rejouer le monde exclusif avec `false`.
+// Borné à 400 nuits — au-delà c'est une requête aberrante, et une fixture qui bouclerait sans fin
+// sur des dates mal formées vaut moins qu'une fixture qui s'arrête.
+function enumerateNights(startDate: string, endDate: string, endDateInclusive: boolean): string[] {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return [];
+  const nights: string[] = [];
+  const cursor = new Date(`${startDate}T00:00:00Z`);
+  const last = /^\d{4}-\d{2}-\d{2}$/.test(endDate) ? new Date(`${endDate}T00:00:00Z`) : null;
+
+  for (let guard = 0; guard < 400; guard += 1) {
+    if (last !== null) {
+      if (endDateInclusive ? cursor > last : cursor >= last) break;
+    } else if (guard > 0) {
+      break; // pas d'`end_date` exploitable : une seule nuit, comme un appel mono-nuit.
+    }
+    nights.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return nights;
+}
+
+// Le catalogue d'une nuit. Avec `category_id`, Lobby ne cote que celle-là ; sans, il cote tout —
+// c'est cette seconde forme que le chemin R1 consomme depuis le 2026-08-28.
+function categoriesForNight(night: string, categoryId: number | null): unknown[] {
+  const entry = scenario.nightAvailabilityByDate?.[night];
+
+  if (entry?.availableByCategory) {
+    const quoted = Object.entries(entry.availableByCategory).map(([id, available]) => ({
+      category_id: Number(id),
+      available_rooms: available,
+      plans: [],
+    }));
+    return categoryId === null ? quoted : quoted.filter((c) => c.category_id === categoryId);
+  }
+
+  const availableRooms = entry?.availableRooms ?? 5;
+  if (categoryId !== null) {
+    return [{ category_id: categoryId, available_rooms: availableRooms, plans: [] }];
+  }
+  // Sans `catalogCategoryIds`, la réponse ne cote RIEN plutôt qu'une catégorie inventée : un test
+  // en mode catalogue mal câblé doit échouer, pas passer sur une disponibilité fabriquée.
+  return (scenario.catalogCategoryIds ?? []).map((id) => ({
+    category_id: id,
+    available_rooms: availableRooms,
+    plans: [],
+  }));
 }
 
 export function startPmsFixtureServer(port: number): Promise<{ url: string; close: () => Promise<void> }> {
@@ -208,6 +311,7 @@ export function startPmsFixtureServer(port: number): Promise<{ url: string; clos
     });
     req.on("end", () => {
       const rawBody = Buffer.concat(chunks).toString("utf8");
+      callsByPath.set(url.pathname, (callsByPath.get(url.pathname) ?? 0) + 1);
       if (req.method === "GET" && url.pathname === "/api/v1/rooms") {
         send(res, 200, scenario.rooms ?? { data: [], meta: { total_records: 0 } });
         return;
@@ -235,19 +339,70 @@ export function startPmsFixtureServer(port: number): Promise<{ url: string; clos
       }
 
       if (req.method === "GET" && url.pathname === "/api/v2/available-rooms") {
-        // Sans `category_id`, Lobby renvoie le catalogue entier — branche distincte, ajoutée le
-        // 2026-08-27. Placée AVANT l'ancienne : `Number(null)` vaut NaN, la branche historique
-        // aurait donc répondu une catégorie fantôme `category_id: null` au lieu d'un catalogue.
-        if (!url.searchParams.has("category_id")) {
-          send(res, 200, scenario.availableRoomsCatalog ?? { date: url.searchParams.get("start_date") ?? "", categories: [] });
+        const startDate = url.searchParams.get("start_date") ?? "";
+        const endDate = url.searchParams.get("end_date") ?? "";
+        const categoryId = url.searchParams.has("category_id")
+          ? Number(url.searchParams.get("category_id"))
+          : null;
+
+        // Charge utile OBSERVÉE rejouée telle quelle (relevé du 2026-08-27) — prioritaire sur toute
+        // synthèse, et volontairement insensible à `end_date` : elle témoigne d'UNE nuit réelle, et
+        // la démultiplier sur une plage fabriquerait une observation qui n'a jamais eu lieu.
+        // Réservée au mode catalogue, comme l'appel qui l'a produite.
+        if (categoryId === null && scenario.availableRoomsCatalog !== undefined) {
+          send(res, 200, scenario.availableRoomsCatalog);
           return;
         }
-        const categoryId = Number(url.searchParams.get("category_id"));
-        const startDate = url.searchParams.get("start_date") ?? "";
-        const entry = scenario.nightAvailabilityByDate?.[startDate];
-        send(res, entry?.status ?? 200, {
-          date: startDate,
-          categories: [{ category_id: categoryId, available_rooms: entry?.availableRooms ?? 5, plans: [] }],
+
+        // ⚠️ ICI EST LE CORRECTIF DU 2026-08-28. `end_date` n'était lu par personne : ce serveur
+        // répondait UNE nuit quoi qu'on lui demande. Il énumère désormais la plage, ce qui est la
+        // seule façon qu'un test « un appel pour N nuits » prouve quoi que ce soit.
+        const nights =
+          scenario.rangeBehaviour === "ignores_end_date"
+            ? [startDate].filter(Boolean)
+            : enumerateNights(startDate, endDate, scenario.endDateInclusive !== false);
+
+        // Une réponse HTTP n'a qu'un statut : la première nuit de la plage qui en déclare un
+        // l'emporte. Rendre 200 alors qu'une nuit de la plage devait échouer serait précisément le
+        // genre de complaisance qui a laissé passer deux bugs le 2026-08-27.
+        const failing = nights.find((night) => scenario.nightAvailabilityByDate?.[night]?.status !== undefined);
+        if (failing !== undefined) {
+          send(res, scenario.nightAvailabilityByDate?.[failing]?.status ?? 500, {
+            message: `fixture: nuit ${failing} en erreur`,
+          });
+          return;
+        }
+
+        const records = nights.map((night) => ({ date: night, categories: categoriesForNight(night, categoryId) }));
+
+        // Forme mono-nuit = celle qui est OBSERVÉE. Forme de plage sous `data[]` = HYPOTHÈSE, non
+        // confirmée : `available-rooms` est documenté « over a date range » et personne ne l'a
+        // jamais essayé. C'est exactement ce que la sonde de pms-nightly-contract-check doit
+        // trancher — jusque-là, aucun code de production ne s'appuie sur cette forme-ci.
+        if (records.length === 1) {
+          send(res, 200, records[0]);
+          return;
+        }
+        // `meta` reproduit la forme OBSERVÉE le 2026-08-28 : { total_records, current_page,
+        // records_per_page: 100, total_pages }. `records_per_page` est ce qui dit qu'un mois tient
+        // dans une page — la seule raison pour laquelle la production peut se permettre un appel
+        // unique par mois sans jamais paginer.
+        //
+        // ⚠️ ET LA FIXTURE PAGINE VRAIMENT (corrigé le 2026-08-28 après revue). Elle rendait
+        // d'abord TOUS les enregistrements tout en annonçant `records_per_page: 100` — une réponse
+        // physiquement impossible (151 enregistrements sur une page de 100), donc plus complaisante
+        // que le vrai service. Une évolution qui élargirait la fenêtre au-delà de 100 nuits aurait
+        // été VERTE ici et cassée en production. Elle tronque désormais comme LobbyPMS le ferait ;
+        // c'est la vérification de couverture, côté domaine, qui doit alors échouer bruyamment.
+        const page = records.slice(0, RECORDS_PER_PAGE);
+        send(res, 200, {
+          data: page,
+          meta: {
+            total_records: records.length,
+            current_page: 1,
+            records_per_page: RECORDS_PER_PAGE,
+            total_pages: Math.max(1, Math.ceil(records.length / RECORDS_PER_PAGE)),
+          },
         });
         return;
       }

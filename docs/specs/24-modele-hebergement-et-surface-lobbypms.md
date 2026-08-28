@@ -63,7 +63,7 @@ obligatoire (§5.1).
 ### Lecture des réponses Lobby
 
 Tout parseur d'une réponse Lobby vit dans `packages/domain/src/pms/`, **jamais dans un Route
-Handler**, et suit le patron de `parseLobbyNightAvailability.ts` : aucun champ supposé présent, champ
+Handler**, et suit le patron de `parseLobbyNightCatalog.ts` : aucun champ supposé présent, champ
 absent = champ omis (jamais une valeur fabriquée), jamais d'exception. Raison non théorique : la doc
 officielle de Lobby s'est **déjà révélée fausse** sur `POST /bookings`, dont la vraie réponse est
 `{"booking":{"booking_id":…}}` et non le `{"data":[{"idBooking":…}]}` imprimé.

@@ -1,5 +1,5 @@
 // Parseur d'OBSERVATION de GET /api/v2/available-rooms — à ne pas confondre avec
-// parseLobbyNightAvailability.ts, qui est sur le chemin de réservation et ne lit délibérément que
+// parseLobbyNightCatalog.ts, qui est sur le chemin de réservation et ne lit délibérément que
 // `available_rooms`. Celui-ci ne sert QU'au job nocturne de contrôle de contrat : il décrit ce que
 // Lobby renvoie, sans rien en déduire ni rien en consommer.
 //

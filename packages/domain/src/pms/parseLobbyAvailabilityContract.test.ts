@@ -63,7 +63,7 @@ describe("parseLobbyAvailabilityContract", () => {
       .categories[0].availableRooms).toBeNull();
   });
 
-  // Racine tolérée sous data[0], comme parseLobbyNightAvailability — forme jamais confirmée
+  // Racine tolérée sous data[0], comme parseLobbyNightCatalog — forme jamais confirmée
   // observée, gardée par précaution et non par mimétisme.
   it("tolère une racine enveloppée dans data[0]", () => {
     expect(parseLobbyAvailabilityContract({ data: [DOCUMENTED] }).categoryIds).toEqual([9631, 29376]);
