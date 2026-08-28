@@ -6,7 +6,7 @@
 // Le sens de circulation est important : hifago fait foi sur l'annulation, Lobby la reçoit. Le sens
 // inverse (annulation faite par le partenaire dans son PMS) est observé par pms-poll-bookings et
 // n'est PAS traité ici — sa règle métier n'est pas écrite (spec 25 §4).
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import {
   cancelLobbyBooking,
   LOBBY_DEFAULT_BASE_URL,
@@ -169,7 +169,12 @@ Deno.serve(async () => {
 });
 
 async function recordFailure(
-  supabase: ReturnType<typeof createClient>,
+  // `SupabaseClient` et non `ReturnType<typeof createClient>` : ce dernier résout les génériques
+  // sur leurs valeurs par défaut, ce qui donne un schéma `never` — le client réel n'y était plus
+  // assignable, ET les arguments des `rpc()` ci-dessous devenaient de type `undefined`, donc plus
+  // vérifiés du tout. Trouvé le 2026-08-27 en branchant `deno check` en CI, premier typecheck de
+  // ces fonctions depuis leur écriture.
+  supabase: SupabaseClient,
   row: CancellationRow,
   summary: { retried: number; failed: number },
   statusCode: number | null,

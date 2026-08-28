@@ -32,6 +32,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint --workspaces --if-present
+      # Bloquant depuis le 2026-08-28 : le script tourne propre, et il couvre le piège
+      # Table.Body/Table.Content non sérialisable que le lint no-restricted-imports ne voit pas.
+      - name: Design system (HeroUI unique, composants sérialisables)
+        run: bash scripts/check-design-system.sh
+      # Le manifeste docs/ai-index.json est ce que lisent les agents pour s'orienter : périmé, il
+      # les envoie lire le mauvais document. `npm run docs:index` le régénère.
+      - name: Manifeste documentaire à jour
+        run: npm run docs:check
+      - name: Dépendances sans vulnérabilité haute ou critique
+        run: npm audit --audit-level=high
 
   typecheck:
     runs-on: ubuntu-latest
@@ -105,6 +115,47 @@ jobs:
       # elles-mêmes, dont l'analyse statique remonte des erreurs qui ne sont pas les nôtres
       # (proisagg, spclocation, __tcache__ — vérifié le 2026-08-27).
       - run: supabase db lint --schema public --level error --fail-on error
+
+  # Les 4 Edge Functions n'avaient JAMAIS été typecheckées — ni le typecheck des workspaces ni le
+  # lint ne les voient (elles tournent sous Deno, hors du monorepo npm). Le premier passage a trouvé
+  # un `ReturnType<typeof createClient>` qui résolvait les génériques par défaut et désactivait
+  # silencieusement la vérification des arguments de deux `rpc()`.
+  functions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
+        with:
+          deno-version: v2.x
+      # Depuis la RACINE : les fonctions importent packages/domain en chemin relatif, un check
+      # lancé depuis supabase/functions ne résout pas ces modules et fabrique de fausses erreurs.
+      - run: deno check supabase/functions/*/index.ts
+
+  # Preuve concurrente anti-survente (barrière de synchronisation, driver `pg` direct). Contrairement
+  # au job `db`, celui-ci a besoin du seed : 6 des 10 tests s'appuient sur des données seedées.
+  concurrence:
+    needs: [db]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_BIN: supabase
+      SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: ci-dummy.apps.googleusercontent.com
+      SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: ci-dummy
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1
+        with:
+          version: 2.116.0
+      - run: supabase start
+      # Les trois étapes ordonnées : reset sans seed, comptes auth via l'API Admin, puis seed.sql.
+      - run: npm run db:setup
+      - run: npm run test:concurrency
 
   build:
     needs: [db]
