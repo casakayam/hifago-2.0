@@ -402,33 +402,37 @@ En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
 nouvelle entrée.
 
-*2026-08-27 (suite) — **la CI ne testait rien de la base, et pas seulement depuis un oubli.**
-`hifago-ci / integration` était rouge à CHAQUE push depuis le 2026-08-15 (10 runs) : `supabase db
-reset` appelé sans `supabase start`. Mais réparer ça n'aurait fait que révéler la marche suivante —
-**`supabase start` applique lui-même le seed** à la création du volume et n'a PAS de `--no-seed`
-(CLI 2.116.0), or `seed.sql` viole la FK `partner_accounts.id -> auth.users(id)` tant que
-`seed_auth_users.mjs` n'est pas passé. Même piège pour tout clone neuf : `[db.seed] enabled = true`
-contredisait la procédure écrite dans l'en-tête de `seed.sql` depuis le 21/08. **Corrigé à la
-source** : `enabled = false` + `npm run db:setup` (`scripts/db-setup.sh`, les 3 étapes ordonnées une
-fois pour toutes). ⚠️ **Ce que le blocage masquait** : 44 fichiers pgTAP (dont les 6 RLS et
-`rls_rpc_only_checklist`), 10 tests de concurrence, 57 specs Playwright, les deux suites
-d'intégration et `docs:check` n'avaient **jamais** tourné en CI — ~100 migrations poussées sans
-qu'aucun invariant de sécurité base ne soit vérifié autrement qu'à la main. Nouveau job `db` :
-`start` → `supabase test db` → `db lint --schema public --level error --fail-on error`. **Sans
-seed, délibérément** : 0 des 44 fichiers pgTAP ne référence le seed, et plusieurs comptent des
-lignes en ABSOLU (`count(*) from audit_log` = 0) — ils exigent une base vierge non seedée (ce qui
-reconfirme, par un second chemin, que les 4 fichiers qui tombent en local tombent sur la pollution).
-Le lint est restreint à `public` : les erreurs du schéma `extensions` sont celles de pgTAP
-lui-même. Durcissement : `permissions: contents: read`, `concurrency`, `timeout-minutes`, 4 actions
-épinglées par SHA, CLI figée à `2.116.0`. Nouveau job `secrets` (gitleaks, historique complet) —
-scan lancé en local AVANT de le rendre bloquant : 4 détections, toutes bénignes et vérifiées une par
-une (clé `service_role` LOCALE publique `iss: supabase-demo`, secret TOTP et comptes seedés),
-consignées avec justification dans `.gitleaksignore`, re-scan `no leaks found`. ⚠️ **Non prouvé** :
-le job `db` n'a jamais tourné, c'est le prochain push qui dira si `supabase start` passe sur un
-runner ; et `npm run db:setup` n'a pas été exécuté ici (il lance `db reset`, qui effacerait la base
-locale partagée avec les autres sessions). **Reste ouvert** : job `concurrency`, `deno check` sur
-les 4 Edge Functions (ni compilées ni vérifiées à ce jour), `docs:check`, `npm audit`/Dependabot,
-Playwright, et `scripts/check-design-system.sh` que plus aucun workflow n'appelle.*
+*2026-08-27 (suite) — **la CI ne testait rien, et ce qu'elle ne testait pas cachait une faille de
+paiement en production.** `hifago-ci / integration` était rouge à CHAQUE push depuis le 2026-08-15
+(10 runs) : `db reset` sans `supabase start`. Réparer ça n'aurait révélé que la marche suivante —
+**`supabase start` applique lui-même le seed** et n'a pas de `--no-seed` (CLI 2.116.0), or `seed.sql`
+viole la FK `partner_accounts.id -> auth.users(id)` tant que `seed_auth_users.mjs` n'est pas passé.
+Corrigé à la source : `[db.seed] enabled = false` + `npm run db:setup`. ⚠️ **Ce que le blocage
+masquait** : 44 fichiers pgTAP (dont les 6 RLS et `rls_rpc_only_checklist`), 10 tests de
+concurrence, 57 specs Playwright, deux suites d'intégration et `docs:check` n'avaient JAMAIS tourné
+en CI, et `build` non plus. **Le job `db` (start → `test db` → `db lint --schema public`) a trouvé
+une faille au premier run** : `apply_payment_webhook`, SECURITY DEFINER sans garde interne, était
+exécutable par `anon` — connaître l'UUID d'un paiement suffisait pour marquer une commande `paid`,
+et chaque client connaît le sien. **Confirmée sur le cloud** (`hqldjdzgvhfwoqypwzqx`, SEULE instance,
+branchée sur le VRAI Mercado Pago), corrigée le soir même (migration `20260828000103`, relue après
+application). ⚠️ **CAUSE À RETENIR** : sur Supabase, `pg_default_acl` accorde EXECUTE
+**explicitement** à anon/authenticated/service_role sur les fonctions de `public` — un
+`revoke execute … from public` ne leur retire RIEN. Toujours nommer les rôles :
+`from public, authenticated, anon`. ⚠️ **Corollaire** : recréer une fonction sous une NOUVELLE
+signature repart des privilèges par défaut (un `create or replace` à signature identique les
+conserve) — c'est ainsi que `claim_pms_cancellation_batch`, correcte deux fois, a reperdu sa
+protection dans `20260827260000` le jour même, invisible en local. Garde-fou permanent :
+`service_role_only_functions.test.sql` épingle les 8 RPC dont le grant EST la protection — **y
+ajouter toute nouvelle RPC appelée uniquement par une Edge Function, un cron ou un Route Handler**.
+Durcissement CI au passage : `permissions: contents: read`, `concurrency`, `timeout-minutes`, 4
+actions épinglées par SHA, CLI figée à 2.116.0, et un job `secrets` (gitleaks, historique complet ;
+4 détections auditées une par une et justifiées dans `.gitleaksignore`, toutes bénignes). `build`
+réparé aussi (`NEXT_PUBLIC_WEB_APP_URL` factice : la CI vérifie que le code compile, pas qu'il est
+configuré). **CI intégralement verte** (run 33128739365). **Reste ouvert** : les 69 RPC SECURITY
+DEFINER exécutables par anon reposent sur un garde interne `is_admin(auth.uid())` qu'AUCUN test ne
+vérifie — candidat sérieux au prochain garde-fou ; `auth_leaked_password_protection` désactivé ;
+job `concurrency`, `deno check` sur les 4 Edge Functions, `docs:check`, `npm audit`/Dependabot,
+Playwright ; et `scripts/check-design-system.sh` que plus aucun workflow n'appelle.*
 
 *2026-08-27 — journée en trois temps : connecteur LobbyPMS vérifié de bout en bout (spec 24), C2
 livré et testé en réel (spec 25), puis **le modèle hébergement mené à son terme (T1 → T3)**.
