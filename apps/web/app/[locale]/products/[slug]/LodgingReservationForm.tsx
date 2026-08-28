@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { format, parseISO } from "date-fns";
 import { useTranslations } from "next-intl";
 import type { DateRange } from "react-day-picker";
@@ -8,12 +8,12 @@ import { Link } from "@/i18n/navigation";
 import {
   Button,
   DayPickerCalendar as Calendar,
+  DayPickerCalendarDayButton,
   Input,
   Label,
   TextField,
-  dateTaggedDayButtonComponents,
 } from "@hifago/ui";
-import { formatCop } from "@hifago/domain";
+import { formatCop, type LodgingKind } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
 import {
   buildInCartNightsMap,
@@ -41,6 +41,7 @@ export function LodgingReservationForm({
   priceCop,
   priceTiers,
   maxQty,
+  lodgingKind,
   isPmsBacked,
   availability,
   rates,
@@ -51,6 +52,7 @@ export function LodgingReservationForm({
   priceCop: number;
   priceTiers: PriceTier[] | null;
   maxQty: number;
+  lodgingKind: LodgingKind | null;
   isPmsBacked: boolean;
   availability: AvailabilityRow[];
   rates: RateRow[];
@@ -139,14 +141,57 @@ export function LodgingReservationForm({
     [lines, productId]
   );
 
-  const fullDates = useMemo(() => {
-    const full: Date[] = [];
+  const qtyMax = Math.max(maxQty, 1);
+
+  // Cupos restants par nuit — une seule dérivation, lue par le barré du calendrier ET par le
+  // compteur affiché dans la case. Ne dépend PAS de `qty` : c'est un fait de disponibilité, pas un
+  // verdict sur la demande en cours.
+  const remainingByDate = useMemo(() => {
+    const map = new Map<string, number>();
     for (const row of effectiveAvailability) {
-      const inCart = inCartByDate.get(row.date) ?? 0;
-      if (row.capacity - row.booked - inCart <= 0) full.push(parseISO(row.date));
+      map.set(row.date, row.capacity - row.booked - (inCartByDate.get(row.date) ?? 0));
     }
-    return full;
+    return map;
   }, [effectiveAvailability, inCartByDate]);
+
+  // Nuits que la quantité demandée ne peut pas prendre. Le seuil est `qty`, jamais 0 — c'est le
+  // correctif du 2026-08-28. Avant, le calendrier ne barrait que les nuits COMPLÈTES : une nuit à 2
+  // places restantes s'affichait normale, se laissait sélectionner, et n'était refusée qu'après
+  // coup par range-unavailable-warning. Le verdict arrivait donc APRÈS le choix au lieu de le
+  // guider, et rien ne disait quelle nuit coinçait ni combien il restait.
+  const unavailableDates = useMemo(() => {
+    const dates: Date[] = [];
+    for (const [date, remaining] of remainingByDate) {
+      if (remaining < qty) dates.push(parseISO(date));
+    }
+    return dates;
+  }, [remainingByDate, qty]);
+
+  // Compteur de restant dans la case du jour. Affiché UNIQUEMENT quand il contraint réellement le
+  // choix (`remaining < qtyMax`) : sur un logement à 20 cupos ouverts tous les jours, imprimer
+  // « 20 » sur trente cases n'informe personne et abîme la lecture du calendrier.
+  //
+  // Mémoïsé sur la map, et c'est indispensable : react-day-picker démonte et remonte toute la
+  // grille quand le TYPE du composant `DayButton` change (cf. la doc de
+  // dateTaggedDayButtonComponents dans packages/ui/src/components/legacy-calendar.tsx, qui existe
+  // précisément pour ça). Recréer ce type à chaque frappe dans le champ quantité aurait défait
+  // exactement l'optimisation qu'elle documente. `data-date` est repris tel quel : c'est la cible
+  // stable des tests e2e, indépendante de la locale d'affichage.
+  const dayButtonComponents = useMemo(() => {
+    function RemainingDayButton(props: ComponentProps<typeof DayPickerCalendarDayButton>) {
+      const iso = format(props.day.date, "yyyy-MM-dd");
+      const remaining = remainingByDate.get(iso);
+      return (
+        <DayPickerCalendarDayButton {...props} data-date={iso}>
+          {props.children}
+          {remaining !== undefined && remaining > 0 && remaining < qtyMax ? (
+            <span data-testid="night-remaining">{remaining}</span>
+          ) : null}
+        </DayPickerCalendarDayButton>
+      );
+    }
+    return { DayButton: RemainingDayButton };
+  }, [remainingByDate, qtyMax]);
 
   const nights = useMemo(() => nightsInRange(range), [range]);
   const hasUnavailableNight = hasUnavailableNightInRange(
@@ -169,9 +214,12 @@ export function LodgingReservationForm({
     return estimateNightsTotal(nights, tierPrice, (night) => rateByDate.get(night));
   }, [nights, qty, priceTiers, priceCop, rateByDate]);
 
+  // La quantité N'EST PLUS remise à 1 ici. Elle l'était à chaque clic sur le calendrier, ce qui
+  // rendait impossible le seul geste qui compte : poser d'abord le nombre de places, puis regarder
+  // quelles nuits l'acceptent. Le champ est désormais saisissable AVANT les dates, et sa valeur
+  // survit à la sélection.
   function handleSelectRange(next: DateRange | undefined) {
     setRange(next);
-    setQty(1);
     setJustAdded(false);
   }
 
@@ -191,7 +239,18 @@ export function LodgingReservationForm({
     setQty(1);
   }
 
-  const qtyMax = Math.max(maxQty, 1);
+  // Nommer l'unité de `qty` là où elle se saisit. « Cantidad » ne disait pas de QUOI, alors que la
+  // réponse dépend du produit : un dortoir se vend au lit, une privée ou une maison à l'unité (même
+  // règle que cuposPerUnit et que le garde-fou capacity_exceeds_physical). `lodging_kind` étant
+  // facultatif, l'intitulé neutre reste le repli.
+  const quantityLabel =
+    lodgingKind === "dorm"
+      ? t("quantityLabelBeds")
+      : lodgingKind === "private"
+        ? t("quantityLabelRooms")
+        : lodgingKind === "whole_house"
+          ? t("quantityLabelHouses")
+          : t("quantityLabel");
 
   return (
     <div className="flex flex-col gap-4">
@@ -214,10 +273,9 @@ export function LodgingReservationForm({
           month={visibleMonth}
           onMonthChange={setVisibleMonth}
           disabled={[{ before: new Date() }]}
-          modifiers={{ full: fullDates }}
-          modifiersClassNames={{ full: "line-through opacity-60" }}
-          // Référence module-scope (packages/ui), jamais reconstruite ici à chaque rendu — cf. sa doc.
-          components={dateTaggedDayButtonComponents}
+          modifiers={{ unavailable: unavailableDates }}
+          modifiersClassNames={{ unavailable: "line-through opacity-60" }}
+          components={dayButtonComponents}
         />
       </div>
 
@@ -235,18 +293,19 @@ export function LodgingReservationForm({
         <p className="text-sm text-muted">{t("selectRange")}</p>
       )}
 
+      {/* Plus de `isDisabled` : le champ se saisit avant les dates, c'est tout l'intérêt du
+          correctif — le calendrier se barre au fur et à mesure qu'on monte la quantité. */}
       <TextField
         className="max-w-32"
         name="qty"
         value={String(qty)}
-        isDisabled={nights.length === 0}
         onChange={(value) => {
           const next = Number(value);
-          setQty(Math.min(Math.max(next, 1), qtyMax));
+          setQty(Number.isNaN(next) ? 1 : Math.min(Math.max(next, 1), qtyMax));
         }}
       >
-        <Label>{t("quantityLabel")}</Label>
-        <Input id="qty" type="number" min={1} max={qtyMax} />
+        <Label>{quantityLabel}</Label>
+        <Input id="qty" type="number" min={1} max={qtyMax} data-testid="lodging-qty-input" />
       </TextField>
 
       {canAdd ? (

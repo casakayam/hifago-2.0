@@ -8,7 +8,7 @@ import { withDb, createPmsBackedEstablishmentFixture, mockPmsNightAvailability, 
 // page.route() (jamais le vrai LobbyPMS, même discipline que mockPmsReserveNights et
 // admin-establishment-pms-connector.spec.ts — spec 21 §10 point 1 : aucun test automatisé de ce
 // projet ne doit jamais toucher le vrai LobbyPMS). Un seul test, chemin heureux + dégradation
-// (hifago/CLAUDE.md §6.5, proportionnalité) : la logique de calcul (fullDates, fail-closed par
+// (hifago/CLAUDE.md §6.5, proportionnalité) : la logique de calcul (unavailableDates, fail-closed par
 // omission) est déjà couverte en Vitest par getNightAvailabilityWindow.test.ts, ce test-ci prouve
 // uniquement le branchement écran réel. Chaque scénario recharge la page (état frais) plutôt que
 // d'enchaîner plusieurs sélections de plage sur la même instance — le comportement de
@@ -56,7 +56,8 @@ test("le calendrier d'un logement PMS-backed reflète la disponibilité Lobby, e
   await page.goto(`/es/products/${SLUG}`);
   await page.waitForLoadState("networkidle");
 
-  // Nuit pleine chez Lobby → visuellement barrée (modifier "full" appliqué à la cellule <td>, cf.
+  // Nuit pleine chez Lobby → visuellement barrée (modifier "unavailable" appliqué à la cellule
+  // <td>, cf.
   // packages/ui/src/components/legacy-calendar.tsx — pas au <button> lui-même).
   await expect(page.locator(`td:has([data-date="${fullNightDate}"])`)).toHaveClass(/line-through/);
 

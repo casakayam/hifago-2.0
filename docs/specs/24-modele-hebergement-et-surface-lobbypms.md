@@ -84,6 +84,28 @@ officielle de Lobby s'est **déjà révélée fausse** sur `POST /bookings`, don
   fermé à ces deux langues et `activeLang` s'initialise à `es` : une clé `pt` importée serait publiée
   par repli, invisible dans l'éditeur et non supprimable. Le parseur la signale à l'écran au lieu de
   l'écrire.
+- **Lobby compte en UNITÉS, hifago en CUPOS — toute lecture de disponibilité doit convertir.**
+  `available_rooms` (`/api/v2/available-rooms`) renvoie un nombre de chambres/tentes/lits-unités
+  libres. `product_availability.capacity`, `order_lines.qty`, `min_qty`/`max_qty` et `price_tiers`
+  comptent, eux, des cupos — et le garde-fou `capacity_exceeds_physical`
+  (`set_product_availability`, migration 20260827250000) dit lesquels : un dortoir se vend au LIT
+  (`unit_count × capacity`), une privée ou une maison entière à l'UNITÉ (`unit_count`),
+  `lodging_kind` NULL suivant le dortoir (borne haute). `cuposPerUnit`
+  (`packages/domain/src/products/lodgingCupos.ts`) REPREND ce vocabulaire, et
+  `GET /api/pms/night-availability` l'applique **après** son cache — ce qui est mis en cache est la
+  réponse brute de Lobby, partageable par deux produits pointant la même catégorie. Corrigé le
+  2026-08-28, après avoir sous-vendu GLAMPING (`capacity=2`, `unit_count=3` : Lobby répond 3,
+  l'écran refusait 4 cupos).
+  > ⚠️ **Rectificatif du 2026-08-28 (revue).** La première version de cet invariant affirmait que
+  > « les deux formules doivent rester identiques, sinon l'écran promet une nuit que la base
+  > refusera ». C'est **faux**, et il ne faut pas raisonner dessus : les deux ne s'appliquent
+  > jamais au même produit. `cuposPerUnit` ne sert que les PMS-backed, et c'est exactement pour eux
+  > que `create_order` saute verrou et décrément de `product_availability` — le garde-fou SQL ne
+  > les voit donc jamais (cf. l'invariant suivant, qui le dit déjà). Ce qui est partagé est un
+  > vocabulaire, pas une contrainte de cohérence. Le garde-fou réel contre la divergence n'est pas
+  > cette phrase : c'est l'exhaustivité du `switch` de `cuposPerUnit`, qui casse la compilation si
+  > `LODGING_KINDS` s'agrandit. Au passage, les deux replis par défaut étaient **opposés**
+  > (SQL `else → unit_count` ; TS `défaut → capacity`) — alignés sur `1` depuis.
 - **Un logement PMS-backed n'a pas de calendrier de cupos interne.** `create_order` saute
   explicitement verrou et décrément de `product_availability` pour ces lignes : proposer l'écran de
   cupos serait proposer un calendrier inerte.

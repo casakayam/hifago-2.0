@@ -1,5 +1,7 @@
 import {
+  asLodgingKind,
   createTtlCache,
+  cuposPerUnit,
   getNightAvailabilityWindow,
   isPmsBacked,
   LOBBY_DEFAULT_BASE_URL,
@@ -28,6 +30,8 @@ interface ProductRow {
   type: string;
   lobby_category_id: number | null;
   establishment_id: string;
+  lodging_kind: string | null;
+  capacity: number | null;
 }
 
 interface EstablishmentRow {
@@ -61,7 +65,7 @@ export async function GET(request: Request) {
   // relecture autoritative doit reproduire la règle de la base, pas seulement s'y substituer.
   const { data: product } = await service
     .from("products")
-    .select("id, type, lobby_category_id, establishment_id")
+    .select("id, type, lobby_category_id, establishment_id, lodging_kind, capacity")
     .eq("id", productId)
     .eq("sellable", true)
     .maybeSingle<ProductRow>();
@@ -101,7 +105,23 @@ export async function GET(request: Request) {
       getNightAvailabilityWindow(baseUrl, apiToken, categoryId, nights, relaySecret)
     );
 
-    return Response.json({ ok: true, nights: rows });
+    // CONVERSION UNITÉS LOBBY → CUPOS, et c'est le coeur de cette route. `available_rooms` compte
+    // des chambres/tentes/lits-unités ; tout le reste de hifago (product_availability.capacity,
+    // order_lines.qty, min_qty/max_qty, price_tiers) compte des cupos. La règle de conversion est
+    // celle du garde-fou capacity_exceeds_physical, partagée dans le domaine plutôt que réécrite
+    // ici — cf. cuposPerUnit.
+    //
+    // La multiplication est APRÈS le cache, jamais avant : ce qui est mis en cache est la réponse
+    // brute de Lobby pour un couple (établissement, catégorie), légitimement partageable par deux
+    // produits pointant la même catégorie avec des capacités différentes. Nouveaux objets, jamais
+    // une mutation en place — les lignes en cache sont réutilisées telles quelles au prochain hit.
+    const perUnit = cuposPerUnit(asLodgingKind(product.lodging_kind), product.capacity);
+    const cupos: NightAvailabilityRow[] =
+      perUnit === 1
+        ? rows
+        : rows.map((row) => ({ ...row, capacity: row.capacity * perUnit }));
+
+    return Response.json({ ok: true, nights: cupos });
   } catch (error) {
     console.error(`GET /api/pms/night-availability a échoué (product ${productId}, month ${month})`, error);
     return Response.json({ ok: false, reason: "lobby_unreachable" }, { status: 502 });

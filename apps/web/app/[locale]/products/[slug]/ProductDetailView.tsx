@@ -175,6 +175,7 @@ export function ProductDetailView({
               priceCop={priceCop}
               priceTiers={lodgingPriceTiers}
               maxQty={lodgingMaxQty}
+              lodgingKind={lodgingKind}
               isPmsBacked={isPmsBacked}
               availability={availability}
               rates={productDateRates}

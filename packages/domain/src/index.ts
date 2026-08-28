@@ -21,5 +21,6 @@ export * from "./pms/buildLobbyBookingNote";
 export * from "./pms/fetchLobbyPhoto";
 export * from "./products/lodgingKind";
 export * from "./products/lodgingUnit";
+export * from "./products/lodgingCupos";
 export * from "./http/resolveOrigin";
 export * from "./http/buildAuthCallbackRedirect";
