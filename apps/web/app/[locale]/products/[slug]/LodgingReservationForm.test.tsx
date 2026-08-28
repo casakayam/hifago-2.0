@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { LodgingReservationForm } from "./LodgingReservationForm";
 import messages from "@/messages/es.json";
@@ -126,5 +126,99 @@ describe("LodgingReservationForm — le calendrier suit la quantité demandée",
   it("nomme l'unité de la quantité selon la nature du couchage", () => {
     renderForm();
     expect(screen.getByText("Camas")).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Tâche 1 (2026-08-28) — la reprise. La panne mesurée est TRANSITOIRE (novembre est revenu 0, puis
+// 29/30, puis 30/30) : ce qui manquait n'était pas un meilleur message, c'était de redemander.
+// Avant ce lot, `loadedMonthsRef` marquait le mois « chargé » même en échec, et plus rien ne le
+// retentait de toute la session.
+// ---------------------------------------------------------------------------------------------
+
+function renderPmsForm() {
+  return render(
+    <NextIntlClientProvider locale="es" messages={{ ProductPage: messages.ProductPage, Common: messages.Common }}>
+      <LodgingReservationForm
+        productId="p-pms"
+        productName="GUSTO"
+        establishmentName="Casa Kayam"
+        priceCop={20000}
+        priceTiers={null}
+        maxQty={6}
+        lodgingKind="dorm"
+        isPmsBacked
+        availability={[]}
+        rates={[]}
+      />
+    </NextIntlClientProvider>
+  );
+}
+
+function mockFetchOnce(body: unknown) {
+  return vi.fn().mockResolvedValue({ json: async () => body } as Response);
+}
+
+describe("LodgingReservationForm — reprise après un échec Lobby", () => {
+  it("annonce l'échec, propose de réessayer, et bloque l'ajout au panier", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce({ ok: false, reason: "pms_unreachable" }));
+    renderPmsForm();
+
+    await waitFor(() => expect(screen.getByTestId("pms-availability-error")).toBeTruthy());
+    expect(screen.getByTestId("pms-availability-retry")).toBeTruthy();
+    expect((screen.getByTestId("add-to-cart-button") as HTMLButtonElement).disabled).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("réessayer redemande vraiment le mois — c'est LE correctif", async () => {
+    const fetchMock = mockFetchOnce({ ok: false, reason: "pms_unreachable" });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPmsForm();
+
+    await waitFor(() => expect(screen.getByTestId("pms-availability-retry")).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId("pms-availability-retry"));
+    // Sans le correctif, loadedMonthsRef avait déjà marqué le mois chargé et l'effet ne repartait
+    // jamais : le compteur resterait à 1.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    vi.unstubAllGlobals();
+  });
+
+  it("distingue le quota du reste, avec son propre message", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce({ ok: false, reason: "pms_rate_limited", retryAfterSeconds: 37 }));
+    renderPmsForm();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("pms-availability-error").textContent).toContain("Demasiadas consultas");
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("ne propose PAS de réessayer quand le connecteur est simplement coupé", async () => {
+    // État anticipé, pas une panne : réessayer ne changera rien tant qu'un admin n'agit pas.
+    vi.stubGlobal("fetch", mockFetchOnce({ ok: false, reason: "connector_inactive" }));
+    renderPmsForm();
+
+    await waitFor(() => expect(screen.getByTestId("pms-availability-error")).toBeTruthy());
+    expect(screen.queryByTestId("pms-availability-retry")).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("une nuit jamais résolue n'est pas sélectionnable — symétrie avec le verdict", async () => {
+    // hasUnavailableNightInRange refusait DÉJÀ une nuit absente ; seul l'affichage la laissait
+    // passer. C'est ce décalage qui produisait un calendrier d'apparence normale, entièrement
+    // non réservable.
+    vi.stubGlobal(
+      "fetch",
+      mockFetchOnce({ ok: true, nights: [{ date: "2026-06-12", capacity: 4, booked: 0 }] })
+    );
+    renderPmsForm();
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-date="2026-06-12"]')?.hasAttribute("disabled")).toBe(false);
+    });
+    expect(document.querySelector('[data-date="2026-06-13"]')?.hasAttribute("disabled")).toBe(true);
+    vi.unstubAllGlobals();
   });
 });

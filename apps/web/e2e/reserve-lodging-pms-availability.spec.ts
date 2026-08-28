@@ -77,18 +77,34 @@ test("le calendrier d'un logement PMS-backed reflète la disponibilité Lobby, e
   await page.getByTestId("add-to-cart-button").click();
   await expect(page.getByTestId("added-to-cart")).toBeVisible();
 
-  // Lobby injoignable (échec réseau/502) → bandeau dégradé affiché, page reste utilisable, jamais
-  // un crash — et par fail-closed (aucune nuit résolue), toute plage reste bloquée à l'ajout.
+  // Lobby injoignable → bandeau dégradé, bouton « réessayer », et surtout : aucune nuit n'est
+  // SÉLECTIONNABLE. C'est le correctif du 2026-08-28 — auparavant le calendrier se laissait
+  // cliquer normalement et n'annonçait le refus qu'après le choix des dates (défaut d'asymétrie
+  // affichage/verdict), ce qui donnait l'impression d'un produit complet plutôt que d'une panne.
   await page.unroute("**/api/pms/night-availability**");
-  await mockPmsNightAvailability(page, { ok: false, reason: "lobby_unreachable" });
+  await mockPmsNightAvailability(page, { ok: false, reason: "pms_unreachable" });
   await page.reload();
   await page.waitForLoadState("networkidle");
 
   await expect(page.getByTestId("pms-availability-error")).toBeVisible();
-  await page.locator(`[data-date="${isoDate(5)}"]`).click();
-  await page.locator(`[data-date="${isoDate(7)}"]`).click();
-  await expect(page.getByTestId("range-unavailable-warning")).toBeVisible();
+  await expect(page.getByTestId("pms-availability-retry")).toBeVisible();
+  await expect(page.locator(`[data-date="${isoDate(5)}"]`)).toBeDisabled();
   await expect(page.getByTestId("add-to-cart-button")).toBeDisabled();
+
+  // Et la reprise fonctionne : redemander suffit à repeupler le calendrier, sans recharger la page.
+  // Les échecs mesurés en préprod étaient transitoires — c'est exactement ce parcours-là.
+  await page.unroute("**/api/pms/night-availability**");
+  await mockPmsNightAvailability(page, {
+    ok: true,
+    nights: [
+      { date: isoDate(5), capacity: 2, booked: 0 },
+      { date: isoDate(6), capacity: 2, booked: 0 },
+      { date: isoDate(7), capacity: 2, booked: 0 },
+    ],
+  });
+  await page.getByTestId("pms-availability-retry").click();
+  await expect(page.getByTestId("pms-availability-error")).not.toBeVisible();
+  await expect(page.locator(`[data-date="${isoDate(5)}"]`)).toBeEnabled();
 
   // Nettoyage — fixture dédiée, jamais partagée. Panier: la ligne ajoutée en phase 2 n'a jamais été
   // commandée (aucun checkout dans ce test), rien à purger côté order_lines.

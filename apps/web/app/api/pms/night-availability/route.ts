@@ -7,6 +7,7 @@ import {
   LOBBY_DEFAULT_BASE_URL,
   nightsOfMonth,
   type NightAvailabilityRow,
+  type PmsFailure,
 } from "@hifago/domain";
 import { createServiceRoleClient } from "@hifago/supabase/service";
 
@@ -47,6 +48,41 @@ const MONTH_PATTERN = /^\d{4}-\d{2}$/;
 // chaud). Best-effort, non partagé entre instances Vercel concurrentes — acceptable, ce cache n'a
 // qu'une valeur de réduction de charge sur Lobby, jamais de correction.
 const cache = createTtlCache<NightAvailabilityRow[]>(60_000);
+
+// Le cache n'évince que sur promesse REJETÉE (cf. ttlCache.ts). Une fenêtre incomplète étant une
+// valeur RÉSOLUE, elle restait mémorisée 60 s et resservie à tous les visiteurs de l'instance —
+// c'est ce qui transformait un échec passager en panne d'une minute. Envelopper l'échec dans une
+// exception est donc ce qui le rend NON mémorisable, sans toucher au cache lui-même. Idiome déjà
+// en place côté admin (`LobbyRejectedError`, lib/pms/lobbyEstablishment.ts).
+class PmsAvailabilityError extends Error {
+  constructor(readonly failure: PmsFailure) {
+    super(`disponibilité Lobby indisponible (${failure.kind})`);
+    this.name = "PmsAvailabilityError";
+  }
+}
+
+// Un échec de lecture n'est jamais une disponibilité : on refuse, on ne devine pas (CLAUDE.md §4.4).
+// Le 429 est le seul cas qui se rattrape en attendant — il mérite son propre code et son Retry-After.
+function respondToFailure(failure: PmsFailure): Response {
+  if (failure.kind === "rate_limited") {
+    return Response.json(
+      { ok: false, reason: "pms_rate_limited", retryAfterSeconds: failure.retryAfterSeconds },
+      {
+        status: 429,
+        headers: failure.retryAfterSeconds !== null
+          ? { "Retry-After": String(failure.retryAfterSeconds) }
+          : undefined,
+      }
+    );
+  }
+  const reason =
+    failure.kind === "rejected"
+      ? "pms_rejected"
+      : failure.kind === "unparseable"
+        ? "pms_unparseable"
+        : "pms_unreachable";
+  return Response.json({ ok: false, reason }, { status: 502 });
+}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -101,9 +137,30 @@ export async function GET(request: Request) {
     // différents ont trivialement la même catégorie 1 — sans ce préfixe, le second visiteur reçoit
     // la disponibilité du premier. Le cache jumeau côté admin (lobbyEstablishment.ts) est clé par
     // établissement depuis toujours ; c'est ici que la discipline manquait.
-    const rows = await cache.getOrFetch(`${establishment.id}:${categoryId}:${month}`, () =>
-      getNightAvailabilityWindow(baseUrl, apiToken, categoryId, nights, relaySecret)
-    );
+    const rows = await cache.getOrFetch(`${establishment.id}:${categoryId}:${month}`, async () => {
+      const window = await getNightAvailabilityWindow(baseUrl, apiToken, categoryId, nights, relaySecret);
+      if (!window.ok) {
+        // ⚠️ Le seuil est UNE nuit manquante, jamais « toutes manquantes ». La panne mesurée le
+        // 2026-08-28 comportait des mois PARTIELS (novembre à 29 nuits sur 30) : un déclencheur
+        // « fenêtre vide » les aurait laissés passer pour des succès, ce qui est précisément le
+        // défaut qu'on corrige.
+        console.warn(
+          `GET /api/pms/night-availability — fenêtre incomplète (product ${productId}, month ${month}) :`,
+          {
+            kind: window.failure.kind,
+            requested: window.requested,
+            obtained: window.obtained,
+            ...(window.failure.kind === "rate_limited"
+              ? { limit: window.failure.limit, retryAfterSeconds: window.failure.retryAfterSeconds }
+              : {}),
+            ...("status" in window.failure ? { status: window.failure.status } : {}),
+            ...("bodyExcerpt" in window.failure ? { bodyExcerpt: window.failure.bodyExcerpt } : {}),
+          }
+        );
+        throw new PmsAvailabilityError(window.failure);
+      }
+      return window.nights;
+    });
 
     // CONVERSION UNITÉS LOBBY → CUPOS, et c'est le coeur de cette route. `available_rooms` compte
     // des chambres/tentes/lits-unités ; tout le reste de hifago (product_availability.capacity,
@@ -123,7 +180,10 @@ export async function GET(request: Request) {
 
     return Response.json({ ok: true, nights: cupos });
   } catch (error) {
+    if (error instanceof PmsAvailabilityError) {
+      return respondToFailure(error.failure);
+    }
     console.error(`GET /api/pms/night-availability a échoué (product ${productId}, month ${month})`, error);
-    return Response.json({ ok: false, reason: "lobby_unreachable" }, { status: 502 });
+    return Response.json({ ok: false, reason: "pms_unreachable" }, { status: 502 });
   }
 }

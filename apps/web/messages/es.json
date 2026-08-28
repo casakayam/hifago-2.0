@@ -87,6 +87,8 @@
     "rangeUnavailable": "Alguna noche de este rango ya no está disponible.",
     "pmsAvailabilityLoading": "Consultando disponibilidad real...",
     "pmsAvailabilityError": "No se pudo consultar la disponibilidad en este momento. Intenta de nuevo más tarde.",
+    "pmsAvailabilityRetry": "Reintentar",
+    "pmsAvailabilityRateLimited": "Demasiadas consultas seguidas. Espera un momento y vuelve a intentarlo.",
     "estimatedTotal": "Total estimado",
     "establishmentTitle": "Sobre el establecimiento",
     "occurrence": {

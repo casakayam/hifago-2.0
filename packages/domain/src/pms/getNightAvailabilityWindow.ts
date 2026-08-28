@@ -1,5 +1,6 @@
 import { getLobbyNightAvailability } from "./lobbyClient.ts";
 import { parseLobbyNightAvailability } from "./parseLobbyNightAvailability.ts";
+import { describeLobbyErrorBody } from "./describeLobbyErrorBody.ts";
 
 export interface NightAvailabilityRow {
   date: string;
@@ -7,23 +8,44 @@ export interface NightAvailabilityRow {
   booked: number;
 }
 
+// Pourquoi une cause TYPÉE plutôt qu'un `null`. Jusqu'au 2026-08-28, une nuit perdue l'était pour
+// trois raisons très différentes — statut non-200 (429 de quota, 5xx, 403 du relais), catégorie
+// absente de la réponse, exception réseau — toutes réduites au même `null`, sans un seul log. C'est
+// ce qui a rendu la panne du 23 décembre indiagnosticable : l'écran ne savait pas distinguer
+// « complet » de « je n'ai pas su », et personne ne pouvait savoir laquelle des trois s'était
+// produite. `bodyExcerpt` ne contient que le corps de la RÉPONSE, jamais l'URL (CLAUDE.md §8).
+export type PmsFailure =
+  | { kind: "rate_limited"; status: number; retryAfterSeconds: number | null; limit: number | null; bodyExcerpt: string }
+  | { kind: "rejected"; status: number; bodyExcerpt: string }
+  | { kind: "unparseable"; status: number; bodyExcerpt: string }
+  | { kind: "unreachable"; message: string };
+
+// Une fenêtre est complète ou elle a échoué — il n'y a pas de demi-succès. Le seuil est UNE nuit
+// manquante, jamais « toutes manquantes » : la panne mesurée le 2026-08-28 comprenait des mois
+// PARTIELS (novembre à 29 nuits sur 30), qu'un déclencheur « zéro nuit » aurait laissé passer pour
+// un succès. `requested`/`obtained` servent au diagnostic, pas à une décision de l'appelant.
+export type PmsWindowResult =
+  | { ok: true; nights: NightAvailabilityRow[] }
+  | { ok: false; failure: PmsFailure; requested: number; obtained: number };
+
+type NightResult = { ok: true; row: NightAvailabilityRow } | { ok: false; failure: PmsFailure };
+
 const CHUNK_SIZE = 6;
 
 // Port de mapChunked (app legacy, src/services/portalService.js) : lots séquentiels, appels
-// parallèles intra-lot — évite de saturer Lobby (rate-limit empirique déjà documenté v1) tout en
-// restant raisonnablement rapide sur une fenêtre d'un mois (~28-31 nuits). Chaque nuit est
-// indépendante : un échec isolé (réseau, catégorie absente de la réponse, forme inattendue) OMET
-// cette nuit du résultat plutôt que d'abattre tout l'appel ou d'inventer une valeur —
-// hasUnavailableNightInRange (apps/web/lib/products/reservationRange.ts) traite déjà toute nuit
-// absente comme indisponible : c'est le comportement fail-closed voulu, gratuitement, sans dupliquer
-// une règle "capacité=0" ailleurs.
+// parallèles intra-lot — évite de saturer Lobby tout en restant raisonnablement rapide.
+//
+// ARRÊT AU PREMIER ÉCHEC, et ce n'est pas qu'une optimisation. Le mode d'échec dominant est le
+// quota (60 appels par fenêtre, mesuré) : une fois le mur atteint, les 25 appels suivants sont
+// certains d'échouer et ne feraient que creuser le trou. Le legacy poursuivait et rendait un
+// résultat partiel muet — c'est exactement ce qu'on retire.
 export async function getNightAvailabilityWindow(
   baseUrl: string,
   apiToken: string,
   categoryId: number,
   nights: string[],
   relaySecret?: string
-): Promise<NightAvailabilityRow[]> {
+): Promise<PmsWindowResult> {
   const rows: NightAvailabilityRow[] = [];
 
   for (let i = 0; i < nights.length; i += CHUNK_SIZE) {
@@ -31,12 +53,20 @@ export async function getNightAvailabilityWindow(
     const results = await Promise.all(
       chunk.map((date) => fetchOneNight(baseUrl, apiToken, categoryId, date, relaySecret))
     );
-    for (const row of results) {
-      if (row) rows.push(row);
+
+    // Le premier échec du lot fait foi : les autres nuits du même lot sont parties en parallèle,
+    // leur sort n'apprend rien de plus sur la cause.
+    const failed = results.find((result): result is { ok: false; failure: PmsFailure } => !result.ok);
+    if (failed) {
+      return { ok: false, failure: failed.failure, requested: nights.length, obtained: rows.length };
+    }
+
+    for (const result of results) {
+      if (result.ok) rows.push(result.row);
     }
   }
 
-  return rows;
+  return { ok: true, nights: rows };
 }
 
 async function fetchOneNight(
@@ -45,16 +75,52 @@ async function fetchOneNight(
   categoryId: number,
   date: string,
   relaySecret?: string
-): Promise<NightAvailabilityRow | null> {
+): Promise<NightResult> {
+  let response;
   try {
-    const response = await getLobbyNightAvailability(baseUrl, apiToken, categoryId, date, addOneDay(date), relaySecret);
-    if (response.status !== 200) return null;
-    const parsed = parseLobbyNightAvailability(response.body, categoryId);
-    if (!parsed) return null;
-    return { date, capacity: parsed.available, booked: 0 };
-  } catch {
-    return null;
+    response = await getLobbyNightAvailability(baseUrl, apiToken, categoryId, date, addOneDay(date), relaySecret);
+  } catch (error) {
+    return {
+      ok: false,
+      failure: { kind: "unreachable", message: error instanceof Error ? error.message : String(error) },
+    };
   }
+
+  // 429 est le cas qu'on veut nommer plutôt que subir : c'est le plafond de débit, il se rattrape
+  // en attendant, contrairement à un 4xx de configuration. `Retry-After` et `X-RateLimit-Limit`
+  // viennent de la réponse elle-même — Lobby dit lui-même sa limite, on cesse de la déduire.
+  if (response.status === 429) {
+    return {
+      ok: false,
+      failure: {
+        kind: "rate_limited",
+        status: response.status,
+        retryAfterSeconds: response.rateLimit.retryAfterSeconds,
+        limit: response.rateLimit.limit,
+        bodyExcerpt: describeLobbyErrorBody(response.body),
+      },
+    };
+  }
+
+  if (response.status !== 200) {
+    return {
+      ok: false,
+      failure: { kind: "rejected", status: response.status, bodyExcerpt: describeLobbyErrorBody(response.body) },
+    };
+  }
+
+  const parsed = parseLobbyNightAvailability(response.body, categoryId);
+  if (!parsed) {
+    // 200 mais la catégorie n'est pas cotée. Distinct d'un `available_rooms: 0`, qui est une
+    // réponse pleine et entière (« complet ») — le parseur ne rend null que si la catégorie est
+    // ABSENTE du tableau.
+    return {
+      ok: false,
+      failure: { kind: "unparseable", status: response.status, bodyExcerpt: describeLobbyErrorBody(response.body) },
+    };
+  }
+
+  return { ok: true, row: { date, capacity: parsed.available, booked: 0 } };
 }
 
 function addOneDay(dateIso: string): string {

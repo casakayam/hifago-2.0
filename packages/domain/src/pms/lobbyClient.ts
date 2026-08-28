@@ -10,9 +10,33 @@
 
 export const LOBBY_DEFAULT_BASE_URL = "https://api.lobbypms.com";
 
+// Quota d'appels rapporté par Lobby. LobbyPMS est une application Laravel (constaté dans ses corps
+// d'erreur : « No query results for model [App\\Models\\Booking] »), dont le middleware `api` par
+// défaut est `throttle:60,1` — et un plafond de 60 appels par fenêtre a effectivement été mesuré en
+// préprod le 2026-08-28. Ces trois en-têtes sont ce qui permet de le CONSTATER au lieu de le
+// déduire : `X-RateLimit-Limit` donne le chiffre exact, et son évolution selon l'établissement
+// interrogé dira si le seau est par jeton ou global.
+//
+// Liste blanche stricte : on ne transporte jamais l'objet `Headers` entier (il peut porter un
+// `set-cookie`), et ces trois-là sont des en-têtes de RÉPONSE — journalisables, contrairement à
+// l'URL de la requête qui porte `api_token` (CLAUDE.md §8).
+export interface LobbyRateLimit {
+  limit: number | null;
+  remaining: number | null;
+  retryAfterSeconds: number | null;
+}
+
 export interface LobbyCallResult<T = unknown> {
   status: number;
   body: T;
+  rateLimit: LobbyRateLimit;
+}
+
+function readPositiveIntHeader(headers: Headers, name: string): number | null {
+  const raw = headers.get(name);
+  if (raw === null) return null;
+  const value = Number(raw.trim());
+  return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 async function lobbyCall<T = unknown>(
@@ -52,7 +76,18 @@ async function lobbyCall<T = unknown>(
     body = { raw: text };
   }
 
-  return { status: response.status, body: body as T };
+  return {
+    status: response.status,
+    body: body as T,
+    rateLimit: {
+      limit: readPositiveIntHeader(response.headers, "x-ratelimit-limit"),
+      remaining: readPositiveIntHeader(response.headers, "x-ratelimit-remaining"),
+      // `Retry-After` peut être une date HTTP plutôt qu'un nombre de secondes (RFC 9110) ; on ne
+      // retient que la forme numérique, la forme date retombe sur null plutôt que sur une valeur
+      // fabriquée.
+      retryAfterSeconds: readPositiveIntHeader(response.headers, "retry-after"),
+    },
+  };
 }
 
 export function getLobbyRooms(baseUrl: string, apiToken: string, page?: number, relaySecret?: string) {

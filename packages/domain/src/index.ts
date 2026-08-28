@@ -15,6 +15,7 @@ export * from "./pms/parseLobbyNightAvailability";
 export * from "./pms/getNightAvailabilityWindow";
 export * from "./pms/parseLobbyAvailabilityContract";
 export * from "./pms/ttlCache";
+export * from "./pms/describeLobbyErrorBody";
 export * from "./pms/parseLobbyRooms";
 export * from "./pms/parseLobbyServices";
 export * from "./pms/buildLobbyBookingNote";

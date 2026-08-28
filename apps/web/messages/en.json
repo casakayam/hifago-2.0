@@ -87,6 +87,8 @@
     "rangeUnavailable": "Some night in this range is no longer available.",
     "pmsAvailabilityLoading": "Checking real availability...",
     "pmsAvailabilityError": "Could not check availability right now. Please try again later.",
+    "pmsAvailabilityRetry": "Try again",
+    "pmsAvailabilityRateLimited": "Too many requests in a row. Wait a moment and try again.",
     "estimatedTotal": "Estimated total",
     "establishmentTitle": "About the establishment",
     "occurrence": {

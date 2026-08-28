@@ -64,18 +64,23 @@ export function LodgingReservationForm({
   const [qty, setQty] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
 
-  // Spec 21 §13 (gap comblé) — un alojamiento PMS-backed n'a jamais de product_availability/
-  // product_date_rates peuplées (Lobby fait foi, cf. page.tsx) : `availability` (prop SSR) reste
-  // vide dans ce cas, remplacée ici par un fetch client mois par mois vers
-  // /api/pms/night-availability. `visibleMonth` pilote le calendrier en mode contrôlé (inoffensif
-  // pour un produit non-PMS, qui ignore ce state) ; `loadedMonthsRef` évite de refetcher un mois
-  // déjà chargé (mémoire de session du composant, jamais persistée) ; `pmsAvailability` s'accumule
-  // au fil de la navigation (jamais réinitialisée en changeant de mois) pour ne pas perdre les
-  // nuits déjà résolues d'un mois précédemment visité.
+  // Spec 21 §13 — un alojamiento PMS-backed n'a jamais de product_availability peuplée (Lobby fait
+  // foi) : `availability` (prop SSR) reste vide, remplacée par un fetch client mois par mois.
+  //
+  // L'ÉTAT EST PAR MOIS, et c'est le correctif du 2026-08-28. Avant, `pmsError` était un booléen
+  // GLOBAL au composant (un mois en échec suivi d'un mois réussi effaçait la bannière), et surtout
+  // `loadedMonthsRef` marquait le mois « chargé » MÊME EN ÉCHEC : plus rien ne le retentait de toute
+  // la session. Comme la panne mesurée est transitoire — novembre est revenu 0, puis 29/30, puis
+  // 30/30 — ce qui manquait n'était pas un meilleur message, c'était de REDEMANDER.
+  type PmsMonthState =
+    | { status: "loading" }
+    | { status: "ready" }
+    | { status: "error"; reason: string; retryAfterSeconds: number | null };
+
   const [visibleMonth, setVisibleMonth] = useState(() => new Date());
   const [pmsAvailability, setPmsAvailability] = useState<Map<string, AvailabilityRow>>(new Map());
-  const [pmsLoading, setPmsLoading] = useState(isPmsBacked);
-  const [pmsError, setPmsError] = useState(false);
+  const [pmsMonths, setPmsMonths] = useState<Map<string, PmsMonthState>>(new Map());
+  const [attempt, setAttempt] = useState(0);
   const loadedMonthsRef = useRef<Set<string>>(new Set());
 
   const monthKey = useMemo(() => format(visibleMonth, "yyyy-MM"), [visibleMonth]);
@@ -83,18 +88,29 @@ export function LodgingReservationForm({
   useEffect(() => {
     if (!isPmsBacked || loadedMonthsRef.current.has(monthKey)) return;
     let cancelled = false;
-    setPmsLoading(true);
-    setPmsError(false);
+    const setMonth = (state: PmsMonthState) =>
+      setPmsMonths((prev) => new Map(prev).set(monthKey, state));
+    setMonth({ status: "loading" });
 
     fetch(`/api/pms/night-availability?productId=${encodeURIComponent(productId)}&month=${monthKey}`)
-      .then((response) => response.json() as Promise<{ ok: boolean; nights?: AvailabilityRow[] }>)
+      .then(
+        (response) =>
+          response.json() as Promise<{
+            ok: boolean;
+            nights?: AvailabilityRow[];
+            reason?: string;
+            retryAfterSeconds?: number | null;
+          }>
+      )
       .then((result) => {
         if (cancelled) return;
         if (!result.ok) {
-          // Échec (ou connecteur inactif) : nuits de ce mois OMISES, jamais une valeur fabriquée —
-          // hasUnavailableNightInRange traite déjà toute nuit absente comme indisponible (fail-closed
-          // gratuit, cf. reservationRange.ts).
-          setPmsError(true);
+          // Le mois n'est VOLONTAIREMENT pas ajouté à loadedMonthsRef : il doit rester retentable.
+          setMonth({
+            status: "error",
+            reason: result.reason ?? "pms_unreachable",
+            retryAfterSeconds: result.retryAfterSeconds ?? null,
+          });
           return;
         }
         loadedMonthsRef.current.add(monthKey);
@@ -103,18 +119,21 @@ export function LodgingReservationForm({
           for (const row of result.nights ?? []) next.set(row.date, row);
           return next;
         });
+        setMonth({ status: "ready" });
       })
       .catch(() => {
-        if (!cancelled) setPmsError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setPmsLoading(false);
+        if (!cancelled) setMonth({ status: "error", reason: "pms_unreachable", retryAfterSeconds: null });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [isPmsBacked, monthKey, productId]);
+  }, [isPmsBacked, monthKey, productId, attempt]);
+
+  const monthState = pmsMonths.get(monthKey);
+  // `connector_inactive` est un état ANTICIPÉ (connecteur coupé côté admin), pas une panne : rien
+  // ne sert de proposer de réessayer, ça ne changera pas tant qu'un admin n'a rien fait.
+  const canRetry = monthState?.status === "error" && monthState.reason !== "connector_inactive";
 
   const effectiveAvailability = useMemo(
     () => (isPmsBacked ? [...pmsAvailability.values()] : availability),
@@ -256,12 +275,26 @@ export function LodgingReservationForm({
     <div className="flex flex-col gap-4">
       <div>
         <h2 className="mb-2 text-sm font-medium">{t("availabilityTitle")}</h2>
-        {isPmsBacked && pmsError ? (
-          <p className="mb-2 text-sm text-danger" role="alert" data-testid="pms-availability-error">
-            {t("pmsAvailabilityError")}
-          </p>
+        {monthState?.status === "error" ? (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <p className="text-sm text-danger" role="alert" data-testid="pms-availability-error">
+              {monthState.reason === "pms_rate_limited"
+                ? t("pmsAvailabilityRateLimited")
+                : t("pmsAvailabilityError")}
+            </p>
+            {canRetry ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                data-testid="pms-availability-retry"
+                onPress={() => setAttempt((value) => value + 1)}
+              >
+                {t("pmsAvailabilityRetry")}
+              </Button>
+            ) : null}
+          </div>
         ) : null}
-        {isPmsBacked && pmsLoading ? (
+        {monthState?.status === "loading" ? (
           <p className="mb-2 text-sm text-muted" aria-live="polite" data-testid="pms-availability-loading">
             {t("pmsAvailabilityLoading")}
           </p>
@@ -272,7 +305,16 @@ export function LodgingReservationForm({
           onSelect={handleSelectRange}
           month={visibleMonth}
           onMonthChange={setVisibleMonth}
-          disabled={[{ before: new Date() }]}
+          // SYMÉTRIE AFFICHAGE / VERDICT, corrigée le 2026-08-28. `hasUnavailableNightInRange`
+          // traite depuis toujours une nuit ABSENTE comme indisponible ; l'affichage, lui, ne
+          // regardait que les nuits REÇUES — une nuit jamais résolue s'affichait donc normale et
+          // cliquable, et n'était refusée qu'après la sélection. La règle existait déjà une porte à
+          // côté, dans ReservationForm : on la reprend, on ne l'invente pas. Vaut aussi pour le
+          // chemin non-PMS, où le même trou existait sans que personne ne l'ait vu.
+          disabled={[
+            { before: new Date() },
+            (date) => !byDate.has(format(date, "yyyy-MM-dd")),
+          ]}
           modifiers={{ unavailable: unavailableDates }}
           modifiersClassNames={{ unavailable: "line-through opacity-60" }}
           components={dayButtonComponents}
