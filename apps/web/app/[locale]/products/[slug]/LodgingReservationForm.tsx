@@ -18,6 +18,7 @@ import {
   isoDateToLocalMidnight,
   lastBookableDateIso,
   startOfTodayInBogota,
+  todayInBogota,
   type LodgingKind,
 } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
@@ -26,6 +27,7 @@ import {
   estimateNightsTotal,
   hasUnavailableNightInRange,
   nightsInRange,
+  reachableRangeWindow,
   resolveTierPrice,
   type PriceTier,
 } from "@/lib/products/reservationRange";
@@ -39,6 +41,19 @@ import {
 // produit, et ce formulaire les sert toutes.
 type AvailabilityRow = { date: string; capacity: number; booked: number };
 type RateRow = { date: string; price_cop: number };
+
+// Une nuit est RÉSERVABLE si son restant couvre la quantité demandée. Seuil `qty`, jamais 0 — une
+// nuit à 2 places restantes n'est pas réservable pour 3, même si elle n'est pas complète. Le restant
+// passé ici est déjà net du panier en cours (`remainingByDate`). Une nuit ABSENTE de la map n'est
+// pas réservable : c'est ce qui couvre la nuit jamais récupérée, acquis du 2026-08-28.
+//
+// Au niveau module, et pas dans le corps du composant : le compilateur React refuse de préserver une
+// mémoïsation dont le résultat est une fonction (react-hooks/preserve-manual-memoization), et une
+// fonction stable ici n'a aucune dépendance à déclarer.
+function nuitReservable(restants: Map<string, number>, iso: string, pourQty: number): boolean {
+  const restant = restants.get(iso);
+  return restant !== undefined && restant >= pourQty;
+}
 
 export function LodgingReservationForm({
   productId,
@@ -200,6 +215,36 @@ export function LodgingReservationForm({
     return dates;
   }, [remainingByDate, qty]);
 
+  // Bornes des deux marches : jamais avant aujourd'hui à Guatapé, jamais au-delà de l'horizon
+  // produit (six mois, inclusif). Mêmes bornes que `startMonth`/`endMonth` et que les deux
+  // matchers `before`/`after` du calendrier — une seule vérité, trois expressions.
+  const bornesCalendrier = useMemo(
+    () => ({ firstIso: todayInBogota(), lastIso: lastBookableDateIso() }),
+    []
+  );
+
+  // LA FENÊTRE ATTEIGNABLE — correctif du 2026-08-29, cf. l'en-tête de reachableRangeWindow.
+  //
+  // ⚠️ L'ancre est `range.from`, y compris quand la plage est COMPLÈTE. Ce n'est pas un raccourci :
+  // `addToRange` (react-day-picker) ré-étend une plage complète au reclic — un clic avant `from`
+  // donne {from: clic, to}, un clic après donne {from, to: clic}. Calculer la fenêtre depuis
+  // `range.from` couvre donc aussi ce reclic, sans cas particulier.
+  //
+  // ⚠️ Et c'est bien `range.from`, pas « from posé et to absent » : RDP 10 pose {from: X, to: X} au
+  // PREMIER clic, jamais {from: X, to: undefined}. Une détection par `!range.to` ne se déclencherait
+  // jamais — vérifié, c'est ce qui a fait échouer la première version de ce correctif.
+  const fenetreAtteignable = useMemo(() => {
+    if (!range?.from) return null;
+    return reachableRangeWindow(
+      format(range.from, "yyyy-MM-dd"),
+      (iso) => nuitReservable(remainingByDate, iso, qty),
+      bornesCalendrier
+    );
+  // Dépendance sur `range` entier, pas sur `range?.from` : le compilateur React infère la
+  // propriété la moins spécifique et refuse la mémoïsation sinon. Recalculer aussi quand seule
+  // la sortie bouge est sans conséquence — la marche est bornée par l'horizon.
+  }, [range, remainingByDate, qty, bornesCalendrier]);
+
   // Compteur de restant dans la case du jour. Affiché UNIQUEMENT quand il contraint réellement le
   // choix (`remaining < qtyMax`) : sur un logement à 20 cupos ouverts tous les jours, imprimer
   // « 20 » sur trente cases n'informe personne et abîme la lecture du calendrier.
@@ -254,6 +299,33 @@ export function LodgingReservationForm({
   function handleSelectRange(next: DateRange | undefined) {
     setRange(next);
     setJustAdded(false);
+  }
+
+  // Monter la quantité peut invalider une plage DÉJÀ posée, sans qu'aucun clic n'ait eu lieu sur
+  // le calendrier — c'est le seul chemin restant par lequel `hasUnavailableNightInRange` pourrait
+  // encore parler. On replie plutôt que d'avertir : la fenêtre resserrée est visible à l'écran
+  // dans le même geste, et l'utilisateur repique une sortie dedans.
+  function handleQtyChange(value: string) {
+    const brut = Number(value);
+    const suivant = Number.isNaN(brut) ? 1 : Math.min(Math.max(brut, 1), qtyMax);
+    setQty(suivant);
+    if (!range?.from) return;
+
+    const fenetre = reachableRangeWindow(
+      format(range.from, "yyyy-MM-dd"),
+      (iso) => nuitReservable(remainingByDate, iso, suivant),
+      bornesCalendrier
+    );
+    // La nuit d'arrivée elle-même ne tient plus la quantité : il n'y a plus de fenêtre à rétrécir,
+    // on repart d'une sélection vide.
+    if (!fenetre) {
+      setRange(undefined);
+      return;
+    }
+    // La sortie déborde la nouvelle fenêtre : on replie sur l'arrivée, qui redevient l'ancre.
+    if (range.to && format(range.to, "yyyy-MM-dd") > fenetre.toIso) {
+      setRange({ from: range.from, to: range.from });
+    }
   }
 
   function handleAddToCart() {
@@ -345,7 +417,20 @@ export function LodgingReservationForm({
             // Borne HAUTE : au-delà de l'horizon produit, rien n'est vendable. Sans elle, ces
             // dates paraissaient sélectionnables et n'étaient refusées qu'après coup.
             { after: dernierJourReservable },
-            (date) => !byDate.has(format(date, "yyyy-MM-dd")),
+            (date) => {
+              const iso = format(date, "yyyy-MM-dd");
+              // PHASE 2 — une arrivée est posée. Seule la fenêtre atteignable reste cliquable, et
+              // la première nuit bloquante y figure comme date de SORTIE (on dort jusqu'à la
+              // veille). C'est ce qui empêche d'ENJAMBER une nuit pleine, au lieu de le reprocher
+              // après coup : `hasUnavailableNightInRange` n'a plus l'occasion de parler.
+              if (fenetreAtteignable) {
+                return iso < fenetreAtteignable.fromIso || iso > fenetreAtteignable.toIso;
+              }
+              // PHASE 1 — pas encore d'arrivée. Une arrivée doit pouvoir héberger la quantité
+              // demandée : ça couvre la nuit SANS DONNÉE (acquis du 2026-08-28) et, désormais, la
+              // nuit PLEINE, qui jusqu'ici était seulement barrée et restait cliquable.
+              return !nuitReservable(remainingByDate, iso, qty);
+            },
           ]}
           modifiers={{ unavailable: unavailableDates }}
           modifiersClassNames={{ unavailable: "line-through opacity-60" }}
@@ -373,10 +458,7 @@ export function LodgingReservationForm({
         className="max-w-32"
         name="qty"
         value={String(qty)}
-        onChange={(value) => {
-          const next = Number(value);
-          setQty(Number.isNaN(next) ? 1 : Math.min(Math.max(next, 1), qtyMax));
-        }}
+        onChange={handleQtyChange}
       >
         <Label>{quantityLabel}</Label>
         <Input id="qty" type="number" min={1} max={qtyMax} data-testid="lodging-qty-input" />

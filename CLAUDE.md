@@ -464,55 +464,36 @@ sont vérifiés par MUTATION, pas seulement par des tests verts. **Non corrigé,
 `createTtlCache` ne purge jamais les entrées expirées (Map non bornée sur clés d'appelant), et
 `addDaysIso` (`bogotaDates.ts:56`) porte le même débordement d'année que corrigé ici.*
 
-*2026-08-28 — **lot fuseau horaire : « toutes les dates sont en heure de Colombie » était documenté
-depuis des mois et n'avait jamais été outillé — d'où DIX sites.** La chaîne `"America/Bogota"`
-n'existait NULLE PART dans le code (trois commentaires, rien d'autre). Guatapé est à UTC−5 toute
-l'année : `new Date().toISOString().slice(0, 10)` rend DÉJÀ demain entre 19 h et minuit heure locale
-— **le bug n'est faux que 5 h par jour**, donc aucune vérification manuelle ne le rencontrait. Et
-`packages/e2e-support/src/date.ts` **portait la même faute** : les deux côtés de chaque assertion se
-trompaient ensemble, 57 specs restaient vertes. Corrigés : la fiche produit (`gte("date", …)`
-retirait la soirée en cours du catalogue), les 4 sites de calendrier d'`apps/web` — dont
-`LodgingReservationForm`, le pire, où le mois d'ouverture **pilote la clé du fetch** (un visiteur
-européen le 1ᵉʳ à 2 h demandait à Lobby le mois SUIVANT) —, les 6 sites d'`apps/admin` dont les deux
-écrans que le socio ouvre quotidiennement, les tests, et les six comparaisons `current_date` de
-`list_clients` (l'admin voyait `pasada` un client qui dort dans la maison ce soir-là). Échappatoire
-unique : `packages/domain/src/time/` (`todayInBogota`, `startOfTodayInBogota`, `addDaysIso`,
-`nowIsoInstant`) + `public.today_in_bogota()` côté SQL (migration `20260828150000`, `create or
-replace` à signature identique pour conserver les privilèges). **CRITÈRE DE FIN OUTILLÉ, le cœur du
-lot** : `eslint.rules.mjs` (les 2 apps) + `scripts/check-timezone.sh` (packages/, supabase/functions/
-Deno, tests/, SQL — l'angle mort où vivait justement le 10ᵉ site), les deux bloquants en CI,
-exceptions NOMMÉES avec leur raison. **DIX-SEPT sites de plus** trouvés au second passage, par
-relecture adversariale : `new Date(order.created_at).toLocaleDateString("es")` est le même défaut
-écrit avec `Intl`, invisible au grep qui avait établi la liste. Sur les 5 **Server Components** de ce
-lot il n'y a aucune question produit — Vercel est en UTC, donc le résultat n'est le bon fuseau de
-personne (« Creada el 28/8/2026, 1:15:00 a. m. » pour une réservation de 20 h 15). Repris via
-`formatDateInBogota()`/`formatDateTimeInBogota()`, qui ne font que passer `timeZone` : format rendu
-**rigoureusement identique**. **427 tests unitaires verts**, pgTAP ciblé (35 assertions), typecheck,
-lint, `deno check`, build des deux apps. **Témoins tous rejoués sans le correctif** : horloge figée à
-`2026-08-28T02:30Z` (Bogotá est encore le 27) ; `process.env.TZ = "Europe/Paris"` forcé côté
-composant — sans ça le test ne prouve rien, la machine de dev étant à `America/Bogota` — 3 tests sur
-4 tombent ; et un pgTAP **déterministe sans figer d'horloge** (Kiritimati UTC+14 vs Midway UTC−11,
-25 h d'écart : leurs `current_date` diffèrent toujours, Bogotá coïncide toujours avec exactement
-l'un des deux) — témoin `have: pasada, want: en_casa`. ⚠️ `timezoneId` dans `playwright.config.ts` ne
-couvre **que le navigateur** : le runner Node et le serveur Next gardent le leur, les deux gestes
-sont nécessaires. ⚠️ **Le lot s'est trompé une fois, et le test le disait** : l'en-tête du pgTAP
-affirmait « Bogotá coïncide toujours avec exactement l'un des deux extrêmes » — faux entre 10 h et
-10 h 59 UTC, la CI aurait rougi une heure par jour et on l'aurait mis sur le compte d'un test
-instable. Le bon invariant est plus faible (« diffère toujours d'AU MOINS un ») et suffit. ⚠️ **Aléa de concurrence** : la session parallèle (tâche 3 LobbyPMS) a créé
-`time/todayInBogota.ts` pendant ce lot ; ses ajouts vivent donc dans un fichier VOISIN
-(`bogotaDates.ts`) pour ne pas risquer d'écraser un fichier ouvert ailleurs ; **fusionnés depuis**,
-une fois la tâche 3 posée — il n'y a plus qu'un module `time/bogotaDates.ts`. ⚠️ `public.today_in_bogota()` était exposée à `anon`/`authenticated` — **révoquée**
-(`from public, anon, authenticated`), verrouillée par deux assertions pgTAP, et rien ne casse
-(prouvé sous `set role authenticated` : EXECUTE refusé, `list_clients` répond — frontière SECURITY
-DEFINER). ⚠️ Le mécanisme n'était PAS celui de `20260828000103` : `proacl` était NULL, donc défaut
-Postgres intégré (`EXECUTE TO PUBLIC`) ; les `pg_default_acl` qui nomment anon/authenticated
-n'existent que pour les objets créés par `supabase_admin`, pas par `postgres`. Nommer les rôles
-reste juste, mais pour l'autre raison (un grant explicite ne part pas avec `from public`).
-**Reste ouvert** : `pms-nightly-contract-check/index.ts` sonde en UTC (vraie dette, exemptée
-nommément) ; deux curseurs UTC en ligne (`buildEvenRatesPerDay.ts`, `pmsFixtureServer.ts`) à faire
-converger vers `addDaysIso` — petit, et tous deux corrects en l'état. Le lot précédent du
-jour (tâche 1 — le calendrier dit sa cause et sait redemander, vérifié en préprod) est décrit dans
-`docs/journal/2026-08.md`.*
+*2026-08-29 — **le grief du 23-24 décembre est enfin clos : une plage ne peut plus ENJAMBER une nuit
+pleine.** Le lot du 28/08 avait fermé le cas « nuits jamais récupérées » ; restait celui d'une nuit
+RÉELLEMENT pleine qu'on enjambe — barrée mais cliquable, et la plage 20→27 décembre qui la traversait
+n'était refusée qu'APRÈS coup, avec exactement le message du grief. Prouvé par sonde avant d'écrire
+le correctif. ⚠️ **Ce chemin n'a aucun filet serveur** : `create_order` saute la validation nuit par
+nuit ET le décrément pour un logement PMS-backed (migration `20260819130000`, l.379 et l.622) — sur
+GUSTO, le calendrier client est la seule barrière synchrone. **NE PAS migrer vers HeroUI
+RangeCalendar** : arbitrage du 17/08 relu puis soumis à contradiction indépendante, zéro objection
+tenue. Une prémisse a pourtant expiré (« la seule barrière qui compte reste le serveur » est fausse
+depuis le 19/08 côté PMS), mais le fait décisif est ailleurs et vaut pour les DEUX bibliothèques :
+le domaine est en nuits à sortie **exclusive**, et leurs deux garde-fous intégrés ont une borne haute
+**inclusive** — `excludeDisabled` de RDP passe par `rangeIncludesDate(…, excludeEnds = false)`,
+`isInvalidSelection` de react-aria rejuge `value.end` APRÈS commit avec `anchorDate` à null. Sortir
+le matin de la première nuit indisponible est légitime : **aucune des deux ne sait l'exprimer**, le
+prédicat conscient de l'ancre doit être écrit par l'app dans les deux mondes. Le clamp react-aria
+n'achète donc aucune garantie gratuite ici. **Correctif** : `reachableRangeWindow` (fonction pure,
+`apps/web/lib/products/reservationRange.ts`) — depuis une ancre A, sont atteignables les dates de
+`[L, U]`, U étant la première nuit non réservable **INCLUSE comme date de SORTIE, jamais comme
+nuit**. ⚠️ **L'ancre est `range.from`, toujours** : RDP 10 pose `{from: X, to: X}` au PREMIER clic,
+donc une détection par `!range.to` ne se déclenche JAMAIS (piège vérifié), et prendre `from` couvre
+gratuitement le reclic sur plage complète que `addToRange` ré-étend. Seuil `< qty` jamais 0 ; bornes
+`todayInBogota()`/`lastBookableDateIso()` ; une nuit pleine n'est plus une arrivée possible ; et
+monter la quantité APRÈS une sélection replie la plage au lieu d'avertir — dernier chemin par lequel
+`hasUnavailableNightInRange` pouvait encore parler. **480 tests verts** (domain 263, web 79, admin
+138), lint, typecheck, 3 garde-fous, build. **Témoins sur le code livré** : 5 des 7 tests composant
+tombent sans le correctif (les 2 autres sont des gardes de non-régression, dit explicitement) ; sur
+la fonction pure, rendre la fin exclusive — le comportement des deux bibliothèques — fait tomber 5
+tests sur 8. ⚠️ **Aléa** : le commit `437dbdf` (lot PMS parallèle) a emporté `reservationRange.ts`
+en cours de rédaction — `reachableRangeWindow` est dans l'historique sous un message « feat(pms) »,
+sans son test ni son appelant. À recoller au découpage par chemin.*
 
 *2026-08-27 — journée en trois temps : connecteur LobbyPMS vérifié de bout en bout (spec 24), C2
 livré et testé en réel (spec 25), puis **le modèle hébergement mené à son terme (T1 → T3)**.
