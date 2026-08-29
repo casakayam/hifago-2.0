@@ -154,6 +154,9 @@
       "nothing_to_pay": "No hay nada pendiente de pago para este pedido.",
       "order_not_found": "No se pudo encontrar el pedido para iniciar el pago.",
       "mercadopago_unavailable": "No pudimos conectar con Mercado Pago. Inténtalo de nuevo en unos instantes.",
+      "pms_refused": "El alojamiento ya no está disponible para esas fechas. No se cobró nada y las fechas quedaron liberadas — probá con otras fechas o con otro alojamiento.",
+      "pms_refused_pending": "El alojamiento ya no está disponible para esas fechas. No se cobró nada. Estamos liberando tu reserva; si ves algo pendiente en unos minutos, escribinos.",
+      "pms_unreachable": "No pudimos confirmar la disponibilidad con el alojamiento. No se cobró nada — intentá de nuevo en unos minutos.",
       "unknown": "No se pudo completar el pedido. Inténtalo de nuevo."
     }
   },

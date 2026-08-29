@@ -2005,8 +2005,9 @@ export type Database = {
         }
       }
       claim_pms_cancellation_batch: {
-        Args: { p_limit?: number }
+        Args: { p_limit?: number; p_max_attempts?: number }
         Returns: {
+          attempts: number
           entry_id: string
           establishment_id: string
           hifago_status: string
@@ -2358,6 +2359,10 @@ export type Database = {
         Args: { p_batch_size?: number; p_campaign_id: string }
         Returns: Json
       }
+      release_order_after_pms_refusal: {
+        Args: { p_order_id: string; p_reason: string }
+        Returns: Json
+      }
       reorder_gallery: {
         Args: {
           p_entity_id: string
@@ -2519,6 +2524,7 @@ export type Database = {
         Args: { p_payload: Json; p_product_id: string }
         Returns: Json
       }
+      today_in_bogota: { Args: never; Returns: string }
       transfer_establishment: {
         Args: {
           p_establishment_id: string

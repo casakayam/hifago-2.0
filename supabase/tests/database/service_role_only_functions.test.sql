@@ -34,6 +34,10 @@ select is(
         -- Deuxième vague (20260828010000) : appelée uniquement par set_order_line_status, écrit
         -- dans ledger_entries sans aucun contrôle propre.
         'apply_order_line_ledger_transition',
+        -- Réordonnancement PMS (20260829100000) : appelée uniquement par /api/pms/reserve-nights,
+        -- qui seul sait que LobbyPMS a refusé. Elle REND DES PLACES et annule des lignes — donc
+        -- directement monnayable si un client pouvait l'appeler avec l'UUID d'une commande.
+        'release_order_after_pms_refusal',
         -- Fonctions de cron (`cron.schedule`) : aucun appelant humain légitime.
         'expire_stale_payment_orders',
         'invoke_pms_poll_bookings',

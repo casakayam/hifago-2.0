@@ -219,18 +219,54 @@ export function CheckoutForm({
       return;
     }
 
-    clear();
     const orderId = result.order_id ?? "";
+
+    // ⚠️ LOBBY D'ABORD — RÉORDONNÉ LE 2026-08-29, et ce n'est pas « un await de plus ».
+    //
+    // Séquence précédente : create_order (qui CONFIRME) → `void reserve-nights` → `void
+    // startPayment`. Les deux `void` étaient délibérés et documentés (« un échec PMS ne défait
+    // jamais une réservation déjà confirmée »), mais la prémisse était fausse : sur le compte réel,
+    // deux catégories refusent `POST /bookings` en 422 TOUT EN affichant une disponibilité non
+    // nulle (spec 24 §11.2, C1 réfuté — rien dans `available-rooms` ne distingue une catégorie
+    // réservable). Le client payait donc son acompte, l'écran disait « réservé », et le partenaire
+    // ne recevait rien — sans même une annulation à compenser, puisque rien n'avait été créé.
+    //
+    // Désormais : Lobby → confirmation visible → encaissement. C'est ce qu'exige la spec 21 §8
+    // (« échec fermé uniquement AVANT confirmation »), que le code violait en silence. Le succès
+    // n'est affiché QU'APRÈS l'accord de Lobby, et `startPayment` n'est jamais atteint sans lui.
+    //
+    // ⚠️ `setPendingOrderId` a été DÉPLACÉ après cet appel, et c'est le geste central : c'est lui
+    // qui bascule l'écran sur « commande confirmée ». Le remonter au-dessus rendrait tout le reste
+    // décoratif.
+    let pmsResponse: Response;
+    try {
+      pmsResponse = await fetch("/api/pms/reserve-nights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      });
+    } catch {
+      // Réseau coupé pendant l'appel : on ne sait pas si Lobby a réservé. Échec fermé — rien n'est
+      // encaissé, et expire_stale_payment_orders reprendra la commande dans les 30 minutes (avec,
+      // au passage, l'annulation d'un booking qui aurait malgré tout été créé).
+      setError(t("errors.pms_unreachable"));
+      return;
+    }
+
+    if (!pmsResponse.ok) {
+      const pmsResult = (await pmsResponse.json().catch(() => null)) as
+        | { reason?: string; released?: boolean }
+        | null;
+      // La commande a été défaite côté serveur (places rendues, lignes annulées, bookings frères mis
+      // en file d'annulation). Le panier est VOLONTAIREMENT conservé — `clear()` n'a pas encore été
+      // appelé : le client peut changer de dates sans tout ressaisir, ce qui est le seul geste utile
+      // face à une catégorie que Lobby refuse.
+      setError(t(pmsResult?.released === false ? "errors.pms_refused_pending" : "errors.pms_refused"));
+      return;
+    }
+
+    clear();
     setPendingOrderId(orderId);
-    // Spec 21 — miroir LobbyPMS fire-and-forget : jamais attendu, jamais bloquant pour l'affichage
-    // order-success ni le paiement. Un échec PMS ne défait jamais une réservation déjà confirmée
-    // (statut d'intégration séparé du statut métier, cf. spec 21 §8) — suivi exclusivement via la
-    // file de réconciliation admin (feature 22), aucune UI dédiée ici.
-    void fetch("/api/pms/reserve-nights", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderId }),
-    }).catch(() => {});
     void startPayment(orderId);
   }
 

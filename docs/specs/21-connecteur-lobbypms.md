@@ -275,6 +275,45 @@ des charges : statut d'intégration séparé du statut métier). Les deux règle
 si on les lit isolément ; elles ne le sont pas : l'échec fermé protège contre la survente
 **avant** l'engagement, la réconciliation protège l'expérience client **après**.
 
+### 8.1 Réordonnancement du 2026-08-29 — Lobby est réservé AVANT confirmation
+
+**Le code violait ce §8 en silence.** La séquence de `CheckoutForm.tsx` était `create_order` (qui
+CONFIRME) → `void reserve-nights` → `void startPayment` : la réservation PMS partait *après* la
+confirmation, sans être attendue, et le paiement démarrait sans elle. « Échec fermé uniquement
+avant confirmation » était donc inapplicable — il n'existait aucun instant, sur ce chemin, entre la
+lecture de Lobby et l'engagement.
+
+**Le fait qui a tranché** (§11.2 de la spec 24) : deux catégories du compte réel (`49823`, `18013`)
+refusent `POST /bookings` en **422** tout en affichant une disponibilité **non nulle**, et C1 est
+**réfuté** — `available-rooms` les cote exactement comme les autres, aucune charge utile ne dit
+« réservable ». Aucune lecture préalable ne peut donc prédire le refus : **seul l'appel d'écriture
+le révèle**. Conséquence observée : le client payait ses 17 %, hifago confirmait, et le partenaire
+ne recevait rien — sans même une annulation à compenser, puisque rien n'avait été créé.
+
+**Séquence en vigueur** : `create_order` → `await reserve-nights` → confirmation affichée →
+`startPayment`. Sur refus d'une **nuit**, `release_order_after_pms_refusal` (migration
+`20260829100000`) défait la commande : lignes en `cancelled_by_provider`, places non-PMS **rendues**,
+blocages de camp retirés, ledger neutralisé, et les bookings frères déjà créés partent en file
+d'annulation via le trigger existant. Rien n'est encaissé, le panier est conservé.
+
+**Trois asymétries à ne pas confondre :**
+
+1. **Une nuit refusée défait la commande ; une activité refusée ne la défait pas.** La nuit est
+   réelle chez le partenaire — l'annuler parce qu'un extra a échoué coûterait au client son
+   logement. L'activité garde donc l'ancien chemin (`pms_reconciliation_entries`).
+2. **Cette fonction rend les places, alors que `cancel_order` refuse de le faire.** Ce n'est pas une
+   incohérence : `cancel_order` garde la place consommée **exprès** (cahier des charges client
+   §7/A3, « en compensation du créneau bloqué pour rien »). Ici personne n'a rien immobilisé — la
+   réservation n'a jamais existé, il n'y a aucune compensation à devoir.
+3. **`create_order` n'est pas modifiée.** Elle reste la barrière anti-survente du chemin **non-PMS**
+   (verrou `for update` + décrément), que les lignes PMS-backed sautent depuis `20260819130000`.
+   Réordonner le PMS ne devait pas déplacer une ligne de ce chemin-là.
+
+**Reste vrai après ce lot** : la réconciliation garde son rôle pour les échecs qui surviennent
+*après* un encaissement réussi (`pms-poll-bookings`, annulations) et pour le seul cas où le
+relâchement lui-même échoue — là, une commande reste pendante et un humain est nécessaire ; le
+filet est `expire_stale_payment_orders` (30 min).
+
 ## 9. Cas limites
 
 Voir §0.

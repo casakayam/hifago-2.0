@@ -16,10 +16,28 @@ import { createServiceRoleClient } from "@hifago/supabase/service";
 // déjà entièrement statué sur l'autorisation de la réservation elle-même, même discipline que
 // /api/payments/create pour create_payment_intent.
 //
-// Invariant central : un échec PMS à n'importe quelle étape ne défait JAMAIS une réservation déjà
-// confirmée (client cahier des charges §5 — statut d'intégration séparé du statut métier, jamais
-// un blocage de la réservation). Toujours 200 { ok: true } côté HTTP — l'échec vit uniquement dans
-// pms_reconciliation_entries, jamais renvoyé comme une erreur au front.
+// ⚠️ INVARIANT RETOURNÉ LE 2026-08-29, ET C'EST TOUT L'OBJET DE CE LOT. Cette route était
+// fire-and-forget APRÈS confirmation, et répondait donc toujours `200 {ok:true}` : « un échec PMS
+// ne défait jamais une réservation déjà confirmée ». Cette phrase reste vraie — mais elle ne
+// s'applique plus, parce qu'il n'y a plus de réservation confirmée à ce moment-là. Elle est
+// désormais ATTENDUE, avant confirmation visible et avant tout encaissement (spec 21 §8 : « échec
+// fermé uniquement AVANT confirmation »), et elle rend un VERDICT.
+//
+// LE FAIT QUI A DÉCIDÉ (spec 24 §11.2) : deux catégories du compte réel (49823, 18013) refusent
+// `POST /bookings` en 422 tout en affichant une disponibilité NON NULLE, et C1 est RÉFUTÉ —
+// `available-rooms` les cote comme les autres. Aucune lecture ne peut prédire le refus : seul
+// l'appel d'écriture le révèle. Le client payait donc ses 17 %, hifago confirmait, et le partenaire
+// ne recevait rien — sans même une annulation à compenser, puisque rien n'avait été créé.
+//
+// CE QUI DÉCLENCHE UN RELÂCHEMENT, et ce qui n'en déclenche pas :
+//   - une NUIT qui n'obtient pas son booking → la commande entière est défaite
+//     (release_order_after_pms_refusal), rien n'est encaissé, les places non-PMS sont rendues ;
+//   - une ACTIVITÉ refusée alors que sa nuit est bien réservée → surtout PAS de relâchement : la
+//     nuit existe chez le partenaire, l'annuler pour un extra serait pire que le défaut. On garde
+//     l'ancien chemin (pms_reconciliation_entries), qui est exactement fait pour ça.
+//   - une activité SANS aucune nuit dans cette commande pour cet établissement → ni l'un ni
+//     l'autre : Lobby n'accepte pas de vente de service isolée, c'est une limite connue, pas un
+//     incident (cf. plus bas).
 //
 // Chaque établissement PMS-backed de la commande est traité INDÉPENDAMMENT (une commande peut
 // contenir des nuits dans plusieurs propriétés, dont certaines PMS-backed et d'autres non, cahier
@@ -79,6 +97,11 @@ async function recordFailure(
 function describeLobbyResponse(status: number, body: unknown): string {
   const text = typeof body === "string" ? body : JSON.stringify(body);
   return `HTTP ${status} — ${text || "corps vide"}`;
+}
+
+interface LodgingFailure {
+  lineId: string;
+  detail: string;
 }
 
 export async function POST(request: Request) {
@@ -182,16 +205,23 @@ export async function POST(request: Request) {
   const baseUrl = process.env.LOBBY_API_BASE_URL || LOBBY_DEFAULT_BASE_URL;
   const relaySecret = process.env.LOBBY_RELAY_SECRET;
 
+  // Les échecs de NUIT sont collectés, pas enregistrés au fil de l'eau : si la commande est
+  // relâchée juste après, insérer dans pms_reconciliation_entries déclencherait notify_all_admins
+  // (sans dédup) pour un incident déjà défait — un e-mail « à traiter » sur quelque chose que
+  // personne ne peut ni ne doit traiter. Le même piège avait déjà produit une salve d'e-mails le
+  // 2026-08-26 (activité sans nuit), et c'est la raison d'être du garde juste en dessous.
+  const lodgingFailures: LodgingFailure[] = [];
+
   for (const group of groups.values()) {
     let primaryBookingId: number | null = null;
 
     for (const line of group.lodgingLines) {
       const product = productsById.get(line.product_id)!;
       if (!line.end_date || product.lobby_category_id == null) {
-        await recordFailure(
-          service, line.id,
-          `ligne inexploitable : end_date=${line.end_date ?? "null"}, lobby_category_id=${product.lobby_category_id ?? "null"}`
-        );
+        lodgingFailures.push({
+          lineId: line.id,
+          detail: `ligne inexploitable : end_date=${line.end_date ?? "null"}, lobby_category_id=${product.lobby_category_id ?? "null"}`,
+        });
         continue;
       }
       try {
@@ -220,16 +250,17 @@ export async function POST(request: Request) {
           // LE cas qui a coûté une heure de diagnostic le 2026-08-27 : la réponse n'est pas
           // exploitable et rien ne disait laquelle. C'est ici que le motif de refus de Lobby
           // (catégorie non réservable par API, paramètre invalide…) devient visible.
-          await recordFailure(
-            service, line.id,
-            `POST /bookings sans booking_id exploitable — ${describeLobbyResponse(response.status, response.body)}`
-          );
+          // LE cas du 422 : Lobby cote la catégorie comme disponible et refuse de la réserver.
+          lodgingFailures.push({
+            lineId: line.id,
+            detail: `POST /bookings sans booking_id exploitable — ${describeLobbyResponse(response.status, response.body)}`,
+          });
           continue;
         }
         await service.from("order_lines").update({ pms_booking_id: String(parsed.bookingId) }).eq("id", line.id);
         primaryBookingId ??= parsed.bookingId;
       } catch (error) {
-        await recordFailure(service, line.id, `createLobbyBooking a levé — ${String(error)}`);
+        lodgingFailures.push({ lineId: line.id, detail: `createLobbyBooking a levé — ${String(error)}` });
       }
     }
 
@@ -255,10 +286,9 @@ export async function POST(request: Request) {
           );
           continue;
         }
-        await recordFailure(
-          service, line.id,
-          "aucun booking porteur : toutes les nuits de cet établissement ont échoué"
-        );
+        // Les nuits de cet établissement ont toutes échoué : la commande va être relâchée, et
+        // c'est l'échec des NUITS qui le décide. Rien à enregistrer ici — ce serait un second
+        // e-mail pour la même cause.
         continue;
       }
       try {
@@ -283,5 +313,38 @@ export async function POST(request: Request) {
     }
   }
 
-  return Response.json({ ok: true });
+  if (lodgingFailures.length === 0) {
+    return Response.json({ ok: true });
+  }
+
+  // ── REFUS : on défait, on n'encaisse pas ────────────────────────────────────────────────────
+  console.error(
+    `reserve-nights : ${lodgingFailures.length} nuit(s) refusée(s) par LobbyPMS (order ${orderId}) — relâchement`,
+    lodgingFailures.map((failure) => failure.detail)
+  );
+
+  const { data: released, error: releaseError } = await service.rpc("release_order_after_pms_refusal", {
+    p_order_id: orderId,
+    p_reason: lodgingFailures[0].detail.slice(0, 300),
+  });
+
+  const releaseOk = !releaseError && (released as { ok?: boolean } | null)?.ok === true;
+  if (!releaseOk) {
+    // ⚠️ LE SEUL CAS QUI LAISSE UNE COMMANDE PENDANTE, et il a besoin d'un humain : Lobby a refusé
+    // ET on n'a pas su défaire. C'est exactement ce pour quoi pms_reconciliation_entries existe,
+    // donc ici — et seulement ici — on l'alimente. Le filet de sécurité reste
+    // expire_stale_payment_orders, qui expirera la commande dans les 30 minutes et déclenchera au
+    // passage l'annulation des bookings frères déjà créés.
+    console.error(`reserve-nights : relâchement IMPOSSIBLE (order ${orderId})`, releaseError);
+    for (const failure of lodgingFailures) {
+      await recordFailure(service, failure.lineId, `${failure.detail} — relâchement impossible`);
+    }
+  }
+
+  // 409 et non 200 : c'est un refus du prestataire, pas une panne de hifago, et il doit se voir
+  // dans la supervision comme dans le front. `released` dit au front que rien ne subsiste.
+  return Response.json(
+    { ok: false, reason: "pms_refused", released: releaseOk, failedLines: lodgingFailures.length },
+    { status: 409 }
+  );
 }

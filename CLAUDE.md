@@ -464,36 +464,73 @@ sont vérifiés par MUTATION, pas seulement par des tests verts. **Non corrigé,
 `createTtlCache` ne purge jamais les entrées expirées (Map non bornée sur clés d'appelant), et
 `addDaysIso` (`bogotaDates.ts:56`) porte le même débordement d'année que corrigé ici.*
 
-*2026-08-29 — **le grief du 23-24 décembre est enfin clos : une plage ne peut plus ENJAMBER une nuit
-pleine.** Le lot du 28/08 avait fermé le cas « nuits jamais récupérées » ; restait celui d'une nuit
-RÉELLEMENT pleine qu'on enjambe — barrée mais cliquable, et la plage 20→27 décembre qui la traversait
-n'était refusée qu'APRÈS coup, avec exactement le message du grief. Prouvé par sonde avant d'écrire
-le correctif. ⚠️ **Ce chemin n'a aucun filet serveur** : `create_order` saute la validation nuit par
-nuit ET le décrément pour un logement PMS-backed (migration `20260819130000`, l.379 et l.622) — sur
-GUSTO, le calendrier client est la seule barrière synchrone. **NE PAS migrer vers HeroUI
-RangeCalendar** : arbitrage du 17/08 relu puis soumis à contradiction indépendante, zéro objection
-tenue. Une prémisse a pourtant expiré (« la seule barrière qui compte reste le serveur » est fausse
-depuis le 19/08 côté PMS), mais le fait décisif est ailleurs et vaut pour les DEUX bibliothèques :
-le domaine est en nuits à sortie **exclusive**, et leurs deux garde-fous intégrés ont une borne haute
-**inclusive** — `excludeDisabled` de RDP passe par `rangeIncludesDate(…, excludeEnds = false)`,
-`isInvalidSelection` de react-aria rejuge `value.end` APRÈS commit avec `anchorDate` à null. Sortir
-le matin de la première nuit indisponible est légitime : **aucune des deux ne sait l'exprimer**, le
-prédicat conscient de l'ancre doit être écrit par l'app dans les deux mondes. Le clamp react-aria
-n'achète donc aucune garantie gratuite ici. **Correctif** : `reachableRangeWindow` (fonction pure,
-`apps/web/lib/products/reservationRange.ts`) — depuis une ancre A, sont atteignables les dates de
-`[L, U]`, U étant la première nuit non réservable **INCLUSE comme date de SORTIE, jamais comme
-nuit**. ⚠️ **L'ancre est `range.from`, toujours** : RDP 10 pose `{from: X, to: X}` au PREMIER clic,
-donc une détection par `!range.to` ne se déclenche JAMAIS (piège vérifié), et prendre `from` couvre
-gratuitement le reclic sur plage complète que `addToRange` ré-étend. Seuil `< qty` jamais 0 ; bornes
-`todayInBogota()`/`lastBookableDateIso()` ; une nuit pleine n'est plus une arrivée possible ; et
-monter la quantité APRÈS une sélection replie la plage au lieu d'avertir — dernier chemin par lequel
-`hasUnavailableNightInRange` pouvait encore parler. **480 tests verts** (domain 263, web 79, admin
-138), lint, typecheck, 3 garde-fous, build. **Témoins sur le code livré** : 5 des 7 tests composant
-tombent sans le correctif (les 2 autres sont des gardes de non-régression, dit explicitement) ; sur
-la fonction pure, rendre la fin exclusive — le comportement des deux bibliothèques — fait tomber 5
-tests sur 8. ⚠️ **Aléa** : le commit `437dbdf` (lot PMS parallèle) a emporté `reservationRange.ts`
-en cours de rédaction — `reachableRangeWindow` est dans l'historique sous un message « feat(pms) »,
-sans son test ni son appelant. À recoller au découpage par chemin.*
+*2026-08-29 — **cinq lots.** (1) **Le grief du 23-24 décembre est clos** : une plage ne peut plus
+ENJAMBER une nuit pleine. Le lot du 28/08 avait fermé les nuits jamais récupérées ; restait la nuit
+RÉELLEMENT pleine, barrée mais cliquable, dont l'enjambement produisait mot pour mot le message du
+grief. ⚠️ **Ce chemin n'a aucun filet serveur** : `create_order` saute la validation nuit par nuit ET
+le décrément pour un logement PMS-backed (`20260819130000`, l.379 et l.622). **NE PAS migrer vers
+HeroUI RangeCalendar** — arbitrage du 17/08 relu puis soumis à contradiction indépendante, zéro
+objection tenue. Le fait décisif vaut pour les DEUX bibliothèques : le domaine est en nuits à sortie
+**exclusive**, et leurs garde-fous intégrés ont une borne haute **inclusive** (`excludeDisabled` via
+`rangeIncludesDate(…, excludeEnds = false)` ; `isInvalidSelection` qui rejuge `value.end` APRÈS
+commit). Sortir le matin de la première nuit indisponible est légitime : **aucune des deux ne sait
+l'exprimer**. (2) **`min_stay` et `lead_days` sont APPLIQUÉS** (décision Jérôme), justement parce
+qu'ils valent {0,0,0} sur les six catégories : l'effet visible est nul, donc le moment est sûr —
+l'alternative était de le découvrir par un 422 en prod. **`reachableRangeWindow`**
+(`apps/web/lib/products/reservationRange.ts`) rend désormais quatre bornes : `fromIso`/`toIso` (les
+nuits réservables, la première nuit bloquante INCLUSE comme SORTIE) et
+`earliestCheckOutIso`/`latestCheckInIso` (la longueur minimale). ⚠️ **L'ancre est `range.from`,
+toujours** — RDP 10 pose `{from: X, to: X}` au premier clic, donc `!range.to` ne se déclenche
+JAMAIS, et prendre `from` couvre le reclic sur plage complète que `addToRange` ré-étend. ⚠️ **Le
+`min_stay` appartient à la nuit d'ARRIVÉE** : en avant c'est l'ancre, **en arrière c'est le
+CANDIDAT** (le clic avant l'ancre est permis, l'ancre devient la sortie) — d'où une marche, pas une
+soustraction. ⚠️ **`lead_days` relève le PLANCHER**, il ne barre pas des nuits une par une ; maximum
+des valeurs non nulles, et il alimente DEUX mécanismes (matcher `before` + bornes de la fenêtre),
+chacun suffisant seul. ⚠️ **`null` n'est jamais 0** : le relevé garde la distinction, l'application
+choisit un défaut localement sans réécrire l'observation ; et `Math.max(1, NaN)` vaut NaN, donc toute
+valeur non finie retombe sur 1. **498 tests verts** (domain 266, web 94, admin 138), lint, typecheck,
+3 garde-fous, build. **Témoins** : mutation « borne basse inclusive » → 8 rouges ; application
+retirée → 5 rouges sur 9 ; plancher retiré des deux mécanismes → 3 rouges (le retirer d'un seul reste
+vert, ce qui a révélé la redondance). Quatre tests passent des deux côtés par construction — gardes
+de non-régression, dit plutôt que compté. (3) **LOBBY EST RÉSERVÉ AVANT LE PAIEMENT** (décision
+Jérôme) : `create_order` → **`await` reserve-nights** → confirmation affichée → `startPayment`.
+⚠️ **Le geste central n'est pas l'`await`, c'est le déplacement de `setPendingOrderId` SOUS l'appel**
+— c'est lui qui bascule l'écran sur « commande confirmée », le laisser au-dessus aurait rendu tout le
+reste décoratif. Motif mesuré : deux catégories du compte réel (49823, 18013) refusent en `422` en
+affichant une disponibilité NON NULLE, et C1 est **réfuté** — rien dans la charge utile ne dit
+« réservable ». Sur refus d'une nuit, `release_order_after_pms_refusal` (`20260829100000`) défait
+tout : lignes en `cancelled_by_provider`, places non-PMS rendues, blocages de camp retirés, ledger
+neutralisé, panier CONSERVÉ. ⚠️ **Asymétrie délibérée** : une NUIT refusée défait la commande, une
+ACTIVITÉ refusée ne la défait pas — annuler une nuit réelle pour un extra coûterait au client son
+logement. ⚠️ **`cancel_order` refuse délibérément de rendre la place** (cahier des charges client
+§7/A3, « compensation du créneau bloqué pour rien ») : ce motif NE s'applique PAS ici, personne n'a
+rien immobilisé. Les deux règles coexistent pour deux situations opposées — ne pas « corriger » l'une
+au nom de l'autre. ⚠️ **Plus d'entrée de réconciliation pour un refus de nuit** : `notify_all_admins`
+n'a pas de dédup, chaque refus aurait mailé tous les admins pour un incident déjà défait. Elles
+restent pour le seul cas qui le mérite — le relâchement lui-même a échoué. (4) **L'horizon produit
+vaut SIX MOIS** (décision Jérôme) : `RESERVATION_HORIZON_MONTHS`
+(`packages/domain/src/products/reservationHorizon.ts`) remplace TROIS définitions dont deux se
+contredisaient (180 j fiche produit, 183 j agenda socio, 36 mois route PMS). ⚠️ « Six mois » n'est
+pas « 180 jours » — `addMonthsIso` compte en mois et BORNE au dernier jour du mois d'arrivée. Le
+garde d'abus de la route disparaît, absorbé. (5) **Le garde-fou fuseau était AVEUGLE à
+`@internationalized/date`** : `today(getLocalTimeZone())` — le bug du 28/08 écrit dans la langue de
+react-aria — passait au vert, et la bibliothèque est déjà dans `node_modules` (3.12.3, tirée par
+HeroUI) sans être déclarée. Motif `getLocalTimeZone(` ajouté : il ferme toute la famille. Et **le
+cache ne double plus un appel EN VOL** — `getOrFetch` ne testait que `expiresAt > now`, donc une
+lecture plus lente que le TTL de 60 s se dupliquait à chaque visiteur, sur la ressource déjà lente,
+jusqu'à brûler le plafond de 60/min. ⚠️ **Ce n'est pas du périmé resservi** : on rejoint la même
+promesse.*
+
+⚠️ **DEUX TROUS CONNUS, NON CORRIGÉS, en attente d'arbitrage.** (a) **Rien ne rend les places quand
+une commande EXPIRE** — `modify_order_line` est la seule fonction du schéma qui décrémente `booked`.
+Pour `cancel_order` c'est assumé (§7/A3) ; pour un checkout jamais payé, un créneau est immobilisé
+pour toujours alors que personne n'a rien bloqué. (b) **Le marquage des catégories qui refusent en
+`422` reste MANUEL, et volontairement** : Lobby renvoie `{error_code: "INPUT_PARAMETERS"}` aussi bien
+pour « cette catégorie n'est pas réservable » que pour « ta requête est mal formée » — un
+`rates_per_day` malformé de NOTRE côté blacklisterait en silence une catégorie parfaitement vendable.
+Même défaut que le proxy « a des photos », déplacé. Depuis le lot (3), un `422` est devenu inoffensif
+(rien encaissé, dates rendues, message clair) : le seul coût restant est un client qui traverse le
+tunnel pour rien, ce qui plaide pour l'humain plutôt que pour l'automatique.*
 
 *2026-08-27 — journée en trois temps : connecteur LobbyPMS vérifié de bout en bout (spec 24), C2
 livré et testé en réel (spec 25), puis **le modèle hébergement mené à son terme (T1 → T3)**.

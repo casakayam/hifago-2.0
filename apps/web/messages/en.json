@@ -154,6 +154,9 @@
       "nothing_to_pay": "There is nothing pending payment for this order.",
       "order_not_found": "The order could not be found to start the payment.",
       "mercadopago_unavailable": "We couldn't connect to Mercado Pago. Please try again shortly.",
+      "pms_refused": "The accommodation is no longer available for those dates. Nothing was charged and the dates were released — try other dates or another place.",
+      "pms_refused_pending": "The accommodation is no longer available for those dates. Nothing was charged. We are releasing your booking; if anything still looks pending in a few minutes, get in touch.",
+      "pms_unreachable": "We could not confirm availability with the accommodation. Nothing was charged — please try again in a few minutes.",
       "unknown": "The order could not be completed. Please try again."
     }
   },
