@@ -1,4 +1,4 @@
-import { addDaysIso } from "../time/bogotaDates";
+import { addDaysIso, joursDansLeMois } from "../time/bogotaDates";
 import { getLobbyAvailableRooms } from "./lobbyClient.ts";
 import { hasActiveRestriction, parseLobbyNightCatalog, type LobbyNightRestrictions } from "./parseLobbyNightCatalog.ts";
 import { alignLobbyCatalogEntries, type NightCatalogRow } from "./alignLobbyCatalogEntries.ts";
@@ -277,8 +277,7 @@ export function pickCategoryNights(rows: NightCatalogRow[], categoryId: number):
 export function nightsOfMonth(month: string, notBeforeIso?: string): string[] {
   const [yearStr, monthStr] = month.split("-");
   const year = Number(yearStr);
-  const monthIndex = Number(monthStr) - 1;
-  const daysInMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+  const daysInMonth = joursDansLeMois(year, Number(monthStr));
 
   const nights: string[] = [];
   for (let day = 1; day <= daysInMonth; day++) {

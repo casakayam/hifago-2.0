@@ -63,12 +63,15 @@ est_exempte() {
 
     # Arithmétique de date ancrée UTC des DEUX côtés (parse `${iso}T00:00:00Z`, formate en UTC) :
     # auto-cohérente, donc indépendante de tout fuseau. Ce n'est pas une faute — mais c'est une
-    # SECONDE implémentation d'addDaysIso(). À faire converger quand le lot connecteur PMS (session
-    # parallèle du 2026-08-28, qui tenait ces fichiers ouverts) aura livré.
-    packages/domain/src/pms/getNightAvailabilityWindow.ts) return 0 ;;
+    # SECONDE implémentation d'addDaysIso().
+    #
+    # ⚠️ CETTE LISTE SE PURGE AVEC LES CONVERGENCES, sinon elle ment. `getNightAvailabilityWindow.ts`
+    # y figurait et n'y est plus : son `addOneDay` a été supprimé au profit d'addDaysIso le même
+    # jour, et l'entrée est restée obsolète quelques heures. Une exemption qui survit à sa raison
+    # d'être envoie le prochain lecteur chercher un problème qui n'existe plus. Vérifier avant
+    # d'ajouter, et retirer dans le commit qui opère la convergence.
     packages/domain/src/pms/getNightAvailabilityWindow.test.ts) return 0 ;;
     packages/domain/src/pms/buildEvenRatesPerDay.ts) return 0 ;;
-    packages/e2e-support/src/pmsFixtureServer.ts) return 0 ;;
 
     # Comparaison SYMÉTRIQUE : les deux membres subissent la même transformation, donc l'égalité ne
     # dépend d'aucun fuseau. Aucune de ces deux dates n'est jamais affichée.

@@ -1,3 +1,4 @@
+import { addDaysIso } from "@hifago/domain";
 import { createServer, type Server } from "node:http";
 
 // Spec 21 — connecteur LobbyPMS. Serveur node:http minimal, aucune nouvelle dépendance (ni Nock ni
@@ -251,11 +252,17 @@ const RECORDS_PER_PAGE = 100;
 // sa date, jamais par son rang. Un scénario peut rejouer le monde exclusif avec `false`.
 // Borné à 400 nuits — au-delà c'est une requête aberrante, et une fixture qui bouclerait sans fin
 // sur des dates mal formées vaut moins qu'une fixture qui s'arrête.
+// ⚠️ `addDaysIso` plutôt qu'un curseur `Date` maison (converge le 2026-08-29) : c'était la
+// TROISIÈME implémentation de l'incrément de date civile dans ce dépôt, et une fixture qui dérive
+// de la production est le défaut que l'en-tête de ce fichier dénonce lui-même. La comparaison est
+// LEXICOGRAPHIQUE — sur `yyyy-MM-dd` zéro-padé elle coïncide exactement avec l'ordre chronologique,
+// et elle évite de reparser deux dates à chaque tour.
 function enumerateNights(startDate: string, endDate: string, endDateInclusive: boolean): string[] {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return [];
+  const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+  if (!ISO_DATE.test(startDate)) return [];
   const nights: string[] = [];
-  const cursor = new Date(`${startDate}T00:00:00Z`);
-  const last = /^\d{4}-\d{2}-\d{2}$/.test(endDate) ? new Date(`${endDate}T00:00:00Z`) : null;
+  const last = ISO_DATE.test(endDate) ? endDate : null;
+  let cursor = startDate;
 
   for (let guard = 0; guard < 400; guard += 1) {
     if (last !== null) {
@@ -263,8 +270,8 @@ function enumerateNights(startDate: string, endDate: string, endDateInclusive: b
     } else if (guard > 0) {
       break; // pas d'`end_date` exploitable : une seule nuit, comme un appel mono-nuit.
     }
-    nights.push(cursor.toISOString().slice(0, 10));
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    nights.push(cursor);
+    cursor = addDaysIso(cursor, 1);
   }
   return nights;
 }

@@ -63,5 +63,19 @@ export const reglesFuseau = {
       message:
         "Projection d'un instant en date civile sans fuseau : sur Vercel (serveur UTC) cette date est fausse 5 h par jour. Utiliser formatDateInBogota()/formatDateTimeInBogota() (packages/domain/src/time/).",
     },
+    {
+      // `getLocalTimeZone()` — le fuseau de la MACHINE, via `@internationalized/date` (la
+      // bibliothèque de dates de react-aria, donc de HeroUI, déjà présente dans node_modules sans
+      // qu'aucun package.json ne la déclare). `today(getLocalTimeZone())` est exactement le défaut
+      // ci-dessus écrit dans une autre langue.
+      //
+      // ⚠️ Ce motif existait déjà dans scripts/check-timezone.sh (le filet CI) et PAS ici, alors
+      // que la règle eslint est la seule à donner un retour dans l'éditeur. C'est précisément
+      // l'asymétrie qui a laissé vivre les dix sites d'origine : une règle documentée quelque part,
+      // mais pas outillée à l'endroit où on écrit le code. Un seul appel suffit à fermer toute la
+      // famille — `today(`, `now(`, `toDate(` prennent tous le fuseau par lui.
+      selector: 'CallExpression[callee.name="getLocalTimeZone"]',
+      message: `Le fuseau de la machine, jamais celui de Guatapé — c'est le bug du 2026-08-28 écrit avec @internationalized/date. ${ECHAPPATOIRE}`,
+    },
   ],
 };

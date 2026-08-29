@@ -211,7 +211,21 @@ export function monthRank(month: string): number {
 
 const JOURS_PAR_MOIS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-function joursDansLeMois(year: number, month: number): number {
+/**
+ * Nombre de jours d'un mois civil (`month` de 1 à 12).
+ *
+ * EXPORTÉE le 2026-08-29, après que ce même fait ait été re-dérivé à TROIS endroits — ici,
+ * `nightsOfMonth` (connecteur PMS, qui décide quelles nuits sont demandées à Lobby) et
+ * `daysInCurrentMonthInBogota` (helpers e2e), les deux derniers via
+ * `new Date(Date.UTC(y, m, 0)).getUTCDate()`. Aucune n'était fausse, mais c'est exactement le motif
+ * qui a produit les dix sites du lot fuseau : une fonction partagée existe, n'est pas exposée, et
+ * chaque nouvel appelant la réinvente. Un test e2e et la production qui divergeraient sur « combien
+ * de nuits en novembre » redonneraient un test vert qui ne teste pas la production.
+ *
+ * Purement arithmétique, sans objet `Date` : le faire passer par `Date` rouvrirait la porte au
+ * fuseau que tout ce module sert à fermer, et au remappage des années à deux chiffres.
+ */
+export function joursDansLeMois(year: number, month: number): number {
   if (month !== 2) return JOURS_PAR_MOIS[month - 1];
   const bissextile = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
   return bissextile ? 29 : 28;

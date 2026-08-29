@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { format, parseISO } from "date-fns";
 import { useTranslations } from "next-intl";
 import type { DateRange } from "react-day-picker";
@@ -280,18 +280,43 @@ export function LodgingReservationForm({
   // ⚠️ Et c'est bien `range.from`, pas « from posé et to absent » : RDP 10 pose {from: X, to: X} au
   // PREMIER clic, jamais {from: X, to: undefined}. Une détection par `!range.to` ne se déclencherait
   // jamais — vérifié, c'est ce qui a fait échouer la première version de ce correctif.
-  const fenetreAtteignable = useMemo(() => {
-    if (!ancreIso) return null;
-    return reachableRangeWindow(
-      ancreIso,
-      (iso) => nuitReservable(remainingByDate, iso, qty),
-      bornesCalendrier,
-      (arrivee) => nuitsMinimumPour(pmsRestrictions, arrivee)
-    );
-  // Dépendance sur `range` entier, pas sur `range?.from` : le compilateur React infère la
-  // propriété la moins spécifique et refuse la mémoïsation sinon. Recalculer aussi quand seule
-  // la sortie bouge est sans conséquence — la marche est bornée par l'horizon.
-  }, [ancreIso, remainingByDate, qty, bornesCalendrier, pmsRestrictions]);
+  // Les trois adaptateurs de `reachableRangeWindow` (nuit réservable, bornes du calendrier,
+  // min_stay de l'arrivée) étaient recopiés à l'identique aux TROIS sites d'appel, avec pour seule
+  // variation la quantité. Ils vivent ici une fois : ajouter un paramètre à la fonction de domaine
+  // ne demande plus de mettre trois sites à jour en cadence, ce qu'un copier-coller rate en silence.
+  const fenetreDepuis = useCallback(
+    (ancre: string, pourQty: number) =>
+      reachableRangeWindow(
+        ancre,
+        (nuit) => nuitReservable(remainingByDate, nuit, pourQty),
+        bornesCalendrier,
+        (arrivee) => nuitsMinimumPour(pmsRestrictions, arrivee)
+      ),
+    [remainingByDate, bornesCalendrier, pmsRestrictions]
+  );
+
+  const fenetreAtteignable = useMemo(
+    () => (ancreIso ? fenetreDepuis(ancreIso, qty) : null),
+    [ancreIso, fenetreDepuis, qty]
+  );
+
+  // PHASE 1, mémoïsée PAR DATE. react-day-picker évalue le prédicat `disabled` une fois par CASE
+  // (~42) et à CHAQUE rendu — donc à chaque frappe dans le champ quantité, à chaque survol qui
+  // change un état voisin. Or chaque évaluation marche jusqu'à la première nuit non réservable,
+  // c'est-à-dire potentiellement jusqu'à l'horizon de six mois sur un logement largement ouvert.
+  // Ce cache ramène le coût à un calcul par date DISTINCTE et par jeu de dépendances, au lieu d'un
+  // par case et par rendu. Il se vide dès qu'une dépendance change, donc il ne peut jamais servir
+  // une fenêtre périmée — et s'il était rejeté par React, on retomberait simplement sur l'ancien
+  // coût, jamais sur un résultat faux.
+  // ⚠️ CONSTRUITE EN UNE FOIS, jamais mutée ensuite : le compilateur React refuse toute
+  // modification d'une valeur issue de `useMemo` (« This value cannot be modified »), donc le cache
+  // paresseux qu'on écrirait spontanément ici est illégal. On calcule d'avance, pour les seules
+  // dates que le calendrier peut proposer comme arrivée — celles dont on a reçu la disponibilité.
+  const fenetresParArrivee = useMemo(() => {
+    const par = new Map<string, ReturnType<typeof fenetreDepuis>>();
+    for (const iso of remainingByDate.keys()) par.set(iso, fenetreDepuis(iso, qty));
+    return par;
+  }, [remainingByDate, fenetreDepuis, qty]);
 
   // Compteur de restant dans la case du jour. Affiché UNIQUEMENT quand il contraint réellement le
   // choix (`remaining < qtyMax`) : sur un logement à 20 cupos ouverts tous les jours, imprimer
@@ -359,12 +384,7 @@ export function LodgingReservationForm({
     setQty(suivant);
     if (!range?.from) return;
 
-    const fenetre = reachableRangeWindow(
-      format(range.from, "yyyy-MM-dd"),
-      (iso) => nuitReservable(remainingByDate, iso, suivant),
-      bornesCalendrier,
-      (arrivee) => nuitsMinimumPour(pmsRestrictions, arrivee)
-    );
+    const fenetre = fenetreDepuis(format(range.from, "yyyy-MM-dd"), suivant);
     // La nuit d'arrivée elle-même ne tient plus la quantité : il n'y a plus de fenêtre à rétrécir,
     // on repart d'une sélection vide.
     if (!fenetre) {
@@ -488,12 +508,12 @@ export function LodgingReservationForm({
               // peut partir d'ici, plutôt que de réécrire la règle : ça couvre la nuit SANS DONNÉE
               // (acquis du 2026-08-28), la nuit PLEINE (2026-08-29), et désormais l'arrivée d'où
               // aucun séjour d'au moins `min_stay` nuits ne tient dans la fenêtre.
-              const depuisIci = reachableRangeWindow(
-                iso,
-                (nuit) => nuitReservable(remainingByDate, nuit, qty),
-                bornesCalendrier,
-                (arrivee) => nuitsMinimumPour(pmsRestrictions, arrivee)
-              );
+              // `has`, pas `??` : une fenêtre légitimement calculée peut valoir `null` (l'arrivée
+              // elle-même ne tient pas la quantité), et `??` la reprendrait pour un défaut de cache.
+              // Le repli ne sert que les cases hors du mois chargé, déjà écartées plus haut.
+              const depuisIci = fenetresParArrivee.has(iso)
+                ? fenetresParArrivee.get(iso)!
+                : fenetreDepuis(iso, qty);
               return depuisIci === null || depuisIci.earliestCheckOutIso === null;
             },
           ]}

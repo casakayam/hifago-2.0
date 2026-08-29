@@ -1,4 +1,4 @@
-import { addDaysIso, todayInBogota } from "@hifago/domain";
+import { addDaysIso, joursDansLeMois, todayInBogota } from "@hifago/domain";
 
 // Réexport : un spec e2e a souvent besoin de la primitive brute (décaler une date déjà connue,
 // lire le jour de Guatapé) en plus des helpers ci-dessous. Une seule source d'import par fichier.
@@ -41,9 +41,10 @@ export function nextMonthIsoDate(dayOfMonth: number): string {
  */
 export function daysInCurrentMonthInBogota(): number {
   const [year, month] = todayInBogota().split("-").map(Number);
-  // Jour 0 du mois suivant = dernier jour du mois demandé. `Date.UTC` des deux côtés : purement
-  // calendaire, aucun fuseau consulté.
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+  // La MÊME fonction que la production (`nightsOfMonth` du connecteur PMS l'utilise aussi) : un
+  // helper de test qui redérive ce que la production calcule finit par diverger d'elle, et rend un
+  // test vert qui ne teste plus rien.
+  return joursDansLeMois(year, month);
 }
 
 /** Le quantième du jour à Guatapé (1-31). */

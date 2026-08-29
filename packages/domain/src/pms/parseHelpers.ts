@@ -30,3 +30,23 @@ export function asNonEmptyString(value: unknown): string | null {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
+
+/**
+ * Entier >= 0, ou null. Le pendant d'`asPositiveInt` pour les champs où **0 est une valeur
+ * légitime** : `available_rooms` à 0 veut dire « complet », `min_stay` à 0 veut dire « aucune
+ * contrainte ». Les confondre avec l'absence coûterait cher dans les deux sens.
+ *
+ * ⚠️ `Number("")` vaut 0, et `Number("  ")` aussi. Sans le filtre de contenu ci-dessous, une chaîne
+ * vide — la forme la plus banale d'un champ non renseigné — se lirait « complet » sur une
+ * disponibilité, ou « pas de contrainte » sur un `min_stay`. Lobby renvoie parfois ses nombres en
+ * chaîne, d'où la tolérance ; elle s'arrête à une chaîne qui a du contenu.
+ *
+ * Tronqué, pas arrondi : Lobby compte des unités physiques, et un `2.5` hypothétique deviendrait
+ * une demi-place à vendre après multiplication par `cuposPerUnit`.
+ */
+export function asNonNegativeInt(value: unknown): number | null {
+  const usable = typeof value === "number" || (typeof value === "string" && value.trim().length > 0);
+  if (!usable) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : null;
+}

@@ -1,4 +1,4 @@
-import { asRecord } from "./parseHelpers.ts";
+import { asNonNegativeInt, asRecord } from "./parseHelpers.ts";
 
 // Parseur de GET /api/v2/available-rooms sur le CHEMIN DE RÉSERVATION, dans sa forme « catalogue »
 // (appel SANS `category_id`). Remplace l'usage que le calendrier faisait de
@@ -114,18 +114,11 @@ function readCategories(record: Record<string, unknown>): NightCategories | null
     // désormais laissée HORS de la map : elle est alors « non cotée », ce que pickCategoryNights
     // rapporte nommément.
     //
-    // Tronqué, pas arrondi : Lobby compte des unités physiques. Un `2.5` hypothétique deviendrait
-    // 2.5 cupos après multiplication par `cuposPerUnit` — une demi-place à vendre.
-    const raw = category.available_rooms;
-    // ⚠️ `Number("")` vaut 0, et `Number("  ")` aussi : sans ce filtre, une chaîne vide — la forme
-    // la plus banale d'un champ « pas renseigné » — se lirait « complet ». Lobby renvoie parfois
-    // ses nombres en chaîne, d'où la tolérance, mais elle s'arrête à une chaîne qui a du contenu.
-    const isUsable =
-      typeof raw === "number" || (typeof raw === "string" && raw.trim().length > 0);
-    if (!isUsable) continue;
-    const availableRooms = Number(raw);
-    if (!Number.isFinite(availableRooms)) continue;
-    const available = Math.max(0, Math.trunc(availableRooms));
+    // `asNonNegativeInt` porte les deux prudences qui comptent ici, et les porte pour tout le
+    // dossier : 0 est une valeur LÉGITIME (« complet »), et une chaîne vide n'en est pas une —
+    // `Number("")` vaut 0, donc un champ non renseigné se lirait « complet » sans ce filtre.
+    const available = asNonNegativeInt(category.available_rooms);
+    if (available === null) continue;
 
     // Doublon de catégorie dans une même nuit : on garde le MINIMUM. On ne sait pas laquelle des
     // deux lignes fait foi, et la seule erreur qui coûte de l'argent est de sur-vendre.
@@ -144,12 +137,7 @@ function readCategories(record: Record<string, unknown>): NightCategories | null
 function readRestrictions(value: unknown): LobbyNightRestrictions | null {
   const record = asRecord(value);
   if (!record) return null;
-  const read = (raw: unknown): number | null => {
-    const usable = typeof raw === "number" || (typeof raw === "string" && raw.trim().length > 0);
-    if (!usable) return null;
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : null;
-  };
+  const read = asNonNegativeInt;
   const restrictions = {
     minStay: read(record.min_stay),
     maxStay: read(record.max_stay),

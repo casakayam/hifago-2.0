@@ -336,9 +336,14 @@ export async function POST(request: Request) {
     // expire_stale_payment_orders, qui expirera la commande dans les 30 minutes et déclenchera au
     // passage l'annulation des bookings frères déjà créés.
     console.error(`reserve-nights : relâchement IMPOSSIBLE (order ${orderId})`, releaseError);
-    for (const failure of lodgingFailures) {
-      await recordFailure(service, failure.lineId, `${failure.detail} — relâchement impossible`);
-    }
+    // En parallèle : ces inserts visent des `order_line_id` distincts, aucun n'attend l'autre. On
+    // est déjà sur un chemin doublement dégradé (refus PMS PUIS échec du relâchement) — c'est le
+    // moment où faire attendre le client N latences réseau au lieu d'une est le plus superflu.
+    await Promise.all(
+      lodgingFailures.map((failure) =>
+        recordFailure(service, failure.lineId, `${failure.detail} — relâchement impossible`)
+      )
+    );
   }
 
   // 409 et non 200 : c'est un refus du prestataire, pas une panne de hifago, et il doit se voir
