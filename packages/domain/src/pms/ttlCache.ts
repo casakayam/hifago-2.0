@@ -82,7 +82,27 @@ export function createTtlCache<T>(ttlMs = 60_000, maxEntries = 200): TtlCache<T>
       sweep(now);
 
       const existing = entries.get(key);
-      if (existing && existing.expiresAt > now) {
+      // DEUX RAISONS DE RESSERVIR UNE ENTRÉE, et la seconde a été ajoutée le 2026-08-29 :
+      //
+      //   - elle est encore FRAÎCHE (`expiresAt > now`) — le cas nominal ;
+      //   - elle est EXPIRÉE MAIS ENCORE EN VOL. On rejoint l'appel en cours au lieu d'en lancer un
+      //     second. L'appelant n'y perd rien : il attend exactement la même promesse, qui rendra
+      //     une donnée FRAÎCHE — ce n'est pas du périmé resservi, et l'échec fermé (CLAUDE.md §4.4)
+      //     tient donc toujours.
+      //
+      // LE DÉFAUT QUE ÇA FERME. Sans la seconde condition, une lecture Lobby plus lente que le TTL
+      // de 60 s expirait PENDANT qu'elle était en vol, et chaque visiteur suivant en déclenchait une
+      // nouvelle — on multipliait les appels précisément sur la ressource déjà lente, jusqu'à
+      // consommer le plafond mesuré de 60 appels/minute et mettre TOUT le monde en 429. Le champ
+      // `settled` existait déjà et disait cela dans son propre commentaire ; il n'était simplement
+      // pas lu ici.
+      //
+      // ⚠️ CONTREPARTIE ASSUMÉE : si un `fetcher` ne se règle JAMAIS (ni tenu ni rompu), tous les
+      // appelants partagent désormais son sort au lieu de retenter chacun de leur côté. C'est le
+      // bon compromis — leurs tentatives séparées échouaient de la même façon tout en brûlant le
+      // quota. Un rejet, lui, libère la clé immédiatement (plus bas) : une panne franche reste
+      // retentée sans délai.
+      if (existing && (existing.expiresAt > now || !existing.settled)) {
         return existing.value;
       }
 

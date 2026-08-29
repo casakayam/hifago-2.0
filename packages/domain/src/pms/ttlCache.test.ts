@@ -153,3 +153,62 @@ describe("createTtlCache", () => {
     expect(await cache.getOrFetch("a", fetcher, 0)).toBe(30);
   });
 });
+
+// ── 2026-08-29 — la ruée sur la ressource lente. Signalée par la revue du lot cache, tranchée par
+// Jérôme : on rejoint l'appel en vol plutôt que de le doubler.
+describe("une entrée expirée mais EN VOL est rejointe, jamais doublée", () => {
+  it("une lecture plus lente que le TTL ne déclenche qu'UN appel, quel que soit le nombre de visiteurs", async () => {
+    const cache = createTtlCache<string>(60_000);
+    let appels = 0;
+    let debloquer: (valeur: string) => void = () => {};
+    const fetcher = () => {
+      appels += 1;
+      return new Promise<string>((resolve) => {
+        debloquer = resolve;
+      });
+    };
+
+    // t=0 : premier visiteur, l'appel part et ne répond pas.
+    const premier = cache.getOrFetch("cle", fetcher, 0);
+    // t=90s : le TTL a expiré PENDANT que l'appel est encore en vol. C'est le cas mesuré.
+    const deuxieme = cache.getOrFetch("cle", fetcher, 90_000);
+    const troisieme = cache.getOrFetch("cle", fetcher, 120_000);
+
+    expect(appels).toBe(1);
+
+    debloquer("catalogue");
+    // Les trois reçoivent la MÊME donnée, et elle est fraîche — jamais du périmé resservi.
+    expect(await premier).toBe("catalogue");
+    expect(await deuxieme).toBe("catalogue");
+    expect(await troisieme).toBe("catalogue");
+  });
+
+  it("une entrée expirée et TERMINÉE déclenche bien un nouvel appel — on ne sert pas de périmé", async () => {
+    const cache = createTtlCache<string>(60_000);
+    let appels = 0;
+    const fetcher = async () => {
+      appels += 1;
+      return `lecture-${appels}`;
+    };
+
+    expect(await cache.getOrFetch("cle", fetcher, 0)).toBe("lecture-1");
+    expect(await cache.getOrFetch("cle", fetcher, 30_000)).toBe("lecture-1"); // encore fraîche
+    expect(await cache.getOrFetch("cle", fetcher, 90_000)).toBe("lecture-2"); // expirée ET finie
+    expect(appels).toBe(2);
+  });
+
+  it("un rejet libère la clé immédiatement — une panne franche reste retentée sans délai", async () => {
+    const cache = createTtlCache<string>(60_000);
+    let appels = 0;
+    const fetcher = async () => {
+      appels += 1;
+      if (appels === 1) throw new Error("Lobby injoignable");
+      return "rétabli";
+    };
+
+    await expect(cache.getOrFetch("cle", fetcher, 0)).rejects.toThrow("Lobby injoignable");
+    // Même instant, TTL loin d'être écoulé : la clé doit avoir été libérée par le rejet.
+    expect(await cache.getOrFetch("cle", fetcher, 1)).toBe("rétabli");
+    expect(appels).toBe(2);
+  });
+});
