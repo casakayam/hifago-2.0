@@ -24,6 +24,16 @@
 #   - `getFullYear()/getMonth()/getDate()` isolés : trop ambigus pour un grep. Dette connue, à
 #     reprendre avec un lint AST si le besoin s'en fait sentir.
 #
+# `getLocalTimeZone` (2026-08-29). Ce motif vient de `@internationalized/date`, la bibliothèque de
+# dates de react-aria — donc de HeroUI, donc DÉJÀ présente dans node_modules (3.12.3, tirée
+# transitivement) alors qu'aucun package.json ne la déclare et qu'aucun fichier ne l'importe encore.
+# `today(getLocalTimeZone())` est EXACTEMENT le bug du 2026-08-28 — la date du navigateur ou du
+# serveur, jamais celle de Guatapé — écrit dans une autre langue, et il passait ce garde-fou au VERT.
+# Trouvé par la session qui évaluait la migration du calendrier sur HeroUI, en posant le témoin. Un
+# seul motif suffit à fermer toute la famille (`today(`, `now(`, `toDate(`… prennent tous le fuseau
+# par ce même appel), et il n'existe aucun usage légitime : le fuseau de l'exploitation est une
+# constante, pas une propriété de la machine qui exécute le code.
+#
 # Les commentaires sont retirés avant analyse (`//` en JS/TS, `--` en SQL) : ce fichier-ci, et
 # beaucoup d'autres, CITENT les expressions interdites pour les expliquer. Limite connue et
 # assumée : un `--` à l'intérieur d'une chaîne SQL masquerait la fin de sa ligne (faux négatif
@@ -88,7 +98,7 @@ signale() { # fichier, lignes, explication
 echo "== Dates civiles calculées hors du fuseau de Guatapé (TS/JS) =="
 while IFS= read -r f; do
   est_exempte "$f" && continue
-  hits="$(sed 's://.*::' "$f" | grep -nE 'toISOString\(\)\.(slice|substring|substr|split)|new Date\(\)|new Date\(Date\.now\(\)\)|new Date\([^)]*\)\.toLocale' || true)"
+  hits="$(sed 's://.*::' "$f" | grep -nE 'toISOString\(\)\.(slice|substring|substr|split)|new Date\(\)|new Date\(Date\.now\(\)\)|new Date\([^)]*\)\.toLocale|getLocalTimeZone\(' || true)"
   [ -z "$hits" ] && continue
   signale "$f" "$hits" \
     "Utiliser packages/domain/src/time/ : todayInBogota(), startOfTodayInBogota(), addDaysIso(), nowIsoInstant()."

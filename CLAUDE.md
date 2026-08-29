@@ -49,8 +49,15 @@ racine (`AGENTS.md` point 2).
    même design system : `data-theme="vitrine"` (apps/web) et `data-theme="admin"` (apps/admin),
    posés sur `<html>` — aucun composant dupliqué, seuls les tokens changent. Bibliothèques
    additionnelles uniquement pour leur usage précis déjà tranché : Recharts (graphiques),
-   react-day-picker (sélecteur de dates client, réexporté par packages/ui — le DatePicker natif
-   HeroUI v3 est encore "in progress", pas encore évalué comme remplacement), FullCalendar
+   react-day-picker (sélecteur de dates client, réexporté par packages/ui — ⚠️ le calendrier
+   react-aria/HeroUI A ÉTÉ ÉVALUÉ, deux fois, sur prototype réel : 2026-08-17 puis 2026-08-29.
+   Ne pas rouvrir sur « HeroUI n'a pas encore été regardé », c'est faux. La raison est de fond :
+   le domaine est en NUITS à check-out exclusif, et AUCUNE des deux bibliothèques ne sait
+   l'exprimer gratuitement — `isInvalidSelection` de react-aria ne s'évalue qu'après commit de la
+   plage, et `excludeDisabled` de react-day-picker passe par `rangeIncludesDate(…, excludeEnds =
+   false)`, donc inclut le jour de sortie. Le prédicat conscient de l'ancre doit être écrit par
+   l'app dans les deux mondes ; migrer n'achète aucune garantie. S'ajoute qu'un seul des trois
+   formulaires est en `mode="range"`), FullCalendar
    (gestion de disponibilité admin/socio), TanStack Table (tables denses — pairé à une primitive
    `SimpleTable` locale à packages/ui, pas au `Table` compound HeroUI qui gère son propre état).
    Jamais de second design system complet en parallèle. Décision révisée le 2026-08-14 (HeroUI
