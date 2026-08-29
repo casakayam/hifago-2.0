@@ -1,9 +1,11 @@
-import type { LobbyCatalogEntry } from "./parseLobbyNightCatalog.ts";
+import type { LobbyCatalogEntry, LobbyNightRestrictions } from "./parseLobbyNightCatalog.ts";
 
 export interface NightCatalogRow {
   date: string;
   /** categoryId → unités libres. Absente = catégorie non cotée par Lobby cette nuit-là. */
   availableByCategory: Map<number, number>;
+  /** categoryId → `restrictions` relevées (jamais appliquées). Absente = Lobby n'en pose aucune. */
+  restrictionsByCategory: Map<number, LobbyNightRestrictions>;
 }
 
 export type CatalogAlignment =
@@ -59,12 +61,18 @@ export function alignLobbyCatalogEntries(
   if (entries.length === 1 && entries[0].date === null && requestedNights.length === 1) {
     return {
       ok: true,
-      nights: [{ date: requestedNights[0], availableByCategory: entries[0].availableByCategory }],
+      nights: [
+        {
+          date: requestedNights[0],
+          availableByCategory: entries[0].availableByCategory,
+          restrictionsByCategory: entries[0].restrictionsByCategory,
+        },
+      ],
     };
   }
 
   const requested = new Set(requestedNights);
-  const byDate = new Map<string, Map<number, number>>();
+  const byDate = new Map<string, LobbyCatalogEntry>();
   let undated = 0;
 
   for (const entry of entries) {
@@ -80,7 +88,7 @@ export function alignLobbyCatalogEntries(
     if (byDate.has(entry.date)) {
       return { ok: false, reason: "duplicate_date", detail: `date ${entry.date} rendue deux fois` };
     }
-    byDate.set(entry.date, entry.availableByCategory);
+    byDate.set(entry.date, entry);
   }
 
   const missing = requestedNights.filter((night) => !byDate.has(night));
@@ -104,6 +112,13 @@ export function alignLobbyCatalogEntries(
   // une fenêtre ordonnée, et rien ne garantit que Lobby trie.
   return {
     ok: true,
-    nights: requestedNights.map((date) => ({ date, availableByCategory: byDate.get(date) as Map<number, number> })),
+    nights: requestedNights.map((date) => {
+      const entry = byDate.get(date) as LobbyCatalogEntry;
+      return {
+        date,
+        availableByCategory: entry.availableByCategory,
+        restrictionsByCategory: entry.restrictionsByCategory,
+      };
+    }),
   };
 }

@@ -154,6 +154,7 @@ describe("getNightAvailabilityWindow (vrai fetch contre un serveur de fixtures l
     expect(pickCategoryNights(result.nights, CATEGORY_ID)).toEqual({
       nights: [{ date: "2028-09-07", capacity: 0, booked: 0 }],
       missingDates: [],
+      restrictedNights: [],
     });
   });
 
@@ -181,6 +182,7 @@ describe("getNightAvailabilityWindow (vrai fetch contre un serveur de fixtures l
     expect(pickCategoryNights(result.nights, CATEGORY_ID)).toEqual({
       nights: [],
       missingDates: ["2028-09-06"],
+      restrictedNights: [],
     });
     // …et les voisines, elles, sont servies normalement par la MÊME lecture.
     expect(pickCategoryNights(result.nights, SIBLING_IDS[0]).missingDates).toEqual([]);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseLobbyNightCatalog } from "./parseLobbyNightCatalog";
 import { alignLobbyCatalogEntries } from "./alignLobbyCatalogEntries";
+import { pickCategoryNights } from "./getNightAvailabilityWindow";
 
 const GLAMPING = 29376;
 const VIDPOVO = 9631;
@@ -290,5 +291,95 @@ describe("parseLobbyNightCatalog — forme mono-nuit observée", () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.entries[0].availableByCategory.size).toBe(0);
+  });
+});
+
+describe("restrictions{min_stay, max_stay, lead_days} — relevées, jamais appliquées", () => {
+  // ⚠️ CE QUE CES TESTS GARDENT, c'est un SILENCE qu'on vient de supprimer. Ces trois champs
+  // existaient dans les réponses de Lobby sans qu'aucun parseur du chemin de réservation ne les
+  // regarde. Ils valent {0,0,0} sur les six catégories de Casa Kayam (observé le 2026-08-27,
+  // reconfirmé par la sonde du 2026-08-28) : aujourd'hui ils ne changent donc RIEN, et c'est
+  // précisément la raison de les lire maintenant plutôt que le jour où ils compteront.
+  const nuit = (categories: unknown[]) => ({ date: "2026-09-26", categories });
+
+  it("lit la forme OBSERVÉE {0,0,0} — présente, et sans contrainte active", () => {
+    const parsed = parseLobbyNightCatalog(
+      nuit([{ category_id: GUSTO, available_rooms: 6, restrictions: { min_stay: 0, max_stay: 0, lead_days: 0 } }])
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.entries[0].restrictionsByCategory.get(GUSTO)).toEqual({
+      minStay: 0,
+      maxStay: 0,
+      leadDays: 0,
+    });
+
+    const aligned = alignLobbyCatalogEntries(parsed.entries, ["2026-09-26"]);
+    expect(aligned.ok).toBe(true);
+    if (!aligned.ok) return;
+    // {0,0,0} = Lobby dit explicitement « aucune contrainte » : rien à signaler.
+    expect(pickCategoryNights(aligned.nights, GUSTO).restrictedNights).toEqual([]);
+  });
+
+  it("une contrainte NON NULLE remonte jusqu'à l'appelant, nuit par nuit", () => {
+    // Le jour où un établissement en pose une, le calendrier laisserait choisir une nuit que
+    // POST /bookings refusera en 422 — sans que rien ne relie la cause à l'effet. C'est ce lien
+    // que ce relevé rétablit, sans rien décider : il n'ampute aucune disponibilité.
+    const parsed = parseLobbyNightCatalog({
+      data: [
+        nuit([{ category_id: GUSTO, available_rooms: 6, restrictions: { min_stay: 0, max_stay: 0, lead_days: 0 } }]),
+        {
+          date: "2026-09-27",
+          categories: [
+            { category_id: GUSTO, available_rooms: 6, restrictions: { min_stay: 3, max_stay: 0, lead_days: 0 } },
+          ],
+        },
+      ],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const aligned = alignLobbyCatalogEntries(parsed.entries, ["2026-09-26", "2026-09-27"]);
+    expect(aligned.ok).toBe(true);
+    if (!aligned.ok) return;
+
+    const picked = pickCategoryNights(aligned.nights, GUSTO);
+    expect(picked.restrictedNights).toEqual([
+      { date: "2026-09-27", restrictions: { minStay: 3, maxStay: 0, leadDays: 0 } },
+    ]);
+    // ⚠️ ET LA DISPONIBILITÉ EST INTACTE : relever n'est pas appliquer. Traduire un `min_stay` en
+    // disponibilité serait un arbitrage produit (refuser la sélection ? échouer au paiement ?
+    // afficher la contrainte ?), et ce module n'arbitre pas.
+    expect(picked.nights).toHaveLength(2);
+    expect(picked.missingDates).toEqual([]);
+  });
+
+  it("`restrictions` absent : la catégorie n'en porte pas, on n'en invente pas", () => {
+    const parsed = parseLobbyNightCatalog(nuit([{ category_id: GUSTO, available_rooms: 6 }]));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.entries[0].restrictionsByCategory.has(GUSTO)).toBe(false);
+  });
+
+  it("un champ illisible reste `null`, jamais 0 — « rien dit » n'est pas « pas de contrainte »", () => {
+    const parsed = parseLobbyNightCatalog(
+      nuit([{ category_id: GUSTO, available_rooms: 6, restrictions: { min_stay: "", lead_days: 2 } }])
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.entries[0].restrictionsByCategory.get(GUSTO)).toEqual({
+      minStay: null,
+      maxStay: null,
+      leadDays: 2,
+    });
+  });
+
+  it("un objet `restrictions` totalement illisible n'est pas inscrit du tout", () => {
+    const parsed = parseLobbyNightCatalog(
+      nuit([{ category_id: GUSTO, available_rooms: 6, restrictions: { min_stay: null, autre: "x" } }])
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    // Ne rien inscrire évite de faire croire à une observation qu'on n'a pas faite.
+    expect(parsed.entries[0].restrictionsByCategory.has(GUSTO)).toBe(false);
   });
 });

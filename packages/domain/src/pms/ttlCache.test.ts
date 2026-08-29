@@ -61,4 +61,95 @@ describe("createTtlCache", () => {
     expect(result).toBe(99);
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
+
+  // ── LA PURGE, ajoutée le 2026-08-28 (D8 de la revue adversariale du lot R1) ─────────────────
+  // Le cache ne vidait la Map que sur promesse ROMPUE : une entrée expirée n'était plus jamais
+  // resservie, et plus jamais libérée non plus. `size()` existe pour rendre ça vérifiable — sans
+  // lui, « expirée » et « purgée » sont indiscernables du dehors (les deux rappellent le fetcher).
+
+  it("une entrée expirée et terminée est PURGÉE, pas seulement ignorée", async () => {
+    const cache = createTtlCache<number>(60_000);
+    const fetcher = vi.fn().mockResolvedValue(1);
+
+    await cache.getOrFetch("2028-09", fetcher, 0);
+    await cache.getOrFetch("2028-10", fetcher, 0);
+    expect(cache.size()).toBe(2);
+
+    // Une lecture APRÈS expiration : elle déclenche le balayage, qui emporte les deux anciennes.
+    // Sans la purge, ce compteur vaudrait 3 — les deux mois de septembre/octobre resteraient
+    // retenus pour toujours, avec leur catalogue complet.
+    await cache.getOrFetch("2028-11", fetcher, 60_001);
+    expect(cache.size()).toBe(1);
+  });
+
+  it("le balayage ne retire pas une entrée encore EN VOL, même expirée", async () => {
+    // ⚠️ CE QUE CE TEST N'AFFIRME PAS, et c'est important : il n'affirme PAS que la coalescence
+    // survit à l'expiration. Elle n'y survit pas, et ne l'a jamais fait — `getOrFetch` traite une
+    // entrée expirée comme un défaut, en vol ou non. Une lecture Lobby plus lente que le TTL
+    // provoque donc une seconde lecture. C'est une sémantique PRÉEXISTANTE, inchangée par ce lot,
+    // et signalée à part : c'est une ruée sur la ressource justement lente.
+    //
+    // Ce qui est affirmé ici : le balayage laisse l'entrée en place tant qu'elle n'est pas
+    // terminée. C'est la même règle que le plafond applique (test suivant), où elle est
+    // load-bearing — là, elle est défensive, et les deux doivent rester cohérentes.
+    const cache = createTtlCache<number>(60_000);
+    let resolveLent: (value: number) => void;
+    const lent = vi.fn().mockReturnValue(new Promise<number>((resolve) => (resolveLent = resolve)));
+    const rapide = vi.fn().mockResolvedValue(2);
+
+    const enVol = cache.getOrFetch("lente", lent, 0);
+    await cache.getOrFetch("autre", rapide, 120_000); // déclenche le balayage
+    expect(cache.size()).toBe(2);
+
+    resolveLent!(7);
+    expect(await enVol).toBe(7);
+  });
+
+  it("le plafond borne une RAFALE, que le balayage ne peut pas borner", async () => {
+    // Mille clés distinctes en moins d'une minute sont mille entrées VALIDES : rien à balayer.
+    // C'est le seul mécanisme qui protège d'un appelant dont l'espace de clés est large — et un
+    // cache partagé ne doit pas dépendre de la prudence de ses appelants.
+    const cache = createTtlCache<number>(60_000, 10);
+    const fetcher = vi.fn().mockResolvedValue(1);
+
+    for (let i = 0; i < 50; i += 1) {
+      await cache.getOrFetch(`cle-${i}`, fetcher, 0);
+    }
+    expect(cache.size()).toBeLessThanOrEqual(10);
+  });
+
+  it("le plafond évince les PLUS ANCIENNES, jamais une entrée en vol — ici c'est load-bearing", async () => {
+    // Contrairement au balayage, le plafond peut viser une entrée NON EXPIRÉE : évincer une lecture
+    // en cours ferait repartir un appel Lobby pour une clé qu'un autre appelant attend déjà. C'est
+    // le seul endroit où le drapeau `settled` change réellement un comportement.
+    //
+    // ⚠️ La première version de ce test ne prouvait RIEN : elle vérifiait la taille et le compte
+    // d'appels sans jamais redemander la clé en vol, donc l'éviction de celle-ci passait inaperçue.
+    // Vérifié par mutation — retirer le filtre `settled` doit faire rougir CE test.
+    const cache = createTtlCache<number>(60_000, 2);
+    let resolveLent: (value: number) => void;
+    const lent = vi.fn().mockReturnValue(new Promise<number>((resolve) => (resolveLent = resolve)));
+    const rapide = vi.fn().mockResolvedValue(1);
+
+    const enVol = cache.getOrFetch("en-vol", lent, 0); // la PLUS ANCIENNE, donc la première visée
+    await cache.getOrFetch("a", rapide, 1);
+    await cache.getOrFetch("b", rapide, 2); // dépasse le plafond : une éviction a lieu
+
+    // Toujours dans son TTL et toujours en vol : cette lecture DOIT retrouver la promesse en cours.
+    const second = cache.getOrFetch("en-vol", lent, 3);
+    resolveLent!(9);
+    expect(await enVol).toBe(9);
+    expect(await second).toBe(9);
+    expect(lent).toHaveBeenCalledTimes(1);
+  });
+
+  it("purger ne change JAMAIS une réponse — au pire un défaut de cache, toujours correct", async () => {
+    const cache = createTtlCache<number>(60_000, 1);
+    const fetcher = vi.fn().mockResolvedValueOnce(10).mockResolvedValueOnce(20).mockResolvedValueOnce(30);
+
+    expect(await cache.getOrFetch("a", fetcher, 0)).toBe(10);
+    expect(await cache.getOrFetch("b", fetcher, 0)).toBe(20);
+    // "a" a été évincée par le plafond : on la relit, et on relit la VRAIE valeur.
+    expect(await cache.getOrFetch("a", fetcher, 0)).toBe(30);
+  });
 });

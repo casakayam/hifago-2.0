@@ -1,6 +1,6 @@
 import { addDaysIso } from "../time/bogotaDates";
 import { getLobbyAvailableRooms } from "./lobbyClient.ts";
-import { parseLobbyNightCatalog } from "./parseLobbyNightCatalog.ts";
+import { hasActiveRestriction, parseLobbyNightCatalog, type LobbyNightRestrictions } from "./parseLobbyNightCatalog.ts";
 import { alignLobbyCatalogEntries, type NightCatalogRow } from "./alignLobbyCatalogEntries.ts";
 import { describeLobbyErrorBody } from "./describeLobbyErrorBody.ts";
 
@@ -217,6 +217,14 @@ export interface CategoryNights {
   nights: NightAvailabilityRow[];
   /** Les nuits demandées que Lobby ne cote PAS pour cette catégorie. Jamais lues comme « complet ». */
   missingDates: string[];
+  /**
+   * Les nuits où Lobby pose une contrainte NON NULLE sur cette catégorie — RELEVÉ, jamais appliqué.
+   * Vide sur tous les comptes observés à ce jour ({0,0,0} sur les six catégories de Casa Kayam,
+   * 2026-08-27 et 2026-08-28), et c'est exactement pourquoi il faut le remonter : une valeur non
+   * nulle qui apparaîtrait un jour ferait accepter au calendrier des nuits que `POST /bookings`
+   * refuserait en 422, sans que rien ne relie la cause à l'effet.
+   */
+  restrictedNights: { date: string; restrictions: LobbyNightRestrictions }[];
 }
 
 /**
@@ -243,8 +251,14 @@ export interface CategoryNights {
 export function pickCategoryNights(rows: NightCatalogRow[], categoryId: number): CategoryNights {
   const nights: NightAvailabilityRow[] = [];
   const missingDates: string[] = [];
+  const restrictedNights: { date: string; restrictions: LobbyNightRestrictions }[] = [];
 
   for (const row of rows) {
+    const restrictions = row.restrictionsByCategory.get(categoryId);
+    if (restrictions && hasActiveRestriction(restrictions)) {
+      restrictedNights.push({ date: row.date, restrictions });
+    }
+
     const available = row.availableByCategory.get(categoryId);
     if (available === undefined) {
       missingDates.push(row.date);
@@ -253,7 +267,7 @@ export function pickCategoryNights(rows: NightCatalogRow[], categoryId: number):
     nights.push({ date: row.date, capacity: available, booked: 0 });
   }
 
-  return { nights, missingDates };
+  return { nights, missingDates, restrictedNights };
 }
 
 // Toutes les nuits ISO (yyyy-MM-dd) d'un mois (yyyy-MM), en excluant celles strictement avant

@@ -238,6 +238,26 @@ export async function GET(request: Request) {
       );
     }
 
+    // RELEVÉ des restrictions Lobby (`min_stay` / `lead_days`), JAMAIS leur application. Le job
+    // nocturne les observait depuis toujours ; le chemin de réservation, lui, les ignorait — on ne
+    // savait donc pas si le compte réel en pose. Elles sont désormais lues et journalisées ici, et
+    // rien d'autre : la disponibilité rendue est intacte, un test le verrouille.
+    //
+    // ⚠️ POURQUOI ON NE LES APPLIQUE PAS. Un `min_stay` filtre des SÉJOURS, pas des nuits : le
+    // traduire en disponibilité par nuit serait un arbitrage produit (que fait-on d'une nuit
+    // réservable seulement dans un séjour de trois ?), pas une correction technique. Ce relevé
+    // existe pour qu'on tranche sur des données observées plutôt que sur une hypothèse.
+    if (picked.restrictedNights.length > 0) {
+      console.warn(
+        `GET /api/pms/night-availability — restrictions Lobby relevées, NON appliquées (product ${productId}, month ${month}) :`,
+        {
+          categoryId,
+          nights: picked.restrictedNights.length,
+          first: picked.restrictedNights[0],
+        }
+      );
+    }
+
     // CONVERSION UNITÉS LOBBY → CUPOS, et c'est le coeur de cette route. `available_rooms` compte
     // des chambres/tentes/lits-unités ; tout le reste de hifago (product_availability.capacity,
     // order_lines.qty, min_qty/max_qty, price_tiers) compte des cupos. La règle de conversion est

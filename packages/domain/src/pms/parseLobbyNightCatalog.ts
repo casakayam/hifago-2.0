@@ -20,6 +20,33 @@ import { asRecord } from "./parseHelpers.ts";
 // Une seule exception, étroite et matérialisée là-bas : une réponse à UNE nuit demandée qui ne
 // porte aucune date. Il n'y a alors ni index ni ambiguïté possible, et c'est la forme sur laquelle
 // la production tourne depuis toujours.
+/**
+ * `restrictions{min_stay, max_stay, lead_days}` d'une catégorie pour une nuit — RELEVÉ, jamais
+ * APPLIQUÉ, et la distinction est le tout du sujet.
+ *
+ * Pourquoi le relever. Ces trois champs existaient dans les réponses de Lobby sans qu'aucun parseur
+ * du chemin de réservation ne les regarde. Ils valent {0,0,0} sur les six catégories de Casa Kayam
+ * (observé le 2026-08-27, reconfirmé le 2026-08-28), donc aujourd'hui ils ne changent rien — et
+ * c'est précisément pour ça qu'il faut les lire MAINTENANT : le jour où un établissement en pose
+ * un, le calendrier laisserait choisir une nuit que `POST /bookings` refusera en 422, sans que rien
+ * ne relie la cause à l'effet.
+ *
+ * Pourquoi ne pas l'appliquer. Un `min_stay` filtre des séjours, pas des nuits : le traduire en
+ * disponibilité serait un arbitrage produit (refuser la sélection ? l'autoriser et échouer au
+ * paiement ? afficher une contrainte ?), et ce module n'arbitre pas. Il rend visible ce que Lobby
+ * dit, l'appelant décide.
+ */
+export interface LobbyNightRestrictions {
+  minStay: number | null;
+  maxStay: number | null;
+  leadDays: number | null;
+}
+
+/** Vrai si Lobby pose une contrainte NON NULLE — le seul cas qui mérite d'être signalé. */
+export function hasActiveRestriction(restrictions: LobbyNightRestrictions): boolean {
+  return (restrictions.minStay ?? 0) > 0 || (restrictions.maxStay ?? 0) > 0 || (restrictions.leadDays ?? 0) > 0;
+}
+
 export interface LobbyCatalogEntry {
   /** yyyy-MM-dd TEL QUE LOBBY LE REND. `null` = la réponse ne porte pas de date. */
   date: string | null;
@@ -30,6 +57,12 @@ export interface LobbyCatalogEntry {
    * entière).
    */
   availableByCategory: Map<number, number>;
+  /**
+   * categoryId → `restrictions` de cette catégorie cette nuit-là. Une catégorie absente de cette
+   * carte n'en porte simplement pas — ce qui est le cas de TOUTES aujourd'hui sur les comptes
+   * observés. Jamais une contrainte inventée.
+   */
+  restrictionsByCategory: Map<number, LobbyNightRestrictions>;
 }
 
 export type LobbyNightCatalogResult =
@@ -51,11 +84,17 @@ function readEntryDate(record: Record<string, unknown>): string | null {
   return null;
 }
 
-function readCategories(record: Record<string, unknown>): Map<number, number> | null {
+interface NightCategories {
+  availableByCategory: Map<number, number>;
+  restrictionsByCategory: Map<number, LobbyNightRestrictions>;
+}
+
+function readCategories(record: Record<string, unknown>): NightCategories | null {
   const rawCategories = record.categories;
   if (!Array.isArray(rawCategories)) return null;
 
   const availableByCategory = new Map<number, number>();
+  const restrictionsByCategory = new Map<number, LobbyNightRestrictions>();
   for (const entry of rawCategories) {
     const category = asRecord(entry);
     if (!category) continue;
@@ -92,8 +131,35 @@ function readCategories(record: Record<string, unknown>): Map<number, number> | 
     // deux lignes fait foi, et la seule erreur qui coûte de l'argent est de sur-vendre.
     const known = availableByCategory.get(categoryId);
     availableByCategory.set(categoryId, known === undefined ? available : Math.min(known, available));
+
+    const restrictions = readRestrictions(category.restrictions);
+    if (restrictions) restrictionsByCategory.set(categoryId, restrictions);
   }
-  return availableByCategory;
+  return { availableByCategory, restrictionsByCategory };
+}
+
+// Même discipline défensive que le reste : un champ absent ou illisible reste `null`, jamais 0 —
+// un 0 signifierait « Lobby dit qu'il n'y a pas de contrainte », ce qui n'est pas la même chose que
+// « Lobby n'a rien dit ». La distinction compte : c'est exactement celle que le relevé doit rendre.
+function readRestrictions(value: unknown): LobbyNightRestrictions | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  const read = (raw: unknown): number | null => {
+    const usable = typeof raw === "number" || (typeof raw === "string" && raw.trim().length > 0);
+    if (!usable) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : null;
+  };
+  const restrictions = {
+    minStay: read(record.min_stay),
+    maxStay: read(record.max_stay),
+    leadDays: read(record.lead_days),
+  };
+  // Un objet `restrictions` présent mais dont aucun des trois champs n'est lisible n'apprend rien :
+  // ne pas l'inscrire évite de faire croire à une observation qu'on n'a pas faite.
+  return restrictions.minStay === null && restrictions.maxStay === null && restrictions.leadDays === null
+    ? null
+    : restrictions;
 }
 
 /**
@@ -111,14 +177,14 @@ export function parseLobbyNightCatalog(body: unknown): LobbyNightCatalogResult {
     for (const element of outer.data) {
       const record = asRecord(element);
       if (!record) return { ok: false };
-      const availableByCategory = readCategories(record);
-      if (!availableByCategory) return { ok: false };
-      entries.push({ date: readEntryDate(record), availableByCategory });
+      const categories = readCategories(record);
+      if (!categories) return { ok: false };
+      entries.push({ date: readEntryDate(record), ...categories });
     }
     return { ok: true, entries };
   }
 
-  const availableByCategory = readCategories(outer);
-  if (!availableByCategory) return { ok: false };
-  return { ok: true, entries: [{ date: readEntryDate(outer), availableByCategory }] };
+  const categories = readCategories(outer);
+  if (!categories) return { ok: false };
+  return { ok: true, entries: [{ date: readEntryDate(outer), ...categories }] };
 }
