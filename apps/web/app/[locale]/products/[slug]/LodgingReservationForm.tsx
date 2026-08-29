@@ -14,11 +14,13 @@ import {
   TextField,
 } from "@hifago/ui";
 import {
+  addDaysIso,
   formatCop,
   isoDateToLocalMidnight,
   lastBookableDateIso,
   startOfTodayInBogota,
   todayInBogota,
+  type LobbyNightRestrictions,
   type LodgingKind,
 } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
@@ -50,6 +52,17 @@ type RateRow = { date: string; price_cop: number };
 // Au niveau module, et pas dans le corps du composant : le compilateur React refuse de préserver une
 // mémoïsation dont le résultat est une fonction (react-hooks/preserve-manual-memoization), et une
 // fonction stable ici n'a aucune dépendance à déclarer.
+// `min_stay` de la nuit d'ARRIVÉE — c'est elle qui commande la longueur du séjour, pas la sortie.
+//
+// ⚠️ `null` veut dire « Lobby n'a rien dit », JAMAIS « Lobby dit zéro ». Le relevé garde la
+// distinction (packages/domain/src/pms/parseLobbyNightCatalog.ts, verrouillé par son test) ; ici on
+// choisit un défaut d'APPLICATION — une nuit, le minimum structurel d'un séjour — sans jamais
+// réécrire l'observation. Une nuit absente de la map n'a simplement aucune contrainte relevée.
+function nuitsMinimumPour(restrictions: Map<string, LobbyNightRestrictions>, arriveeIso: string): number {
+  const minStay = restrictions.get(arriveeIso)?.minStay;
+  return minStay === null || minStay === undefined ? 1 : minStay;
+}
+
 function nuitReservable(restants: Map<string, number>, iso: string, pourQty: number): boolean {
   const restant = restants.get(iso);
   return restant !== undefined && restant >= pourQty;
@@ -108,6 +121,10 @@ export function LodgingReservationForm({
   // SUIVANT, et le calendrier qu'il regardait n'était jamais celui qu'on venait de charger.
   const [visibleMonth, setVisibleMonth] = useState(() => startOfTodayInBogota());
   const [pmsAvailability, setPmsAvailability] = useState<Map<string, AvailabilityRow>>(new Map());
+  // Les restrictions Lobby de CETTE catégorie, nuit par nuit. Elles sont PAR CATÉGORIE : deux
+  // produits d'une même catégorie les partagent, deux catégories du même établissement peuvent
+  // différer — d'où une map locale au composant, jamais un cache partagé entre produits.
+  const [pmsRestrictions, setPmsRestrictions] = useState<Map<string, LobbyNightRestrictions>>(new Map());
   const [pmsMonths, setPmsMonths] = useState<Map<string, PmsMonthState>>(new Map());
   const [attempt, setAttempt] = useState(0);
   const loadedMonthsRef = useRef<Set<string>>(new Set());
@@ -127,6 +144,7 @@ export function LodgingReservationForm({
           response.json() as Promise<{
             ok: boolean;
             nights?: AvailabilityRow[];
+            restrictedNights?: { date: string; restrictions: LobbyNightRestrictions }[];
             reason?: string;
             retryAfterSeconds?: number | null;
           }>
@@ -146,6 +164,14 @@ export function LodgingReservationForm({
         setPmsAvailability((prev) => {
           const next = new Map(prev);
           for (const row of result.nights ?? []) next.set(row.date, row);
+          return next;
+        });
+        // Le tableau ne porte QUE les nuits sous contrainte non nulle : vide sur tous les comptes
+        // observés à ce jour, donc ce bloc est un no-op aujourd'hui — et c'est exactement pourquoi
+        // le poser maintenant est sûr.
+        setPmsRestrictions((prev) => {
+          const next = new Map(prev);
+          for (const row of result.restrictedNights ?? []) next.set(row.date, row.restrictions);
           return next;
         });
         setMonth({ status: "ready" });
@@ -218,10 +244,31 @@ export function LodgingReservationForm({
   // Bornes des deux marches : jamais avant aujourd'hui à Guatapé, jamais au-delà de l'horizon
   // produit (six mois, inclusif). Mêmes bornes que `startMonth`/`endMonth` et que les deux
   // matchers `before`/`after` du calendrier — une seule vérité, trois expressions.
+  // `lead_days` — LE PLANCHER QUI MONTE, pas des nuits à barrer une par une (le délai de
+  // réservation est une propriété de la catégorie, pas de telle ou telle nuit). On retient le
+  // MAXIMUM des valeurs non nulles relevées : si deux nuits annonçaient des délais différents, le
+  // plus strict est le seul qui ne propose jamais une nuit que Lobby refuserait.
+  //
+  // ⚠️ `null` est ignoré, pas lu comme 0 — « Lobby n'a rien dit » n'apporte aucune contrainte.
+  const plancherIso = useMemo(() => {
+    let lead = 0;
+    for (const restrictions of pmsRestrictions.values()) {
+      if (restrictions.leadDays !== null && restrictions.leadDays > lead) lead = restrictions.leadDays;
+    }
+    return lead > 0 ? addDaysIso(todayInBogota(), lead) : todayInBogota();
+  }, [pmsRestrictions]);
+
+  // Le même plancher, sous la forme qu'attend le matcher `before` de react-day-picker. À
+  // `lead_days = 0` il vaut exactement `startOfTodayInBogota()` — d'où l'absence totale d'effet
+  // aujourd'hui, sur des restrictions mesurées à {0,0,0}.
+  const plancher = useMemo(() => isoDateToLocalMidnight(plancherIso), [plancherIso]);
+
   const bornesCalendrier = useMemo(
-    () => ({ firstIso: todayInBogota(), lastIso: lastBookableDateIso() }),
-    []
+    () => ({ firstIso: plancherIso, lastIso: lastBookableDateIso() }),
+    [plancherIso]
   );
+
+  const ancreIso = useMemo(() => (range?.from ? format(range.from, "yyyy-MM-dd") : null), [range]);
 
   // LA FENÊTRE ATTEIGNABLE — correctif du 2026-08-29, cf. l'en-tête de reachableRangeWindow.
   //
@@ -234,16 +281,17 @@ export function LodgingReservationForm({
   // PREMIER clic, jamais {from: X, to: undefined}. Une détection par `!range.to` ne se déclencherait
   // jamais — vérifié, c'est ce qui a fait échouer la première version de ce correctif.
   const fenetreAtteignable = useMemo(() => {
-    if (!range?.from) return null;
+    if (!ancreIso) return null;
     return reachableRangeWindow(
-      format(range.from, "yyyy-MM-dd"),
+      ancreIso,
       (iso) => nuitReservable(remainingByDate, iso, qty),
-      bornesCalendrier
+      bornesCalendrier,
+      (arrivee) => nuitsMinimumPour(pmsRestrictions, arrivee)
     );
   // Dépendance sur `range` entier, pas sur `range?.from` : le compilateur React infère la
   // propriété la moins spécifique et refuse la mémoïsation sinon. Recalculer aussi quand seule
   // la sortie bouge est sans conséquence — la marche est bornée par l'horizon.
-  }, [range, remainingByDate, qty, bornesCalendrier]);
+  }, [ancreIso, remainingByDate, qty, bornesCalendrier, pmsRestrictions]);
 
   // Compteur de restant dans la case du jour. Affiché UNIQUEMENT quand il contraint réellement le
   // choix (`remaining < qtyMax`) : sur un logement à 20 cupos ouverts tous les jours, imprimer
@@ -314,7 +362,8 @@ export function LodgingReservationForm({
     const fenetre = reachableRangeWindow(
       format(range.from, "yyyy-MM-dd"),
       (iso) => nuitReservable(remainingByDate, iso, suivant),
-      bornesCalendrier
+      bornesCalendrier,
+      (arrivee) => nuitsMinimumPour(pmsRestrictions, arrivee)
     );
     // La nuit d'arrivée elle-même ne tient plus la quantité : il n'y a plus de fenêtre à rétrécir,
     // on repart d'une sélection vide.
@@ -413,7 +462,7 @@ export function LodgingReservationForm({
             // Minuit à GUATAPÉ, jamais l'heure du NAVIGATEUR (lot fuseau, 2026-08-28) : un visiteur
             // européen ouvrant la fiche le 1er du mois à 2 h du matin voyait le dernier jour du mois
             // précédent barré, alors qu'à Guatapé il était encore réservable.
-            { before: startOfTodayInBogota() },
+            { before: plancher },
             // Borne HAUTE : au-delà de l'horizon produit, rien n'est vendable. Sans elle, ces
             // dates paraissaient sélectionnables et n'étaient refusées qu'après coup.
             { after: dernierJourReservable },
@@ -423,13 +472,29 @@ export function LodgingReservationForm({
               // la première nuit bloquante y figure comme date de SORTIE (on dort jusqu'à la
               // veille). C'est ce qui empêche d'ENJAMBER une nuit pleine, au lieu de le reprocher
               // après coup : `hasUnavailableNightInRange` n'a plus l'occasion de parler.
-              if (fenetreAtteignable) {
-                return iso < fenetreAtteignable.fromIso || iso > fenetreAtteignable.toIso;
+              if (fenetreAtteignable && ancreIso) {
+                if (iso === ancreIso) return false; // recliquer l'ancre reste permis (ré-ancrage)
+                if (iso < fenetreAtteignable.fromIso || iso > fenetreAtteignable.toIso) return true;
+                // `min_stay` — la borne BASSE. Une sortie trop proche de l'arrivée ne fait pas un
+                // séjour assez long : elle n'est pas signalée, elle n'est pas sélectionnable.
+                if (iso > ancreIso) {
+                  const sortie = fenetreAtteignable.earliestCheckOutIso;
+                  return sortie === null || iso < sortie;
+                }
+                const arrivee = fenetreAtteignable.latestCheckInIso;
+                return arrivee === null || iso > arrivee;
               }
-              // PHASE 1 — pas encore d'arrivée. Une arrivée doit pouvoir héberger la quantité
-              // demandée : ça couvre la nuit SANS DONNÉE (acquis du 2026-08-28) et, désormais, la
-              // nuit PLEINE, qui jusqu'ici était seulement barrée et restait cliquable.
-              return !nuitReservable(remainingByDate, iso, qty);
+              // PHASE 1 — pas encore d'arrivée. On demande à la MÊME fonction si un séjour valide
+              // peut partir d'ici, plutôt que de réécrire la règle : ça couvre la nuit SANS DONNÉE
+              // (acquis du 2026-08-28), la nuit PLEINE (2026-08-29), et désormais l'arrivée d'où
+              // aucun séjour d'au moins `min_stay` nuits ne tient dans la fenêtre.
+              const depuisIci = reachableRangeWindow(
+                iso,
+                (nuit) => nuitReservable(remainingByDate, nuit, qty),
+                bornesCalendrier,
+                (arrivee) => nuitsMinimumPour(pmsRestrictions, arrivee)
+              );
+              return depuisIci === null || depuisIci.earliestCheckOutIso === null;
             },
           ]}
           modifiers={{ unavailable: unavailableDates }}

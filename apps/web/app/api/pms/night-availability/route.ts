@@ -238,15 +238,21 @@ export async function GET(request: Request) {
       );
     }
 
-    // RELEVÉ des restrictions Lobby (`min_stay` / `lead_days`), JAMAIS leur application. Le job
-    // nocturne les observait depuis toujours ; le chemin de réservation, lui, les ignorait — on ne
-    // savait donc pas si le compte réel en pose. Elles sont désormais lues et journalisées ici, et
-    // rien d'autre : la disponibilité rendue est intacte, un test le verrouille.
+    // RESTRICTIONS LOBBY (`min_stay` / `lead_days`) — relevées, journalisées, et depuis le
+    // 2026-08-29 TRANSMISES au client, qui les applique. L'arbitrage produit que ce module refusait
+    // de faire a été tranché par Jérôme : `min_stay` devient la longueur minimale d'une plage
+    // sélectionnable, `lead_days` relève le plancher des nuits réservables.
     //
-    // ⚠️ POURQUOI ON NE LES APPLIQUE PAS. Un `min_stay` filtre des SÉJOURS, pas des nuits : le
-    // traduire en disponibilité par nuit serait un arbitrage produit (que fait-on d'une nuit
-    // réservable seulement dans un séjour de trois ?), pas une correction technique. Ce relevé
-    // existe pour qu'on tranche sur des données observées plutôt que sur une hypothèse.
+    // ⚠️ POURQUOI MAINTENANT, alors que c'est mesuré à {0,0,0} sur les six catégories de Casa Kayam
+    // (2026-08-27, reconfirmé le 28) : justement parce que c'est zéro. L'effet visible est nul
+    // aujourd'hui, donc le moment est sûr. L'alternative était d'attendre qu'un socio pose un
+    // `min_stay` dans Lobby et de le découvrir par un 422 en production, sans que rien ne relie la
+    // cause à l'effet.
+    //
+    // ⚠️ CETTE ROUTE N'ARBITRE TOUJOURS PAS. Elle transmet le relevé tel quel — dates et champs, y
+    // compris les `null`. La traduction en fenêtre sélectionnable appartient à l'écran
+    // (LodgingReservationForm), parce que c'est une question de sélection, pas de disponibilité :
+    // les nuits rendues ci-dessous sont RIGOUREUSEMENT les mêmes qu'avant ce lot.
     if (picked.restrictedNights.length > 0) {
       console.warn(
         `GET /api/pms/night-availability — restrictions Lobby relevées, NON appliquées (product ${productId}, month ${month}) :`,
@@ -276,7 +282,12 @@ export async function GET(request: Request) {
         ? picked.nights
         : picked.nights.map((row) => ({ ...row, capacity: row.capacity * perUnit }));
 
-    return Response.json({ ok: true, nights: cupos });
+    // `restrictedNights` ne porte QUE les nuits où Lobby pose une contrainte non nulle
+    // (`hasActiveRestriction`) : sur les comptes observés à ce jour, ce tableau est vide et la
+    // charge utile est identique à celle d'avant. Les nuits sans contrainte n'y figurent pas — leur
+    // absence EST l'information « rien à appliquer ici », et c'est ce qui évite de transporter
+    // trente objets nuls par mois.
+    return Response.json({ ok: true, nights: cupos, restrictedNights: picked.restrictedNights });
   } catch (error) {
     if (error instanceof PmsAvailabilityError) {
       return respondToFailure(error.failure);

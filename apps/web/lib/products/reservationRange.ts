@@ -110,7 +110,25 @@ export function buildInCartNightsMap(
 //   - L est la plus ancienne date telle que toutes les nuits de [L, A) soient réservables.
 // Entre les deux, une seule date porte une nuit non réservable : U. C'est ce qui rend la fenêtre
 // sûre sans exception à énumérer.
-export type ReachableWindow = { fromIso: string; toIso: string };
+export type ReachableWindow = {
+  /** Arrivée la plus ancienne atteignable : toutes les nuits de [fromIso, ancre) sont réservables. */
+  fromIso: string;
+  /** Sortie la plus lointaine atteignable — la première nuit non réservable y est INCLUSE. */
+  toIso: string;
+  /**
+   * `min_stay` — LA BORNE BASSE, posée le 2026-08-29. Un séjour de N nuits sort à `ancre + N` :
+   * avec `min_stay = 2`, la première sortie atteignable est `ancre + 2`, jamais `ancre + 1`.
+   * `null` quand cette sortie dépasserait `toIso` : aucun séjour assez long ne tient dans la
+   * fenêtre, donc aucune sortie n'est proposable en avant.
+   */
+  earliestCheckOutIso: string | null;
+  /**
+   * Le miroir, pour un clic AVANT l'ancre — react-day-picker le permet (`addToRange` rend alors
+   * `{from: clic, to: ancre}`), donc l'ancre devient la SORTIE et le `min_stay` qui s'applique est
+   * celui de la nouvelle arrivée, pas celui de l'ancre. D'où une marche, et pas une soustraction.
+   */
+  latestCheckInIso: string | null;
+};
 
 /**
  * `null` si la nuit de l'ancre elle-même n'est pas réservable (la quantité demandée a monté depuis
@@ -120,10 +138,22 @@ export type ReachableWindow = { fromIso: string; toIso: string };
  * produit. Les comparaisons sont lexicographiques, ce que `yyyy-MM-dd` zéro-padé autorise, et c'est
  * aussi ce qui garantit la terminaison — `addDaysIso` est strictement monotone.
  */
+// Un séjour fait au moins UNE nuit : c'est structurel, pas un réglage. `Math.max(1, …)` ne suffit
+// pas — `Math.max(1, NaN)` vaut NaN, et `addDaysIso` produirait alors une date invalide plutôt
+// qu'une erreur lisible. Toute valeur non finie retombe donc sur 1.
+//
+// ⚠️ Ne PAS lire ce repli comme « min_stay vaut 1 » : côté relevé, un champ illisible reste `null`
+// et le reste (packages/domain/src/pms/parseLobbyNightCatalog.ts, verrouillé par son test). C'est
+// l'APPLICATION qui choisit un défaut ici, localement, sans jamais réécrire l'observation.
+function nuitsMinimum(valeur: number): number {
+  return Number.isFinite(valeur) ? Math.max(1, Math.trunc(valeur)) : 1;
+}
+
 export function reachableRangeWindow(
   anchorIso: string,
   isNightBookable: (iso: string) => boolean,
-  bounds: { firstIso: string; lastIso: string }
+  bounds: { firstIso: string; lastIso: string },
+  minNightsFor: (arrivalIso: string) => number = () => 1
 ): ReachableWindow | null {
   if (!isNightBookable(anchorIso)) return null;
 
@@ -135,5 +165,22 @@ export function reachableRangeWindow(
     fromIso = addDaysIso(fromIso, -1);
   }
 
-  return { fromIso, toIso };
+  // EN AVANT — l'ancre est l'arrivée, c'est donc SON `min_stay` qui commande.
+  const sortie = addDaysIso(anchorIso, nuitsMinimum(minNightsFor(anchorIso)));
+  const earliestCheckOutIso = sortie > toIso ? null : sortie;
+
+  // EN ARRIÈRE — chaque candidat serait l'ARRIVÉE, donc chacun apporte son propre `min_stay`. On
+  // marche du plus proche au plus lointain et on garde le premier qui tient : c'est l'arrivée la
+  // plus tardive possible. Avec un `min_stay` constant, ça retombe exactement sur `ancre − min_stay`
+  // — la marche n'existe que pour rester juste quand il varie d'une nuit à l'autre.
+  let latestCheckInIso: string | null = null;
+  let candidat = addDaysIso(anchorIso, -1);
+  for (let nuits = 1; candidat >= fromIso; nuits += 1, candidat = addDaysIso(candidat, -1)) {
+    if (nuits >= nuitsMinimum(minNightsFor(candidat))) {
+      latestCheckInIso = candidat;
+      break;
+    }
+  }
+
+  return { fromIso, toIso, earliestCheckOutIso, latestCheckInIso };
 }
