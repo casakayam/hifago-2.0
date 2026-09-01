@@ -28,6 +28,26 @@ Deno.serve(async () => {
   const apiKey = Deno.env.get("RESEND_API_KEY");
   const from = Deno.env.get("NOTIFICATION_EMAIL_FROM") || "notificaciones@hifago.test";
 
+  // Sans clé, on ne réclame RIEN. Ce garde est AVANT claim_notification_email_batch, et c'est tout
+  // l'enjeu : réclamer incrémente `attempts`, et mark_notification_email_failed abandonne
+  // définitivement à la 5e tentative. La version précédente réclamait puis marquait chaque ligne en
+  // échec — avec le cron toutes les 5 min, ça abandonnait en 25 minutes des emails parfaitement
+  // valides dont le seul tort était d'attendre que le secret soit posé. C'est exactement ce qui est
+  // arrivé en préprod : 9 emails morts en `abandoned` (état terminal), tous avec
+  // last_error = 'RESEND_API_KEY manquante'. Une file en attente de configuration doit rester
+  // INTACTE, pas se vider toute seule.
+  //
+  // Statut 200 volontaire (et non 500 comme la branche claim_failed ci-dessous) : l'absence de
+  // secret est un état de configuration connu et attendu en dev local, pas une panne — un 5xx
+  // polluerait net._http_response à chaque tick de pg_cron.
+  if (!apiKey) {
+    console.error("RESEND_API_KEY manquante — aucun lot réclamé (voir supabase/functions/.env)");
+    return new Response(
+      JSON.stringify({ ok: false, reason: "missing_api_key", claimed: 0, sent: 0, failed: 0 }),
+      { headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   const { data: batch, error } = await supabase.rpc("claim_notification_email_batch", { p_limit: 20 });
   if (error) {
     console.error("claim_notification_email_batch a échoué", error);
@@ -36,22 +56,6 @@ Deno.serve(async () => {
 
   const rows = (batch ?? []) as NotificationEmailRow[];
   const summary = { claimed: rows.length, sent: 0, failed: 0 };
-
-  if (!apiKey) {
-    // Cas attendu en dev local sans clé Resend réelle (spec 23 §2, hors périmètre du code) —
-    // chaque ligne réclamée est marquée failed/retry plutôt que de rester bloquée à 'sending'
-    // indéfiniment (mark_notification_email_failed gère déjà le passage à 'pending' pour retry).
-    for (const row of rows) {
-      await supabase.rpc("mark_notification_email_failed", {
-        p_id: row.id,
-        p_error: "RESEND_API_KEY manquante — voir supabase/functions/.env",
-      });
-      summary.failed++;
-    }
-    return new Response(JSON.stringify({ ok: true, ...summary }), {
-      headers: { "Content-Type": "application/json" },
-    });
-  }
 
   for (const row of rows) {
     try {
