@@ -51,7 +51,8 @@
     "backToLogin": "Back to sign in"
   },
   "Common": {
-    "cancellationPolicy": "A cancellation or a no-show on your part is never refunded."
+    "cancellationPolicy": "A cancellation or a no-show on your part is never refunded.",
+    "breadcrumbHome": "Home"
   },
   "ProductPage": {
     "backToCatalog": "← Back to catalog",

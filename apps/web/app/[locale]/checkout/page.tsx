@@ -1,7 +1,18 @@
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@hifago/supabase/server";
 import { CheckoutForm } from "./CheckoutForm";
+
+export async function generateMetadata(
+  props: Omit<PageProps<"/[locale]/checkout">, "searchParams">
+): Promise<Metadata> {
+  const { locale } = await props.params;
+  const t = await getTranslations({ locale, namespace: "CheckoutPage" });
+  // Un panier n'a rien d'indexable, et son contenu est propre à une session. noindex plutôt que
+  // Disallow, pour la raison expliquée sur les écrans d'authentification (spec 26 §5.1).
+  return { title: t("title"), robots: { index: false, follow: true } };
+}
 
 export default async function CheckoutPage({
   params,

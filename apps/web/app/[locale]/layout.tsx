@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Geist, Geist_Mono } from "next/font/google";
 import { routing } from "@/i18n/routing";
 import { CartProvider } from "@/lib/cart/CartContext";
+import { getSiteUrl } from "@/lib/seo/siteUrl";
 import "../globals.css";
 
 const geistSans = Geist({
@@ -26,7 +27,15 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { locale } = await props.params;
   const t = await getTranslations({ locale, namespace: "LocaleLayout" });
-  return { title: t("title") };
+  return {
+    // Sans metadataBase, TOUT `alternates.canonical` / `openGraph.url` relatif du site reste
+    // relatif (next/dist/lib/metadata/default-metadata.js pose `metadataBase: null`, et
+    // resolve-url.js ne résout en absolu que s'il est renseigné). Les canonicals des fiches
+    // produit/établissement existaient déjà et étaient donc inertes. Posé ici parce que ce
+    // layout est le root layout de fait — apps/web n'a pas de app/layout.tsx.
+    metadataBase: new URL(getSiteUrl()),
+    title: t("title"),
+  };
 }
 
 export default async function PublicLocaleLayout({

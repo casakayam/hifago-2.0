@@ -41,6 +41,12 @@ jobs:
       # dire l'angle mort où vivait le dixième site du lot fuseau (packages/e2e-support/src/date.ts).
       - name: Fuseau de Guatapé (aucune date civile calculée en UTC)
         run: bash scripts/check-timezone.sh
+      # Deux règles SEO que la relecture ne peut pas attraper : l'une porte sur une ABSENCE
+      # (aucune table d'avis n'existe, donc aucune note ne doit être émise), l'autre sur deux
+      # écritures visuellement identiques dont une seule échappe réellement le JSON-LD. Les deux
+      # branches du script ont été vérifiées PAR MUTATION, pas seulement observées vertes.
+      - name: Référencement (données structurées honnêtes, JSON-LD échappé)
+        run: bash scripts/check-seo.sh
       # Le manifeste docs/ai-index.json est ce que lisent les agents pour s'orienter : périmé, il
       # les envoie lire le mauvais document. `npm run docs:index` le régénère.
       - name: Manifeste documentaire à jour

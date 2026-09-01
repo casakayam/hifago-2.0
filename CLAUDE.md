@@ -123,7 +123,35 @@ racine (`AGENTS.md` point 2).
 4. Une langue de contenu sans locale d'interface routée (ex. contenu saisi en français) : canonical
    vers `x-default` (l'espagnol), jamais de route publique dédiée.
 5. Un seul `sitemap.xml` dynamique avec `alternates.languages` par entrée — jamais un sitemap par
-   langue.
+   langue. Il liste une entrée **par locale réellement traduite**, jamais une seule entrée dans la
+   langue par défaut portant ses alternates : sans `<loc>` propre, une version linguistique n'a pas
+   de balise de retour. Il ne contient **jamais** une URL que les métadonnées déclarent `noindex` —
+   le même prédicat de contenu natif sert aux deux, partagé, jamais recopié.
+6. `metadataBase` est obligatoire, sinon tout `canonical`/`openGraph.url` relatif reste relatif et
+   inerte. Il vient d'une variable d'environnement, **jamais** des en-têtes de la requête : une URL
+   canonique qui change avec l'hôte servant la page annule ce que le canonical sert à résoudre.
+7. **Une seule source de hreflang** : les métadonnées. `alternateLinks` de next-intl reste
+   désactivé — activé par défaut, il pose des hreflang dérivés de `x-forwarded-host` sur toutes les
+   pages, y compris celles qu'on vient de déclarer `noindex`.
+8. Canonical auto-référent sur **toute** route routée, pas seulement les fiches : un `?ref=<code>`
+   se pose sur n'importe quelle URL et en fabrique autant de variantes indexables.
+9. `Disallow` empêche le crawl, `noindex` empêche l'indexation — jamais les deux sur la même page.
+   Une page en `Disallow` n'est jamais chargée, donc son `noindex` n'est jamais lu. Empêcher
+   l'indexation passe par les métadonnées ; `Disallow` ne sert qu'à économiser du budget de crawl
+   sur une route sans contenu.
+10. `robots.txt` interdit tout par défaut et n'ouvre que sur un déploiement de **production
+    déclarée** — drapeau adossé à l'environnement de déploiement, jamais à l'URL configurée, qu'une
+    variable « toutes environnements » propagerait jusqu'aux previews. Il est prérendu au build :
+    basculer le drapeau exige un redéploiement.
+11. Un `robots.txt` n'a **qu'un** groupe `User-Agent: *` : un crawler nommé n'obéit qu'à son propre
+    groupe et ignore le générique, donc un groupe par bot sans répétition des `Disallow` autorise
+    précisément ce que le groupe générique interdit. Les décisions par bot se documentent en
+    commentaire dans la source, jamais en règles dans le fichier servi.
+12. Le JSON-LD est rendu côté **serveur**, échappé (`<` en séquence `\u003c` — le contenu vient de
+    partenaires et finit dans un `<script>`), et décrit exactement ce que la page affiche.
+13. Aucune propriété schema.org sans colonne réelle derrière — **jamais** de `aggregateRating` ni de
+    `review` tant qu'aucune table d'avis n'existe, jamais d'adresse décomposée que la base ne stocke
+    pas, jamais de `geo` sur des coordonnées nulles.
 
 ## 6. Tests
 1. E2E : Playwright, jamais Cypress (seul capable de piloter plusieurs `BrowserContext` isolés
@@ -427,6 +455,40 @@ En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 `hifago/docs/journal/<mois-en-cours>.md` — nouveau mois = nouveau fichier (`2026-09.md` le
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
 nouvelle entrée.
+
+*2026-09-01 — **deux des cinq règles SEO de §5 étaient fausses, dont une violée par une
+bibliothèque.** ⚠️ **§5.2 était enfreinte en silence** : `next-intl` active `alternateLinks` PAR
+DÉFAUT (`routing/config.js`), donc le middleware posait sur chaque réponse des hreflang
+es/en/x-default que personne n'avait écrits, **dérivés de `x-forwarded-host`**, et posés AUSSI sur
+les fiches `noindex` — en contradiction avec §5.3. Coupé (`alternateLinks: false`) : une seule
+source, les métadonnées. §5.5 n'avait jamais existé en code. ⚠️ **Mon premier diagnostic disait §5.4
+non tenue : c'était FAUX** (le canonical vers la langue source existait depuis le début) — relevé
+par une revue adversariale avant d'écrire une ligne. Livré : `metadataBase` (sans lui, tous les
+canonicals déjà écrits étaient **relatifs donc inertes**), `robots.ts` fermé hors production,
+`sitemap.ts` dynamique multilingue, OpenGraph, canonical auto-référent, JSON-LD
+Product/Event/LodgingBusiness/Breadcrumb/WebSite. ⚠️ **Les metadata routes sont PRÉRENDUES AU
+BUILD** : sans `dynamic = "force-dynamic"` le sitemap était figé — et le job `build` de la CI n'a
+aucun Supabase, tandis que `postgrest-js` avale l'erreur réseau en `{data: null}`, donc **on aurait
+livré un sitemap vide, build vert**. Prouvé par la sortie du build (`○ robots.txt`, `ƒ
+sitemap.xml`). ⚠️ **Aucun test unitaire ne protège de ça** (un mock rend toujours des données) : le
+garde-fou est un smoke test de bascule. ⚠️ **`Disallow` n'est pas `noindex`** (une page en Disallow
+n'est jamais chargée, donc son noindex n'est jamais lu) et **un groupe `User-Agent:` nommé annule le
+groupe `*`** — d'où un seul groupe générique, la décision « tous les bots IA autorisés » étant
+documentée en commentaire. ⚠️ **Le piège d'échappement du JSON-LD s'est refermé CINQ fois dans la
+même session**, dont une dans le garde-fou censé l'interdire (il cherchait `<`, motif que tout
+`.tsx` contient) : quand deux écritures sont visuellement identiques, vérifier par COMPORTEMENT.
+`scripts/check-seo.sh` (CI, job lint) a ses deux branches **vérifiées par mutation**. Jamais de
+`aggregateRating` (aucune table d'avis), d'adresse décomposée (seul `formattedAddress` est
+persisté), ni de `geo` sur coordonnées nulles. Règles écrites en §5 points 5-13, spec 26,
+`/hifago-review` §3 étendu de 4 à 13 questions. **565 tests verts**, build OK, serveur réel
+interrogé (39 URL au sitemap, canonical absolu, JSON-LD parsable), 3 e2e. ⚠️ **`npm install` a cassé
+`node_modules`** (bug arborist au rollback : `.bin` vidé, eslint/vitest introuvables) — réparé par
+`npm ci` ; pour le lockfile seul, `npm install --package-lock-only`. ⚠️ **Ne pas lancer prettier
+sur ce dépôt** : aucune config, il reformate tout le fichier. ⚠️ **`check-timezone.sh` échoue sur
+`tests/notification-real/send_8_real_emails.mjs`** (non commité, 2026-08-31) — pas ce lot, mais la
+CI cassera au commit de ce fichier. **Rien de tout ça ne sera observable avant la bascule de
+domaine** : robots bloque, le SSO Vercel renvoie 302, et `hifago.co` sert encore le legacy. Détail
+complet : `hifago/docs/journal/2026-09.md` (2026-09-01). Rien commité.*
 
 *2026-08-28 (tâche 3, session parallèle au lot fuseau) — **le calendrier d'un logement coûtait
 180 appels LobbyPMS par mois affiché, sous un plafond de 60 par minute. Il en coûte 1.** Deux

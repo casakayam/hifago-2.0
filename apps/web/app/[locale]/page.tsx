@@ -1,7 +1,12 @@
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
+import type { Metadata } from "next";
 import { CatalogBrowser, type CatalogProduct } from "./CatalogBrowser";
+import { buildPageMetadata } from "@/lib/seo/pageMetadata";
+import { getSiteUrl } from "@/lib/seo/siteUrl";
+import { buildWebSiteJsonLd } from "@/lib/seo/jsonld/site";
+import { JsonLd } from "@/components/seo/JsonLd";
 
 // products_select_public (Tranche 2, étendue feature 32) : catalogue public, sellable=true
 // seulement. La recherche/le filtre restent volontairement basiques (texte + type, en mémoire
@@ -11,6 +16,31 @@ import { CatalogBrowser, type CatalogProduct } from "./CatalogBrowser";
 // app-nav-shell/lucide-react et fait planter next build) — tout le rendu HeroUI vit dans
 // CatalogBrowser.tsx ("use client").
 const PRODUCTS_COLUMNS = "id, slug, name, description, type, establishment_id";
+
+export async function generateMetadata(
+  props: Omit<PageProps<"/[locale]">, "searchParams">
+): Promise<Metadata> {
+  const { locale } = await props.params;
+  const t = await getTranslations({ locale, namespace: "HomePage" });
+
+  // La page la plus stratégique du site n'avait AUCUN generateMetadata : elle héritait du seul
+  // `title: "Hifago"` du layout, alors que ces deux libellés existaient déjà dans messages/*.json
+  // sans être utilisés nulle part.
+  //
+  // ⚠️ Le canonical auto-référent n'est pas décoratif ici : proxy.ts pose le cookie d'attribution
+  // à partir de `?ref=` sur N'IMPORTE QUELLE page, et [locale]/r/[code]/route.ts redirige vers
+  // `/<locale>?ref=<code>`. Chaque code promo distribué fabrique donc une URL indexable distincte
+  // de l'accueil ; sans canonical, rien ne les rassemble.
+  //
+  // Pas de `nativeLocales` : ces textes viennent de next-intl (jeu d'interface fermé et complet
+  // dans les deux locales), pas du contenu partenaire soumis au repli JSONB.
+  return buildPageMetadata({
+    locale,
+    pathFor: (candidate) => `/${candidate}`,
+    title: t("title"),
+    description: t("description"),
+  });
+}
 
 export default async function HomePage({
   params,
@@ -140,6 +170,11 @@ export default async function HomePage({
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-8">
+      {/* Nœud d'identité du site : c'est le plus rentable pour être cité par un moteur de
+          réponse, et il n'exige aucune colonne de base de données. */}
+      <JsonLd
+        data={buildWebSiteJsonLd(getSiteUrl(), locale, t("title"), t("description"))}
+      />
       <div className="text-center">
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
         <p className="text-muted">{t("description")}</p>

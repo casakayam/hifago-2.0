@@ -5,6 +5,13 @@ import { setRequestLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, asLodgingKind, resolveLocalizedField } from "@hifago/domain";
 import { EstablishmentDetailView } from "./EstablishmentDetailView";
+import { routing } from "@/i18n/routing";
+import { hasNativeContent } from "@/lib/seo/nativeContent";
+import { buildPageMetadata } from "@/lib/seo/pageMetadata";
+import { getSiteUrl } from "@/lib/seo/siteUrl";
+import { buildEstablishmentJsonLd } from "@/lib/seo/jsonld/establishment";
+import { buildBreadcrumbJsonLd } from "@/lib/seo/jsonld/breadcrumb";
+import { JsonLd } from "@/components/seo/JsonLd";
 
 // T1 du modèle hébergement (spec 24 §4) — la page publique d'un établissement, qui n'existait pas.
 //
@@ -23,7 +30,10 @@ import { EstablishmentDetailView } from "./EstablishmentDetailView";
 // analysant le TYPE LITTÉRAL de la chaîne (une concaténation l'élargirait en `string` et ferait
 // tomber l'inférence sur GenericStringError). `lobby_api_token` n'est évidemment jamais sélectionné —
 // il est revoke pour anon/authenticated, le demander ferait échouer TOUTE la requête.
-const ESTABLISHMENT_COLUMNS = `id, slug, name, description, address, check_in_time, check_out_time, mode`;
+// `lat, lon` ajoutés pour le nœud `geo` des données structurées : déjà accordés au rôle
+// `anon` par la migration 20260819110000, donc aucune migration n'est nécessaire — mais une
+// colonne non accordée ferait échouer TOUTE la requête avant même la RLS (CLAUDE.md §11.1).
+const ESTABLISHMENT_COLUMNS = `id, slug, name, description, address, lat, lon, check_in_time, check_out_time, mode`;
 
 const getEstablishment = cache(async (slug: string) => {
   const supabase = await createClient();
@@ -51,18 +61,21 @@ export async function generateMetadata(
   // traduction réelle dans cette locale, reste noindex + canonical vers la langue source. Elle ne
   // doit jamais être indexée comme une page distincte — sinon on publie deux URL pour un contenu
   // identique, dans une langue que personne n'a écrite.
-  const hasNativeContent = Boolean(asLocalizedField(establishment.name)?.[locale]);
+  //
+  // ⚠️ Cette page ne portait PAS `alternates.languages`, contrairement à la fiche produit qui en
+  // avait : incohérence réelle, contraire à §5.2, née d'avoir écrit deux fois la même règle à deux
+  // endroits. Les deux passent désormais par buildPageMetadata.
+  const nativeLocales = routing.locales.filter((candidate) =>
+    hasNativeContent(establishment.name, candidate)
+  );
 
-  return {
+  return buildPageMetadata({
+    locale,
+    pathFor: (candidate) => `/${candidate}/establishments/${slug}`,
     title,
     description,
-    robots: hasNativeContent ? undefined : { index: false, follow: true },
-    alternates: {
-      canonical: hasNativeContent
-        ? `/${locale}/establishments/${slug}`
-        : `/es/establishments/${slug}`,
-    },
-  };
+    nativeLocales,
+  });
 }
 
 export default async function EstablishmentPage({
@@ -71,6 +84,7 @@ export default async function EstablishmentPage({
   const { locale, slug } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("EstablishmentPage");
+  const tCommon = await getTranslations("Common");
 
   const establishment = await getEstablishment(slug);
   if (!establishment) notFound();
@@ -137,21 +151,47 @@ export default async function EstablishmentPage({
     };
   });
 
+  const siteUrl = getSiteUrl();
+  const establishmentJsonLd = buildEstablishmentJsonLd({
+    siteUrl,
+    locale,
+    slug,
+    name,
+    description,
+    imageUrls: (media ?? []).map(
+      (m) => supabase.storage.from("catalog-media").getPublicUrl(m.storage_path).data.publicUrl
+    ),
+    address: establishment.address,
+    latitude: establishment.lat,
+    longitude: establishment.lon,
+    mode: establishment.mode,
+    checkInTime: establishment.check_in_time,
+    checkOutTime: establishment.check_out_time,
+  });
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd(siteUrl, [
+    { name: tCommon("breadcrumbHome"), path: `/${locale}` },
+    { name, path: `/${locale}/establishments/${slug}` },
+  ]);
+
   return (
-    <EstablishmentDetailView
-      name={name}
-      description={description ?? null}
-      address={establishment.address}
-      checkInTime={establishment.check_in_time}
-      checkOutTime={establishment.check_out_time}
-      mode={establishment.mode}
-      photoSlides={(media ?? []).map((m) => ({
+    <>
+      <JsonLd data={establishmentJsonLd} />
+      <JsonLd data={breadcrumbJsonLd} />
+      <EstablishmentDetailView
+        name={name}
+        description={description ?? null}
+        address={establishment.address}
+        checkInTime={establishment.check_in_time}
+        checkOutTime={establishment.check_out_time}
+        mode={establishment.mode}
+        photoSlides={(media ?? []).map((m) => ({
         id: m.id,
         alt: name,
         url: supabase.storage.from("catalog-media").getPublicUrl(m.storage_path).data.publicUrl,
-      }))}
-      products={catalog}
-      backToCatalogLabel={t("backToCatalog")}
-    />
+        }))}
+        products={catalog}
+        backToCatalogLabel={t("backToCatalog")}
+      />
+    </>
   );
 }

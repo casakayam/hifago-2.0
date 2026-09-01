@@ -14,6 +14,13 @@ import {
 import { formatOccurrenceLabel } from "@/lib/products/formatOccurrenceLabel";
 import { formatCop } from "@hifago/domain";
 import { ProductDetailView } from "./ProductDetailView";
+import { routing } from "@/i18n/routing";
+import { hasNativeContent } from "@/lib/seo/nativeContent";
+import { buildPageMetadata } from "@/lib/seo/pageMetadata";
+import { getSiteUrl } from "@/lib/seo/siteUrl";
+import { buildProductJsonLd } from "@/lib/seo/jsonld/product";
+import { buildBreadcrumbJsonLd } from "@/lib/seo/jsonld/breadcrumb";
+import { JsonLd } from "@/components/seo/JsonLd";
 
 // Template literal sans interpolation (pas une concaténation "a" + "b"), une seule ligne : Supabase-js
 // infère le type de retour de .select() en analysant le TYPE littéral de la chaîne au niveau
@@ -51,28 +58,24 @@ export async function generateMetadata(
   const title = resolveLocalizedField(asLocalizedField(product.name), locale) ?? product.slug;
   const description =
     resolveLocalizedField(asLocalizedField(product.description), locale) ?? undefined;
-  // Une fiche saisie sans traduction pour cette locale (repli JSONB, cf. hifago/CLAUDE.md §5)
-  // reste noindex + canonical vers la langue source (es, la locale de repli de
-  // resolveLocalizedField) tant qu'aucune vraie traduction n'existe — jamais indexée comme une
-  // page distincte.
-  const hasNativeContent = Boolean(asLocalizedField(product.name)?.[locale]);
 
-  return {
+  // Une fiche saisie sans traduction pour cette locale (repli JSONB, cf. hifago/CLAUDE.md §5)
+  // reste noindex + canonical vers la langue source, et ne s'annonce pas comme une version
+  // linguistique distincte. Ces trois décisions se prennent ENSEMBLE : elles vivent donc dans
+  // buildPageMetadata, partagé avec l'accueil et la page établissement — et le prédicat
+  // hasNativeContent est le même que celui du sitemap, sans quoi celui-ci listerait des URL que
+  // ces métadonnées déclarent noindex.
+  const nativeLocales = routing.locales.filter((candidate) =>
+    hasNativeContent(product.name, candidate)
+  );
+
+  return buildPageMetadata({
+    locale,
+    pathFor: (candidate) => `/${candidate}/products/${product.slug}`,
     title,
     description,
-    robots: hasNativeContent ? undefined : { index: false, follow: true },
-    alternates: {
-      canonical: hasNativeContent
-        ? `/${locale}/products/${product.slug}`
-        : `/es/products/${product.slug}`,
-      // Uniquement les locales d'interface routées (es/en) — jamais la liste dynamique de
-      // langues de contenu du produit (cf. hifago/CLAUDE.md §5.2).
-      languages: {
-        es: `/es/products/${product.slug}`,
-        en: `/en/products/${product.slug}`,
-      },
-    },
-  };
+    nativeLocales,
+  });
 }
 
 export default async function ProductPage({
@@ -88,6 +91,7 @@ export default async function ProductPage({
   // (T3, 2026-08-27) : il ne servait qu'au « Desde {prix le plus bas} » d'un hôtel, dont le prix
   // vivait sur ses chambres.
   const tOccurrence = await getTranslations("ProductPage.occurrence");
+  const tCommon = await getTranslations("Common");
 
   const supabase = await createClient();
   const product = await getProduct(slug);
@@ -262,34 +266,60 @@ export default async function ProductPage({
     url: supabase.storage.from("catalog-media").getPublicUrl(m.storage_path).data.publicUrl,
   }));
 
+  // Données structurées, construites ICI et non dans ProductDetailView : la vue cliente ne reçoit
+  // ni le slug ni le type, et reçoit le prix DÉJÀ FORMATÉ en chaîne (priceDisplay) — inutilisable
+  // pour une offre. Le Server Component a les valeurs brutes (spec 26 §5.4).
+  const siteUrl = getSiteUrl();
+  const productJsonLd = buildProductJsonLd({
+    siteUrl,
+    locale,
+    slug: product.slug,
+    name,
+    description,
+    imageUrls: photoSlides.map((slide) => slide.url),
+    productType: product.type as string,
+    priceCop: product.price_cop,
+    occurrenceDate: product.occurrence_date,
+    startTime: product.start_time,
+    location: establishmentName ? { name: establishmentName, address: establishmentAddress } : null,
+  });
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd(siteUrl, [
+    { name: tCommon("breadcrumbHome"), path: `/${locale}` },
+    { name, path: `/${locale}/products/${product.slug}` },
+  ]);
+
   return (
-    <ProductDetailView
-      name={name}
-      description={description}
-      photoSlides={photoSlides}
-      priceDisplay={priceDisplay}
-      unit={product.unit}
-      capacity={product.capacity}
-      unitCount={product.unit_count}
-      lodgingKind={asLodgingKind(product.lodging_kind)}
-      reservationMode={reservationMode}
-      occurrenceLabel={occurrenceLabel}
-      externalBookingUrl={product.external_booking_url}
-      productId={product.id}
-      establishmentName={establishmentName}
-      establishmentSlug={product.establishment?.slug ?? null}
-      establishmentDescription={establishmentDescription}
-      establishmentAddress={establishmentAddress}
-      establishmentPhotoSlides={establishmentPhotoSlides}
-      priceCop={product.price_cop ?? 0}
-      lodgingPriceTiers={
-        product.price_tiers as { min_qty: number; max_qty: number; price_cop: number }[] | null
-      }
-      lodgingMaxQty={product.max_qty ?? 20}
-      isPmsBacked={productIsPmsBacked}
-      availability={availability ?? []}
-      productDateRates={productDateRates ?? []}
-      productSlots={productSlots ?? []}
-    />
+    <>
+      <JsonLd data={productJsonLd} />
+      <JsonLd data={breadcrumbJsonLd} />
+      <ProductDetailView
+        name={name}
+        description={description}
+        photoSlides={photoSlides}
+        priceDisplay={priceDisplay}
+        unit={product.unit}
+        capacity={product.capacity}
+        unitCount={product.unit_count}
+        lodgingKind={asLodgingKind(product.lodging_kind)}
+        reservationMode={reservationMode}
+        occurrenceLabel={occurrenceLabel}
+        externalBookingUrl={product.external_booking_url}
+        productId={product.id}
+        establishmentName={establishmentName}
+        establishmentSlug={product.establishment?.slug ?? null}
+        establishmentDescription={establishmentDescription}
+        establishmentAddress={establishmentAddress}
+        establishmentPhotoSlides={establishmentPhotoSlides}
+        priceCop={product.price_cop ?? 0}
+        lodgingPriceTiers={
+          product.price_tiers as { min_qty: number; max_qty: number; price_cop: number }[] | null
+        }
+        lodgingMaxQty={product.max_qty ?? 20}
+        isPmsBacked={productIsPmsBacked}
+        availability={availability ?? []}
+        productDateRates={productDateRates ?? []}
+        productSlots={productSlots ?? []}
+      />
+    </>
   );
 }

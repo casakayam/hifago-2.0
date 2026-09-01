@@ -24,12 +24,15 @@ const OUT = path.join(DOCS, 'ai-index.json');
 
 /** Table de routage sujet → document. Éditée à la main, préservée à chaque régénération. */
 const ROUTAGE = {
+  'référencement, seo, sitemap, robots.txt, hreflang, données structurées json-ld':
+    'docs/specs/26-referencement-seo-et-moteurs-ia.md',
   'stack technique, architecture cible, décisions déjà tranchées à ne pas rouvrir': 'docs/04-architecture-cible.md',
   'squelette RPC anti-survente, test de concurrence, recherche géo+JSONB à copier': 'docs/05-reference-technique.md',
   'modèle de données cible : entités, champs, établissement/chambre/produit/compte': 'docs/00-modele-de-donnees.md',
   'cahier des charges portail client (marketplace, réservation)': 'docs/01-cahier-des-charges-client.md',
   'cahier des charges portail socio (référent, prestador)': 'docs/02-cahier-des-charges-socio.md',
   'cahier des charges back-office admin': 'docs/03-cahier-des-charges-admin.md',
+  'emails transactionnels : les 8 envois possibles, leur déclencheur et leur destinataire': 'docs/06-emails-transactionnels.md',
   'sommaire des specs de feature, gabarit réutilisable': 'docs/specs/README.md',
   'gabarit à copier pour spécifier une nouvelle feature': 'docs/specs/_modele.md',
   'comment poser les bonnes questions à Jérôme avant d\'écrire une spec, clarifier une ambiguïté': 'docs/specs/avant-la-spec.md',

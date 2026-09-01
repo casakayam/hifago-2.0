@@ -7,7 +7,12 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { locale } = await props.params;
   const t = await getTranslations({ locale, namespace: "Login" });
-  return { title: t("title") };
+  // ⚠️ noindex plutôt qu'un Disallow dans robots.txt, et la distinction n'est pas cosmétique :
+  // une page en Disallow n'est jamais CHARGÉE, donc sa balise noindex n'est jamais lue, et elle
+  // peut finir indexée sans description si un lien externe la désigne. Disallow sert à économiser
+  // du budget de crawl, noindex à empêcher l'indexation — jamais les deux sur la même page
+  // (spec 26 §5.1).
+  return { title: t("title"), robots: { index: false, follow: true } };
 }
 
 export default async function LoginPage({

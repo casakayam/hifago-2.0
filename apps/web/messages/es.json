@@ -51,7 +51,8 @@
     "backToLogin": "Volver a iniciar sesión"
   },
   "Common": {
-    "cancellationPolicy": "Una cancelación o una ausencia de tu parte nunca es reembolsada."
+    "cancellationPolicy": "Una cancelación o una ausencia de tu parte nunca es reembolsada.",
+    "breadcrumbHome": "Inicio"
   },
   "ProductPage": {
     "backToCatalog": "← Volver al catálogo",
