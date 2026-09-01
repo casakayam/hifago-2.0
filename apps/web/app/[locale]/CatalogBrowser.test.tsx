@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { CatalogBrowser, type CatalogProduct } from "./CatalogBrowser";
-import messages from "@/messages/es.json";
+import { loadMessages } from "@/messages";
+
+const messages = loadMessages("es");
 
 // `@/i18n/navigation`'s Link tire next-intl/navigation → next/navigation, dont la résolution
 // casse sous Vitest (Next 16, interop ESM connu, sans rapport avec la logique testée ici). Ce

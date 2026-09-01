@@ -1,0 +1,8 @@
+{
+  "title": "Mis reservas",
+  "empty": "Aún no tienes reservas.",
+  "linesSummary": "{active} de {total} líneas activas",
+  "cancel": "Anular reserva",
+  "cancelling": "Anulando…",
+  "cancelError": "No se pudo anular la reserva. Inténtalo de nuevo."
+}

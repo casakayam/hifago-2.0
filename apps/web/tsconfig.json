@@ -24,6 +24,11 @@
     }
   },
   "include": [
+    // ⚠️ Les globs TypeScript ne descendent PAS dans les répertoires commençant par un point :
+    // sans cette ligne, .storybook/{main,preview}.tsx n'est jamais typechecké (constaté 2026-09-01).
+    // Même raison que la ligne ".next/types" ci-dessous.
+    ".storybook/**/*.ts",
+    ".storybook/**/*.tsx",
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",

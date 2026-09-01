@@ -3,8 +3,11 @@
 Outil interne pour explorer les parcours UX du portail client (`apps/web`) **en conversation**,
 sans écrire de code à la main. Wireframe bas-fidélité volontairement pauvre (gris, blocs
 rectangulaires) — le sujet est la disposition et le parcours, jamais l'esthétique finale (couleurs
-de marque, typographie), qui reste pilotée par `hifago/DESIGN.md` et le pipeline de design
-séparé. Zéro dépendance, zéro build.
+de marque, typographie), qui n'est pas encore tranchée pour la vitrine. ⚠️ Ce paragraphe renvoyait
+jusqu'au 2026-09-01 à un `hifago/DESIGN.md` et à un « pipeline de design séparé » : **ni l'un ni
+l'autre n'a jamais existé** (`git log` ne montre aucun commit de ce fichier). En pratique, le thème
+`vitrine` ne définit aucun token — voir la story `Playground/Tokens` dans Storybook pour ce qui est
+réellement en vigueur. Zéro dépendance, zéro build.
 
 Ce n'est pas un composant HeroUI, pas un Storybook, pas un outil pour construire du vrai code —
 juste un moyen rapide de dire "voilà où je veux que les choses soient" avant d'implémenter quoi
@@ -126,7 +129,10 @@ normal de l'outil.
 - Pas un éditeur visuel avec glisser-déposer — le positionnement se pilote en éditant `screens.js`
   en conversation, pas à la souris (choix assumé, voir `hifago/CLAUDE.md` / le plan de design pour
   le contexte).
-- Pas la page de test des vrais composants HeroUI (Storybook ou preview interne, décision séparée)
-  — celle-ci teste de vrais composants ; ce bac à sable teste des parcours en blocs neutres.
+- Pas la page de test des vrais composants HeroUI : c'est **Storybook**, tranché le 2026-09-01
+  (`npm run storybook` depuis `apps/web`, port 6006) — la « décision séparée » évoquée ici jusqu'à
+  cette date est prise. Storybook teste de vrais composants dans le vrai thème ; ce bac à sable
+  teste des parcours en blocs neutres. Les deux ne se remplacent pas : on vient ici pour dire *où*
+  les choses vont, on va dans Storybook pour voir *à quoi elles ressemblent*.
 - Pas relié à `npm install`/CI/Vercel — dossier `apps/test-ux/` volontairement sans `package.json`,
   ignoré par les workspaces npm, la CI et les déploiements existants.

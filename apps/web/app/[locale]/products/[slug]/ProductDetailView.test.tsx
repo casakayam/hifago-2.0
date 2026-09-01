@@ -3,7 +3,9 @@ import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { LodgingKind } from "@hifago/domain";
 import { ProductDetailView } from "./ProductDetailView";
-import messages from "@/messages/es.json";
+import { loadMessages } from "@/messages";
+
+const messages = loadMessages("es");
 
 // Même mock de navigation que CatalogBrowser.test.tsx (cf. son commentaire) : `@/i18n/navigation`
 // tire next-intl/navigation → next/navigation, dont la résolution casse sous Vitest. Le lien de

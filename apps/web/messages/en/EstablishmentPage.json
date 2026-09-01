@@ -1,0 +1,15 @@
+{
+  "backToCatalog": "← Back to catalog",
+  "roomsTitle": "Rooms",
+  "wholeHouseTitle": "Entire place",
+  "lodgingsTitle": "Accommodation",
+  "activitiesTitle": "Activities and services",
+  "noProducts": "This place has nothing on sale yet.",
+  "checkIn": "Check-in from {time}",
+  "checkOut": "Check-out until {time}",
+  "lodgingKindDorm": "Dorm bed",
+  "lodgingKindPrivate": "Private room",
+  "lodgingKindWholeHouse": "Entire house",
+  "lodgingCapacity": "Up to {count, plural, one {# person} other {# people}}",
+  "lodgingUnitCount": "{count} in total"
+}

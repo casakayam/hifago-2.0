@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { LodgingReservationForm } from "./LodgingReservationForm";
-import messages from "@/messages/es.json";
+import { loadMessages } from "@/messages";
+
+const messages = loadMessages("es");
 
 // Même mock de navigation que ProductDetailView.test.tsx (cf. son commentaire) : le lien vers le
 // checkout n'est pas le sujet.

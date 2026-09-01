@@ -46,3 +46,6 @@ mercadopago-sandbox-test-data.md
 *.tsbuildinfo
 next-env.d.ts
 .gstack/
+
+# Sortie de `npm run build-storybook` — artefact de vérification, jamais versionné.
+storybook-static/

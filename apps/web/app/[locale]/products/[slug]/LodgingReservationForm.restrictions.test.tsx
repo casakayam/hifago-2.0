@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { LodgingReservationForm } from "./LodgingReservationForm";
-import messages from "@/messages/es.json";
+import { loadMessages } from "@/messages";
+
+const messages = loadMessages("es");
 
 vi.mock("@/i18n/navigation", () => ({
   Link: ({ href, children, ...p }: React.ComponentProps<"a">) => <a href={href} {...p}>{children}</a>,

@@ -1,1 +1,16 @@
 @import "@hifago/ui/styles/globals.css";
+
+/* ⚠️ Scan explicite du contenu de cette app.
+ *
+ * `packages/ui/src/styles/globals.css` porte déjà la même directive pour SON propre code, avec le
+ * commentaire qui explique pourquoi : la détection automatique de contenu de Tailwind v4 n'est pas
+ * fiable dans ce monorepo. La production reposait pourtant encore sur cette détection implicite
+ * pour `apps/web`, et le playground Storybook — dont la racine de détection Vite diffère — l'a
+ * rendu visible : sans directive, les composants s'affichent SANS STYLE, en silence.
+ *
+ * Posé ici, à l'entrée CSS de l'app, plutôt que dans l'entrée du playground : les deux la
+ * partagent, Next comme Vite en bénéficient, et la production ferme le même piège. Glob récursif
+ * unique plutôt qu'une énumération de dossiers, sinon un futur `apps/web/features/` serait muet.
+ * Chemin relatif à CE fichier. (2026-09-01)
+ */
+@source "../**/*.{ts,tsx}";

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createTranslator } from "next-intl";
-import esMessages from "@/messages/es.json";
 import { formatOccurrenceLabel, type OccurrenceInput } from "./formatOccurrenceLabel";
+import { loadMessages } from "@/messages";
 
-// createTranslator charge le vrai catalogue es.json (namespace ProductPage.occurrence) plutôt
+const esMessages = loadMessages("es");
+
+// createTranslator charge le vrai catalogue messages/es/ProductPage.json (namespace
+// ProductPage.occurrence) plutôt
 // qu'un mock — tester contre le catalogue réel attrape aussi une clé manquante/mal orthographiée,
 // pas seulement la logique de branchement de formatOccurrenceLabel. Cast explicite : le type
 // Translator retourné n'accepte que les clés littérales de ce namespace précis (contravariance

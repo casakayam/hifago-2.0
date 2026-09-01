@@ -1,0 +1,17 @@
+{
+  "title": "Hifago",
+  "description": "Actividades y experiencias en Guatapé.",
+  "searchLabel": "Buscar",
+  "searchPlaceholder": "Nombre del producto…",
+  "typeFilterLabel": "Tipo",
+  "typeFilterAllLabel": "Todos los tipos",
+  "noResults": "No encontramos productos con esos criterios.",
+  "types": {
+    "lodging": "Alojamiento",
+    "activity": "Actividad",
+    "transport": "Transporte",
+    "camp": "Camp",
+    "evento": "Evento"
+  },
+  "lodgingCount": "{count, plural, one {# alojamiento} other {# alojamientos}}"
+}

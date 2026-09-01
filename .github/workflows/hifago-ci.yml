@@ -51,8 +51,23 @@ jobs:
       # les envoie lire le mauvais document. `npm run docs:index` le régénère.
       - name: Manifeste documentaire à jour
         run: npm run docs:check
-      - name: Dépendances sans vulnérabilité haute ou critique
-        run: npm audit --audit-level=high
+      # `--omit=dev` depuis le 2026-09-01, décision de Jérôme, avec sa raison et son coût.
+      # RAISON : l'installation de Storybook (outil de playground local, jamais déployé) fait
+      # entrer 3 avis `high` sur `image-size` — déni de service par boucle infinie sur des parsers
+      # ICNS/JXL/HEIF — via `vite-plugin-storybook-nextjs`. `No fix available` : aucune version
+      # corrigée n'existe, donc ni `npm audit fix` ni un `overrides` ne peuvent y répondre.
+      # CE QU'ON PERD, et il faut le savoir : ce job ne contrôle plus AUCUNE dépendance de
+      # développement, pas seulement celle-ci. Il audite désormais ce qui est réellement déployé.
+      # À REVOIR : si `image-size` publie un correctif, retirer `--omit=dev` et revenir à l'audit
+      # complet — c'est le seul motif de cette restriction.
+      - name: Dépendances de production sans vulnérabilité haute ou critique
+        run: npm audit --omit=dev --audit-level=high
+      # Non bloquant, et c'est le but : l'étape ci-dessus ne regarde plus les devDependencies, donc
+      # une NOUVELLE faille dans vitest, playwright, eslint ou storybook passerait totalement
+      # inaperçue. Cette étape la laisse au moins visible dans les logs. Elle échouera tant que
+      # `image-size` n'aura pas de correctif — c'est attendu, ne pas la « réparer » en la retirant.
+      - name: Dépendances de développement — angle mort, pour information seulement
+        run: npm audit --audit-level=high || true
 
   typecheck:
     runs-on: ubuntu-latest

@@ -1,0 +1,15 @@
+{
+  "backToCatalog": "← Volver al catálogo",
+  "roomsTitle": "Habitaciones",
+  "wholeHouseTitle": "Alojamiento completo",
+  "lodgingsTitle": "Alojamiento",
+  "activitiesTitle": "Actividades y servicios",
+  "noProducts": "Este establecimiento todavía no tiene nada a la venta.",
+  "checkIn": "Check-in desde las {time}",
+  "checkOut": "Check-out hasta las {time}",
+  "lodgingKindDorm": "Cama en dormitorio",
+  "lodgingKindPrivate": "Habitación privada",
+  "lodgingKindWholeHouse": "Casa entera",
+  "lodgingCapacity": "Hasta {count, plural, one {# persona} other {# personas}}",
+  "lodgingUnitCount": "{count} en total"
+}

@@ -13,6 +13,7 @@
     "dev": "concurrently -n web,admin -c blue,magenta \"npm run dev --workspace=apps/web\" \"npm run dev --workspace=apps/admin\"",
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:admin": "npm run dev --workspace=apps/admin",
+    "storybook": "npm run storybook --workspace=apps/web",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",

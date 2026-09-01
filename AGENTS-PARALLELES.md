@@ -57,3 +57,67 @@ cassant les tests d'une autre session, contamination croisée entre deux specs p
 établissement seedé). Ce ne sont pas des cas isolés : lancer plusieurs agents en parallèle sur ce
 repo est un mode de travail normal ici, donc chaque agent doit démarrer en le sachant, au lieu de
 le découvrir en marchant sur le travail d'un autre.
+
+---
+
+## Bloc additionnel — agent qui crée des composants de la vitrine
+
+À coller **en plus** du bloc générique ci-dessus, quand plusieurs agents créent des composants
+`apps/web` en même temps. Ajouté le 2026-09-01, en montant le terrain des composants atomiques.
+
+Le bloc générique parle de migrations, de base Supabase et de fixtures de test. Les collisions du
+front sont ailleurs : un fichier de messages partagé, un barrel, un port. L'architecture a été faite
+pour les supprimer — ce bloc dit ce qu'il en reste.
+
+```
+Périmètre exclusif. Tu ne crées des composants QUE dans le dossier qui t'est assigné, et tu
+n'écris QUE dans le namespace i18n qui t'est assigné (messages/es/<Namespace>.json et son
+équivalent en/). Les composants des autres agents sont en LECTURE SEULE pour toi.
+
+Ne crée jamais un atome hors de ton périmètre. Si tu as besoin d'un atome qui n'existe pas encore,
+tu ne le crées PAS : tu le signales et tu composes localement en attendant. Sinon on se retrouve
+avec trois variantes du même bouton, chacune écrite par un agent différent — c'est le vrai risque
+de ce mode de travail, bien plus que les conflits de fichiers.
+
+Fichiers que tu ne touches pas :
+- `apps/web/package.json` et le lockfile — aucune dépendance à ajouter, le terrain les fournit
+  toutes. Si tu crois en avoir besoin, c'est un signal : demande d'abord.
+- `apps/web/messages/index.ts` — sauf si tu introduis un namespace NOUVEAU (rare : un par écran).
+  Dans ce cas, préviens, parce que c'est le seul fichier de messages que plusieurs agents partagent.
+- `apps/web/.storybook/**` — la configuration du playground est commune.
+- Il n'existe volontairement AUCUN barrel `index.ts` dans `apps/web/components/` : n'en crée pas.
+  Chaque composant s'importe par son chemin. Ajouter un composant ne doit modifier aucun fichier
+  partagé — les stories sont découvertes par glob.
+
+Ports. Une seule instance de chaque serveur tourne sur la machine : `npm run dev` (3100) et
+Storybook (6006), lancés par Jérôme. Tu ne les lances pas. Tu vérifies ton travail avec
+`npx vitest run <ton fichier>`, `npx tsc --noEmit` et `npm run build`. Si tu as réellement besoin
+d'un rendu, utilise un autre port (`storybook dev -p 6007`) et arrête-le en partant.
+
+Conventions. `apps/web/components/README.md` fait foi : nommage, anatomie d'un composant, règles
+SEO/sémantique, i18n, accessibilité, responsive, et la liste des états limites à couvrir en story.
+Lis-le avant d'écrire, il tient en cinq minutes et il a été écrit pour éviter que chaque agent
+invente sa propre convention.
+
+Vérifie avant de rendre : `npx vitest run` (dont messages/parity.test.ts, qui échoue si une clé
+n'existe que dans une langue), `npx tsc --noEmit`, et le rendu de tes stories aux gabarits Mobile
+390 et Desktop 1280.
+```
+
+### Découpage en vagues (2026-09-01)
+
+Le risque n'est pas le conflit de fichier, c'est **deux agents qui créent le même atome** sous deux
+noms. D'où un ordre, pas un simple partage :
+
+- **Vague 1 — les atomes partagés, séquentielle, un seul agent.** `PageShell`, `Title` (niveau en
+  prop), `Price`, `TypeBadge`, `BackLink`, `Image`. Petits et rapides, mais tout le monde en dépend.
+  Goulot assumé.
+- **Vague 2 — molecules et organisms, en parallèle, une verticale par agent.** Les frontières
+  coïncident avec les namespaces i18n existants, qui découpent déjà l'app par écran :
+
+  | Agent | Dossier / périmètre | Namespace i18n |
+  |---|---|---|
+  | A | Coquille : `SiteHeader`, `SiteFooter`, `LanguageSwitcher`, `CartButton` | `Chrome` (nouveau) |
+  | B | Catalogue : `ProductCard`, `CatalogFilters`, `EmptyState` | `HomePage` |
+  | C | Fiche : `PhotoStrip`, `PriceBlock`, `FactsList`, `EstablishmentBlock` | `ProductPage`, `EstablishmentPage` |
+  | D | Commande : `CartSummary`, `OrderCard` | `CheckoutPage`, `AccountOrdersPage` |

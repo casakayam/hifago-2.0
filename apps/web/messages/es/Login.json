@@ -1,0 +1,9 @@
+{
+  "title": "Iniciar sesión",
+  "email": "Correo electrónico",
+  "password": "Contraseña",
+  "submit": "Iniciar sesión",
+  "submitting": "Conectando…",
+  "error": "Correo o contraseña incorrectos.",
+  "signupLink": "¿No tienes cuenta? Crear una"
+}

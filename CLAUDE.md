@@ -82,7 +82,24 @@ racine (`AGENTS.md` point 2).
    `overflow-x-auto` (scrollable ≠ lisible) : reflow en cartes sous le breakpoint `md` (768px,
    défaut Tailwind v4) — pattern déjà validé côté legacy (portail socio) à reproduire, pas
    réinventer. Détail et procédure de vérification : `.claude/skills/hifago-ui/SKILL.md`, audité
-   par `/hifago-review` (domaine design system).
+   par `/hifago-review` (domaine design system). ⚠️ **Ne jamais MASQUER de contenu selon la
+   largeur** (`hidden md:block`) : Google indexe la version mobile, donc un bloc caché sous `md`
+   sort de l'index alors qu'il s'affiche parfaitement sur l'écran du développeur. On réorganise
+   (empiler, replier en gardant le contenu dans le HTML), on ne supprime pas — `hidden` est réservé
+   au décoratif.
+
+7. **Composants de la vitrine et playground** (2026-09-01) : ils vivent dans
+   `apps/web/components/{atoms,molecules,organisms}/` — jamais dans `packages/ui`, qui reste réservé
+   à ce qui est prouvé consommé par les DEUX apps (point 1). **Storybook** (`npm run storybook`,
+   port 6006) est l'outil de playground, tranché par Jérôme ce jour-là : il clôt le point laissé
+   ouvert par `apps/test-ux/README.md` (« Storybook ou preview interne, décision séparée »).
+   ⚠️ Il n'existe volontairement **aucun barrel** `index.ts` dans `apps/web/components/` et **aucun
+   registre de stories** : plusieurs agents y créent des composants en parallèle dans le même
+   répertoire de travail, et tout fichier partagé deviendrait le point où ils s'écrasent.
+   Conventions complètes (nommage, sémantique SEO, i18n, accessibilité, responsive, stories) :
+   `apps/web/components/README.md`. ⚠️ La CI audite désormais `npm audit --omit=dev` : Storybook
+   introduit 3 avis `high` sans correctif sur `image-size`, une dépendance de développement jamais
+   déployée — on perd en contrepartie le contrôle automatique sur toutes les devDependencies.
 
 ## 3. Frontière RLS / RPC-only — checklist non négociable
 1. **RPC-only (aucune policy RLS d'écriture, grants revoke)** : toute table portant un compteur de
@@ -152,6 +169,16 @@ racine (`AGENTS.md` point 2).
 13. Aucune propriété schema.org sans colonne réelle derrière — **jamais** de `aggregateRating` ni de
     `review` tant qu'aucune table d'avis n'existe, jamais d'adresse décomposée que la base ne stocke
     pas, jamais de `geo` sur des coordonnées nulles.
+
+14. **Un traducteur next-intl ne traverse pas la frontière RSC.** Un composant client appelle
+    `useTranslations()` lui-même ; un composant qui reçoit ses données d'un Server Component reçoit
+    des **chaînes déjà résolues** en props. Un atome générique ne traduit rien — il reçoit son
+    libellé.
+15. Les messages d'`apps/web` vivent **un fichier par namespace et par locale**
+    (`messages/<locale>/<Namespace>.json`), agrégés par `messages/index.ts` — jamais un fichier
+    unique par locale, sur lequel plusieurs agents parallèles s'écraseraient. Toute clé existe dans
+    **es ET en** ; `messages/parity.test.ts` échoue sinon, et vérifie aussi qu'aucun namespace créé
+    sur disque n'a été oublié dans l'agrégateur.
 
 ## 6. Tests
 1. E2E : Playwright, jamais Cypress (seul capable de piloter plusieurs `BrowserContext` isolés
@@ -456,39 +483,39 @@ En fin de feature/session : (1) *append* (jamais écraser) une entrée datée à
 1er septembre) ; (2) *remplacer* (pas ajouter) le paragraphe ci-dessous par le résumé de cette
 nouvelle entrée.
 
-*2026-09-01 — **deux des cinq règles SEO de §5 étaient fausses, dont une violée par une
-bibliothèque.** ⚠️ **§5.2 était enfreinte en silence** : `next-intl` active `alternateLinks` PAR
-DÉFAUT (`routing/config.js`), donc le middleware posait sur chaque réponse des hreflang
-es/en/x-default que personne n'avait écrits, **dérivés de `x-forwarded-host`**, et posés AUSSI sur
-les fiches `noindex` — en contradiction avec §5.3. Coupé (`alternateLinks: false`) : une seule
-source, les métadonnées. §5.5 n'avait jamais existé en code. ⚠️ **Mon premier diagnostic disait §5.4
-non tenue : c'était FAUX** (le canonical vers la langue source existait depuis le début) — relevé
-par une revue adversariale avant d'écrire une ligne. Livré : `metadataBase` (sans lui, tous les
-canonicals déjà écrits étaient **relatifs donc inertes**), `robots.ts` fermé hors production,
-`sitemap.ts` dynamique multilingue, OpenGraph, canonical auto-référent, JSON-LD
-Product/Event/LodgingBusiness/Breadcrumb/WebSite. ⚠️ **Les metadata routes sont PRÉRENDUES AU
-BUILD** : sans `dynamic = "force-dynamic"` le sitemap était figé — et le job `build` de la CI n'a
-aucun Supabase, tandis que `postgrest-js` avale l'erreur réseau en `{data: null}`, donc **on aurait
-livré un sitemap vide, build vert**. Prouvé par la sortie du build (`○ robots.txt`, `ƒ
-sitemap.xml`). ⚠️ **Aucun test unitaire ne protège de ça** (un mock rend toujours des données) : le
-garde-fou est un smoke test de bascule. ⚠️ **`Disallow` n'est pas `noindex`** (une page en Disallow
-n'est jamais chargée, donc son noindex n'est jamais lu) et **un groupe `User-Agent:` nommé annule le
-groupe `*`** — d'où un seul groupe générique, la décision « tous les bots IA autorisés » étant
-documentée en commentaire. ⚠️ **Le piège d'échappement du JSON-LD s'est refermé CINQ fois dans la
-même session**, dont une dans le garde-fou censé l'interdire (il cherchait `<`, motif que tout
-`.tsx` contient) : quand deux écritures sont visuellement identiques, vérifier par COMPORTEMENT.
-`scripts/check-seo.sh` (CI, job lint) a ses deux branches **vérifiées par mutation**. Jamais de
-`aggregateRating` (aucune table d'avis), d'adresse décomposée (seul `formattedAddress` est
-persisté), ni de `geo` sur coordonnées nulles. Règles écrites en §5 points 5-13, spec 26,
-`/hifago-review` §3 étendu de 4 à 13 questions. **565 tests verts**, build OK, serveur réel
-interrogé (39 URL au sitemap, canonical absolu, JSON-LD parsable), 3 e2e. ⚠️ **`npm install` a cassé
-`node_modules`** (bug arborist au rollback : `.bin` vidé, eslint/vitest introuvables) — réparé par
-`npm ci` ; pour le lockfile seul, `npm install --package-lock-only`. ⚠️ **Ne pas lancer prettier
-sur ce dépôt** : aucune config, il reformate tout le fichier. ⚠️ **`check-timezone.sh` échoue sur
-`tests/notification-real/send_8_real_emails.mjs`** (non commité, 2026-08-31) — pas ce lot, mais la
-CI cassera au commit de ce fichier. **Rien de tout ça ne sera observable avant la bascule de
-domaine** : robots bloque, le SSO Vercel renvoie 302, et `hifago.co` sert encore le legacy. Détail
-complet : `hifago/docs/journal/2026-09.md` (2026-09-01). Rien commité.*
+*2026-09-01 (2e lot du jour) — **le terrain des composants de la vitrine, et un playground qui a
+servi d'abord à trouver des bugs.** Storybook installé dans `apps/web` (`npm run storybook`, port
+6006), **choisi par Jérôme contre ma recommandation d'une route interne** — et ça marche du premier
+coup (`@storybook/nextjs-vite` 10.5.10 déclare `next: ^16` / `react: ^19`). Clôt le point ouvert
+depuis le 2026-08-25 dans `apps/test-ux/README.md` (« Storybook ou preview interne, décision
+séparée »). ⚠️ **L'installation fait entrer 3 avis `high` SANS CORRECTIF** (`image-size`, via
+`vite-plugin-storybook-nextjs`) : sur décision de Jérôme, la CI audite désormais
+`npm audit --omit=dev` — on perd donc tout contrôle automatique sur les devDependencies, motif et
+condition de retour écrits dans le YAML. ⚠️ **Deux bugs trouvés en montant le playground** : les
+**polices Geist ne sont pas appliquées** (le layout définit `--font-geist-*`, HeroUI consomme
+`--font-sans`/`--font-mono` — les noms ne correspondent pas, la vitrine est en pile système), et
+**`hifago/DESIGN.md` n'a jamais existé** (4 références fantômes dans `apps/test-ux`, aucun commit).
+Signalés, non corrigés. ⚠️ **Piège n°1 fermé par mesure** : le `@source` de `packages/ui` ne couvre
+pas `apps/web`, et sous Vite les composants s'afficheraient SANS STYLE en silence —
+`.storybook/preview.css` déclare ses propres `@source`, prouvé par une carte `h-80` qui mesure bien
+320 px. **i18n éclatée** en un fichier par namespace (`messages/<locale>/<Namespace>.json`) : ⚠️ ma
+première justification (« conflit git ») était FAUSSE — les agents travaillent dans le MÊME
+répertoire de travail, donc sans merge git, ils s'écrasent en direct. `messages/parity.test.ts`
+**vérifié par mutation**, attrape la clé absente d'une langue et le namespace non branché ; ⚠️ il ne
+vérifie PAS l'absence de chaînes en dur, qui reste tenue par la relecture. ⚠️ **Le lint a attrapé un
+vrai défaut** dans ma story Tokens (`setState` dans un effet) : corrigé en initialiseur paresseux +
+`MutationObserver`, meilleur composant au passage. ⚠️ Storybook **garde les accents dans les ids de
+story** (URL fragile → `id` ASCII explicite) et son iframe contient **2 `<h1>` cachés** (fausser
+toute vérification qui compte les titres sans filtrer la visibilité). **Aucun composant de design
+system créé** — c'était le périmètre. Conventions écrites pour la première fois dans
+`apps/web/components/README.md` (nommage, sémantique SEO, i18n, a11y, responsive, stories), et
+découpage en vagues + section « Agent qui crée des composants » dans `AGENTS-PARALLELES.md` : pas de
+barrel, pas de registre, un agent = un dossier + un namespace. **567 tests verts**, build web,
+build-storybook, tous les garde-fous. ⚠️ `check-timezone.sh` échoue toujours sur
+`tests/notification-real/` (non commité, 2026-08-31) — pas ce lot. **La vague 1 (atomes partagés,
+séquentielle) reste à faire.** Le 1er lot du jour (référencement SEO/IA) est commité et poussé
+(`6a8962d`). Détail complet : `hifago/docs/journal/2026-09.md` (2026-09-01). Rien commité pour ce
+2e lot.*
 
 *2026-08-28 (tâche 3, session parallèle au lot fuseau) — **le calendrier d'un logement coûtait
 180 appels LobbyPMS par mois affiché, sous un plafond de 60 par minute. Il en coûte 1.** Deux

@@ -1,0 +1,9 @@
+{
+  "title": "Sign in",
+  "email": "Email",
+  "password": "Password",
+  "submit": "Sign in",
+  "submitting": "Signing in…",
+  "error": "Incorrect email or password.",
+  "signupLink": "Don't have an account? Create one"
+}

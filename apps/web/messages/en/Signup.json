@@ -1,0 +1,12 @@
+{
+  "title": "Create account",
+  "email": "Email",
+  "password": "Password",
+  "confirmPassword": "Confirm password",
+  "submit": "Create account",
+  "submitting": "Creating…",
+  "passwordMismatch": "Passwords don't match.",
+  "genericError": "Could not create the account. Check the details and try again.",
+  "loginLink": "Already have an account?",
+  "loginLinkAction": "Sign in"
+}

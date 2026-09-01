@@ -1,0 +1,12 @@
+{
+  "title": "Crear cuenta",
+  "email": "Correo electrónico",
+  "password": "Contraseña",
+  "confirmPassword": "Confirmar contraseña",
+  "submit": "Crear cuenta",
+  "submitting": "Creando…",
+  "passwordMismatch": "Las contraseñas no coinciden.",
+  "genericError": "No se pudo crear la cuenta. Verifica los datos e inténtalo de nuevo.",
+  "loginLink": "¿Ya tienes cuenta?",
+  "loginLinkAction": "Iniciar sesión"
+}

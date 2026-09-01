@@ -43,4 +43,23 @@ if [ "$fail" -eq 0 ]; then
   echo "✓ Aucun Table.Body/Table.Content non sérialisable détecté."
 fi
 
+echo
+echo "== Aucun barrel index.ts dans apps/web/components =="
+# La convention « pas de barrel » (apps/web/components/README.md, CLAUDE.md §2.7) n'existait que
+# sur le papier. Or c'est le fichier que le premier agent pressé créera par réflexe, et une fois
+# qu'il est là les suivants l'utilisent : on ne revient plus en arrière. Il est interdit parce que
+# plusieurs agents créent des composants EN PARALLÈLE dans le même répertoire de travail — un
+# barrel serait le fichier que tous éditent à chaque ajout, donc celui où ils s'écrasent.
+#
+# ⚠️ Scopé à apps/web/components : `packages/ui/src/index.ts` EST un barrel délibéré, et une règle
+# globale le condamnerait à tort.
+hits="$(find apps/web/components \( -name 'index.ts' -o -name 'index.tsx' \) 2>/dev/null || true)"
+if [ -n "$hits" ]; then
+  echo "$hits"
+  echo "✗ Barrel détecté dans apps/web/components — importer chaque composant par son chemin (cf. apps/web/components/README.md)."
+  fail=1
+else
+  echo "✓ Aucun barrel dans apps/web/components."
+fi
+
 exit $fail
