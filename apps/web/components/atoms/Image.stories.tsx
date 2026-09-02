@@ -11,7 +11,7 @@ const SRC = "/globe.svg";
 const SIZES = "(max-width: 640px) 100vw, 50vw";
 
 const meta = {
-  title: "Atoms/Image",
+  title: "Affichage/Image",
   component: Image,
   parameters: { layout: "padded" },
   args: { src: SRC, alt: "Vue du Embalse de Guatapé depuis la colline", sizes: SIZES },

@@ -9,7 +9,7 @@ import { IconButton } from "./IconButton";
 // À voir aux deux gabarits (Mobile 390 par défaut, Desktop 1280) : les hauteurs changent au
 // breakpoint `md`, et c'est là que se joue la règle des 44 px (voir la story `Tailles`).
 const meta = {
-  title: "Atoms/Button",
+  title: "Actions/Button",
   component: Button,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof Button>;

@@ -10,7 +10,7 @@ import type { ButtonColor, ButtonVariant } from "./Button";
 // « Buttons must have discernible text ». C'est le seul défaut que ce composant existe pour rendre
 // impossible.
 const meta = {
-  title: "Atoms/IconButton",
+  title: "Actions/IconButton",
   component: IconButton,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof IconButton>;

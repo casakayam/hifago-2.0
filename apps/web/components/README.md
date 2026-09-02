@@ -137,10 +137,28 @@ Chaque composant a au minimum `Defaut`, plus les **états limites** qui le conce
 `Chargement`, `Erreur`, `TexteLong`, `SansImage`. Ce sont eux qui cassent en production.
 
 ```tsx
-const meta = { title: "Atoms/Price", component: Price } satisfies Meta<typeof Price>;
+const meta = { title: "Affichage/Price", component: Price } satisfies Meta<typeof Price>;
 export default meta;
 export const Defaut: StoryObj<typeof meta> = { args: { amountCop: 80000 } };
 ```
+
+### ⚠️ Le `title` ne suit PAS le dossier
+
+Le dossier dit ce qui est composable (`atoms` / `molecules` / `organisms`) ; le `title` sert à
+**trouver** un composant dans la barre latérale. Ce ne sont pas le même besoin, et les faire
+coïncider donnait quatorze entrées à plat où l'on cherchait un bouton entre un gabarit de page et
+un prix. Cinq groupes, décidés le 2026-09-02 :
+
+| Groupe | Contenu |
+|---|---|
+| `Actions/` | `Button`, `IconButton`, `LinkButton`, `BackLink` |
+| `Saisie/` | `Field`, `Textarea`, `Select`, `Checkbox` |
+| `Affichage/` | `Price`, `TypeBadge`, `Image`, `Title` |
+| `Structure/` | `PageShell`, `Card` |
+| `Playground/` | les stories de référence — jetons, palettes, sémantique |
+
+Un nouveau composant rejoint le groupe qui décrit **ce qu'il fait**, quel que soit son dossier. Si
+aucun ne convient, c'est une conversation, pas un sixième groupe créé au passage.
 
 ⚠️ Si le `title` contient un accent, ajouter un `id` explicite **sans accent** dans le `meta` :
 Storybook dérive sinon l'identifiant du titre en conservant les accents, ce qui produit une URL

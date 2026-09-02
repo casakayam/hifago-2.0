@@ -13,7 +13,7 @@ import { Textarea, type TextareaProps } from "./Textarea";
 // la prop ne fonctionne pas (constaté le 2026-09-02 sur le `type` de Field). Seule `valeurInitiale`
 // reste dans le render — elle appartient au wrapper d'état, pas au composant.
 const meta = {
-  title: "Atoms/Textarea",
+  title: "Saisie/Textarea",
   component: Textarea,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof Textarea>;

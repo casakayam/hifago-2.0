@@ -13,7 +13,7 @@ const LIBELLES_ES: Record<string, string> = {
 };
 
 const meta = {
-  title: "Atoms/TypeBadge",
+  title: "Affichage/TypeBadge",
   component: TypeBadge,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof TypeBadge>;

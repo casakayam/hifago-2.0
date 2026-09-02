@@ -12,7 +12,7 @@ import { Select, type SelectOption, type SelectProps } from "./Select";
 // la prop ne fonctionne pas (constaté le 2026-09-02 sur le `type` de Field). Seule `valeurInitiale`
 // reste dans le render — elle appartient au wrapper d'état, pas au composant.
 const meta = {
-  title: "Atoms/Select",
+  title: "Saisie/Select",
   component: Select,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof Select>;

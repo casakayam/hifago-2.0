@@ -18,7 +18,7 @@ import { Button } from "./Button";
 // devient un libellé long à côté d'une valeur longue. À regarder aux deux gabarits et dans les
 // deux modes.
 const meta = {
-  title: "Atoms/Field",
+  title: "Saisie/Field",
   component: Field,
   parameters: { layout: "padded" },
   argTypes: {

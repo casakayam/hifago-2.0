@@ -5,7 +5,7 @@ import { Title } from "./Title";
 // décision la moins évidente de l'atome, et la seule qu'on peut vérifier d'un coup d'œil — le
 // panneau « Accessibility » vérifie l'ordre des titres pendant qu'on regarde leur taille.
 const meta = {
-  title: "Atoms/Title",
+  title: "Affichage/Title",
   component: Title,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof Title>;

@@ -6,7 +6,7 @@ import { Price } from "./Price";
 // (`formatCop(product.price_cop ?? 0, locale)` dans products/[slug]/page.tsx), et 12 500 000 est
 // celui qui déborde d'une carte étroite.
 const meta = {
-  title: "Atoms/Price",
+  title: "Affichage/Price",
   component: Price,
   parameters: { layout: "padded" },
   args: { locale: "es" },

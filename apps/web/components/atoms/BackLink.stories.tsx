@@ -9,7 +9,7 @@ import { PageShell } from "./PageShell";
 // Basculer la langue dans la barre d'outils ne change PAS le libellé : un atome ne traduit rien, il
 // reçoit `label` déjà traduit. C'est visible ici, et c'est voulu.
 const meta = {
-  title: "Atoms/BackLink",
+  title: "Actions/BackLink",
   component: BackLink,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof BackLink>;

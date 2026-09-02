@@ -8,7 +8,7 @@ import { PageShell } from "./PageShell";
 // À regarder en gabarit Mobile 390 (actif par défaut) ET Desktop 1280 : `large` et `narrow` ne se
 // distinguent qu'au-delà de 672 px, et `p-6 sm:p-8` ne se voit que sur le petit.
 const meta = {
-  title: "Atoms/PageShell",
+  title: "Structure/PageShell",
   component: PageShell,
   parameters: { layout: "fullscreen" },
   decorators: [

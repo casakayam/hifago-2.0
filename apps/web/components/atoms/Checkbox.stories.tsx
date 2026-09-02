@@ -12,7 +12,7 @@ import { Checkbox, type CheckboxProps } from "./Checkbox";
 // la prop ne fonctionne pas (constaté le 2026-09-02 sur le `type` de Field). Seule ``initial``
 // reste dans le render — elle appartient au wrapper d'état, pas au composant.
 const meta = {
-  title: "Atoms/Checkbox",
+  title: "Saisie/Checkbox",
   component: Checkbox,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof Checkbox>;

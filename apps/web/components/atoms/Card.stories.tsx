@@ -14,7 +14,7 @@ import { TypeBadge } from "./TypeBadge";
 // À voir aux deux gabarits (Mobile 390 par défaut, Desktop 1280) et dans les deux modes de la
 // barre d'outils.
 const meta = {
-  title: "Atoms/Card",
+  title: "Structure/Card",
   component: Card,
   parameters: { layout: "padded" },
   args: {

@@ -10,7 +10,7 @@ import { LinkButton } from "./LinkButton";
 // (clair/sombre, barre d'outils) : les hauteurs changent au breakpoint `md`, et c'est là que se
 // joue la règle des 44 px de cible tactile.
 const meta = {
-  title: "Atoms/LinkButton",
+  title: "Actions/LinkButton",
   component: LinkButton,
   parameters: { layout: "padded" },
   args: { href: "/checkout", children: "Reservar" },
