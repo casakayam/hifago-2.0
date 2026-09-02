@@ -109,9 +109,30 @@ n'existe que dans une langue), `npx tsc --noEmit`, et le rendu de tes stories au
 Le risque n'est pas le conflit de fichier, c'est **deux agents qui créent le même atome** sous deux
 noms. D'où un ordre, pas un simple partage :
 
-- **Vague 1 — les atomes partagés, séquentielle, un seul agent.** `PageShell`, `Title` (niveau en
-  prop), `Price`, `TypeBadge`, `BackLink`, `Image`. Petits et rapides, mais tout le monde en dépend.
-  Goulot assumé.
+- **Vague 1 — les atomes partagés, DEUX agents en parallèle.** `PageShell`, `Title` (niveau en
+  prop), `BackLink`, `Price`, `TypeBadge`, `Image`. Prompts prêts :
+  `hifago/prompts/vague1-agent-A.md` et `-B.md`.
+
+  ⚠️ **Cette vague était planifiée séquentielle** (« tout le monde en dépend, goulot assumé »).
+  Révisé le 2026-09-01 à la demande de Jérôme, et ce n'est tenable que parce que trois conditions
+  sont réunies — si l'une saute, on revient à un seul agent :
+
+  | Agent | Atomes | Ce qui les lie |
+  |---|---|---|
+  | A | `PageShell`, `Title`, `BackLink` | sémantique du document : landmarks, niveaux de titre, navigation localisée |
+  | B | `Price`, `TypeBadge`, `Image` | affichage d'une valeur : montant, type, visuel |
+
+  1. **Les six atomes ne dépendent d'aucun autre** — vérifié, aucun n'en consomme un second.
+  2. **Aucun ne traduit** (ils reçoivent leurs libellés), donc aucun ne touche `messages/`, qui est
+     le seul fichier de messages réellement partagé.
+  3. ⚠️ **Aucun agent ne migre les pages existantes.** C'est la condition décisive : `page.tsx` a
+     besoin d'atomes des DEUX périmètres, donc la migration est le seul vrai point de collision.
+     Elle est faite après, par le coordinateur, en une passe.
+
+  Le risque résiduel n'est pas le conflit de fichier, c'est la **divergence de conception** : deux
+  agents qui inventent deux façons d'exposer `testId` ou de nommer une variante. La parade est dans
+  les prompts : les six signatures sont **écrites à l'avance par le coordinateur**, les agents
+  implémentent au lieu de concevoir.
 - **Vague 2 — molecules et organisms, en parallèle, une verticale par agent.** Les frontières
   coïncident avec les namespaces i18n existants, qui découpent déjà l'app par écran :
 

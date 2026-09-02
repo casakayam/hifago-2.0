@@ -497,8 +497,12 @@ condition de retour écrits dans le YAML. ⚠️ **Deux bugs trouvés en montant
 **`hifago/DESIGN.md` n'a jamais existé** (4 références fantômes dans `apps/test-ux`, aucun commit).
 Signalés, non corrigés. ⚠️ **Piège n°1 fermé par mesure** : le `@source` de `packages/ui` ne couvre
 pas `apps/web`, et sous Vite les composants s'afficheraient SANS STYLE en silence —
-`.storybook/preview.css` déclare ses propres `@source`, prouvé par une carte `h-80` qui mesure bien
-320 px. **i18n éclatée** en un fichier par namespace (`messages/<locale>/<Namespace>.json`) : ⚠️ ma
+le `@source "../**/*.{ts,tsx}"` a été posé dans `apps/web/app/globals.css` — donc la PRODUCTION
+ferme le même piège, pas seulement le playground — prouvé par une carte `h-80` qui mesure bien
+320 px. *(Corrigé le 2026-09-01 en fin de journée : ce curseur attribuait ce `@source` à un
+`.storybook/preview.css` qui n'a jamais été commité — le fichier a été supprimé quand la déclaration
+est remontée dans `globals.css`, et j'avais gardé la formulation d'avant. Relevé par l'agent B de la
+vague 1.)* **i18n éclatée** en un fichier par namespace (`messages/<locale>/<Namespace>.json`) : ⚠️ ma
 première justification (« conflit git ») était FAUSSE — les agents travaillent dans le MÊME
 répertoire de travail, donc sans merge git, ils s'écrasent en direct. `messages/parity.test.ts`
 **vérifié par mutation**, attrape la clé absente d'une langue et le namespace non branché ; ⚠️ il ne
