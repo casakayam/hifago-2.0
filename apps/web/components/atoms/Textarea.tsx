@@ -1,7 +1,7 @@
 "use client";
 
-import { Description, ErrorMessage, Label, TextArea, TextField } from "@hifago/ui";
-import { FIELD_MIN_HEIGHT, FIELD_WIDTH_CLASSES, type FieldWidth } from "./Field";
+import { Label, TextArea, TextField } from "@hifago/ui";
+import { FieldMessages, FIELD_MIN_HEIGHT, FIELD_WIDTH_CLASSES, sousId, type FieldWidth } from "./Field";
 
 // Le champ de saisie multi-lignes (2026-09-02, vague 3).
 //
@@ -72,14 +72,9 @@ export function Textarea({
         rows={rows}
         placeholder={placeholder}
         maxLength={maxLength}
-        data-testid={testId ? `${testId}-input` : undefined}
+        data-testid={sousId(testId, "input")}
       />
-      {hint ? (
-        <Description data-testid={testId ? `${testId}-hint` : undefined}>{hint}</Description>
-      ) : null}
-      {error ? (
-        <ErrorMessage data-testid={testId ? `${testId}-error` : undefined}>{error}</ErrorMessage>
-      ) : null}
+      <FieldMessages hint={hint} error={error} testId={testId} />
     </TextField>
   );
 }

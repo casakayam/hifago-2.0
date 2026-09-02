@@ -1,8 +1,9 @@
 import * as React from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Button, Card, Chip, Input, Label, TextField } from "@hifago/ui";
+import { composer as versRgb, contraste, resoudre } from "./contraste";
 
-// Les trois pistes visuelles candidates de la vitrine, à comparer et à trancher — en clair ET en
+// Les cinq pistes visuelles candidates de la vitrine, à comparer et à trancher — en clair ET en
 // sombre. Écrit le 2026-09-01, même démarche que pour l'admin le 2026-08-15
 // (docs/specs/09-design-system-admin.md §10) : on ne choisit pas une palette dans un tableau de
 // valeurs, on la choisit en la regardant sur des composants réels.
@@ -12,7 +13,7 @@ import { Button, Card, Chip, Input, Label, TextField } from "@hifago/ui";
 // de packages/ui/src/styles/globals.css.
 //
 // Cette story ne dépend PAS du sélecteur « piste » de la barre d'outils : chaque panneau porte ses
-// propres `data-piste`/`data-mode`, ce qui permet d'afficher les trois pistes — et les deux modes —
+// propres `data-piste`/`data-mode`, ce qui permet d'afficher les cinq pistes — et les deux modes —
 // sur le même écran. C'est possible parce que `light-dark()` se résout sur l'élément qui porte le
 // `color-scheme`, pas sur la racine du document : vérifié en navigateur avant d'écrire le CSS.
 
@@ -81,37 +82,10 @@ type Mode = "clair" | "sombre";
 // désormais des `light-dark(...)` sur une piste active — constaté, hors de mon périmètre.)
 // D'où la sonde : on pose l'expression sur un élément réel placé DANS le panneau, et on relit la
 // couleur calculée.
-function resoudre(sonde: HTMLElement, expression: string): string {
-  sonde.style.color = "";
-  sonde.style.color = expression;
-  return getComputedStyle(sonde).color;
-}
-
-// Le canvas sert de convertisseur universel : il accepte `oklch()`, `oklab(... / .15)` et
-// `color-mix()` — vérifié — et il compose l'alpha pour nous. Un aplat translucide (les badges
-// « soft » de HeroUI) n'a de contraste réel qu'une fois posé sur son fond : c'est ce que ça mesure.
-function versRgb(couches: string[]): [number, number, number] {
-  const canevas = document.createElement("canvas");
-  canevas.width = canevas.height = 1;
-  const ctx = canevas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return [0, 0, 0];
-  for (const couche of couches) {
-    ctx.fillStyle = couche;
-    ctx.fillRect(0, 0, 1, 1);
-  }
-  const d = ctx.getImageData(0, 0, 1, 1).data;
-  return [d[0] / 255, d[1] / 255, d[2] / 255];
-}
-
-function luminance([r, g, b]: [number, number, number]): number {
-  const l = [r, g, b].map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2];
-}
-
-function contraste(a: [number, number, number], b: [number, number, number]): number {
-  const [haut, bas] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (haut + 0.05) / (bas + 0.05);
-}
+// ⚠️ La formule vit dans `./contraste` depuis le 2026-09-02 : elle était écrite ici ET dans
+// Button.stories.tsx, et les deux versions avaient divergé sur le seuil de linéarisation sRGB.
+// Voir l'en-tête du module — c'était le pire endroit du lot où se permettre un doublon, puisque
+// ce sont les chiffres qui départagent les pistes.
 
 // `seuil` : 4.5 = texte (WCAG 1.4.3) ; 3 = ce qui IDENTIFIE un composant (1.4.11 — bordure de
 // champ, anneau de focus). Un filet de carte décoratif n'entre dans aucune des deux catégories et
@@ -358,7 +332,7 @@ export const PaletteActive: Story = {
 // La comparaison : chaque palette en clair ET en sombre, sur les mêmes éléments. ⚠️ Les panneaux
 // forcent leur mode, donc le sélecteur « Mode » de la barre d'outils ne les touche pas — c'est ce
 // qui permet de voir les deux d'un coup d'œil.
-export const TroisPistes: Story = {
+export const ToutesLesPistes: Story = {
   render: () => (
     <div className="flex flex-col gap-8">
       <p className="max-w-[75ch] text-sm">
@@ -384,7 +358,7 @@ export const TroisPistes: Story = {
   ),
 };
 
-// Les trois pistes dans un même mode, côte à côte : c'est cette vue-là qui fait sentir l'écart
+// Les cinq pistes dans un même mode, côte à côte : c'est cette vue-là qui fait sentir l'écart
 // entre elles, alors que la story ci-dessus fait sentir l'écart entre les deux modes.
 export const ClairCoteACote: Story = {
   render: () => (

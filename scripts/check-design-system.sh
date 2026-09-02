@@ -62,4 +62,32 @@ else
   echo "✓ Aucun barrel dans apps/web/components."
 fi
 
+echo
+echo "== Composant d'apps/web important @hifago/ui sans \"use client\" en tête =="
+# ⚠️ CLAUDE.md §11.16 : importer N'IMPORTE QUEL nom depuis le barrel @hifago/ui tire l'ensemble de
+# son graphe de modules, et fait planter `next build` (« Collecting page data ») dès que ce graphe
+# atteint un Server Component. La règle documentée dit donc : tout composant qui importe le barrel
+# porte "use client" en ligne 1, et devient le point d'entrée HeroUI de ses appelants.
+#
+# ⚠️ Cette règle n'était vérifiée par RIEN jusqu'au 2026-09-02. Or §11.16 dit lui-même que la
+# violation est invisible au typecheck ET au lint : elle ne se voit qu'au build, sur la route qui
+# atteint le composant — donc en pratique sur un déploiement. C'est le motif exact du §11 point 20
+# (« une règle documentée que rien ne vérifie n'est pas une règle »), appliqué à la raison d'être
+# n°1 de la surcouche de composants.
+#
+# Stories et tests sont exclus : ils n'entrent jamais dans le graphe de modules de `next build`.
+while IFS= read -r f; do
+  case "$f" in *.stories.tsx|*.test.tsx) continue ;; esac
+  if grep -q 'from "@hifago/ui"' "$f" 2>/dev/null; then
+    first_line="$(head -n1 "$f")"
+    if [ "$first_line" != '"use client";' ] && [ "$first_line" != "'use client';" ]; then
+      echo "✗ $f — importe @hifago/ui sans \"use client\" en ligne 1 (le barrel fait planter next build depuis un Server Component, cf. CLAUDE.md §11.16)."
+      fail=1
+    fi
+  fi
+done < <(find apps/web/components -type f -name '*.tsx' 2>/dev/null)
+if [ "$fail" -eq 0 ]; then
+  echo "✓ Tout composant d'apps/web important @hifago/ui porte \"use client\"."
+fi
+
 exit $fail

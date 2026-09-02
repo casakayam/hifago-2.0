@@ -7,7 +7,7 @@ import { Textarea, type TextareaProps } from "./Textarea";
 // ressemblera le jour où un formulaire en aura besoin, pas à documenter un existant.
 //
 // Le formulaire complet qui le montre à côté d'un `Field`, d'un `Select` et d'un `Checkbox` est la
-// story « Atoms/Field → Formulaire ».//
+// story « Saisie/Field → Formulaire ».//
 // ⚠️ Les valeurs de chaque story vivent dans `args`, jamais dans le `render` après le spread :
 // `<X {...args} error="…" />` écrase silencieusement le contrôle du panneau, et donne à croire que
 // la prop ne fonctionne pas (constaté le 2026-09-02 sur le `type` de Field). Seule `valeurInitiale`
@@ -73,7 +73,7 @@ export const AvecAide: Story = {
   render: (args) => (
     <div className="flex flex-col gap-4">
       <ZoneControlee {...args} />
-      <Legende>⚠️ En erreur, HeroUI masque l&apos;aide au profit du message — voir Atoms/Field.</Legende>
+      <Legende>⚠️ En erreur, HeroUI masque l&apos;aide au profit du message — voir Saisie/Field.</Legende>
     </div>
   ),
 };

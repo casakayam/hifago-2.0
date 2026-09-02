@@ -63,10 +63,17 @@ describe("Button", () => {
   // HeroUI définit comme calc(var(--radius) * 3) — 24 px aujourd'hui, 36 px sur l'une des pistes
   // candidates. Le bouton reprend le jeton au facteur 1 (8 px avec les jetons actuels, mesuré),
   // demande de Jérôme du 2026-09-02.
-  it("reprend le rayon du thème au facteur 1, et n'hérite plus du rounded-3xl de HeroUI", () => {
+  // ⚠️ Ce test ne vérifie QUE la moitié testable ici, et son titre le dit maintenant. Deux
+  // assertions tautologiques se sont succédé à cet endroit avant celle-ci (2026-09-02) :
+  // `toContain("button")` — que `button--lg` satisfait toujours — puis
+  // `not.toContain("rounded-3xl")`, tout aussi creuse, parce que `rounded-3xl` vit dans le CSS de
+  // `.button` et n'apparaît JAMAIS dans le className (mesuré : « button button--lg
+  // button--primary […] rounded-[var(--radius)] »).
+  // Que le rayon du composant l'emporte sur celui de HeroUI est un fait de CASCADE CSS, que jsdom
+  // ne calcule pas : il se vérifie au rendu, dans la story `Rayon`, pas ici.
+  it("pose la classe de rayon dérivée du thème", () => {
     const el = bouton(<Button>A</Button>);
     expect(el.className).toContain("rounded-[var(--radius)]");
-    expect(el.className).toContain("button");
   });
 
   it("passe en pleine largeur avec width=full", () => {

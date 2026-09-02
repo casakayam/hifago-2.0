@@ -119,6 +119,49 @@ export const FIELD_WIDTH_CLASSES: Record<FieldWidth, string> = {
 // les champs n'ont pas de taille à changer, d'où ce plancher explicite, aligné sur lui.
 export const FIELD_MIN_HEIGHT = "min-h-11";
 
+/**
+ * Le `data-testid` d'un enfant, selon la convention du README (`${testId}-hint`).
+ *
+ * Le ternaire `testId ? … : undefined` était réécrit DOUZE fois dans les quatre atomes de saisie —
+ * une convention appliquée à la main autant de fois qu'il y a d'enfants nommés. (2026-09-02)
+ */
+export function sousId(testId: string | undefined, suffixe: string): string | undefined {
+  return testId ? `${testId}-${suffixe}` : undefined;
+}
+
+/**
+ * Le pied « aide + erreur », partagé par `Field`, `Textarea` et `Select`.
+ *
+ * ⚠️ Ordre volontaire : HeroUI masque la description quand le champ est invalide
+ * (`.textfield[data-invalid] [data-slot="description"] { display: none }`), donc l'aide s'efface
+ * d'elle-même au profit de l'erreur. Les deux restent reliés au champ par `aria-describedby`, que
+ * react-aria pose seul — c'est vérifié par un test, parce que c'est exactement le genre de lien
+ * qui casse sans que rien ne le montre.
+ *
+ * ⚠️ Ce bloc était recopié à l'octet près dans les trois composants, et le commentaire ci-dessus
+ * n'existait qu'au-dessus d'UNE des trois copies. (2026-09-02)
+ *
+ * ⚠️ `Checkbox` en est délibérément exclu : il n'a pas de conteneur react-aria qui fournisse le
+ * contexte de champ, donc `Description`/`ErrorMessage` y rendraient `null` (leur `useHasTextSlot`).
+ * Il écrit ses deux messages à la main, et c'est documenté dans son en-tête.
+ */
+export function FieldMessages({
+  hint,
+  error,
+  testId,
+}: {
+  hint?: string;
+  error?: string;
+  testId?: string;
+}) {
+  return (
+    <>
+      {hint ? <Description data-testid={sousId(testId, "hint")}>{hint}</Description> : null}
+      {error ? <ErrorMessage data-testid={sousId(testId, "error")}>{error}</ErrorMessage> : null}
+    </>
+  );
+}
+
 // SVG inline : `lucide-react` est présent dans node_modules mais déclaré par packages/ui, PAS par
 // apps/web — l'importer créerait une dépendance fantôme (celle qui a cassé le build Vercel le
 // 2026-08-23). Deux glyphes valent mieux qu'une dépendance.
@@ -199,7 +242,7 @@ export function Field({
           // Clavier numérique sur mobile, dérivé du type plutôt qu'exposé en prop : personne n'a de
           // raison de vouloir un champ `number` sans lui.
           inputMode={type === "number" ? "numeric" : undefined}
-          data-testid={testId ? `${testId}-input` : undefined}
+          data-testid={sousId(testId, "input")}
         />
         {bascule ? (
           <div className="absolute inset-y-0 right-0 flex items-center">
@@ -213,20 +256,12 @@ export function Field({
               color="neutral"
               isDisabled={isDisabled}
               onPress={() => setRevele((etat) => !etat)}
-              testId={testId ? `${testId}-reveal` : undefined}
+              testId={sousId(testId, "reveal")}
             />
           </div>
         ) : null}
       </div>
-      {/* ⚠️ Ordre volontaire : HeroUI masque la description quand le champ est invalide
-          (`.textfield[data-invalid] [data-slot="description"] { display: none }`), donc l'aide
-          s'efface d'elle-même au profit de l'erreur. Les deux restent reliés au champ par
-          `aria-describedby`, que react-aria pose seul — c'est vérifié par un test, parce que c'est
-          exactement le genre de lien qui casse sans que rien ne le montre. */}
-      {hint ? <Description data-testid={testId ? `${testId}-hint` : undefined}>{hint}</Description> : null}
-      {error ? (
-        <ErrorMessage data-testid={testId ? `${testId}-error` : undefined}>{error}</ErrorMessage>
-      ) : null}
+      <FieldMessages hint={hint} error={error} testId={testId} />
     </TextField>
   );
 }

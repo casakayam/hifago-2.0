@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { formatCop } from "@hifago/domain";
-import { Price } from "./Price";
+import { Price, type PriceProps } from "./Price";
 
 // Pas de @testing-library/jest-dom dans ce monorepo (cf. CatalogBrowser.test.tsx) — assertions DOM
 // natives uniquement.
@@ -12,7 +12,9 @@ import { Price } from "./Price";
 // seule ligne du projet ait bougé. On compare donc à `formatCop`, qui est justement le point de
 // vérité que cet atome doit se contenter de respecter.
 
-function rendre(props: { amountCop: number; locale: string; testId?: string }) {
+// Les props du composant plutôt qu'une redéclaration : `locale` est typée `Locale` depuis le
+// 2026-09-02, et une signature locale en `string` rendait le test plus permissif que le composant.
+function rendre(props: PriceProps) {
   const { container } = render(<Price {...props} />);
   const span = container.querySelector("span");
   if (!span) throw new Error("Price n'a rendu aucun <span>");

@@ -31,12 +31,15 @@ export const TexteLong: Story = {
   },
 };
 
-// ⚠️ Le contexte réel, et un constat à connaître : posé en enfant direct de PageShell (un conteneur
-// `flex flex-col`), le lien devient un flex item et son `inline-flex` est « blockifié » — il
-// s'étire donc sur toute la largeur, et la zone cliquable va jusqu'au bord droit de la page. Le
-// motif d'origine (ProductDetailView.tsx:113) avait déjà exactement ce comportement, l'atome ne
-// l'introduit pas. Un `self-start` le corrigerait ; il n'est pas dans le contrat, donc pas ajouté
-// en silence — signalé au coordinateur.
+// ⚠️ Le contexte réel, et ce que cette story PROUVE. Posé en enfant direct de PageShell (un
+// conteneur `flex flex-col`), le lien devient un flex item et son `inline-flex` est « blockifié » :
+// sans parade il s'étirerait sur toute la largeur, et les 44 px de cible tactile deviendraient une
+// bande cliquable d'un bord à l'autre qui navigue au moindre appui dans le vide (342 px mesurés à
+// 390 px de viewport). Le motif d'origine (ProductDetailView.tsx:113) avait déjà ce comportement,
+// sur 20 px de haut.
+// `BackLink` pose donc `self-start`, et c'est ici qu'on le voit tenir dans un vrai conteneur flex —
+// `BackLink.test.tsx` vérifie la classe, cette story vérifie le rendu.
+// (Ce commentaire annonçait le défaut comme ouvert jusqu'au 2026-09-02, alors qu'il était corrigé.)
 export const DansUnePage: Story = {
   // `args` en plus du `render` : Storybook exige les props requises du composant même quand la
   // story rend elle-même. Ils pilotent le lien réellement affiché ci-dessous.

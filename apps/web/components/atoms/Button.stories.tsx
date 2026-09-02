@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { useEffect, useRef, useState } from "react";
 import { Button, type ButtonColor, type ButtonVariant } from "./Button";
 import { IconButton } from "./IconButton";
+import { composer, contraste, resoudre } from "../playground/contraste";
 
 // Le playground du bouton de la vitrine. Il est fait pour être REGARDÉ d'un coup d'œil, pas
 // manipulé contrôle par contrôle : chaque story montre un axe entier à la fois.
@@ -57,44 +58,23 @@ function Legende({ children }: { children: React.ReactNode }) {
 // La composition (les fonds `soft` sont semi-transparents) est faite par le navigateur lui-même
 // via un canvas 1×1 : aucun parsing d'oklch/color-mix à écrire, et le résultat est celui affiché.
 function contrasteMesure(bouton: HTMLElement): number | null {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 1;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return null;
-
-  const composer = (fond: string, dessus: string): [number, number, number] => {
-    ctx.clearRect(0, 0, 1, 1);
-    ctx.fillStyle = fond;
-    ctx.fillRect(0, 0, 1, 1);
-    ctx.fillStyle = dessus;
-    ctx.fillRect(0, 0, 1, 1);
-    const d = ctx.getImageData(0, 0, 1, 1).data;
-    return [d[0], d[1], d[2]];
-  };
-  const luminance = ([r, g, b]: [number, number, number]) => {
-    const c = [r, g, b].map((v) => {
-      const x = v / 255;
-      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
-    });
-    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-  };
-
-  // ⚠️ Le fond de référence est celui d'une PAGE de la vitrine (`--background`), pas celui du
-  // body de Storybook — le playground ne le peint pas, et en mode sombre on mesurerait du texte
-  // clair sur du blanc. On le fait résoudre par le moteur sur un élément réel : lu en brut,
-  // `--background` vaut la chaîne `light-dark(clair, sombre)` entière, que le canvas prendrait
-  // toujours par sa branche claire.
+  // ⚠️ Le fond de référence est celui d'une PAGE de la vitrine (`--background`), pas celui du body
+  // de Storybook — le playground ne le peint pas, et en mode sombre on mesurerait du texte clair
+  // sur du blanc. `resoudre` le fait évaluer par le moteur sur un élément réel : lu en brut,
+  // `--background` vaut la chaîne `light-dark(clair, sombre)` entière, dont le canvas prendrait
+  // toujours la branche claire.
   const sonde = document.createElement("div");
-  sonde.style.backgroundColor = "var(--background)";
   document.body.appendChild(sonde);
-  let fondPage = getComputedStyle(sonde).backgroundColor;
+  let fondPage = resoudre(sonde, "var(--background)");
   sonde.remove();
   if (!fondPage || fondPage === "rgba(0, 0, 0, 0)") fondPage = "rgb(255,255,255)";
+
   const style = getComputedStyle(bouton);
-  const fondBouton = composer(fondPage, style.backgroundColor);
-  const texte = composer(`rgb(${fondBouton.join(",")})`, style.color);
-  const [clair, sombre] = [luminance(texte), luminance(fondBouton)].sort((a, b) => b - a);
-  return Math.round(((clair + 0.05) / (sombre + 0.05)) * 100) / 100;
+  // Les fonds `soft` sont semi-transparents : un aplat n'a de contraste réel qu'une fois posé sur
+  // son fond, d'où l'empilement plutôt qu'une lecture directe.
+  const fondBouton = composer([fondPage, style.backgroundColor]);
+  const texte = composer([fondPage, style.backgroundColor, style.color]);
+  return Math.round(contraste(texte, fondBouton) * 100) / 100;
 }
 
 /** Affiche le bouton et, sous lui, le contraste WCAG réellement rendu. Seuil du texte : 4.5:1. */
@@ -248,7 +228,7 @@ function EtatForce({ attribut, children }: { attribut?: string; children: React.
   useEffect(() => {
     if (!attribut) return;
     conteneur.current?.querySelector("button")?.setAttribute(attribut, "true");
-  });
+  }, [attribut]);
   return <div ref={conteneur}>{children}</div>;
 }
 
@@ -312,7 +292,7 @@ export const AvecIcone: Story = {
         <IconButton icon={<Panier />} label="Ver carrito" variant="solid" color="accent" />
         <Legende>
           IconButton — le libellé est requis, il devient le nom accessible. Formes, tailles et
-          états complets : story « Atoms/IconButton ».
+          états complets : story « Actions/IconButton ».
         </Legende>
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 import { Checkbox as HeroUICheckbox } from "@hifago/ui";
-import { FIELD_MIN_HEIGHT } from "./Field";
+import { FIELD_MIN_HEIGHT, sousId } from "./Field";
 
 // La case à cocher de la vitrine (2026-09-02, vague 3).
 //
@@ -73,7 +73,7 @@ export function Checkbox({
         </HeroUICheckbox.Content>
       </HeroUICheckbox>
       {hint ? (
-        <span id={idAide} className="text-sm text-muted" data-testid={testId ? `${testId}-hint` : undefined}>
+        <span id={idAide} className="text-sm text-muted" data-testid={sousId(testId, "hint")}>
           {hint}
         </span>
       ) : null}
@@ -85,7 +85,7 @@ export function Checkbox({
           // formulaires existants en souffrent encore). La couleur de TEXTE de la famille est
           // `--danger-soft-foreground`.
           className="text-sm font-medium [color:var(--danger-soft-foreground)]"
-          data-testid={testId ? `${testId}-error` : undefined}
+          data-testid={sousId(testId, "error")}
         >
           {error}
         </span>

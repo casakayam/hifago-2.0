@@ -13,7 +13,7 @@ c'est CLAUDE.md qui fait foi.
 | `molecules/` | Composition de plusieurs atomes, liée à un écran | `ProductCard`, `CatalogFilters` |
 | `organisms/` | Bloc autonome, souvent avec état ou navigation | `SiteHeader`, `CartSummary` |
 | `seo/` | Pas de l'interface : données structurées | `JsonLd` |
-| `playground/` | Stories de référence (socle, tokens, sémantique) | `Socle.stories.tsx` |
+| `playground/` | Stories de référence (jetons, palettes, sémantique) | `Palette.stories.tsx` |
 
 Un composant lié à **une seule route** reste colocalisé dans `app/[locale]/…` — c'est déjà le cas
 des treize composants d'écran actuels. On ne remonte dans `components/` que ce qui sert **au moins

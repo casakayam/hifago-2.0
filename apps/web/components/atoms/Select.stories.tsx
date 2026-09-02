@@ -25,7 +25,7 @@ const TYPES: SelectOption[] = [
   { value: "lodging", label: "Alojamiento" },
   { value: "activity", label: "Actividad" },
   { value: "transport", label: "Transporte" },
-  { value: "camp", label: "Camping" },
+  { value: "camp", label: "Camp" },
   { value: "evento", label: "Evento" },
 ];
 
@@ -119,7 +119,7 @@ export const DansUneBarreDeFiltres: Story = {
       <ListeControlee {...args} />
       <Legende>
         width=&quot;short&quot; — la liste ne s&apos;étire pas, c&apos;est la recherche à côté
-        d&apos;elle qui prend la place (voir Atoms/Field → Largeurs).
+        d&apos;elle qui prend la place (voir Saisie/Field → Largeurs).
       </Legende>
     </div>
   ),

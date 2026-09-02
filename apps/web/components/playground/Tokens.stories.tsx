@@ -38,7 +38,12 @@ function useTokens(noms: string[]) {
     const observateur = new MutationObserver(() => setValeurs(lireTokens(noms)));
     observateur.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["data-theme"],
+      // ⚠️ Les quatre attributs, pas seulement `data-theme` : depuis que la barre d'outils pilote
+      // aussi la piste, le mode et le rayon (2026-09-02), ce sont eux qui changent les jetons que
+      // ce tableau affiche. N'observer que `data-theme` laissait des valeurs PÉRIMÉES à l'écran
+      // après un changement de piste — sans rien signaler, et sur la story qui sert précisément à
+      // départager les pistes.
+      attributeFilter: ["data-theme", "data-piste", "data-mode", "data-radius"],
     });
     return () => observateur.disconnect();
   }, [noms]);

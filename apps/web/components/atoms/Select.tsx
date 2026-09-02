@@ -1,7 +1,7 @@
 "use client";
 
-import { Description, ErrorMessage, Label, ListBox, Select as HeroUISelect } from "@hifago/ui";
-import { FIELD_MIN_HEIGHT, FIELD_WIDTH_CLASSES, type FieldWidth } from "./Field";
+import { Label, ListBox, Select as HeroUISelect } from "@hifago/ui";
+import { FieldMessages, FIELD_MIN_HEIGHT, FIELD_WIDTH_CLASSES, sousId, type FieldWidth } from "./Field";
 
 // La liste déroulante de la vitrine (2026-09-02, vague 3).
 //
@@ -85,7 +85,7 @@ export function Select({
       <Label>{label}</Label>
       <HeroUISelect.Trigger
         className={FIELD_MIN_HEIGHT}
-        data-testid={testId ? `${testId}-trigger` : undefined}
+        data-testid={sousId(testId, "trigger")}
       >
         {/* ⚠️ Contenu explicite : sans lui, une valeur vide n'afficherait rien du tout. C'est aussi
             le seul nœud sur lequel un test peut s'appuyer — le <select> natif caché de HeroUI
@@ -109,12 +109,7 @@ export function Select({
           ))}
         </ListBox>
       </HeroUISelect.Popover>
-      {hint ? (
-        <Description data-testid={testId ? `${testId}-hint` : undefined}>{hint}</Description>
-      ) : null}
-      {error ? (
-        <ErrorMessage data-testid={testId ? `${testId}-error` : undefined}>{error}</ErrorMessage>
-      ) : null}
+      <FieldMessages hint={hint} error={error} testId={testId} />
     </HeroUISelect>
   );
 }

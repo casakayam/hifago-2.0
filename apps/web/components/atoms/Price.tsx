@@ -13,11 +13,19 @@
 // vit déjà dans `app/[locale]/products/[slug]/page.tsx` — lui ajouter ici une branche texte libre
 // ferait entrer une décision métier dans un atome de présentation.
 import { formatCop } from "@hifago/domain";
+import type { Locale } from "@/messages";
 
 export type PriceProps = {
   amountCop: number;
-  /** "es" | "en" — le formatage monétaire dépend de la langue, pas l'atome. */
-  locale: string;
+  /**
+   * Le formatage monétaire dépend de la langue, pas l'atome.
+   * ⚠️ Typé `Locale` (exporté par `@/messages`, dérivé de `routing.locales`) et non `string` :
+   * `<Price locale={product.slug} />` compilait sans broncher et `Intl` rendait silencieusement
+   * n'importe quoi. Même parti pris que `alt`/`sizes` d'`Image` — la contrainte est portée par le
+   * type, pas par un commentaire. Une troisième locale ajoutée à `i18n/routing.ts` l'élargira
+   * toute seule.
+   */
+  locale: Locale;
   testId?: string;
 };
 

@@ -168,7 +168,8 @@
  * (docs/specs/09-design-system-admin.md §10) : des pistes montées, comparées à l'œil dans un rendu
  * réel, une seule retenue. Ici le rendu réel est la story `Playground/Palette`.
  *
- * ⚠️ IL Y A QUATRE PISTES, PAS TROIS, et la quatrième est la plus importante. La spec de ce lot
+ * ⚠️ IL Y A CINQ PISTES (la cinquième, `chiva`, ajoutée le 2026-09-02), et la quatrième —
+ * `hifago` — est la plus importante. La spec de ce lot
  * partait du principe que « Jérôme n'a pas donné de direction » pour la vitrine. Vérification faite,
  * c'est faux : le portail legacy /guatape, en production, porte une marque complète et versionnée —
  * orange #e63f0a, vert forêt #074242, papier #fffdf8, polices Anton/Allura/Akshar/DM Mono — et il a
@@ -260,14 +261,17 @@
  * - Il ne recale pas les utilitaires Tailwind « bruts ». `apps/web` compte 4 `rounded` et 30
  *   `border` sans suffixe, qui figent 0.25rem / 1px et ne dérivent pas de `--radius` /
  *   `--border-width` (le thème admin a dû les recaler explicitement, plus haut dans ce fichier).
- *   Les trois pistes gardent `--border-width: 1px`, donc les 30 `border` sont sans conséquence ;
- *   seuls les 4 `rounded` resteront à 0.25rem, y compris dans Cal qui vise des angles francs.
+ *   ⚠️ Constat révisé le 2026-09-02 : quatre pistes gardent `--border-width: 1px` — les `border`
+ *   bruts y sont donc sans conséquence — mais `chiva` monte à 2px, et un trait à 1px au milieu
+ *   d'une interface à 2px se voit immédiatement. Elle recale donc ces utilitaires elle-même, en
+ *   fin de fichier, scopée à son seul sélecteur. Restent les 4 `rounded` figés à 0.25rem, y
+ *   compris dans Cal qui vise des angles francs.
  *   Recaler 34 éléments d'un coup n'a pas été demandé : signalé plutôt que fait.
  * ============================================================================================ */
 
 @layer base {
   /* ------------------------------------------------------------------------------------------
-   * Formules dérivées, communes aux trois pistes
+   * Formules dérivées, communes à toutes les pistes
    * ------------------------------------------------------------------------------------------
    * HeroUI déclare ces jetons sur `:root` en les calculant depuis les primitifs
    * (themes/default/variables.css:100-155). Ils sont RECOPIÉS ici, à l'identique, sur le sélecteur
@@ -507,7 +511,7 @@
    * Ce qu'elle sacrifie, et il y a trois choses, pas une :
    *   1. La neutralité du fond. Un crème teinte TOUTES les photos posées dessus — c'est le contraire
    *      d'un fond blanc qui les laisse parler.
-   *   2. L'écart accent/danger : 36° en clair, 40° en sombre — le plus petit des trois pistes
+   *   2. L'écart accent/danger : 36° en clair, 40° en sombre — le plus petit de toutes les pistes
    *      (Embalse : 179°). Un bouton primaire et une alerte restent distinguables, mais l'un et
    *      l'autre sont rouges. C'est mesuré, assumé, et c'est le vrai coût de cette direction.
    *   3. Elle rappelle l'admin (terracotta sur beige), alors que Jérôme a demandé de l'oublier.
