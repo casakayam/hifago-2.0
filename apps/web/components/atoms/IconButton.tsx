@@ -50,6 +50,15 @@ export type IconButtonProps = {
   isPending?: boolean;
   /** Nom accessible pendant l'envoi, déjà traduit. Sans lui, `label` est conservé. */
   pendingLabel?: string;
+  /**
+   * ⚠️ Ajouté le 2026-09-02 (vague 4) pour le bouton de menu du header : un bouton qui commande un
+   * panneau doit annoncer son état, sinon un lecteur d'écran ne sait pas que quelque chose s'est
+   * ouvert. `undefined` (le défaut) ne pose aucun attribut — un bouton ordinaire ne prétend pas
+   * contrôler quoi que ce soit.
+   */
+  isExpanded?: boolean;
+  /** `id` du panneau commandé, pour `aria-controls`. Va de pair avec `isExpanded`. */
+  controlsId?: string;
   testId?: string;
 };
 
@@ -70,6 +79,8 @@ export function IconButton({
   isDisabled,
   isPending = false,
   pendingLabel,
+  isExpanded,
+  controlsId,
   testId,
 }: IconButtonProps) {
   return (
@@ -83,6 +94,8 @@ export function IconButton({
       onPress={onPress}
       isDisabled={isDisabled}
       isPending={isPending}
+      aria-expanded={isExpanded}
+      aria-controls={controlsId}
       data-testid={testId}
     >
       {/* L'icône est purement visuelle : le nom vient d'`aria-label`, jamais du glyphe. */}

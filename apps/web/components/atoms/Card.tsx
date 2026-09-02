@@ -189,9 +189,19 @@ const CLICKABLE_CLASS =
  * de clic — ni l'un ni l'autre n'existe dans ce dépôt, et `relative z-[2]` reste posable à la main
  * pour un cas exotique. Chaîne écrite en toutes lettres, comme partout ici : Tailwind scanne le
  * texte source.
+ *
+ * ⚠️ `:not(.absolute)` sur la MOITIÉ `relative` seulement, ajouté le 2026-09-02 (vague 4). Un
+ * enfant déjà positionné en `absolute` n'a aucun besoin de `relative` — il est déjà dans le
+ * contexte d'empilement, `z-index` s'y applique tel quel — et le lui imposer le REPLACE dans le
+ * flux : ses `top`/`left` deviennent des décalages relatifs, et il atterrit ailleurs. Constat
+ * mesuré sur `molecules/PhotoStrip` dans une carte cliquable : la flèche « photo précédente » du
+ * carrousel passait de y=239 (bord gauche, mi-hauteur, correct) à y=462, sous la photo. Le clic
+ * marchait, la position non — donc une panne visuelle et silencieuse de plus, dans un mécanisme
+ * écrit précisément contre les pannes silencieuses. La moitié `z-[2]` reste inconditionnelle :
+ * c'est elle qui fait tout le travail.
  */
 const ENFANTS_INTERACTIFS_CLASS =
-  "[&_:is(button,select,input,textarea,[role=button],a:not([data-card-link]))]:relative [&_:is(button,select,input,textarea,[role=button],a:not([data-card-link]))]:z-[2]";
+  "[&_:is(button,select,input,textarea,[role=button],a:not([data-card-link])):not(.absolute)]:relative [&_:is(button,select,input,textarea,[role=button],a:not([data-card-link]))]:z-[2]";
 
 export function Card({
   children,

@@ -186,7 +186,11 @@ describe("Card", () => {
       </Card>
     );
     const cible = ":is(button,select,input,textarea,[role=button],a:not([data-card-link]))";
-    expect(cliquable.className).toContain(`[&_${cible}]:relative`);
+    // ⚠️ `:not(.absolute)` sur la moitié `relative` seulement (2026-09-02, vague 4) : un enfant déjà
+    // en `absolute` est déjà positionné, `z-index` s'y applique, et lui imposer `relative` le
+    // replacerait dans le flux — les flèches du carrousel de `molecules/PhotoStrip` atterrissaient
+    // sous la photo. La moitié `z-[2]`, elle, reste inconditionnelle : c'est elle qui remonte.
+    expect(cliquable.className).toContain(`[&_${cible}:not(.absolute)]:relative`);
     expect(cliquable.className).toContain(`[&_${cible}]:z-[2]`);
 
     // Une carte non cliquable n'a pas d'overlay : rien à remonter, et poser un z-index sur ses

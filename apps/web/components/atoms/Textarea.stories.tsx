@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { useState } from "react";
 import { Textarea, type TextareaProps } from "./Textarea";
+import { Legende } from "../playground/Legende";
 
 // Le champ multi-lignes. ⚠️ Aucun écran ne l'utilise aujourd'hui — c'est une pièce du design
 // system demandée par Jérôme, pas une extraction. Ces stories servent donc à décider à quoi il
@@ -24,10 +25,6 @@ type Story = StoryObj<typeof meta>;
 function ZoneControlee({ valeurInitiale = "", ...props }: Omit<TextareaProps, "value" | "onChange"> & { valeurInitiale?: string }) {
   const [valeur, setValeur] = useState(valeurInitiale);
   return <Textarea {...props} value={valeur} onChange={setValeur} />;
-}
-
-function Legende({ children }: { children: React.ReactNode }) {
-  return <span className="text-xs text-muted">{children}</span>;
 }
 
 export const Defaut: Story = {

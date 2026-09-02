@@ -70,15 +70,17 @@ describe("Checkbox", () => {
     expect(racine.getAttribute("data-invalid")).toBe("true");
   });
 
-  // ⚠️ N'utilise PAS `text-danger` : ce jeton est un aplat, mesuré à 3.56:1 sur fond clair, sous le
-  // seuil WCAG de 4.5:1 (constaté en vague 2 sur le bouton).
-  it("écrit son erreur avec la couleur de TEXTE de la famille danger", () => {
+  // ⚠️ La couleur elle-même n'est plus décidée ici : `.error-message` est recalibrée pour le thème
+  // vitrine dans packages/ui/src/styles/globals.css (2026-09-02), parce que trois autres champs la
+  // rendaient au jeton d'aplat `--danger` — 3.56:1, sous le seuil WCAG de 4.5:1. Ce test vérifie
+  // donc que Checkbox passe bien par cette décision partagée au lieu d'en réécrire une locale.
+  it("écrit son erreur avec la classe d'erreur partagée, pas une couleur locale", () => {
     const { container } = rendu(
       <Checkbox label="Acepto" isSelected={false} onChange={() => {}} error="Obligatorio" testId="c" />
     );
     const erreur = container.querySelector('[data-testid="c-error"]') as HTMLElement;
-    expect(erreur.className).toContain("[color:var(--danger-soft-foreground)]");
-    expect(erreur.className).not.toContain("text-danger");
+    expect(erreur.className).toContain("error-message");
+    expect(erreur.className).not.toContain("[color:");
   });
 
   it("garde une cible tactile d'au moins 44 px sur toute la ligne", () => {

@@ -6,8 +6,9 @@ import { Image } from "./Image";
 // natives uniquement.
 //
 // Ce que ces tests protègent vraiment, c'est le contrat d'accessibilité et de performance qui
-// justifie l'existence de l'atome : `alt` et `sizes` traversent bien jusqu'au <img>, et un produit
-// sans photo rend un substitut plutôt qu'un trou (ou pire, une balise <img> sans source).
+// justifie l'existence de l'atome : `alt` et `sizes` traversent bien jusqu'au <img>, la priorité de
+// chargement produit bien un preload, et un produit sans photo rend un substitut plutôt qu'un trou
+// (ou pire, une balise <img> sans source).
 
 // ⚠️ Source MATRICIELLE, pas le `/globe.svg` des stories, et c'est le point du test suivant :
 // next/image reconnaît un SVG comme non optimisable et supprime alors `sizes` ET `srcset` de la
@@ -16,8 +17,23 @@ const SRC = "/photo-produit.jpg";
 const SIZES = "(max-width: 640px) 100vw, 50vw";
 
 function rendre(props: Partial<React.ComponentProps<typeof Image>> = {}) {
-  const { container } = render(<Image src={SRC} alt="Vue du embalse" sizes={SIZES} {...props} />);
+  const { container } = render(
+    <Image src={SRC} alt="Vue du embalse" sizes={SIZES} loading="lazy" {...props} />
+  );
   return container;
+}
+
+// ⚠️ `document.head` n'est PAS nettoyé entre deux tests : `ReactDOM.preload` écrit dans le document
+// et dédoublonne par URL, donc un preload posé par un test précédent survit au démontage. D'où une
+// source DISTINCTE par test de priorité — sinon « aucun preload » passerait au vert sur un preload
+// laissé par le test d'à côté, ou l'inverse.
+function preloadDe(src: string): Element | undefined {
+  return Array.from(document.head.querySelectorAll('link[rel="preload"][as="image"]')).find((lien) => {
+    // Raster : la source est dans `imagesrcset`, encodée (`%2F`), et `href` est délibérément omis
+    // par next/image. Vectoriel : pas de srcset du tout, la source est dans `href`, telle quelle.
+    const cible = `${lien.getAttribute("imagesrcset") ?? ""} ${lien.getAttribute("href") ?? ""}`;
+    return cible.includes(encodeURIComponent(src)) || cible.includes(src);
+  });
 }
 
 describe("Image", () => {
@@ -39,6 +55,55 @@ describe("Image", () => {
     const img = rendre({ src: "/globe.svg" }).querySelector("img");
     expect(img?.getAttribute("sizes")).toBeNull();
     expect(img?.getAttribute("srcset")).toBeNull();
+  });
+
+  it('loading="lazy" pose loading="lazy" sur la balise, et AUCUN preload', () => {
+    const img = rendre({ src: "/lazy-mesure.jpg" }).querySelector("img");
+    expect(img?.getAttribute("loading")).toBe("lazy");
+    expect(preloadDe("/lazy-mesure.jpg")).toBeUndefined();
+  });
+
+  it('loading="priority" retire loading="lazy" et fait injecter un <link rel="preload"> dans <head>', () => {
+    const img = rendre({ src: "/priority-mesure.jpg", loading: "priority" }).querySelector("img");
+    if (!img) throw new Error("aucune <img> rendue");
+
+    // ⚠️ Mesuré sur Next 16.3.0, pas supposé : `priority` ne pose RIEN sur la balise. Pas de
+    // `loading="eager"`, et — changement de Next 16 — plus de `fetchpriority="high"` non plus
+    // (jusqu'à Next 15, `priority` l'impliquait). La seule différence visible sur le <img> est
+    // l'absence de `loading="lazy"`.
+    expect(img.hasAttribute("loading")).toBe(false);
+    expect(img.hasAttribute("fetchpriority")).toBe(false);
+
+    // Le vrai effet est ici : c'est le preload qui fait découvrir l'image au navigateur sans
+    // attendre la mise en page — donc la seule assertion qui prouve la priorité.
+    const preload = preloadDe("/priority-mesure.jpg");
+    expect(preload).toBeDefined();
+    expect(preload?.getAttribute("imagesizes")).toBe(SIZES);
+  });
+
+  it("⚠️ constat : sur un SVG, priority SURVIT là où sizes et srcset sont jetés", () => {
+    // L'asymétrie vaut d'être figée : la même source non optimisable perd son jeu de tailles mais
+    // garde sa priorité de chargement. Une vérification de priorité faite sur un SVG mesure donc
+    // bien quelque chose, contrairement à une vérification de `sizes`.
+    const img = rendre({ src: "/priority-mesure.svg", loading: "priority" }).querySelector("img");
+    expect(img?.getAttribute("srcset")).toBeNull();
+    expect(img?.hasAttribute("loading")).toBe(false);
+
+    const preload = preloadDe("/priority-mesure.svg");
+    expect(preload).toBeDefined();
+    // Pas de srcset à annoncer : next/image retombe sur `href`, et `imagesizes` disparaît avec lui.
+    expect(preload?.getAttribute("href")).toBe("/priority-mesure.svg");
+    expect(preload?.getAttribute("imagesizes")).toBeNull();
+  });
+
+  it("n'injecte aucun preload quand src vaut null, même en priority", () => {
+    // La prop reste exigée par le type, mais sans source il n'y a rien à précharger : le substitut
+    // ne doit pas laisser un `<link rel=preload>` pointant nulle part dans le <head>. Compté avant
+    // et après, parce que le <head> porte déjà les preloads des tests précédents.
+    const compter = () => document.head.querySelectorAll('link[rel="preload"][as="image"]').length;
+    const avant = compter();
+    rendre({ src: null, loading: "priority" });
+    expect(compter()).toBe(avant);
   });
 
   it("rend le substitut et AUCUNE balise <img> quand src vaut null", () => {

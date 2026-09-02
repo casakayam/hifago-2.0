@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { IconButton } from "./IconButton";
 import type { ButtonColor, ButtonVariant } from "./Button";
+import { Legende } from "../playground/Legende";
 
 // Le bouton sans libellé visible. Story séparée de « Atoms/Button » parce que le composant l'est :
 // ici le libellé est REQUIS (il devient le nom accessible) et la forme compte, deux choses qui
@@ -30,10 +31,6 @@ const Coeur = () => (
     <path d="M12 20s-7-4.5-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.5-7 9-7 9z" />
   </svg>
 );
-
-function Legende({ children }: { children: React.ReactNode }) {
-  return <span className="text-xs text-muted">{children}</span>;
-}
 
 const VARIANTS: ButtonVariant[] = ["solid", "soft", "outline", "ghost"];
 const COLORS: ButtonColor[] = ["accent", "neutral", "danger"];

@@ -36,7 +36,12 @@ const SRC = "/globe.svg";
 const SIZES = "(max-width: 640px) 100vw, 50vw";
 
 function Photo({ src = SRC }: { src?: string | null }) {
-  return <Image src={src} alt="Vue du Embalse de Guatapé depuis la colline" sizes={SIZES} />;
+  // `loading` est devenu obligatoire sur l'atome le 2026-09-02 (vague 4) : une carte de catalogue
+  // est en dessous de la ligne de flottaison sauf la toute première, donc `"lazy"`. Seule ligne
+  // touchée hors du périmètre Image/PhotoStrip, et elle l'est par nécessité — la prop est requise.
+  return (
+    <Image src={src} alt="Vue du Embalse de Guatapé depuis la colline" sizes={SIZES} loading="lazy" />
+  );
 }
 
 // Les stories d'une carte SEULE sont bornées en largeur : une carte occupe rarement 1 248 px, et

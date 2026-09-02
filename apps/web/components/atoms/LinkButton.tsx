@@ -102,7 +102,7 @@ export type LinkButtonProps = {
  * texte (`@source` dans app/globals.css), une classe interpolée n'existerait pas dans le CSS
  * compilé et le lien serait sans anneau, en silence.
  */
-const FOCUS_CLASS = "focus-visible:status-focused";
+export const FOCUS_CLASS = "focus-visible:status-focused";
 
 export function LinkButton({
   children,

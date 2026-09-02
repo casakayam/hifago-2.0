@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button, type ButtonColor, type ButtonVariant } from "./Button";
 import { IconButton } from "./IconButton";
 import { composer, contraste, resoudre } from "../playground/contraste";
+import { Legende } from "../playground/Legende";
 
 // Le playground du bouton de la vitrine. Il est fait pour être REGARDÉ d'un coup d'œil, pas
 // manipulé contrôle par contrôle : chaque story montre un axe entier à la fois.
@@ -42,10 +43,6 @@ const Croix = () => (
     <path d="M6 6l12 12M18 6L6 18" />
   </svg>
 );
-
-function Legende({ children }: { children: React.ReactNode }) {
-  return <span className="text-xs text-muted">{children}</span>;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 // Contraste mesuré EN DIRECT, pas recopié.

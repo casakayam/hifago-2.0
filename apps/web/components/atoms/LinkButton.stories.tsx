@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import * as React from "react";
 import { Button, type ButtonColor, type ButtonVariant } from "./Button";
 import { LinkButton } from "./LinkButton";
+import { Legende } from "../playground/Legende";
 
 // Le playground du lien habillé en bouton. Deux choses à y regarder, et une seule compte vraiment :
 // que `LinkButton` et `Button` soient INDISCERNABLES à l'œil, et discernables à l'oreille.
@@ -30,10 +31,6 @@ const FlecheSortante = () => (
     <path d="M14 5h5v5M19 5l-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4" />
   </svg>
 );
-
-function Legende({ children }: { children: React.ReactNode }) {
-  return <span className="text-xs text-muted">{children}</span>;
-}
 
 export const Defaut: Story = {};
 

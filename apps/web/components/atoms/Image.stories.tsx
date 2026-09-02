@@ -14,7 +14,15 @@ const meta = {
   title: "Affichage/Image",
   component: Image,
   parameters: { layout: "padded" },
-  args: { src: SRC, alt: "Vue du Embalse de Guatapé depuis la colline", sizes: SIZES },
+  // `loading: "lazy"` en défaut de story, jamais en défaut du composant : la prop est obligatoire
+  // exprès (2026-09-02), et lui donner une valeur par défaut ici ne fait que dispenser CHAQUE
+  // story de la réécrire — pas les appelants.
+  args: {
+    src: SRC,
+    alt: "Vue du Embalse de Guatapé depuis la colline",
+    sizes: SIZES,
+    loading: "lazy",
+  },
 } satisfies Meta<typeof Image>;
 
 export default meta;
@@ -30,6 +38,36 @@ export const SansImage: Story = { args: { src: null } };
 export const Carre: Story = { args: { ratio: "1/1" } };
 
 export const Panoramique: Story = { args: { ratio: "16/9" } };
+
+// ⚠️ La seule story du fichier dont la différence ne se VOIT pas — et c'est justement ce qu'elle
+// documente. Mesuré sur Next 16.3.0, pas supposé (cf. Image.test.tsx) :
+//   • `"lazy"`     → `<img loading="lazy">`, l'image n'est cherchée qu'à l'approche du viewport ;
+//   • `"priority"` → la balise perd `loading` et NE GAGNE RIEN (pas de `loading="eager"`, et plus
+//     de `fetchpriority="high"` depuis Next 16) ; l'effet réel est un
+//     `<link rel="preload" as="image">` injecté dans le `<head>`, qui fait découvrir l'image au
+//     navigateur sans attendre la mise en page.
+// À inspecter dans l'onglet Éléments du navigateur, pas à l'œil. La valeur se change aussi depuis
+// les contrôles de la barre latérale, sur n'importe quelle story du fichier.
+export const Chargement: Story = {
+  render: (args) => (
+    <div className="flex flex-col gap-4">
+      {(["priority", "lazy"] as const).map((valeur) => (
+        <div key={valeur} className="flex items-start gap-3">
+          <span className="w-20 shrink-0 text-xs text-muted">{valeur}</span>
+          <div className="w-40">
+            {/* `alt` répété après le spread : cf. le commentaire de TousLesRatios. */}
+            <Image {...args} alt={args.alt} loading={valeur} />
+          </div>
+          <p className="text-xs text-muted">
+            {valeur === "priority"
+              ? "Au-dessus de la ligne de flottaison — c'est le LCP. Pose un <link rel=preload> dans le <head>."
+              : "Tout le reste. Pose loading=\"lazy\" sur la balise."}
+          </p>
+        </div>
+      ))}
+    </div>
+  ),
+};
 
 // Les trois ratios côte à côte, avec et sans visuel : c'est la vue qui prouve que le substitut
 // occupe exactement la même place que l'image qu'il remplace.

@@ -80,11 +80,13 @@ export function Checkbox({
       {error ? (
         <span
           id={idErreur}
-          // ⚠️ Pas `text-danger` : ce jeton est un aplat, mesuré à 3.56:1 sur fond clair — sous le
-          // seuil WCAG de 4.5:1 (constaté en vague 2, et les sept messages d'erreur des
-          // formulaires existants en souffrent encore). La couleur de TEXTE de la famille est
-          // `--danger-soft-foreground`.
-          className="text-sm font-medium [color:var(--danger-soft-foreground)]"
+          // ⚠️ La classe BEM de HeroUI, pas une classe arbitraire écrite ici. Ce composant portait
+          // la bonne couleur à la main — `--danger` est un aplat, mesuré à 3.56:1, sous le seuil
+          // WCAG de 4.5:1 — pendant que Field, Textarea et Select déléguaient à HeroUI et
+          // rendaient donc du texte insuffisamment contrasté. La décision est remontée dans
+          // packages/ui/src/styles/globals.css le 2026-09-02 : `.error-message` y est recalibrée
+          // pour tout le thème vitrine, et les quatre composants la suivent depuis un seul endroit.
+          className="error-message"
           data-testid={sousId(testId, "error")}
         >
           {error}

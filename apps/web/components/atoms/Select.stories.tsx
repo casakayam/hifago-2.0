@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { useState } from "react";
 import { Select, type SelectOption, type SelectProps } from "./Select";
+import { Legende } from "../playground/Legende";
 
 // La liste déroulante. ⚠️ C'est le composant le plus rentable du lot : le filtre par type du
 // catalogue occupe aujourd'hui quinze lignes de JSX compound (CatalogBrowser.tsx:58-80).
@@ -32,10 +33,6 @@ const TYPES: SelectOption[] = [
 function ListeControlee({ valeurInitiale = "", ...props }: Omit<SelectProps, "value" | "onChange"> & { valeurInitiale?: string }) {
   const [valeur, setValeur] = useState(valeurInitiale);
   return <Select {...props} value={valeur} onChange={setValeur} />;
-}
-
-function Legende({ children }: { children: React.ReactNode }) {
-  return <span className="text-xs text-muted">{children}</span>;
 }
 
 // Le cas du catalogue : rien de sélectionné, donc « tous ».

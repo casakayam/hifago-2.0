@@ -151,14 +151,21 @@ un prix. Cinq groupes, décidés le 2026-09-02 :
 
 | Groupe | Contenu |
 |---|---|
-| `Actions/` | `Button`, `IconButton`, `LinkButton`, `BackLink` |
+| `Actions/` | `Button`, `IconButton`, `LinkButton`, `IconLink`, `BackLink` |
 | `Saisie/` | `Field`, `Textarea`, `Select`, `Checkbox` |
-| `Affichage/` | `Price`, `TypeBadge`, `Image`, `Title` |
+| `Affichage/` | `Price`, `TypeBadge`, `Image`, `Title`, `PhotoStrip` |
 | `Structure/` | `PageShell`, `Card` |
+| `Coquille/` | `SiteHeader`, `SiteMenu`, `SiteFooter`, `LanguageSwitcher` |
 | `Playground/` | les stories de référence — jetons, palettes, sémantique |
 
 Un nouveau composant rejoint le groupe qui décrit **ce qu'il fait**, quel que soit son dossier. Si
-aucun ne convient, c'est une conversation, pas un sixième groupe créé au passage.
+aucun ne convient, c'est une conversation, pas un groupe créé au passage.
+
+*Cette conversation a eu lieu le 2026-09-02 : les composants de la coquille du site étaient arrivés
+sous un `Organisms/` qui reproduisait le nom du dossier — exactement ce que ce tableau existe pour
+éviter — et `SiteFooter` s'était retrouvé dans `Structure/` pendant que `SiteHeader` était ailleurs,
+séparant deux jumeaux. `Coquille/` est donc un sixième groupe assumé, et le mot est celui que le
+projet emploie déjà (voir l'en-tête de `PageShell`).*
 
 ⚠️ Si le `title` contient un accent, ajouter un `id` explicite **sans accent** dans le `meta` :
 Storybook dérive sinon l'identifiant du titre en conservant les accents, ce qui produit une URL

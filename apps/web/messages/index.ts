@@ -11,6 +11,7 @@
 // Seuls des imports statiques marchent dans les trois environnements — Next (serveur), Vitest et
 // Vite. Ce fichier n'est modifié qu'à l'ajout d'un NAMESPACE (rare : un par écran), jamais à
 // l'ajout d'une clé — c'est ce qui le rend acceptable comme point de passage partagé.
+import esChrome from "./es/Chrome.json";
 import esLocaleLayout from "./es/LocaleLayout.json";
 import esHomePage from "./es/HomePage.json";
 import esLogin from "./es/Login.json";
@@ -21,6 +22,7 @@ import esProductPage from "./es/ProductPage.json";
 import esEstablishmentPage from "./es/EstablishmentPage.json";
 import esCheckoutPage from "./es/CheckoutPage.json";
 import esAccountOrdersPage from "./es/AccountOrdersPage.json";
+import enChrome from "./en/Chrome.json";
 import enLocaleLayout from "./en/LocaleLayout.json";
 import enHomePage from "./en/HomePage.json";
 import enLogin from "./en/Login.json";
@@ -39,6 +41,8 @@ export type Locale = (typeof routing)["locales"][number];
 
 const MESSAGES = {
   es: {
+    // Coquille du site (header, et footer à venir) — namespace ajouté le 2026-09-02, vague 4.
+    Chrome: esChrome,
     LocaleLayout: esLocaleLayout,
     HomePage: esHomePage,
     Login: esLogin,
@@ -51,6 +55,7 @@ const MESSAGES = {
     AccountOrdersPage: esAccountOrdersPage,
   },
   en: {
+    Chrome: enChrome,
     LocaleLayout: enLocaleLayout,
     HomePage: enHomePage,
     Login: enLogin,

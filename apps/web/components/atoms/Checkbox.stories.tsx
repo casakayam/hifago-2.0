@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { useState } from "react";
 import { Checkbox, type CheckboxProps } from "./Checkbox";
+import { Legende } from "../playground/Legende";
 
 // La case à cocher. Son seul usage réel aujourd'hui est le consentement marketing du paiement
 // (CheckoutForm.tsx:388-396, huit lignes de JSX compound).
@@ -23,10 +24,6 @@ type Story = StoryObj<typeof meta>;
 function CaseControlee({ initial = false, ...props }: Omit<CheckboxProps, "isSelected" | "onChange"> & { initial?: boolean }) {
   const [coche, setCoche] = useState(initial);
   return <Checkbox {...props} isSelected={coche} onChange={setCoche} />;
-}
-
-function Legende({ children }: { children: React.ReactNode }) {
-  return <span className="text-xs text-muted">{children}</span>;
 }
 
 export const Defaut: Story = {

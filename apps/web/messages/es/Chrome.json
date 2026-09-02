@@ -1,0 +1,20 @@
+{
+  "homeLabel": "Hifago, ir al inicio",
+  "navLabel": "Cuenta y carrito",
+  "cartLabel": "{count, plural, =0 {Carrito, vacío} one {Carrito, # artículo} other {Carrito, # artículos}}",
+  "accountLabel": "Mi cuenta",
+  "loginLabel": "Iniciar sesión",
+  "menuOpenLabel": "Abrir el menú",
+  "menuCloseLabel": "Cerrar el menú",
+  "languageLabel": "Idioma",
+  "languageCurrentLabel": "Idioma actual",
+  "footerNavLabel": "Enlaces institucionales",
+  "footerLegalNotice": "Aviso legal",
+  "footerPrivacy": "Política de privacidad",
+  "footerContact": "Contacto",
+  "footerHelp": "Ayuda y preguntas frecuentes",
+  "footerTerms": "Condiciones generales",
+  "footerWhatsApp": "Escríbenos por WhatsApp",
+  "footerWhatsAppNewTab": "(se abre en una pestaña nueva)",
+  "footerIdentity": "Hifago · Guatapé, Colombia"
+}

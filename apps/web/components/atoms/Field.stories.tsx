@@ -5,6 +5,7 @@ import { Textarea } from "./Textarea";
 import { Select } from "./Select";
 import { Checkbox } from "./Checkbox";
 import { Button } from "./Button";
+import { Legende } from "../playground/Legende";
 
 // Le champ de saisie de la vitrine, dans tous ses états.
 //
@@ -49,10 +50,6 @@ type Story = StoryObj<typeof meta>;
 function ChampControle({ valeurInitiale = "", ...props }: FieldProps & { valeurInitiale?: string }) {
   const [valeur, setValeur] = useState(valeurInitiale);
   return <Field {...props} value={valeur} onChange={setValeur} />;
-}
-
-function Legende({ children }: { children: React.ReactNode }) {
-  return <span className="text-xs text-muted">{children}</span>;
 }
 
 export const Defaut: Story = {

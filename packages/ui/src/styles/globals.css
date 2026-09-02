@@ -24,7 +24,6 @@
     color-scheme: light;
 
     --radius: 0rem;
-    --field-radius: 0rem;
     --border-width: 0px;
     /* Champs de formulaire : seule exception à "pas de bordure" (voir --field-background
        ci-dessous — constaté en usage réel le 2026-08-15, corrige docs/specs/09-design-system-admin.md
@@ -153,7 +152,40 @@
 }
 
 /* ============================================================================================
- * Thème `vitrine` (apps/web) — quatre pistes à comparer, en clair et en sombre
+ * Thème `vitrine` — la couleur du message d'erreur
+ * ============================================================================================
+ *
+ * ⚠️ CE BLOC CHANGE LE RENDU DE LA PRODUCTION, et c'est délibéré — contrairement à la section des
+ * pistes juste en dessous, qui promet de ne rien changer tant que rien n'est adopté. Il est posé
+ * ici, séparément, pour que cette promesse-là reste vraie : ce n'est pas un choix de palette,
+ * c'est un défaut d'accessibilité.
+ *
+ * LE DÉFAUT (constaté le 2026-09-02, revue du lot Storybook). `.error-message` de HeroUI rend
+ * `color: var(--danger)` — vérifié dans heroui.min.css. Or `--danger` est un jeton d'APLAT :
+ * mesuré à 3.56:1 sur fond clair, sous le seuil WCAG de 4.5:1 pour du texte. La couleur de TEXTE
+ * de la famille est `--danger-soft-foreground`.
+ *
+ * ⚠️ Ce qui rendait le défaut invisible, c'est qu'il n'était pas uniforme : `Checkbox` avait posé
+ * la bonne couleur à la main, en documentant la mesure, pendant que `Field`, `Textarea` et `Select`
+ * déléguaient à HeroUI. Le même formulaire livrait donc une case à cocher accessible et trois
+ * champs qui ne l'étaient pas, pour la même information. La décision est remontée ici : un seul
+ * endroit, les quatre composants suivent.
+ *
+ * ⚠️ `.error-message` seulement, JAMAIS `.field-error` : ce dernier porte `opacity: 0` dans HeroUI
+ * (il n'apparaît que sous une condition d'état), et le viser depuis un composant qui l'emploierait
+ * hors de ce contexte rendrait le message invisible plutôt que lisible.
+ *
+ * Le jour où une piste est adoptée, `--danger-soft-foreground` reste dérivé du `--danger` de cette
+ * piste (color-mix, cf. les formules de HeroUI) : cette règle suit la palette au lieu de la figer.
+ * ============================================================================================ */
+@layer base {
+  [data-theme="vitrine"] .error-message {
+    color: var(--danger-soft-foreground);
+  }
+}
+
+/* ============================================================================================
+ * Thème `vitrine` (apps/web) — cinq pistes à comparer, en clair et en sombre
  * ============================================================================================
  *
  * Écrit le 2026-09-01. Jusqu'ici le thème `vitrine` ne définissait AUCUN jeton : le commentaire en
@@ -311,6 +343,22 @@
    * déclaration de cette section ne s'applique — c'est vérifiable, pas seulement écrit.
    * ------------------------------------------------------------------------------------------ */
   [data-theme="vitrine"][data-piste] {
+    /* ⚠️ Miroirs, posés UNE fois (2026-09-02). Ces sept jetons recopiaient caractère pour
+       caractère la valeur de `--foreground` / `--radius` / `--border-width` dans CHACUNE des cinq
+       pistes — 35 déclarations, vérifiées identiques une par une avant d'être retirées. Changer la
+       couleur de texte d'une piste demandait donc six éditions synchrones, et en oublier une ne se
+       voyait qu'en mode SOMBRE (en clair les cinq valeurs sont toutes quasi-noires). `var()` étant
+       résolu au moment du calcul sur l'élément porteur, et les pistes déclarant leur source sur ce
+       même élément, ils suivent automatiquement — y compris `--field-radius` quand le sélecteur de
+       rayon de la barre d'outils surcharge `--radius`. */
+    --surface-foreground: var(--foreground);
+    --overlay-foreground: var(--foreground);
+    --default-foreground: var(--foreground);
+    --field-foreground: var(--foreground);
+    --segment-foreground: var(--foreground);
+    --field-radius: var(--radius);
+    --field-border-width: var(--border-width);
+
     --surface-hover: color-mix(in oklab, var(--surface) 92%, var(--surface-foreground) 8%);
 
     --background-secondary: color-mix(in oklab, var(--background) 96%, var(--foreground) 4%);
@@ -449,9 +497,7 @@
     color-scheme: light dark;
 
     --radius: 0.75rem;
-    --field-radius: 0.75rem;
     --border-width: 1px;
-    --field-border-width: 1px;
 
     /* Base */
     --background: light-dark(oklch(98.5% 0.005 215), oklch(26% 0.018 235));
@@ -459,18 +505,15 @@
 
     /* Surfaces — l'étagement remplace l'ombre en mode sombre */
     --surface: light-dark(oklch(100% 0 0), oklch(30.5% 0.02 235));
-    --surface-foreground: light-dark(oklch(23% 0.025 235), oklch(96% 0.006 215));
     --surface-secondary: light-dark(oklch(94.8% 0.009 215), oklch(35% 0.02 235));
     --surface-tertiary: light-dark(oklch(90.3% 0.011 215), oklch(39.5% 0.02 235));
     --overlay: light-dark(oklch(100% 0 0), oklch(32% 0.02 235));
-    --overlay-foreground: light-dark(oklch(23% 0.025 235), oklch(96% 0.006 215));
 
     /* Texte discret */
     --muted: light-dark(oklch(46% 0.022 232), oklch(77% 0.018 225));
 
     /* Neutre (boutons secondaires, badges par défaut) */
     --default: light-dark(oklch(91.5% 0.01 215), oklch(36% 0.018 235));
-    --default-foreground: light-dark(oklch(23% 0.025 235), oklch(96% 0.006 215));
 
     /* Accent — la couleur d'identité de la piste */
     --accent: light-dark(oklch(47.5% 0.108 208), oklch(80% 0.095 200));
@@ -478,7 +521,6 @@
 
     /* Champs de formulaire */
     --field-background: light-dark(oklch(100% 0 0), oklch(28% 0.02 235));
-    --field-foreground: light-dark(oklch(23% 0.025 235), oklch(96% 0.006 215));
     --field-placeholder: light-dark(oklch(48% 0.02 232), oklch(70% 0.015 225));
     --field-border: light-dark(oklch(59% 0.024 215), oklch(63% 0.026 235));
 
@@ -492,7 +534,6 @@
 
     /* Divers */
     --segment: light-dark(oklch(100% 0 0), oklch(32% 0.02 235));
-    --segment-foreground: light-dark(oklch(23% 0.025 235), oklch(96% 0.006 215));
     --border: light-dark(oklch(80% 0.018 215), oklch(42% 0.018 235));
     --separator: light-dark(oklch(89% 0.012 215), oklch(34% 0.018 235));
     --surface-secondary-foreground: var(--surface-foreground);
@@ -526,9 +567,7 @@
     color-scheme: light dark;
 
     --radius: 0.25rem;
-    --field-radius: 0.25rem;
     --border-width: 1px;
-    --field-border-width: 1px;
 
     /* Base */
     --background: light-dark(oklch(98.4% 0.011 78), oklch(26% 0.018 42));
@@ -536,18 +575,15 @@
 
     /* Surfaces — l'étagement remplace l'ombre en mode sombre */
     --surface: light-dark(oklch(100% 0 0), oklch(30.5% 0.021 44));
-    --surface-foreground: light-dark(oklch(22% 0.028 42), oklch(96% 0.014 78));
     --surface-secondary: light-dark(oklch(94.4% 0.024 76), oklch(35% 0.023 44));
     --surface-tertiary: light-dark(oklch(89.9% 0.028 74), oklch(39.5% 0.025 44));
     --overlay: light-dark(oklch(100% 0 0), oklch(32% 0.023 44));
-    --overlay-foreground: light-dark(oklch(22% 0.028 42), oklch(96% 0.014 78));
 
     /* Texte discret */
     --muted: light-dark(oklch(45% 0.038 45), oklch(77% 0.024 60));
 
     /* Neutre (boutons secondaires, badges par défaut) */
     --default: light-dark(oklch(90% 0.026 72), oklch(36% 0.023 44));
-    --default-foreground: light-dark(oklch(22% 0.028 42), oklch(96% 0.014 78));
 
     /* Accent — la couleur d'identité de la piste */
     --accent: light-dark(oklch(50% 0.15 42), oklch(79% 0.12 48));
@@ -555,7 +591,6 @@
 
     /* Champs de formulaire */
     --field-background: light-dark(oklch(99.7% 0.005 80), oklch(28% 0.021 44));
-    --field-foreground: light-dark(oklch(22% 0.028 42), oklch(96% 0.014 78));
     --field-placeholder: light-dark(oklch(47% 0.035 45), oklch(70% 0.02 60));
     --field-border: light-dark(oklch(58% 0.045 58), oklch(63% 0.032 48));
 
@@ -569,7 +604,6 @@
 
     /* Divers */
     --segment: light-dark(oklch(99.5% 0.007 80), oklch(32% 0.023 44));
-    --segment-foreground: light-dark(oklch(22% 0.028 42), oklch(96% 0.014 78));
     --border: light-dark(oklch(79% 0.032 72), oklch(42% 0.023 44));
     --separator: light-dark(oklch(88% 0.022 74), oklch(34% 0.021 44));
     --surface-secondary-foreground: var(--surface-foreground);
@@ -601,9 +635,7 @@
     color-scheme: light dark;
 
     --radius: 0rem;
-    --field-radius: 0rem;
     --border-width: 1px;
-    --field-border-width: 1px;
 
     /* Base */
     --background: light-dark(oklch(99% 0 0), oklch(26% 0 0));
@@ -611,18 +643,15 @@
 
     /* Surfaces — l'étagement remplace l'ombre en mode sombre */
     --surface: light-dark(oklch(95.5% 0.002 100), oklch(30.5% 0 0));
-    --surface-foreground: light-dark(oklch(16% 0 0), oklch(97% 0 0));
     --surface-secondary: light-dark(oklch(91% 0.002 100), oklch(35% 0 0));
     --surface-tertiary: light-dark(oklch(86.5% 0.002 100), oklch(39.5% 0 0));
     --overlay: light-dark(oklch(100% 0 0), oklch(32% 0 0));
-    --overlay-foreground: light-dark(oklch(16% 0 0), oklch(97% 0 0));
 
     /* Texte discret */
     --muted: light-dark(oklch(44% 0 0), oklch(77% 0 0));
 
     /* Neutre (boutons secondaires, badges par défaut) */
     --default: light-dark(oklch(90.5% 0.002 100), oklch(36% 0 0));
-    --default-foreground: light-dark(oklch(16% 0 0), oklch(97% 0 0));
 
     /* Accent — la couleur d'identité de la piste */
     --accent: light-dark(oklch(22% 0 0), oklch(96% 0 0));
@@ -630,7 +659,6 @@
 
     /* Champs de formulaire */
     --field-background: light-dark(oklch(100% 0 0), oklch(28% 0 0));
-    --field-foreground: light-dark(oklch(16% 0 0), oklch(97% 0 0));
     --field-placeholder: light-dark(oklch(46% 0 0), oklch(68% 0 0));
     --field-border: light-dark(oklch(57% 0 0), oklch(63% 0 0));
 
@@ -644,7 +672,6 @@
 
     /* Divers */
     --segment: light-dark(oklch(100% 0 0), oklch(32% 0 0));
-    --segment-foreground: light-dark(oklch(16% 0 0), oklch(97% 0 0));
     --border: light-dark(oklch(79% 0 0), oklch(42% 0 0));
     --separator: light-dark(oklch(88% 0 0), oklch(34% 0 0));
     --surface-secondary-foreground: var(--surface-foreground);
@@ -697,9 +724,7 @@
     color-scheme: light dark;
 
     --radius: 0.25rem;
-    --field-radius: 0.25rem;
     --border-width: 1px;
-    --field-border-width: 1px;
 
     /* Base */
     --background: light-dark(oklch(98.4% 0.008 88), oklch(26% 0.007 118));
@@ -707,18 +732,15 @@
 
     /* Surfaces — l'étagement remplace l'ombre en mode sombre */
     --surface: light-dark(oklch(100% 0 0), oklch(30.5% 0.009 110));
-    --surface-foreground: light-dark(oklch(0% 0 0), oklch(91.3% 0.007 88.6));
     --surface-secondary: light-dark(oklch(94.6% 0.013 88), oklch(35% 0.01 110));
     --surface-tertiary: light-dark(oklch(90.1% 0.014 88), oklch(39.5% 0.011 110));
     --overlay: light-dark(oklch(100% 0 0), oklch(32% 0.01 110));
-    --overlay-foreground: light-dark(oklch(0% 0 0), oklch(91.3% 0.007 88.6));
 
     /* Texte discret */
     --muted: light-dark(oklch(47.3% 0.077 194.9), oklch(76.8% 0.028 87.9));
 
     /* Neutre (boutons secondaires, badges par défaut) */
     --default: light-dark(oklch(91.3% 0.007 88.6), oklch(36% 0.011 110));
-    --default-foreground: light-dark(oklch(0% 0 0), oklch(91.3% 0.007 88.6));
 
     /* Accent — la couleur d'identité de la piste */
     --accent: light-dark(oklch(51.8% 0.153 41.3), oklch(80.5% 0.14 46.8));
@@ -726,7 +748,6 @@
 
     /* Champs de formulaire */
     --field-background: light-dark(oklch(100% 0 0), oklch(28% 0.009 110));
-    --field-foreground: light-dark(oklch(0% 0 0), oklch(91.3% 0.007 88.6));
     --field-placeholder: light-dark(oklch(47.3% 0.077 194.9), oklch(72% 0.025 88));
     --field-border: light-dark(oklch(56% 0.06 194.9), oklch(63% 0.03 110));
 
@@ -740,7 +761,6 @@
 
     /* Divers */
     --segment: light-dark(oklch(99.4% 0.007 88.6), oklch(32% 0.01 110));
-    --segment-foreground: light-dark(oklch(0% 0 0), oklch(91.3% 0.007 88.6));
     --border: light-dark(oklch(79% 0.024 190), oklch(42% 0.012 110));
     --separator: light-dark(oklch(88% 0.016 190), oklch(34% 0.011 110));
     --surface-secondary-foreground: var(--surface-foreground);
@@ -815,9 +835,7 @@
     color-scheme: light dark;
 
     --radius: 0.5rem;
-    --field-radius: 0.5rem;
     --border-width: 2px;
-    --field-border-width: 2px;
 
     /* Base */
     --background: light-dark(oklch(100% 0 0), oklch(18% 0 0));
@@ -825,18 +843,15 @@
 
     /* Surfaces — l'étagement remplace l'ombre en mode sombre */
     --surface: light-dark(oklch(100% 0 0), oklch(24% 0 0));
-    --surface-foreground: light-dark(oklch(0% 0 0), oklch(100% 0 0));
     --surface-secondary: light-dark(oklch(95% 0 0), oklch(30% 0 0));
     --surface-tertiary: light-dark(oklch(89% 0 0), oklch(36% 0 0));
     --overlay: light-dark(oklch(100% 0 0), oklch(24% 0 0));
-    --overlay-foreground: light-dark(oklch(0% 0 0), oklch(100% 0 0));
 
     /* Texte discret */
     --muted: light-dark(oklch(45% 0 0), oklch(76% 0 0));
 
     /* Neutre (boutons secondaires, badges par défaut) */
     --default: light-dark(oklch(92% 0 0), oklch(32% 0 0));
-    --default-foreground: light-dark(oklch(0% 0 0), oklch(100% 0 0));
 
     /* Accent — la couleur d'identité de la piste */
     --accent: light-dark(oklch(52% 0.25 258), oklch(72% 0.18 250));
@@ -844,7 +859,6 @@
 
     /* Champs de formulaire */
     --field-background: light-dark(oklch(100% 0 0), oklch(18% 0 0));
-    --field-foreground: light-dark(oklch(0% 0 0), oklch(100% 0 0));
     --field-placeholder: light-dark(oklch(45% 0 0), oklch(72% 0 0));
     --field-border: light-dark(oklch(0% 0 0), oklch(100% 0 0));
 
@@ -858,7 +872,6 @@
 
     /* Divers */
     --segment: light-dark(oklch(100% 0 0), oklch(24% 0 0));
-    --segment-foreground: light-dark(oklch(0% 0 0), oklch(100% 0 0));
     --border: light-dark(oklch(0% 0 0), oklch(100% 0 0));
     --separator: light-dark(oklch(0% 0 0), oklch(100% 0 0));
     --surface-secondary-foreground: var(--surface-foreground);
@@ -909,19 +922,15 @@
    * ------------------------------------------------------------------------------------------ */
   [data-theme="vitrine"][data-piste][data-radius="6"] {
     --radius: 0.375rem;
-    --field-radius: 0.375rem;
   }
   [data-theme="vitrine"][data-piste][data-radius="8"] {
     --radius: 0.5rem;
-    --field-radius: 0.5rem;
   }
   [data-theme="vitrine"][data-piste][data-radius="12"] {
     --radius: 0.75rem;
-    --field-radius: 0.75rem;
   }
   [data-theme="vitrine"][data-piste][data-radius="18"] {
     --radius: 1.125rem;
-    --field-radius: 1.125rem;
   }
 
 
