@@ -1,0 +1,382 @@
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
+import { useEffect, useRef, useState } from "react";
+import { Button, type ButtonColor, type ButtonVariant } from "./Button";
+import { IconButton } from "./IconButton";
+
+// Le playground du bouton de la vitrine. Il est fait pour être REGARDÉ d'un coup d'œil, pas
+// manipulé contrôle par contrôle : chaque story montre un axe entier à la fois.
+//
+// À voir aux deux gabarits (Mobile 390 par défaut, Desktop 1280) : les hauteurs changent au
+// breakpoint `md`, et c'est là que se joue la règle des 44 px (voir la story `Tailles`).
+const meta = {
+  title: "Atoms/Button",
+  component: Button,
+  parameters: { layout: "padded" },
+} satisfies Meta<typeof Button>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+const VARIANTS: ButtonVariant[] = ["solid", "soft", "outline", "ghost"];
+const COLORS: ButtonColor[] = ["accent", "neutral", "danger"];
+
+// Icônes inline, volontairement : `lucide-react` est présent dans node_modules mais déclaré par
+// packages/ui, PAS par apps/web — l'importer ici créerait une dépendance fantôme, celle qui a cassé
+// le build Vercel le 2026-08-23 (le hoisting npm local la masque, l'install scopée la révèle).
+// Le composant ne connaît donc aucune bibliothèque d'icônes : il reçoit un ReactNode.
+const FlecheDroite = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M5 12h14M13 6l6 6-6 6" />
+  </svg>
+);
+const Panier = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M6 6h15l-1.5 9h-12z" />
+    <circle cx="9" cy="20" r="1" />
+    <circle cx="18" cy="20" r="1" />
+  </svg>
+);
+const Croix = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
+
+function Legende({ children }: { children: React.ReactNode }) {
+  return <span className="text-xs text-muted">{children}</span>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Contraste mesuré EN DIRECT, pas recopié.
+//
+// ⚠️ Écrire les ratios en dur dans un commentaire les rend faux au premier changement de jeton —
+// et les jetons light/dark sont en cours d'écriture par un autre agent au moment où ceci est écrit
+// (2026-09-01). Mesuré ici, le chiffre affiché sous chaque bouton reste vrai par construction, et
+// dit immédiatement si un changement de thème casse une combinaison.
+//
+// La composition (les fonds `soft` sont semi-transparents) est faite par le navigateur lui-même
+// via un canvas 1×1 : aucun parsing d'oklch/color-mix à écrire, et le résultat est celui affiché.
+function contrasteMesure(bouton: HTMLElement): number | null {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 1;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+
+  const composer = (fond: string, dessus: string): [number, number, number] => {
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = fond;
+    ctx.fillRect(0, 0, 1, 1);
+    ctx.fillStyle = dessus;
+    ctx.fillRect(0, 0, 1, 1);
+    const d = ctx.getImageData(0, 0, 1, 1).data;
+    return [d[0], d[1], d[2]];
+  };
+  const luminance = ([r, g, b]: [number, number, number]) => {
+    const c = [r, g, b].map((v) => {
+      const x = v / 255;
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+
+  // ⚠️ Le fond de référence est celui d'une PAGE de la vitrine (`--background`), pas celui du
+  // body de Storybook — le playground ne le peint pas, et en mode sombre on mesurerait du texte
+  // clair sur du blanc. On le fait résoudre par le moteur sur un élément réel : lu en brut,
+  // `--background` vaut la chaîne `light-dark(clair, sombre)` entière, que le canvas prendrait
+  // toujours par sa branche claire.
+  const sonde = document.createElement("div");
+  sonde.style.backgroundColor = "var(--background)";
+  document.body.appendChild(sonde);
+  let fondPage = getComputedStyle(sonde).backgroundColor;
+  sonde.remove();
+  if (!fondPage || fondPage === "rgba(0, 0, 0, 0)") fondPage = "rgb(255,255,255)";
+  const style = getComputedStyle(bouton);
+  const fondBouton = composer(fondPage, style.backgroundColor);
+  const texte = composer(`rgb(${fondBouton.join(",")})`, style.color);
+  const [clair, sombre] = [luminance(texte), luminance(fondBouton)].sort((a, b) => b - a);
+  return Math.round(((clair + 0.05) / (sombre + 0.05)) * 100) / 100;
+}
+
+/** Affiche le bouton et, sous lui, le contraste WCAG réellement rendu. Seuil du texte : 4.5:1. */
+function AvecContraste({ legende, children }: { legende: string; children: React.ReactNode }) {
+  const conteneur = useRef<HTMLDivElement>(null);
+  const [ratio, setRatio] = useState<number | null>(null);
+  useEffect(() => {
+    const bouton = conteneur.current?.querySelector("button");
+    if (!bouton) return;
+    const mesurer = () => setRatio(contrasteMesure(bouton));
+    // ⚠️ Deux mesures, et le délai n'est PAS une précaution en l'air : `.button` de HeroUI porte
+    // `transition: background-color 100ms`. Une mesure prise juste après un changement de thème
+    // lit une couleur EN COURS D'ANIMATION — constaté en comparant les chiffres affichés à un
+    // recalcul externe : la story annonçait 3.57:1 (la couleur de départ) là où le bouton rendait
+    // déjà 5.93:1. On mesure donc une fois tout de suite, et une fois la transition finie.
+    const planifier = () => {
+      mesurer();
+      return window.setTimeout(mesurer, 250);
+    };
+    let minuteur = planifier();
+    // La barre d'outils pose `data-piste`/`data-mode` sur <html> APRÈS le montage : sans ce
+    // guetteur, un chiffre figé au premier rendu afficherait les contrastes des défauts HeroUI sur
+    // une story déjà passée à une autre piste.
+    const observateur = new MutationObserver(() => {
+      window.clearTimeout(minuteur);
+      minuteur = planifier();
+    });
+    observateur.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-piste", "data-mode", "data-theme", "class", "style"],
+    });
+    return () => {
+      window.clearTimeout(minuteur);
+      observateur.disconnect();
+    };
+  }, []);
+  const passe = ratio === null || ratio >= 4.5;
+  return (
+    <div ref={conteneur} className="flex flex-col items-start gap-1">
+      {children}
+      {/* ⚠️ `text-danger` (le jeton brut) est lui-même à 3.56:1 sur fond blanc — mesuré en
+          écrivant cette story, et signalé par axe. C'est `--danger-soft-foreground` qui est la
+          couleur de TEXTE de la famille (6.74:1) : un avertissement de contraste illisible aurait
+          été une jolie ironie. Le mot « sous 4.5 » porte l'information, pas la couleur seule. */}
+      <span
+        className={
+          passe ? "text-xs text-muted" : "text-xs font-medium [color:var(--danger-soft-foreground)]"
+        }
+      >
+        {legende} · {ratio === null ? "…" : `${ratio}:1`}
+        {passe ? "" : " ⚠ sous 4.5"}
+      </span>
+    </div>
+  );
+}
+
+// ⚠️ LA story de ce lot : les deux axes que HeroUI ne sépare pas. Quatre formes × trois couleurs,
+// et chaque case est une combinaison réellement atteignable — « outline en rouge » n'existe pas
+// dans le `variant` à 7 valeurs de HeroUI.
+export const Matrice: Story = {
+  args: { children: "Reservar" },
+  render: (args) => (
+    <div className="flex flex-col gap-6">
+      <Legende>
+        Le chiffre sous chaque bouton est son contraste WCAG mesuré au rendu, pas une valeur
+        recopiée : il suit les jetons du thème. Seuil du texte : 4.5:1.
+      </Legende>
+      {/* ⚠️ Constat du 2026-09-01, à ne pas confondre avec un défaut de ce composant. Mesuré sur
+          les quatre pistes × deux modes : avec « Aucune piste » (défauts HeroUI = production
+          actuelle), solid/accent rend 3.59:1 et solid/danger 3.48:1, sous le seuil. Avec chacune
+          des quatre pistes candidates de l'agent B (hifago, embalse, zócalo, cal), les douze
+          combinaisons passent, marge la plus serrée 5.84:1. La cible chiffrée pour corriger les défauts HeroUI (dichotomie sur le
+          rendu réel) : luminosité 0.5626 pour --accent et 0.5902 pour --danger. */}
+      <Legende>
+        Une case en rouge vient du THÈME, pas du bouton — la surcouche ne fait que consommer les
+        jetons. Sur « Aucune piste » (les défauts HeroUI, soit la production d&apos;aujourd&apos;hui),
+        solid/accent et solid/danger tombent à 3.59:1 et 3.48:1 : il faudrait descendre la
+        luminosité de --accent à 0.5626 et de --danger à 0.5902, chroma et teinte inchangés. Sur
+        chacune des pistes candidates, en clair comme en sombre, les douze cases passent.
+      </Legende>
+      {VARIANTS.map((variant) => (
+        <div key={variant} className="flex flex-col gap-2">
+          <Legende>{variant}</Legende>
+          <div className="flex flex-wrap items-center gap-3">
+            {COLORS.map((color) => (
+              <AvecContraste key={color} legende={color}>
+                <Button {...args} variant={variant} color={color} />
+              </AvecContraste>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  ),
+};
+
+// Mesure la hauteur RENDUE plutôt que de l'écrire en dur : elle change au breakpoint `md`, et une
+// valeur recopiée deviendrait fausse en silence au premier changement de HeroUI.
+function AvecHauteur({ children }: { children: React.ReactNode }) {
+  const conteneur = useRef<HTMLDivElement>(null);
+  const [hauteur, setHauteur] = useState<number | null>(null);
+  useEffect(() => {
+    const bouton = conteneur.current?.querySelector("button");
+    if (!bouton) return;
+    const mesurer = () => setHauteur(Math.round(bouton.getBoundingClientRect().height));
+    mesurer();
+    const observateur = new ResizeObserver(mesurer);
+    observateur.observe(bouton);
+    return () => observateur.disconnect();
+  }, []);
+  return (
+    <div ref={conteneur} className="flex flex-col items-start gap-1">
+      {children}
+      <Legende>{hauteur === null ? "…" : `${hauteur} px`}</Legende>
+    </div>
+  );
+}
+
+// ⚠️ La règle des 44 px de components/README.md, mise à l'épreuve. Basculer sur Desktop 1280 fait
+// perdre 4 px à chaque taille (HeroUI rétrécit à partir de `md`) : seul `lg` sur mobile atteint
+// réellement 44 px, ce qui est la raison du défaut `lg` de ce composant.
+export const Tailles: Story = {
+  args: { children: "Reservar" },
+  render: (args) => (
+    <div className="flex flex-wrap items-end gap-4">
+      <AvecHauteur>
+        <Button {...args} size="sm">
+          sm
+        </Button>
+      </AvecHauteur>
+      <AvecHauteur>
+        <Button {...args} size="md">
+          md
+        </Button>
+      </AvecHauteur>
+      <AvecHauteur>
+        <Button {...args} size="lg">
+          lg (défaut)
+        </Button>
+      </AvecHauteur>
+    </div>
+  ),
+};
+
+// Force les attributs que react-aria pose lui-même (`data-hovered`, `data-pressed`,
+// `data-focus-visible`) pour rendre les états VISIBLES côte à côte, sans avoir à survoler chaque
+// bouton. Ce sont exactement les sélecteurs du CSS de HeroUI — ce n'est donc pas une imitation :
+// c'est le vrai style, dans un état figé. Les états réels se voient dans la story `Actions`.
+function EtatForce({ attribut, children }: { attribut?: string; children: React.ReactNode }) {
+  const conteneur = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!attribut) return;
+    conteneur.current?.querySelector("button")?.setAttribute(attribut, "true");
+  });
+  return <div ref={conteneur}>{children}</div>;
+}
+
+export const Etats: Story = {
+  args: { children: "Pagar" },
+  render: (args) => (
+    <div className="flex flex-col gap-6">
+      {VARIANTS.map((variant) => (
+        <div key={variant} className="flex flex-col gap-2">
+          <Legende>{variant}</Legende>
+          <div className="flex flex-wrap items-center gap-3">
+            {[
+              { cle: "defaut", libelle: "défaut", attribut: undefined },
+              { cle: "survol", libelle: "survol", attribut: "data-hovered" },
+              { cle: "focus", libelle: "focus clavier", attribut: "data-focus-visible" },
+              { cle: "presse", libelle: "pressé", attribut: "data-pressed" },
+            ].map(({ cle, libelle, attribut }) => (
+              <div key={cle} className="flex flex-col items-start gap-1">
+                <EtatForce attribut={attribut}>
+                  <Button {...args} variant={variant} />
+                </EtatForce>
+                <Legende>{libelle}</Legende>
+              </div>
+            ))}
+            <div className="flex flex-col items-start gap-1">
+              <Button {...args} variant={variant} isDisabled />
+              <Legende>désactivé</Legende>
+            </div>
+            {/* ⚠️ L'état qui absorbe une duplication réelle : cinq écrans écrivent aujourd'hui
+                `isDisabled={isSubmitting}` PLUS un libellé ternaire. Ici une prop, et le libellé de
+                remplacement reçu déjà traduit. */}
+            <div className="flex flex-col items-start gap-1">
+              <Button {...args} variant={variant} isPending pendingLabel="Enviando…" />
+              <Legende>en cours</Legende>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  ),
+};
+
+// Avant, après, et seule (via IconButton, qui exige un libellé accessible).
+export const AvecIcone: Story = {
+  args: { children: "Añadir al carrito" },
+  render: (args) => (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button {...args} iconBefore={<Panier />} />
+        <Legende>iconBefore</Legende>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button {...args} iconAfter={<FlecheDroite />}>
+          Continuar
+        </Button>
+        <Legende>iconAfter</Legende>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <IconButton icon={<Croix />} label="Quitar del carrito" />
+        <IconButton icon={<Croix />} label="Quitar del carrito" variant="soft" color="danger" />
+        <IconButton icon={<Panier />} label="Ver carrito" variant="solid" color="accent" />
+        <Legende>
+          IconButton — le libellé est requis, il devient le nom accessible. Formes, tailles et
+          états complets : story « Atoms/IconButton ».
+        </Legende>
+      </div>
+    </div>
+  ),
+};
+
+// Le cas mobile : sur un écran de 390 px, l'action principale d'un formulaire prend toute la
+// largeur. `width="full"` remplace le `className="w-fit"`/pleine largeur écrit à la main.
+export const PleineLargeur: Story = {
+  args: { children: "Confirmar y pagar" },
+  render: (args) => (
+    <div className="flex max-w-sm flex-col gap-3">
+      <Button {...args} width="full" />
+      <Button {...args} width="full" variant="outline" color="neutral">
+        Seguir comprando
+      </Button>
+      <Legende>À regarder en Mobile 390 : c&apos;est la disposition réelle du checkout.</Legende>
+    </div>
+  ),
+};
+
+// ⚠️ La story cliquable : le clic atterrit, le survol se voit, le focus clavier se voit (Tab), et
+// l'état pressé se voit (maintenir). Les trois derniers sont ici RÉELS, contrairement à `Etats`.
+function Demonstration() {
+  const [compteur, setCompteur] = useState(0);
+  const [envoiEnCours, setEnvoiEnCours] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button onPress={() => setCompteur((n) => n + 1)}>Añadir al carrito</Button>
+        <Button variant="outline" color="neutral" onPress={() => setCompteur(0)}>
+          Vaciar
+        </Button>
+        <span className="text-sm font-medium" data-testid="compteur">
+          Carrito : {compteur}
+        </span>
+      </div>
+
+      {/* Le vrai cycle d'un envoi : un clic, deux secondes en cours, retour. C'est ce que font les
+          cinq formulaires de l'app — sauf qu'ils l'écrivent à la main. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          isPending={envoiEnCours}
+          pendingLabel="Enviando…"
+          onPress={() => {
+            setEnvoiEnCours(true);
+            setTimeout(() => setEnvoiEnCours(false), 2000);
+          }}
+        >
+          Confirmar reserva
+        </Button>
+        <Legende>2 s en cours, puis retour — le focus reste sur le bouton</Legende>
+      </div>
+
+      <Legende>
+        Survoler, tabuler (l&apos;anneau de focus doit rester visible), maintenir enfoncé pour voir
+        l&apos;enfoncement.
+      </Legende>
+    </div>
+  );
+}
+
+export const Actions: Story = {
+  args: { children: "" },
+  render: () => <Demonstration />,
+};

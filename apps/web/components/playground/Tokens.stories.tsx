@@ -57,7 +57,12 @@ function Ligne({ nom, valeur, echantillon }: { nom: string; valeur: string; echa
         />
       ) : null}
       <code className="w-56 shrink-0 font-mono text-xs">{nom}</code>
-      <span className={defini ? "text-xs" : "text-xs italic text-[var(--muted)]"}>
+      {/* ⚠️ `min-w-0 break-words` : depuis que le thème vitrine a des pistes, une valeur n'est plus
+          `oklch(0.9702 0 0)` mais `light-dark(oklch(94.9% 0.013 88), oklch(15.7% 0.006 122.2))` —
+          trois fois plus longue. Sans ces deux classes, cette ligne poussait la PAGE à 397 px en
+          gabarit Mobile 390, c'est-à-dire exactement le défilement horizontal que le README
+          interdit. Relevé par le balayage a11y du lot des pistes (2026-09-01), qui l'a causé. */}
+      <span className={`min-w-0 break-words ${defini ? "text-xs" : "text-xs italic text-[var(--muted)]"}`}>
         {defini ? valeur : "non défini — valeur héritée du navigateur"}
       </span>
     </div>
