@@ -122,6 +122,32 @@ export const HEROUI_VARIANT: Record<ButtonVariant, "primary" | "secondary" | "ou
  */
 const RADIUS_CLASS = "rounded-[var(--radius)]";
 
+/**
+ * La FORME, ajoutée le 2026-09-02 à la demande de Jérôme pour le bouton de la barre de recherche
+ * (« plus rond en radius »). Deux valeurs, pas un rayon libre : un bouton suit le rayon du thème,
+ * ou il est complètement arrondi — l'entre-deux serait une valeur en dur qui cesserait de suivre la
+ * piste de couleur adoptée, exactement ce que la note ci-dessus cherche à éviter.
+ *
+ * ⚠️ `square` porte le MÊME nom et le même sens que sur `IconButton`. Ce qui accorde vraiment les
+ * deux composants, c'est `RADIUS_CLASS`, exporté d'ici et importé là-bas — PAS les deux tables, qui
+ * restent séparées et qu'il faut donc modifier ensemble. Et la valeur « complètement arrondi » y
+ * porte un autre nom à dessein : sur un bouton carré c'est un `circle`, sur un bouton large une
+ * `pill` — même classe, deux formes.
+ *
+ * ⚠️ Ceci ne rouvre PAS la question tranchée en tête d'`IconButton.tsx` (« pourquoi un composant
+ * séparé, et pas une prop `shape` sur `Button` ») : ce qui y était refusé, c'est de faire porter à
+ * un seul composant deux contrats de NOM ACCESSIBLE différents (`children` contre `icon` + `label`
+ * requis). Le rayon n'a rien à voir avec ça — il ne change aucune obligation pour l'appelant.
+ */
+const SHAPE_CLASSES = {
+  square: RADIUS_CLASS,
+  /** `rounded-full`. Le cas d'usage : un bouton logé DANS une forme déjà arrondie (la pilule de
+      `organisms/SearchBar`), où le rayon du thème jurerait avec le contenant. */
+  pill: "rounded-full",
+} as const;
+
+export type ButtonShape = keyof typeof SHAPE_CLASSES;
+
 /** Les classes des deux axes, partagées avec IconButton — même bouton, mêmes couleurs. */
 export function buttonToneClasses(variant: ButtonVariant, color: ButtonColor): string {
   return `${COLOR_CLASSES[color]} ${VARIANT_CLASSES[variant]}`;
@@ -144,6 +170,11 @@ export type ButtonProps = {
    * répétées dans une liste dense — jamais à une action principale.
    */
   size?: ButtonSize;
+  /**
+   * La forme des angles. `square` (défaut) suit `--radius`, donc la piste de couleur adoptée ;
+   * `pill` arrondit complètement — réservé à un bouton logé dans un contenant déjà arrondi.
+   */
+  shape?: ButtonShape;
   /** `full` remplace le `className="w-fit"`/pleine largeur écrit à la main dans les écrans. */
   width?: "auto" | "full";
   type?: "button" | "submit";
@@ -168,6 +199,7 @@ export function Button({
   variant = "solid",
   color = "accent",
   size = "lg",
+  shape = "square",
   width = "auto",
   type,
   onPress,
@@ -180,7 +212,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <HeroUIButton
-      className={`${buttonToneClasses(variant, color)} ${RADIUS_CLASS}`}
+      className={`${buttonToneClasses(variant, color)} ${SHAPE_CLASSES[shape]}`}
       variant={HEROUI_VARIANT[variant]}
       size={size}
       fullWidth={width === "full"}

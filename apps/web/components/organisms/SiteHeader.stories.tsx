@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { useEffect } from "react";
-import { CartProvider, useCart, type CartLine } from "@/lib/cart/CartContext";
+import { CartProvider } from "@/lib/cart/CartContext";
+import { PanierPre } from "@/components/playground/PanierPre";
 import { PageShell } from "@/components/atoms/PageShell";
 import { Title } from "@/components/atoms/Title";
 import { SiteHeader } from "./SiteHeader";
@@ -28,26 +28,6 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
-
-/** `CartProvider` n'accepte pas d'état initial — on le remplit au montage. */
-function PanierPre({ lignes }: { lignes: number }) {
-  const { lines, addLine } = useCart();
-  useEffect(() => {
-    if (lines.length > 0 || lignes === 0) return;
-    for (let i = 0; i < lignes; i += 1) {
-      addLine({
-        productId: `p-${i}`,
-        productName: "Paseo en lancha",
-        establishmentName: "Casa Kayam",
-        date: "2026-09-14",
-        // ⚠️ 3 personnes sur UNE ligne : la pastille doit afficher le nombre de lignes, pas 3×N.
-        qty: 3,
-        priceCop: 80000,
-      } satisfies Omit<CartLine, "id">);
-    }
-  }, [lines.length, lignes, addLine]);
-  return null;
-}
 
 function Cadre({ lignes = 0, isAuthenticated = false }: { lignes?: number; isAuthenticated?: boolean }) {
   return (

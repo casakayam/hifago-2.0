@@ -76,6 +76,16 @@ describe("Button", () => {
     expect(el.className).toContain("rounded-[var(--radius)]");
   });
 
+  // `shape="pill"` (2026-09-02, demande de Jérôme pour le bouton de `organisms/SearchBar`) : un
+  // bouton logé dans une forme déjà arrondie doit pouvoir l'être aussi. Deux valeurs seulement —
+  // un rayon libre serait une valeur en dur, qui cesserait de suivre la piste adoptée.
+  it("arrondit complètement avec shape=pill, et suit le thème par défaut", () => {
+    const pilule = bouton(<Button shape="pill">A</Button>).className;
+    expect(pilule).toContain("rounded-full");
+    expect(pilule).not.toContain("rounded-[var(--radius)]");
+    expect(bouton(<Button shape="square">A</Button>).className).toContain("rounded-[var(--radius)]");
+  });
+
   it("passe en pleine largeur avec width=full", () => {
     expect(bouton(<Button width="full">A</Button>).className).toContain("button--full-width");
     expect(bouton(<Button>A</Button>).className).not.toContain("button--full-width");
