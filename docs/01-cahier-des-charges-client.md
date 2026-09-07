@@ -3,7 +3,7 @@ id: refonte-cdc-client
 titre: "Cahier des charges — portail client (marketplace global, Guatapé = première localisation)"
 theme: cadrage
 statut: brouillon
-maj: 2026-08-13
+maj: 2026-09-07
 resume: >
   Comportement métier cible du portail de réservation client, dérivé du comportement réel actuel
   et challengé section par section avec Jérôme avant reprise dans la refonte.
@@ -79,7 +79,7 @@ Ajoutés par la relecture intégrale du 2026-09-07 :
 | # | Section | Statut |
 |---|---|---|
 | 1 | Périmètre et vision | ✅ validé 2026-08-11 |
-| 2 | Parcours utilisateurs | ✅ validé 2026-08-11 |
+| 2 | Parcours utilisateurs | 🔄 réécrit 2026-09-07 — en relecture |
 | 3a | Catalogue et tarification produits | ✅ corrigé 2026-08-13 |
 | 3b | Moteur de commission (17/10/7) | ✅ validé 2026-08-11 |
 | 3c | Code partenaire / attribution référent | ✅ corrigé 2026-08-13 |
@@ -160,143 +160,189 @@ présence est actée ici comme un pré-requis du site.
 
 ## 2. Parcours utilisateurs
 
-**Statut : ✅ validé par Jérôme le 2026-08-11** (placement des suggestions laissé « à trancher
-plus tard », non bloquant).
+**Statut : en relecture — section entièrement réécrite le 2026-09-07, à revalider par Jérôme.**
+Version précédente (✅ validée le 2026-08-11) : `git show e5d3959:docs/01-cahier-des-charges-client.md`.
+Cette réécriture est issue d'une **interview étape par étape** menée avec Jérôme le 2026-09-07,
+avant l'ouverture du chantier front de `apps/web` — les quatre axes du parcours avaient changé.
+Ce qui n'est pas daté du 2026-09-07 ci-dessous est **inchangé** depuis la validation du 2026-08-11.
 
 > Décrit les étapes fonctionnelles du parcours (ce que le client fait, dans quel ordre, ce qui
 > est obligatoire vs optionnel) — pas l'implémentation d'interface actuelle (carrousels,
 > animations, mise en page), qui sera entièrement redessinée (cf. cadrage général). Une étape
 > décrite ici doit survivre au changement de front ; un détail d'interaction ne le doit pas.
 
-**Nouvelle règle décidée (2026-08-11) — page d'accueil et découverte** (n'existe pas
-aujourd'hui — le portail actuel ouvre directement sur le parcours de réservation, sans page de
-découverte) :
-- une **page d'accueil** propose des hébergements, activités, transports, **camps** et **eventos**
-  dans des sections clairement distinctes — en particulier, camps et eventos ne sont jamais fusionnés
-  dans un même parcours ou une même catégorie générique — organisées en **sections**
-  (par catégorie, pour l'instant). L'algorithme de mise en avant au sein d'une section n'est **pas
-  encore choisi** — décision volontairement différée — mais la cible doit être conçue pour que ce
-  choix **se change facilement** (pas figé dans le code au premier jet) et pour permettre, plus
-  tard, de faire tourner plusieurs variantes en **A/B testing**. Contrainte d'architecture à
-  retenir pour le chiffrage : le classement d'une section doit être un point d'extension isolé,
-  pas une règle éparpillée dans l'affichage.
-- une **barre de recherche généraliste** permet de filtrer par type d'offre (hôtel, activité, transport, **camp, evento**…), par sous-catégorie d'activité (ex. jet ski), et par **localisation avec un rayon de
-  20 km** autour d'un point. *Implique* : chaque fiche (hébergement et prestation) porte des
-  coordonnées géographiques — à ajouter en §4 — et la taxonomie d'activités actuelle (6 familles
-  larges) devra probablement s'affiner en sous-catégories cherchables, point à détailler avec le
-  catalogue (§3a).
-- **Décision (2026-08-11)** : en complément de la recherche, des **pages de catégorie/listing
-  dédiées** (ex. « Activités à Guatapé », Guatapé n'étant qu'un exemple de localisation/tag
-  parmi d'autres, pas l'identité de la plateforme) doivent exister — navigables et indexables,
-  pas seulement accessibles via une recherche active. Même logique de tags que ci-dessus pour
-  déterminer ce qu'une page de catégorie regroupe.
+### 2a. Accueil et découverte
 
-**Parcours principal — composer et valider une réservation :**
+**Décidé le 2026-08-11, précisé et modifié le 2026-09-07.** N'existe pas dans le portail actuel,
+qui ouvre directement sur le parcours de réservation sans page de découverte.
 
-1. **Arrivée sur le portail** — directement sur une réservation en cours (lien profond, QR ou
-   lien attribué portant un code partenaire en arrière-plan, cf. §3c), ou via la page
-   d'accueil/recherche ci-dessus.
-2. **Consultation d'une fiche** : hébergement, activité, transport, **camp** ou **evento**. Les
-   parcours Camp et Evento restent visuellement et fonctionnellement distincts ; ils ne sont pas
-   présentés comme deux variantes d'un même produit.
-3. **Choix de l'hébergement** — optionnel (une commande peut n'avoir aucune nuit, cf. §3e) : un ou
-   plusieurs hôtels/hostels (type de couchage, dates, nombre de personnes) et/ou un ou plusieurs
-   logements entiers, parmi les établissements disponibles.
-4. **Ajout de prestations** — optionnel et cumulable : activités, transport, **camps** et
-   **eventos**. Le camp suit son propre parcours multi-jours ; l'evento suit son propre parcours
-   éditorial/réservable. Chaque prestation ajoutée peut exiger une date, ou une date et un créneau,
-   selon sa nature (§3a/§3d) ; le client voit en temps réel les places restantes quand elles se
-   raréfient (§3d).
-5. **Suggestions complémentaires** — *nouveau, à définir* : après un ajout au panier et/ou à
-   l'étape de paiement (point ouvert ci-dessous), le client se voit proposer d'autres offres
-   pertinentes à ajouter — jamais un blocage, une simple proposition qu'il peut ignorer.
-6. **Coordonnées du client** : nom, WhatsApp et email (**tous trois obligatoires depuis le
-   2026-08-17**, cf. §3e) ; document/commentaire restent optionnels. Si le client est connecté à
-   son compte (ci-dessous), ces informations sont pré-remplies depuis son profil. **Aucun champ de
-   code promo/code partenaire n'est affiché au client final** dans le périmètre actuel (§3c).
-7. **Étape de paiement** : **un seul paiement, à la fin**, pour toute la commande — même si elle
-   combine plusieurs établissements/prestataires (§3e). Aujourd'hui, confirmation du paiement à
-   l'arrivée (pas de saisie de moyen de paiement en ligne) ; demain, si le paiement en ligne se
-   concrétise (MercadoPago/Stripe, cf. cadrage général), cette étape portera la saisie réelle — la
-   place de l'étape dans le parcours ne change pas, seul son contenu évoluera. **Décision
-   (2026-08-11)** : le paiement du client reste unique et global, mais la **facturation interne
-   reste divisée par ligne/prestataire** (déjà le cas : chaque ligne porte son propre snapshot de
-   prix et de commission, §3b/§4) — pour pouvoir séparer, tracer et régler chaque part
-   individuellement (par établissement, par référent) même si le client n'a payé qu'une fois.
-8. **Validation** : la commande est créée. Le client reçoit une confirmation (numéro(s) de
-   réservation, récapitulatif, totaux) et un moyen direct de contacter l'hébergement/l'équipe
-   (aujourd'hui : message WhatsApp pré-rempli).
+- **L'accueil et l'écran de résultats de recherche sont la même page** (2026-09-07) : en-tête,
+  bloc de recherche, une section par type d'offre, pied de page. Une recherche ne change pas
+  d'écran, elle change les critères.
+- **Une section par type d'offre** : activités, hébergements, transports, **camps**, **eventos**.
+  Camps et eventos ne sont **jamais fusionnés** dans un même parcours ni dans une même catégorie
+  générique. Ordre décidé le 2026-09-07 : **activités d'abord**, puis hébergements, transports,
+  camps, eventos.
+- Chaque section montre **au plus huit offres** et un lien « voir plus » vers sa page de listing
+  (2026-09-07). **Une section vide n'est pas affichée.**
+- **L'algorithme de mise en avant au sein d'une section reste hors périmètre** (confirmé le
+  2026-09-07). La contrainte d'architecture est conservée : le classement d'une section doit
+  rester un **point d'extension isolé**, jamais une règle éparpillée dans l'affichage, pour qu'on
+  puisse en changer — et faire tourner des variantes en A/B testing — sans rouvrir un écran.
+- **Barre de recherche généraliste** (périmètre arrêté le 2026-09-07) : on cherche par **tag**,
+  par **nom**, par **type d'offre** et par **établissement** ; on filtre par **nombre de
+  personnes** et par **dates**. Les résultats restent **groupés par section**, les sections vides
+  masquées.
+- Le **bloc de recherche reste présent sur toutes les pages qui affichent des listes**, et les
+  critères saisis **se conservent d'un écran à l'autre** (2026-09-07).
+- **Pages de listing dédiées, navigables et indexables** — pas seulement atteignables par une
+  recherche active (2026-08-11), avec une structure arrêtée le 2026-09-07 :
+  - la page des **activités** est un **index de sous-catégories** (les tags : jet ski, buceo,
+    kayak…), sans produit ; on y clique pour atteindre la liste des offres d'un tag ;
+  - les quatre autres types **listent directement leurs offres**.
+- **Granularité par tags** (2026-08-11, inchangé) : plutôt qu'une liste de familles figée dans le
+  code, la cible utilise des **tags** saisis par le prestataire/gérant de l'offre ou par l'admin.
+  Reste à détailler : tags libres ou choisis dans une liste gérée, modération éventuelle, lien
+  avec les six familles actuelles.
+- **Marketplace global** : « Activités à Guatapé » n'est qu'un exemple de page de tag ; Guatapé est
+  une localisation parmi d'autres, pas l'identité de la plateforme.
 
-**Nouvelle règle décidée (2026-08-11) — compte client** (cf. §1, décision qui rouvre le
-périmètre) :
-- le client peut **créer un compte / se connecter**, à tout moment du parcours (avant, pendant ou
-  après une réservation) — jamais une obligation pour réserver (§1) ;
-- un client connecté a accès à une **page compte** : ses informations (pré-remplissage du
-  formulaire de coordonnées), l'**historique de ses réservations** passées et en cours ;
-- une réservation faite **sans être connecté** (parcours invité) reste possible et complète — le
-  rattachement à un compte existant, s'il y en a un, se fait alors par WhatsApp/email (§3c),
-  jamais par une obligation de connexion.
-- **Décision (2026-08-13) — modification partielle vs annulation totale** : depuis son compte, un
-  client peut **modifier** une réservation sans annuler l'ensemble de la commande : supprimer une
-  activité précise, ajouter une nouvelle activité/prestation, ou remplacer une ligne (par exemple
-  pour changer sa date ou sa quantité). Une ligne financière déjà créée n'est jamais recalculée
-  sur place : un remplacement se fait par annulation de la ligne concernée puis création d'une
-  nouvelle ligne, afin de préserver les snapshots de prix/commission (§3b).
-  **Annuler la réservation**, au contraire, signifie annuler **toute la commande** et toutes ses
-  lignes (hébergements, activités, transports, camps et eventos). Dans les deux cas, une annulation
-  côté client n'est **jamais remboursée** (§7/A3). Le contact direct reste disponible en complément.
-- **Attribution partenaire persistante** : elle n'est sauvegardée durablement que pour un client
-  disposant d'un **compte enregistré**. Un invité peut réserver via un QR/lien attribué, mais ce
-  rattachement ne devient pas une préférence durable attachée à son identité (§3c).
-- **Recommandation à confirmer — voucher/e-ticket** : à la confirmation, le client reçoit un
-  justificatif de réservation présentable sur place (au-delà du numéro de réservation actuel) —
-  utile dès qu'il y a plusieurs prestataires indépendants qui doivent pouvoir vérifier une
-  réservation sans dépendre de Jérôme. Détail (QR, PDF, etc.) à trancher au chiffrage.
+### 2b. Parcours principal — composer et valider une réservation
 
-**Décision (2026-08-11) — condition d'annulation affichée avant réservation, simplifiée le
-2026-08-12** : la fiche d'un produit (§3a) et/ou l'étape de récapitulatif doivent afficher
-clairement, **avant que le client ne valide et paie**, qu'une annulation ou une absence de sa
-part n'est jamais remboursée (§7/A3) — une règle fixe et universelle, pas une politique qui
-varie par produit/établissement. Un client ne doit jamais découvrir ça après coup, en cas de
-litige.
+Réécrit le 2026-09-07. Les invariants métier (§3d anti-survente, §3e règles de panier, §3b
+commission figée) sont inchangés ; c'est l'enchaînement des écrans qui change.
 
-**Parcours secondaires :**
+1. **Arrivée** — sur l'accueil, ou directement sur une fiche par lien profond, QR ou lien attribué
+   portant un code partenaire en arrière-plan (§3c). *Inchangé.*
+2. **Découverte** — accueil, recherche, ou page de listing (§2a).
+3. **Consultation d'une fiche.** Pour tout ce qui n'est pas un hébergement : photos, titre,
+   description, prix, une section présentant l'**établissement**, et le **calendrier de sélection
+   de date**. Les parcours Camp et Evento restent distincts ; ils ne sont pas présentés comme deux
+   variantes d'un même produit. *(Structure d'écran arrêtée le 2026-09-07.)*
+4. **Hébergement — parcours propre** (2026-09-07) : on passe par la **fiche de l'établissement**,
+   qui présente ses couchages en cartes ; on ouvre un couchage, on voit sa fiche et son calendrier.
+   Dans les listes, un établissement apparaît comme **une seule offre dès qu'il propose deux
+   couchages ou plus** ; un logement isolé reste une offre à lui seul. Choisir un hébergement
+   reste **optionnel** : une commande peut n'avoir aucune nuit (§3e). *Cohérent avec la spec 24 :
+   l'hôtel est l'établissement, le couchage est un produit.*
+5. **Ajout au panier, puis retour à la découverte** (2026-09-07) — **ceci ferme le point laissé
+   ouvert le 2026-08-11 sur le placement des suggestions complémentaires** : elles ont lieu
+   **après chaque ajout**, et non à l'étape de paiement. Après un ajout, le client revient à
+   l'accueil, **ses critères de recherche conservés** et **les sections réordonnées selon ce qu'il
+   a déjà au panier** — une activité ajoutée fait remonter les hébergements, et inversement. C'est
+   une proposition, jamais un blocage.
+   L'ajout de prestations reste **optionnel et cumulable** ; chacune peut exiger une date, ou une
+   date et un créneau, selon sa nature (§3a/§3d) ; le client voit les places restantes quand elles
+   se raréfient (§3d).
+6. **Panier** (2026-09-07) — un écran à lui. Le panier **survit à un rechargement et à la fermeture
+   de l'onglet**. Conséquence assumée : il peut porter des lignes vieilles de plusieurs jours, donc
+   **prix et disponibilité sont revérifiés** à la reprise. Une ligne devenue indisponible est
+   **signalée en place**, avec le moyen de la retirer ; les autres lignes et le total sont
+   conservés ; **jamais de retrait automatique** (invariant §3d).
+7. **Coordonnées du client** : nom, WhatsApp et email (**tous trois obligatoires depuis le
+   2026-08-17**, cf. §3e) ; document/commentaire restent optionnels. Pré-remplis si le client est
+   connecté. **Aucun champ de code promo/code partenaire n'est affiché au client final** (§3c).
+   La **connexion est proposée à cette étape, jamais imposée** (2026-09-07).
+8. **Paiement** : **un seul paiement, à la fin**, pour toute la commande — même si elle combine
+   plusieurs établissements/prestataires (§3e), la **facturation interne restant divisée par
+   ligne/prestataire** (§3b/§4). La **condition d'annulation** est affichée ici, avant de payer
+   (§2d). Le paiement en ligne est effectif depuis la spec 19 (Mercado Pago, acompte obligatoire) ;
+   il **fait sortir du site** et le client revient ensuite sur le portail.
+9. **Résultat** (2026-09-07) — un écran **avec une adresse propre à la commande**, rechargeable et
+   réouvrable plus tard. Il porte le ou les **numéros de réservation**, le **récapitulatif** et les
+   **totaux**, et propose au client **de créer un compte** pour retrouver sa réservation.
+   En cas d'échec de paiement, la réservation est **conservée** et le client se voit proposer de
+   **réessayer** — jamais un retour silencieux au panier.
+   ⚠️ **Changement assumé le 2026-09-07** : cet écran ne porte **plus** de contact WhatsApp
+   pré-rempli (il en portait un dans le portail actuel). Le canal reste accessible : le pied de
+   page du site porte un contact WhatsApp sur **toutes** les pages.
+
+### 2c. Compte client
+
+Décidé le 2026-08-11 (cf. §1), révisé le 2026-09-07.
+
+- Le client peut **créer un compte / se connecter à tout moment** du parcours — avant, pendant ou
+  après une réservation — **jamais une obligation pour réserver** (§1). *Inchangé.*
+- Une réservation faite **sans être connecté** reste possible et complète. *Inchangé.*
+- **Deux mécanismes** : email/mot de passe **et** connexion Google. Un compte reste identifié par
+  un email unique quel que soit le mode utilisé. *Inchangé.* S'y ajoutent **mot de passe oublié et
+  réinitialisation** (2026-09-07), qui n'existent aujourd'hui que côté `apps/admin`.
+- **Ce que le compte donne** (arrêté le 2026-09-07) : l'**historique des réservations** passées et
+  en cours ; le **profil** (ses informations, source du pré-remplissage) ; **l'annulation d'une
+  commande entière** ; et le moyen de **contacter l'établissement ou Hifago**, par un contact
+  WhatsApp **par réservation**, avec le numéro de réservation dans le message.
+- ⚠️ **Modification partielle d'une réservation : retirée du premier périmètre** (2026-09-07).
+  Cela renverse la décision du 2026-08-13 (« depuis son compte, un client peut modifier une
+  réservation sans annuler l'ensemble »). Reste une **cible future**, portée au backlog ; le
+  mécanisme voulu ne change pas quand elle reviendra — une ligne financière déjà créée n'est jamais
+  recalculée sur place : un remplacement se fait par annulation puis création d'une nouvelle ligne,
+  pour préserver les snapshots de prix/commission (§3b). La RPC `modify_order_line` existe déjà et
+  reste utilisée côté socio/admin.
+- **Annuler la réservation** signifie annuler **toute la commande** et toutes ses lignes
+  (hébergements, activités, transports, camps et eventos). Une annulation côté client n'est
+  **jamais remboursée** (§7/A3). *Inchangé.*
+- **Attribution partenaire persistante** : sauvegardée durablement **uniquement** pour un client
+  disposant d'un compte enregistré. Un invité peut réserver via un QR/lien attribué sans que ce
+  rattachement devienne une préférence durable (§3c). *Inchangé.*
+- **Voucher/e-ticket, recommandation toujours à confirmer** : l'écran de résultat adressable
+  (§2b.9) en pose la fondation — le justificatif présentable sur place et sa forme (QR, PDF)
+  restent à trancher.
+
+*État d'implémentation : Google OAuth et l'inscription email/mot de passe avec vérification ont
+été construits le 2026-08-15 (feature 31) en back-end générique, mais le **front n'existe que sur
+`apps/admin`** — le front `apps/web` reste à construire. Spec :
+`docs/specs/07-connexion-inscription-complete.md`.*
+
+### 2d. Condition d'annulation affichée avant réservation
+
+Décidé le 2026-08-11, simplifié le 2026-08-12, **localisé le 2026-09-07** : la mention qu'une
+annulation ou une absence n'est **jamais remboursée** (§7/A3) est affichée **sur l'écran de
+paiement, avant que le client ne valide et paie** — et pas ailleurs. C'est une règle fixe et
+universelle, pas une politique qui varie par produit ou par établissement. Un client ne doit
+jamais découvrir ça après coup, en cas de litige.
+
+### 2e. Parcours secondaires
 
 - **Consultation sans engagement** : le client peut consulter le détail d'une activité, d'un camp
-  ou d'un evento (description, photos, prix) sans jamais entamer de réservation. Certaines fiches
-  restent de simples vitrines renvoyant vers un contact direct plutôt que vers une réservation en
-  ligne (§6) — un client doit toujours pouvoir distinguer les deux au premier regard.
+  ou d'un evento sans jamais entamer de réservation.
+- **Fiche vitrine, non réservable en ligne** : certaines offres renvoient vers un contact direct
+  plutôt que vers une réservation (§6). Le client doit pouvoir **distinguer les deux au premier
+  regard** — forme arrêtée le 2026-09-07 : la fiche est identique aux autres, mais **le calendrier
+  de réservation laisse la place à un bouton de contact**. La différence se voit à l'endroit exact
+  où le client la cherche, sans bandeau ni texte explicatif.
 - **Réservation refusée en cours de route** : si une place/nuit devient indisponible entre
-  l'affichage et la validation (concurrence avec un autre client), le client en est informé
-  explicitement et doit ajuster sa sélection — jamais une réservation silencieusement dégradée ou
-  partiellement honorée (invariant §3d).
-- **Après la réservation, sans compte** : le client garde son numéro de réservation et le contact
-  direct (WhatsApp) comme seuls repères — toute question ultérieure passe par ce contact.
-- **Après la réservation, avec compte** : la réservation apparaît dans l'historique du compte —
-  un point de suivi en plus du contact direct, pas un remplacement.
+  l'affichage et la validation, le client en est informé **explicitement** et ajuste lui-même sa
+  sélection — jamais une réservation silencieusement dégradée ou partiellement honorée
+  (invariant §3d). Écran correspondant : §2b.6.
+- **Après la réservation, sans compte** : le client garde son **numéro de réservation** et l'écran
+  de résultat, qui reste réouvrable à son adresse (§2b.9). Le contact WhatsApp du pied de page
+  reste disponible sur tout le site.
+- **Après la réservation, avec compte** : la réservation apparaît dans l'historique, avec son
+  contact WhatsApp dédié (§2c).
 
-**Décision (2026-08-11) — compte client** : les deux mécanismes sont proposés, comme le fait déjà
-`/partner` — email/mot de passe **et** connexion Google. Un compte reste identifié par un email
-unique quel que soit le mode de connexion utilisé.
+### 2f. Points encore à trancher
 
-**Implémenté le 2026-08-15 (Feature 31)** : Google OAuth + inscription email/mot de passe avec
-vérification par email construits — back-end générique (les deux apps), mais le **front reste à
-construire côté `apps/web`** (ce lot a livré le front sur `apps/admin` uniquement, décision Jérôme
-2026-08-15). Spec détaillée : `docs/specs/07-connexion-inscription-complete.md`.
-
-**Direction actée (2026-08-11), détails à voir plus tard** — granularité de recherche par
-catégorie : plutôt qu'une liste fixe de familles (comme les 6 catégories actuelles), la cible
-utilisera des **tags**, saisis par le prestataire/gérant de l'offre concernée, ou par l'admin
-principal — pas une taxonomie figée dans le code. Reste à détailler plus tard : tags libres ou
-choisis dans une liste gérée, modération éventuelle, lien avec les 6 familles actuelles
-(remplacées ou simple pré-remplissage).
-
-**Points encore à trancher (chiffrage technique) :**
-- Suggestions : uniquement à l'étape de paiement, après chaque ajout au panier, ou les deux ?
+- **Recherche par localisation — différée, pas abandonnée** (tranché le 2026-09-07) : le rayon de
+  20 km autour d'un point, validé le 2026-08-11, ne fait **pas partie du premier lot**. Le périmètre
+  livré d'abord est tag, nom, type, établissement, personnes, dates. La cible « marketplace global »
+  du §1 continue de s'y adosser, donc la fonction de recherche doit être conçue pour **accueillir le
+  filtre géographique sans être réécrite** — les coordonnées existent déjà sur les produits comme
+  sur les établissements.
+- **Plafonds du panier** (§3e) : plafond global sur toute la commande, ou plafond répété par
+  établissement ? La question devient plus visible depuis que le panier survit plusieurs jours.
+- **Voucher/e-ticket** : forme du justificatif (QR, PDF, autre).
+- **Disponibilité d'un hébergement adossé à un PMS dans une recherche datée** : décision différée
+  le 2026-09-07 — il apparaît, sans garantie de disponibilité.
+- **Rattachement d'une commande passée en invité à un compte créé après coup** : le mécanisme
+  n'existe pas ; périmètre à part entière (§2b.9).
+- **Source du contact d'un établissement** : décision du 2026-09-07 de rendre public le téléphone
+  du partenaire — à porter en version étroite (partenaire possédant un établissement actif),
+  jamais la table d'identité entière, qui contient aussi des référents particuliers.
 
 *Traçabilité : `docs/2-reference/04-app-reservar.md` § « Front (`reservar.js`) — structure »,
-`docs/1-manuels/10-client.md`. Sections nouvelles sans équivalent dans le code actuel : page
-d'accueil/recherche, suggestions, compte client.*
+`docs/1-manuels/10-client.md` pour le portail actuel. Sections sans équivalent dans le code
+actuel : accueil/recherche, pages de listing, suggestions, compte client, écran de résultat
+adressable.*
 
 ---
 
