@@ -25,6 +25,7 @@ repond_a:
 - **Trou (a)** — rien ne libère un cupo/place quand une commande EXPIRE (jamais payée) ; seul `cancel_order` le fait. Un créneau reste immobilisé pour toujours si personne n'annule explicitement.
 - **Trou (b)** — le marquage des catégories qui refusent en 422 Lobby reste MANUEL, volontairement : Lobby ne distingue pas "pas réservable" de "requête mal formée" dans son code d'erreur.
 - LobbyPMS spec 21 §10 points 3-5 non tranchés : traslado↔commission hifago, valeur exacte de `orders.status` en cas d'échec PMS post-confirmation, chiffrement du token.
+- **Modification partielle d'une réservation depuis le compte client** — cible future, retirée du premier périmètre le 2026-09-07 (renverse la décision du 2026-08-13, cahier 01 §2c) ; `modify_order_line` reste utilisée côté socio/admin.
 - **Chantier front vitrine** — les six points ouverts du parcours client cible sont groupés dans `docs/01-cahier-des-charges-client.md` §2f (recherche géo différée, plafonds du panier, forme du voucher, dispo PMS en recherche datée, rattachement d'une commande invitée à un compte, source du contact d'un établissement). Une ligne ici, pas six : ils vivent dans la section qu'ils concernent.
 - `products.check_in_time`/`check_out_time` fait toujours doublon avec celui de l'établissement — décision de modèle à trancher (lequel fait foi), pas un simple nettoyage.
 

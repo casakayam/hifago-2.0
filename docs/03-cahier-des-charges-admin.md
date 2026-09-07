@@ -68,6 +68,17 @@ ces lignes en tiennent lieu.
   ouvert non levé), et les niveaux d'accès différenciés restent un arbitrage Jérôme
   (`CLAUDE.md` §10, `docs/backlog.md`).
 
+Ajouté par la réécriture du §2 du cahier client le 2026-09-07 :
+
+- **§3g, bloc « Décision 2026-08-13 — modification vs annulation *client* » — un mot périmé.** La
+  modification partielle depuis le compte client a été retirée du premier périmètre le 2026-09-07
+  (`01-cahier-des-charges-client.md` §2c, portée au backlog) : côté client, le seul geste
+  self-service sur une commande existante est l'**annulation entière**. La modification par lignes
+  reste un geste **admin/socio** (`modify_order_line`, déjà construite). Tout le corps du bloc reste
+  valide — définition des deux gestes, snapshots figés, reconstruction des lignes remplacées — et
+  l'exigence « l'admin doit voir clairement lequel des deux gestes a eu lieu » vaut désormais en
+  identifiant l'**auteur réel** du geste, qui n'est plus jamais le client.
+
 > Méthode : une section = une unité de validation avec Jérôme. Statut par section :
 > `brouillon` → `en relecture` → `✅ validé par Jérôme le AAAA-MM-JJ`.
 > Sources principales : `docs/2-reference/03-app-admin.md`, `docs/2-reference/05-data-model.md`.

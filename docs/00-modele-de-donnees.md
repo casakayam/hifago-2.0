@@ -64,6 +64,16 @@ ces lignes en tiennent lieu. §2 fait exception : il a bien été réécrit le 2
   troisième langue serait publiée par repli, invisible dans l'éditeur et non supprimable. Ouvrir une
   langue de contenu supplémentaire reste donc un geste de code, pas une simple donnée.
 
+- **Section « 🗺️ Google Maps », le constat de fait — périmé, et démenti par ce document lui-même.**
+  « Aucune coordonnée lat/lon n'existe en base SQL » décrit la base *legacy* : dans le nouveau stack
+  les colonnes existent et sont renseignées par le géocodage — `establishments.lat`/`lon`
+  (migration `20260814234500`) et `products.address`/`lat`/`lon` (spec 11) — ce que les tableaux
+  d'audit du §1 et du §3 de ce même document portent d'ailleurs en « ✅ livré ». La prose et les
+  tableaux se contredisent, et c'est la prose qu'on lit. Corollaire sur le renvoi : la recherche par
+  rayon n'est plus « déjà décidée (client §2) » — elle a été **différée hors du premier lot** le
+  2026-09-07 (`01-cahier-des-charges-client.md` §2f), précisément *parce que* les coordonnées
+  existent déjà et qu'aucune migration ne bloque son ajout ultérieur.
+
 ## 🌙 Découverte majeure — du schéma dormant, jamais exposé
 
 Une lecture complète des 14 migrations SQL (pas seulement leur résumé documenté) révèle plusieurs

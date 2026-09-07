@@ -63,6 +63,24 @@ Ajoutés par la relecture intégrale du 2026-09-07 :
   dans `products.stay_rates`, nouveauté assumée face à la v1). Séjour minimum et délai de préavis
   minimum, eux, restent bien à construire.
 
+Ajoutés par la réécriture du §2 le 2026-09-07 — **contradictions internes à ce document**, que
+`npm run docs:check` ne sait pas détecter (il ne vérifie que le couplage spec↔cahier) :
+
+- **§3e contredit frontalement §2b.6 sur la durée de vie du panier.** §3e écrit que le panier
+  « n'est pas persisté au-delà de la session en cours (perdu si l'onglet est fermé) » ; §2b.6,
+  réécrit le 2026-09-07, écrit qu'il « survit à un rechargement **et** à la fermeture de l'onglet ».
+  §3e n'a pas été réécrit — une section est une unité de validation avec Jérôme — mais son statut
+  passe à « à rouvrir » dans le sommaire, et il ne doit plus être lu comme opposable sur ce point.
+  ⚠️ **Propagé hors des cahiers** : `apps/web/lib/cart/CartContext.tsx` cite nommément §3e pour
+  interdire toute persistance. Le commentaire n'est pas encore faux (§3e reste la version validée) ;
+  il le deviendra à la seconde où Jérôme revalidera §2b.6, et devra être corrigé dans le même geste.
+- **§4 décrit encore la modification partielle d'une réservation comme une écriture du portail
+  client**, sous le titre « Écrit par le portail », alors que §2c l'a retirée du premier périmètre
+  le 2026-09-07. Le mécanisme décrit y reste exact — annuler puis recréer, jamais recalculer une
+  ligne en place, snapshots préservés — mais il vaut désormais côté **socio/admin**
+  (`modify_order_line`), pas côté client, dont le seul geste self-service sur une commande
+  existante est l'annulation entière.
+
 > Méthode : une section = une unité de validation avec Jérôme. Statut par section :
 > `brouillon` → `en relecture` → `✅ validé par Jérôme le AAAA-MM-JJ`.
 > Sources principales : `docs/2-reference/04-app-reservar.md`, `docs/1-manuels/10-client.md`,
@@ -84,9 +102,9 @@ Ajoutés par la relecture intégrale du 2026-09-07 :
 | 3b | Moteur de commission (17/10/7) | ✅ validé 2026-08-11 |
 | 3c | Code partenaire / attribution référent | ✅ corrigé 2026-08-13 |
 | 3d | Disponibilité, cupos, calendrier | ✅ corrigé 2026-08-13 |
-| 3e | Règles de panier | ✅ validé 2026-08-11 |
+| 3e | Règles de panier | 🔄 à rouvrir — contredit par §2b.6 (2026-09-07) |
 | 3f | Cycle de vie de la commande | ✅ validé 2026-08-11 |
-| 4 | Entités de données touchées | ✅ corrigé 2026-08-13 |
+| 4 | Entités de données touchées | ✅ corrigé 2026-08-13, amendé 2026-09-07 (§2c) |
 | 5 | Intégration LobbyPMS | ✅ validé 2026-08-11 |
 | 6 | Cas limites | ✅ validé 2026-08-11 |
 | 7 | Lacunes connues, challengées une à une | ✅ validé 2026-08-11 |
@@ -193,12 +211,30 @@ qui ouvre directement sur le parcours de réservation sans page de découverte.
   par **nom**, par **type d'offre** et par **établissement** ; on filtre par **nombre de
   personnes** et par **dates**. Les résultats restent **groupés par section**, les sections vides
   masquées.
+- **Sens exact des deux filtres, arrêté le 2026-09-07** — c'est ce qui les rend testables :
+  - **Nombre de personnes = capacité déclarée**, jamais les places réellement restantes. Taper 3
+    montre ce qui *peut accueillir* 3 personnes ; une chambre pour 4 sort même si elle est déjà
+    occupée. **Conséquence voulue** : le filtre ne consulte aucune disponibilité, donc il fonctionne
+    sans dates et n'interroge jamais un PMS externe pendant une recherche.
+  - **Dates = chevauchement**, jamais inclusion. Une ou deux dates ; une offre remonte dès que sa
+    période **croise** la plage demandée, et elle peut donc **déborder avant et après** — un camp du
+    10 au 15 sort pour une recherche du 12 au 13.
+  - Un produit **sans date requise** reste visible même quand des dates sont saisies : rien ne
+    permet de l'exclure.
 - Le **bloc de recherche reste présent sur toutes les pages qui affichent des listes**, et les
   critères saisis **se conservent d'un écran à l'autre** (2026-09-07).
+- **Où vivent ces critères, décidé le 2026-09-07** : dans **l'adresse des pages qui affichent des
+  résultats** (accueil et listings), qui en ont besoin pour filtrer côté serveur et dont l'URL
+  devient ainsi partageable ; **dans la mémoire du navigateur ailleurs**. Une fiche produit ou
+  établissement garde donc une **adresse propre et unique**, et son calendrier se pré-remplit quand
+  même avec les dates cherchées. **Conséquence assumée et voulue** : les fiches restent cacheables,
+  seules les listes sont rendues à chaque requête.
 - **Pages de listing dédiées, navigables et indexables** — pas seulement atteignables par une
   recherche active (2026-08-11), avec une structure arrêtée le 2026-09-07 :
   - la page des **activités** est un **index de sous-catégories** (les tags : jet ski, buceo,
-    kayak…), sans produit ; on y clique pour atteindre la liste des offres d'un tag ;
+    kayak…), sans produit ; on y clique pour atteindre la liste des offres d'un tag. **Seuls les
+    tags portant au moins une offre publiée y figurent** (2026-09-07) — un tag vide produirait une
+    page vide que Google indexerait ;
   - les quatre autres types **listent directement leurs offres**.
 - **Granularité par tags** (2026-08-11, inchangé) : plutôt qu'une liste de familles figée dans le
   code, la cible utilise des **tags** saisis par le prestataire/gérant de l'offre ou par l'admin.
@@ -209,8 +245,10 @@ qui ouvre directement sur le parcours de réservation sans page de découverte.
 
 ### 2b. Parcours principal — composer et valider une réservation
 
-Réécrit le 2026-09-07. Les invariants métier (§3d anti-survente, §3e règles de panier, §3b
-commission figée) sont inchangés ; c'est l'enchaînement des écrans qui change.
+Réécrit le 2026-09-07. Les invariants métier (§3d anti-survente, §3b commission figée) sont
+inchangés ; c'est l'enchaînement des écrans qui change. ⚠️ **Une exception : §3e est révisé sur un
+point — la persistance du panier (§2b.6) — et ses plafonds restent à revoir (§2f).** §3e n'a pas
+été réécrit, il est marqué à rouvrir.
 
 1. **Arrivée** — sur l'accueil, ou directement sur une fiche par lien profond, QR ou lien attribué
    portant un code partenaire en arrière-plan (§3c). *Inchangé.*
@@ -225,37 +263,75 @@ commission figée) sont inchangés ; c'est l'enchaînement des écrans qui chang
    couchages ou plus** ; un logement isolé reste une offre à lui seul. Choisir un hébergement
    reste **optionnel** : une commande peut n'avoir aucune nuit (§3e). *Cohérent avec la spec 24 :
    l'hôtel est l'établissement, le couchage est un produit.*
+   **Prix affiché sur une carte groupée (décidé le 2026-09-07)** : « **desde** X COP », où X est le
+   **prix minimum** de ses couchages, porté par une colonne dédiée sur l'établissement et
+   **recalculée à chaque ajout, édition ou suppression** d'un produit. ⚠️ C'est une dénormalisation :
+   elle doit être maintenue **dans la même transaction** que la modification du produit, sinon elle
+   dérive en silence — la spec devra porter la règle et son test.
 5. **Ajout au panier, puis retour à la découverte** (2026-09-07) — **ceci ferme le point laissé
    ouvert le 2026-08-11 sur le placement des suggestions complémentaires** : elles ont lieu
    **après chaque ajout**, et non à l'étape de paiement. Après un ajout, le client revient à
    l'accueil, **ses critères de recherche conservés** et **les sections réordonnées selon ce qu'il
-   a déjà au panier** — une activité ajoutée fait remonter les hébergements, et inversement. C'est
-   une proposition, jamais un blocage.
+   a déjà au panier**. **Règle exacte, arrêtée le 2026-09-07** : les types **absents** du panier
+   passent devant, dans leur ordre habituel ; les types **déjà présents** tombent à la fin, dans le
+   leur. Le client voit donc toujours d'abord ce qu'il n'a pas encore. Choisie contre la variante
+   « suivre le dernier ajout » parce que l'ordre ne saute pas à chaque clic. C'est une proposition,
+   jamais un blocage. **Le plafond de huit par section vaut aussi sous recherche** (2026-09-07) ;
+   une section à zéro résultat n'est pas affichée ; et **aucun ordre particulier n'est retenu** à
+   l'intérieur d'une section pour l'instant, cohérent avec le classement laissé hors périmètre.
    L'ajout de prestations reste **optionnel et cumulable** ; chacune peut exiger une date, ou une
-   date et un créneau, selon sa nature (§3a/§3d) ; le client voit les places restantes quand elles
-   se raréfient (§3d).
+   date et un créneau, selon sa nature (§3a/§3d).
+   ⚠️ **Sixième renversement, acté le 2026-09-07** : la promesse « le client voit en temps réel les
+   places restantes quand elles se raréfient », portée par la version du 2026-08-11 et héritée du
+   portail actuel, est **retirée**. Aucun compteur de places restantes n'est affiché au client, à
+   aucun seuil. L'anti-survente (§3d) reste évidemment entier — c'est l'affichage qui disparaît, pas
+   la règle.
 6. **Panier** (2026-09-07) — un écran à lui. Le panier **survit à un rechargement et à la fermeture
    de l'onglet**. Conséquence assumée : il peut porter des lignes vieilles de plusieurs jours, donc
-   **prix et disponibilité sont revérifiés** à la reprise. Une ligne devenue indisponible est
+   **la disponibilité est revérifiée** à la reprise. *Le prix, lui, ne bouge pas (décision du
+   2026-09-07) — et même s'il bougeait, `create_order` calcule tous les montants **côté serveur**,
+   le navigateur n'en envoyant jamais aucun : un panier ancien ne peut pas faire payer un ancien
+   prix.* Une ligne devenue indisponible est
    **signalée en place**, avec le moyen de la retirer ; les autres lignes et le total sont
    conservés ; **jamais de retrait automatique** (invariant §3d).
 7. **Coordonnées du client** : nom, WhatsApp et email (**tous trois obligatoires depuis le
    2026-08-17**, cf. §3e) ; document/commentaire restent optionnels. Pré-remplis si le client est
    connecté. **Aucun champ de code promo/code partenaire n'est affiché au client final** (§3c).
-   La **connexion est proposée à cette étape, jamais imposée** (2026-09-07).
+   La **connexion est proposée à cette étape, jamais imposée** (2026-09-07) — et au retour de la
+   connexion, **ce sont les informations du compte qui font foi** : elles remplacent ce que le
+   visiteur avait éventuellement déjà tapé. Le panier n'est jamais perdu par ce détour.
 8. **Paiement** : **un seul paiement, à la fin**, pour toute la commande — même si elle combine
    plusieurs établissements/prestataires (§3e), la **facturation interne restant divisée par
    ligne/prestataire** (§3b/§4). La **condition d'annulation** est affichée ici, avant de payer
    (§2d). Le paiement en ligne est effectif depuis la spec 19 (Mercado Pago, acompte obligatoire) ;
    il **fait sortir du site** et le client revient ensuite sur le portail.
 9. **Résultat** (2026-09-07) — un écran **avec une adresse propre à la commande**, rechargeable et
-   réouvrable plus tard. Il porte le ou les **numéros de réservation**, le **récapitulatif** et les
+   réouvrable plus tard.
+   **Accès, décidé le 2026-09-07** : l'adresse porte un **code secret impossible à deviner** et
+   reste valable **sans limite de temps** ; elle part aussi dans l'email de confirmation, ce qui la
+   rend retrouvable des mois plus tard. Tradeoff assumé : qui détient le lien voit le nom, le
+   téléphone et l'email du client.
+   **Créer un compte depuis cet écran rattache les commandes par adresse email** (2026-09-07) —
+   l'email étant déjà vérifié à l'inscription, c'est ce qui rend le rattachement sûr. Ce mécanisme
+   n'existe pas encore : RPC à écrire.
+   ⚠️ **Deux contraintes vérifiées le 2026-09-07, à traiter dans la spec** : (a) la policy
+   `orders_select` **exclut l'invité de toute lecture** — « l'invité n'a justement aucune session
+   pour prouver la propriété de sa commande » (migration `20260818200000_payments.sql`) — donc cet
+   écran, conçu d'abord pour lui, exige un jeton porté par l'URL ou une lecture `service_role` dans
+   un Route Handler, jamais une lecture directe ; (b) cette adresse porte le nom, le téléphone et
+   l'email d'un client : `robots.ts` ne bloque aujourd'hui que `/{locale}/r/`, `/auth/` et `/api/`,
+   elle doit donc y être ajoutée. Il porte le ou les **numéros de réservation**, le **récapitulatif** et les
    **totaux**, et propose au client **de créer un compte** pour retrouver sa réservation.
    En cas d'échec de paiement, la réservation est **conservée** et le client se voit proposer de
    **réessayer** — jamais un retour silencieux au panier.
-   ⚠️ **Changement assumé le 2026-09-07** : cet écran ne porte **plus** de contact WhatsApp
-   pré-rempli (il en portait un dans le portail actuel). Le canal reste accessible : le pied de
-   page du site porte un contact WhatsApp sur **toutes** les pages.
+   ⚠️ **Changement assumé le 2026-09-07, maintenu après vérification** : cet écran ne porte
+   **plus** de contact WhatsApp pré-rempli, alors que le portail actuel en production en porte un.
+   Le canal de suivi d'un client sans compte devient **l'email de confirmation** (Resend, spec 23,
+   envoi réel vérifié le 2026-08-31) et cet écran lui-même, réouvrable à son adresse.
+   *La première rédaction de ce paragraphe justifiait le retrait par « le pied de page porte un
+   contact WhatsApp sur toutes les pages » — c'était faux à deux titres et la justification est
+   retirée : `SiteFooter` n'est monté dans aucune route à ce jour, et l'architecture de coquilles
+   retenue le place dans la zone vitrine, pas dans la zone tunnel où vit cet écran.*
 
 ### 2c. Compte client
 
@@ -288,9 +364,11 @@ Décidé le 2026-08-11 (cf. §1), révisé le 2026-09-07.
   (§2b.9) en pose la fondation — le justificatif présentable sur place et sa forme (QR, PDF)
   restent à trancher.
 
-*État d'implémentation : Google OAuth et l'inscription email/mot de passe avec vérification ont
-été construits le 2026-08-15 (feature 31) en back-end générique, mais le **front n'existe que sur
-`apps/admin`** — le front `apps/web` reste à construire. Spec :
+*État d'implémentation, corrigé le 2026-09-07 : Google OAuth et l'inscription email/mot de passe
+avec vérification ont été construits le 2026-08-15 (feature 31) en back-end générique. Côté
+`apps/web`, **`/login`, `/signup` et `/verify-email` existent déjà** (feature 32) en email/mot de
+passe ; ce qui reste à construire sur la vitrine, c'est **Google OAuth** et **mot de passe oublié /
+réinitialisation**, qui n'existent aujourd'hui que sur `apps/admin`. Spec :
 `docs/specs/07-connexion-inscription-complete.md`.*
 
 ### 2d. Condition d'annulation affichée avant réservation
@@ -310,13 +388,25 @@ jamais découvrir ça après coup, en cas de litige.
   regard** — forme arrêtée le 2026-09-07 : la fiche est identique aux autres, mais **le calendrier
   de réservation laisse la place à un bouton de contact**. La différence se voit à l'endroit exact
   où le client la cherche, sans bandeau ni texte explicatif.
+  **Précision du 2026-09-07 : ce n'est pas réservé aux eventos** — un transport, une activité ou
+  tout autre type peut être en vitrine. Et ce n'est **jamais** `sellable = false`, qui rend le
+  produit totalement invisible au public : le mécanisme est celui déjà posé par la migration
+  `20260814190000` — le produit reste **publié** (`sellable = true`) et porte
+  **`external_booking_url`**, colonne volontairement générique (« plus jamais figé WhatsApp seul »),
+  éventuellement avec `price_label` plutôt qu'un prix réel. Deux conséquences pour la mise en
+  œuvre : le front doit brancher sur **la présence de `external_booking_url`** et non sur le type
+  `evento` comme aujourd'hui ; et la contrainte `products_price_cop_required_unless_evento`
+  n'exempte que les eventos, donc une vitrine d'un autre type devra porter un prix — à revoir si
+  Jérôme veut une vitrine sans prix sur un transport.
 - **Réservation refusée en cours de route** : si une place/nuit devient indisponible entre
   l'affichage et la validation, le client en est informé **explicitement** et ajuste lui-même sa
   sélection — jamais une réservation silencieusement dégradée ou partiellement honorée
   (invariant §3d). Écran correspondant : §2b.6.
-- **Après la réservation, sans compte** : le client garde son **numéro de réservation** et l'écran
-  de résultat, qui reste réouvrable à son adresse (§2b.9). Le contact WhatsApp du pied de page
-  reste disponible sur tout le site.
+- **Après la réservation, sans compte** : le client garde son **numéro de réservation**, l'**email
+  de confirmation** (spec 23) et l'écran de résultat, réouvrable à son adresse (§2b.9). *Corrigé le
+  2026-09-07 : ce paragraphe invoquait un contact WhatsApp « du pied de page, disponible sur tout le
+  site » qui n'existe dans aucune route à ce jour, et que l'architecture de coquilles ne posera pas
+  dans la zone tunnel.*
 - **Après la réservation, avec compte** : la réservation apparaît dans l'historique, avec son
   contact WhatsApp dédié (§2c).
 
@@ -333,10 +423,19 @@ jamais découvrir ça après coup, en cas de litige.
 - **Voucher/e-ticket** : forme du justificatif (QR, PDF, autre).
 - **Disponibilité d'un hébergement adossé à un PMS dans une recherche datée** : décision différée
   le 2026-09-07 — il apparaît, sans garantie de disponibilité.
-- **Rattachement d'une commande passée en invité à un compte créé après coup** : le mécanisme
-  n'existe pas ; périmètre à part entière (§2b.9).
-- **Source du contact d'un établissement** : décision du 2026-09-07 de rendre public le téléphone
-  du partenaire — à porter en version étroite (partenaire possédant un établissement actif),
+- **Rattachement d'une commande passée en invité à un compte créé après coup** : la règle est
+  tranchée — **par adresse email** (§2b.9, 2026-09-07) — mais **le mécanisme n'existe pas** :
+  RPC à écrire, périmètre à part entière. Ce n'est donc plus un arbitrage en attente, c'est du
+  travail à chiffrer.
+- **Source du contact d'un établissement** : la décision du 2026-09-07 est prise — le contact d'un
+  établissement devient public — mais **la colonne à publier reste à trancher**. Vérification du
+  2026-09-07 : le téléphone que le partenaire saisit lui-même vit dans `partner_accounts.phone`,
+  pas dans `partners.phone`, et la migration `20260819100000` dit pourquoi — `partners` est
+  *l'organisation*, partageable entre plusieurs comptes, « un écran de compte personnel ne doit
+  jamais écraser ce que voit un collègue du même partenaire ». Publier `partners.phone` publierait
+  donc une colonne que le partenaire ne remplit jamais. Trois issues à départager : publier
+  `partner_accounts.phone` du compte propriétaire, ajouter un champ de contact public sur
+  `establishments`, ou n'exposer que le canal Hifago. Dans tous les cas, exposition **étroite** —
   jamais la table d'identité entière, qui contient aussi des référents particuliers.
 
 *Traçabilité : `docs/2-reference/04-app-reservar.md` § « Front (`reservar.js`) — structure »,
@@ -987,12 +1086,19 @@ Consolidé depuis les sections ci-dessus — à trancher à l'ouverture du chiff
 
 1. **§3e** — les plafonds de lignes/unités du panier (aujourd'hui pensés pour un seul
    établissement) : plafond global sur toute la commande une fois plusieurs établissements
-   combinés, ou plafond répété par établissement ?
-2. **§2** — placement des suggestions complémentaires : uniquement à l'étape de paiement, après
-   chaque ajout au panier, ou les deux ?
-3. **§2** — détail d'implémentation du voucher/e-ticket (QR, PDF, autre).
+   combinés, ou plafond répété par établissement ? *Rendu plus visible depuis que le panier survit
+   plusieurs jours (§2b.6).*
+2. **§2** — détail d'implémentation du voucher/e-ticket (QR, PDF, autre).
 
-**Points désormais tranchés le 2026-08-13** : remise par quantité = jamais sur les nuits ;
+La liste vivante des points ouverts du parcours client est désormais le **§2f**, qui en porte six.
+Celle-ci ne garde que ceux qui touchent d'autres sections que le §2.
+
+**Point désormais tranché le 2026-09-07** : placement des suggestions complémentaires = **après
+chaque ajout au panier**, par retour à l'accueil réordonnée (§2b.5) — jamais à l'étape de paiement.
+
+**Points désormais tranchés le 2026-08-13** (⚠️ le troisième est amendé : la modification par
+lignes est sortie du périmètre du portail **client** le 2026-09-07, §2c, et reste un geste
+socio/admin) : remise par quantité = jamais sur les nuits ;
 attribution persistante = compte enregistré uniquement et dernier code valide prioritaire ;
 modification = lignes choisies, annulation = commande entière.
 
