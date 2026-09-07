@@ -116,6 +116,7 @@ et leurs vues. Aucune redirection à poser : `apps/web` n'a jamais été servi e
 | index trigramme sur le texte cherchable de `products` et `establishments` | **à créer** | — |
 | `products`, `establishments`, `catalog_tags`, `product_tag_assignments`, `product_media` | réutilisés tels quels | policies `_select_public` déjà en place |
 | `products.external_booking_url` | **mort à activer** | posé le 2026-08-13, jamais consommé par le front — c'est lui qui fait une fiche vitrine, **jamais** `sellable = false` |
+| contrainte `products_price_cop_required_unless_evento` | **à remplacer** | devient `…_unless_vitrine` : `check (type = 'evento' or external_booking_url is not null or price_cop is not null)` — une vitrine de n'importe quel type peut se passer de prix chiffré et afficher `price_label` |
 
 Aucune table n'est créée. Aucune écriture n'est ajoutée. **Aucune RPC `security definer`** : cette
 spec ne touche à rien de capacitaire, donc rien ne relève de la frontière RPC-only.
@@ -150,7 +151,8 @@ spec ne touche à rien de capacitaire, donc rien ne relève de la frontière RPC
 
 **Créés** : les 4 `layout.tsx` de zone · `not-found.tsx`, `error.tsx`, `loading.tsx` par zone ·
 `lib/catalog/{buscar,tags,producto,establecimiento,rutas,tipos}.ts` ·
-`supabase/migrations/<ts>_search_catalog.sql` · `scripts/check-tokens.sh` ·
+`supabase/migrations/<ts>_search_catalog.sql` ·
+`supabase/migrations/<ts>_precio_opcional_en_vitrina.sql` · `scripts/check-tokens.sh` ·
 `scripts/check-data-layer.sh` · `scripts/check-i18n-links.sh`.
 **Modifiés** : `app/[locale]/layout.tsx` · `proxy.ts` (pose du pathname en en-tête) ·
 `app/robots.ts` (ajout de `/{locale}/pago/`) · `app/sitemap.ts` (consomme `listarRutasIndexables`) ·
@@ -289,8 +291,21 @@ exactement ce que `CLAUDE.md` §3.5 interdit de présenter comme un filet de sé
 **`products.external_booking_url` — mort à activer.** Posé par la migration `20260814190000` avec le
 commentaire « générique, plus jamais figé WhatsApp seul », jamais consommé par le front, qui branche
 aujourd'hui sur `isEvento`. C'est cette colonne qui fait une fiche vitrine.
-⚠️ La contrainte `products_price_cop_required_unless_evento` n'exempte que les eventos : une vitrine
-d'un autre type devra porter un prix ou un `price_label` — signalé en §10, non tranché ici.
+**La contrainte de prix est relâchée (tranché par Jérôme le 2026-09-07).**
+`products_price_cop_required_unless_evento` n'exemptait que les eventos, parce qu'à sa création
+(2026-08-13) eux seuls pouvaient être en vitrine. Depuis que la vitrine vaut pour tous les types,
+elle rattrapait un transport dont le tarif se négocie : il aurait dû afficher un montant ferme qui
+n'est pas le vrai — le genre d'écart qui finit en litige au moment de payer. Elle devient donc
+`products_price_cop_required_unless_vitrine` :
+
+```sql
+check (type = 'evento' or external_booking_url is not null or price_cop is not null)
+```
+
+Un produit portant une URL de contact peut alors se passer de `price_cop` et afficher `price_label`
+(« Consultar », « Desde $150.000 ») — exactement ce que font déjà les eventos, avec une colonne qui
+existe déjà et n'était pas réservée à un type. Aucune donnée existante ne devient invalide : la
+nouvelle contrainte est strictement plus permissive que l'ancienne.
 
 ## 7. Contrat de la couche d'accès
 
@@ -391,10 +406,11 @@ plafonnement — donc vivre dans `search_catalog`, d'où la colonne `es_establec
 (Jérôme, 2026-09-07). Conséquence SEO assumée : l'URL anglaise ne porte pas de mots-clés anglais.
 Réversible plus tard, au prix d'une table de correspondance et de 301.
 
-**Point ouvert — la vitrine d'un type autre qu'`evento` doit-elle pouvoir se passer de prix ?**
-`products_price_cop_required_unless_evento` n'exempte que les eventos. Un bus vitrine devra donc
-porter un `price_cop` même s'il n'est pas vendu en ligne, ou l'on relâche la contrainte. Arbitrage
-de Jérôme ; sans réponse, on garde la contrainte telle quelle et le bus porte un prix indicatif.
+**Tranché par Jérôme le 2026-09-07 — une vitrine de n'importe quel type peut se passer de prix
+chiffré.** La contrainte est relâchée (cf. §6) : un produit portant `external_booking_url` affiche
+`price_label` au lieu d'un montant. Écarté : garder la contrainte et saisir un prix indicatif —
+annoncer un montant ferme sur une offre dont le tarif se négocie est un écart qui se découvre au
+moment de payer.
 
 **Point ouvert, hérité — les six du cahier §2f** : recherche géographique différée · plafonds du
 panier · forme du voucher · disponibilité PMS dans une recherche datée · colonne exacte du contact
