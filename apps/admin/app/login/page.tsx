@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { LoginForm } from "./LoginForm";
 
-// Segment non localisé par next-intl (cf. hifago/CLAUDE.md §12) — texte en dur en espagnol,
+// Segment non localisé par next-intl (cf. docs/journal/2026-08.md) — texte en dur en espagnol,
 // même convention que le reste d'apps/admin (Spanish, cf. AdminSidebar/NewInvitationForm) — pas
 // le français de /partner/join, une exception isolée à ne pas propager (décision Jérôme,
 // 2026-08-15). Login partagé admin+socio (sessions indépendantes d'apps/web depuis la scission

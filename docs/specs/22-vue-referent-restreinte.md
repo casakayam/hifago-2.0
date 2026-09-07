@@ -4,7 +4,8 @@ titre: "Vue référent restreinte — pas d'établissement/mis reservas, liste d
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: "validé par Jérôme le 2026-08-20"
+statut: implemente
+reste: Validé par Jérôme le 2026-08-20.
 maj: 2026-08-20
 resume: >
   Ferme "Mi establecimiento y actividades" et "Mis reservas" pour un référent pur (aucune capacité
@@ -211,5 +212,5 @@ commission déjà en COP dont il est la lecture directe).
 
 `docs/02-cahier-des-charges-socio.md` §3a/§3c/§3d · `docs/specs/19-paiement-mercadopago-acompte-ledger.md`
 (moteur 17/10/7, `ledger_entries`) · `docs/specs/20-agenda-reservations-socio.md` (page d'accueil
-socio, `selectActiveOperatorEstablishmentIds`) · `hifago/CLAUDE.md` §12 (curseur, entrée 2026-08-20
+socio, `selectActiveOperatorEstablishmentIds`) · `docs/journal/2026-08.md` (entrée 2026-08-20
 "nettoyage complet des statuts").

@@ -51,6 +51,11 @@ jobs:
       # les envoie lire le mauvais document. `npm run docs:index` le régénère.
       - name: Manifeste documentaire à jour
         run: npm run docs:check
+      # Second filet (le premier est le hook PostToolUse local, cf. .claude/settings.json) contre
+      # la régression du 2026-08-15 → 2026-09-07 : CLAUDE.md avait déjà été vidé une fois puis
+      # regonflé à 569 lignes sans qu'aucun outil ne le signale pendant trois semaines.
+      - name: Corpus d'instructions (tailles, renvois CLAUDE.md §N, chemins cités)
+        run: npm run check:instructions
       # `--omit=dev` depuis le 2026-09-01, décision de Jérôme, avec sa raison et son coût.
       # RAISON : l'installation de Storybook (outil de playground local, jamais déployé) fait
       # entrer 3 avis `high` sur `image-size` — déni de service par boucle infinie sur des parsers

@@ -59,46 +59,34 @@ export function Price({ amountCop, suffix, testId }: PriceProps) { … }
 - `cn` s'importe de `@hifago/ui`. ⚠️ **Ne jamais écrire de `tv()` à la main** : dans ce projet les
   variantes ne sont pas des compositions Tailwind mais des classes BEM (`button--outline`) stylées
   par les tokens `[data-theme]`. `buttonVariants` de HeroUI en est le seul exemple.
-- ⚠️ **`CLAUDE.md` §11.16 s'applique par TRANSITIVITÉ, et c'est ce qui décide de la forme d'un
-  composant.** La règle est écrite pour `page.tsx`/`layout.tsx`, mais un composant sans
-  `"use client"` importé PAR un Server Component fait entrer le barrel dans le même graphe de
-  modules, avec le même `next build` cassé — invisible au typecheck et au lint. Deux formes valides,
-  jamais autre chose :
-  1. **N'importer rien de `@hifago/ui`** (ni `cn`) : suffisant dès que les variantes sont des
-     chaînes de classes fixes, ce qui est le cas de cinq des six atomes.
-  2. **Porter `"use client"` en tête**, quand le composant a réellement besoin d'une primitive
-     HeroUI — c'est le cas de `TypeBadge`, qui s'appuie sur `Chip`.
-
-  Corollaire pratique : n'importe `cn` que si tu as vraiment des classes à fusionner. Constaté le
-  2026-09-01, les deux agents de la vague 1 y étant arrivés séparément.
+- ⚠️ **La règle RSC/barrel de `.claude/rules/apps.md` (`CLAUDE.md` §11.16) s'applique par
+  TRANSITIVITÉ, et c'est ce qui décide de la forme d'un composant** : un composant sans
+  `"use client"` importé PAR un Server Component fait entrer le barrel `@hifago/ui` dans le même
+  graphe de modules (`next build` cassé, invisible au typecheck et au lint). Deux formes valides,
+  jamais autre chose : (1) **n'importer rien de `@hifago/ui`**, ni `cn` — suffisant dès que les
+  variantes sont des chaînes de classes fixes, le cas de cinq des six atomes ; (2) **porter
+  `"use client"` en tête**, quand le composant a réellement besoin d'une primitive HeroUI
+  (`TypeBadge`, qui s'appuie sur `Chip`). Corollaire : n'importe `cn` que si tu as vraiment des
+  classes à fusionner (constaté le 2026-09-01, les deux agents de la vague 1 y étant arrivés
+  séparément).
 - Au-delà de ~150 lignes, on découpe.
 
 ## SEO — la sémantique est une décision de composant
 
-- **Un seul `<h1>` par page**, hiérarchie sans saut. Un composant de titre **reçoit son niveau en
-  prop** (`as="h2"`), il ne le choisit jamais seul.
-- **Les landmarks appartiennent à la coquille** : un seul `<main>`, un `<header>`, un `<footer>`,
-  `<nav>` pour la navigation.
-- **Toute image passe par `next/image`**, `alt` **requis** (jamais optionnel) et `sizes` renseigné.
-- ⚠️ **Tout lien interne passe par le `Link` de `@/i18n/navigation`** — jamais `next/link` nu ni
-  `<a href>` : lui seul conserve le préfixe de locale. Un `<a href="/products/x">` produit un lien
-  cassé.
-- **Le JSON-LD reste dans `page.tsx`** (Server Component), jamais dans un composant de présentation.
-- Un composant ne masque jamais du contenu indexable derrière une interaction : un accordéon fermé
-  garde son contenu dans le HTML.
+Les règles sont dans `.claude/rules/seo.md` (point 7 : un seul `<h1>`, un titre reçoit son niveau
+en prop, landmarks dans la coquille, `next/image` avec `alt` requis et `sizes`, JSON-LD dans
+`page.tsx`, rien d'indexable masqué) et `.claude/rules/apps.md` (tout lien interne passe par le
+`Link` de `@/i18n/navigation`, jamais `next/link` nu ni `<a href>`) — chargées dès qu'un fichier
+d'`apps/web` est ouvert. Ce README ne les recopie pas.
 
 ## Traductions
 
-- **Aucune chaîne ES/EN en dur.**
-- ⚠️ **Un traducteur next-intl ne traverse pas la frontière RSC.** Donc : un composant **client**
-  appelle `useTranslations()` lui-même ; un composant qui reçoit ses données d'un Server Component
-  reçoit des **chaînes déjà résolues** (c'est pourquoi `ProductDetailView` reçoit
-  `backToCatalogLabel`, pas un `t`).
-- **Un atome ne traduit rien** — il reçoit son libellé. Seuls molecules et organisms appellent
-  `useTranslations`.
-- Les messages vivent dans `messages/<locale>/<Namespace>.json`, **un fichier par namespace**.
-  Toute nouvelle clé va dans **es ET en** — `messages/parity.test.ts` échoue sinon. Un nouveau
-  namespace doit être branché dans `messages/index.ts` (le test le vérifie aussi).
+Les règles i18n (frontière RSC, un fichier par namespace et par locale, parité es/en vérifiée par
+`messages/parity.test.ts`) sont dans `.claude/rules/apps.md`. Ce qui est propre aux composants :
+**aucune chaîne ES/EN en dur** ; **un atome ne traduit rien** — il reçoit son libellé, seuls
+molecules et organisms appellent `useTranslations` (c'est pourquoi `ProductDetailView` reçoit
+`backToCatalogLabel`, pas un `t`) ; un nouveau namespace doit être branché dans
+`messages/index.ts` (le test le vérifie aussi).
 
 ## Lisibilité et accessibilité
 
@@ -111,25 +99,12 @@ export function Price({ amountCop, suffix, testId }: PriceProps) { … }
 
 ## Responsive — mobile d'abord
 
-- **Classes de base = mobile**, les variantes `sm:`/`md:`/`lg:` ajoutent pour les grands écrans.
-- ⚠️ **Ne jamais masquer du contenu selon la largeur.** Google indexe la version **mobile** : un
-  `hidden md:block` retire ce contenu de l'index. On réorganise, on ne supprime pas. `hidden` est
-  réservé au décoratif.
-- Un composant **ne fixe aucune largeur en dur** ; il s'adapte à son conteneur.
-- **La page ne défile jamais horizontalement** : un contenu large défile dans son propre conteneur.
-  ⚠️ **`overflow-x-auto` seul est une violation d'accessibilité sérieuse**, pas seulement une
-  imperfection : une région qui défile et que rien ne rend focalisable est inatteignable au clavier
-  (axe `scrollable-region-focusable`, WCAG 2.1.1). Si le conteneur **ne contient aucun élément déjà
-  focalisable** (un tableau de texte, un bloc de code — par opposition à une liste de liens, qui se
-  parcourt au clavier toute seule), il lui faut `tabIndex={0}` **et** un nom accessible :
-  `role="region"` + `aria-label`. Ne le pose pas quand la région contient déjà des liens ou des
-  boutons : ça ajouterait un arrêt de tabulation inutile. Constaté le 2026-09-01 en montant les
-  atomes — la règle était écrite ici depuis la veille sans cette moitié, et tout reflow de liste
-  dense de la vague 2 aurait reproduit le défaut.
-- Pour une liste dense : **reflow en cartes sous `md`**, jamais un simple `overflow-x-auto` — rendre
-  scrollable n'est pas rendre lisible. Pattern déjà validé côté admin, à reproduire.
-- Breakpoint de référence : `md` = 768 px. Un composant n'est pas terminé tant qu'il n'a pas été vu
-  à **390×844** et **1280×900**.
+Les règles (classes de base = mobile, rien de masqué selon la largeur, reflow en cartes sous `md`,
+aucune largeur en dur, pas de défilement horizontal de page, `overflow-x-auto` seul = violation
+WCAG 2.1.1 sauf `tabIndex={0}` + `role="region"` + `aria-label` quand rien n'est focalisable,
+viewports 390×844 et 1280×900) sont dans `.claude/rules/ui.md`, chargée dès qu'un fichier de
+`components/` est ouvert. Constaté le 2026-09-01 en montant les atomes : la moitié accessibilité de
+la règle manquait ici, et tout reflow de liste dense l'aurait reproduit — d'où une seule source.
 
 ## Stories
 

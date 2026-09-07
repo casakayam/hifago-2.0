@@ -14,6 +14,60 @@ repond_a:
 
 # Cahier des charges — back-office admin
 
+## Écarts connus (alimenté par les specs qui révisent ce cahier — voir leur champ `revise:`)
+
+Relevés par la relecture intégrale du 2026-09-07. Les sections ci-dessous ne sont pas réécrites —
+ces lignes en tiennent lieu.
+
+- **L'« acceptation de contrat par rôle » a été ABANDONNÉE** (décisions Jérôme des 2026-08-19 et
+  2026-08-20, migrations `20260819230000_partner_capabilities_remove_onboarding_status.sql` puis
+  `20260820010000_partner_capabilities_active_by_default.sql`, récit complet en
+  `02-cahier-des-charges-socio.md` §3a). Une capacité est **active dès sa création**, quel qu'en
+  soit le chemin — les trois sont déjà un geste admin. Trois passages de ce cahier reposent encore
+  sur la prémisse inverse et sont donc périmés :
+  - **§3d, « Décision (2026-08-11) — visibilité sur l'acceptation de contrat »** : il n'y a plus
+    d'état accepté/en attente à afficher. Seul subsiste le statut technique (active / suspendue).
+  - **§3g**, « le versement d'un dû à un bénéficiaire est bloqué si son identité n'a pas encore
+    accepté le contrat de son rôle » : ce verrou n'existe pas. Le versement lui-même a par ailleurs
+    changé de nature — voir la ligne Mercado Pago ci-dessous.
+  - **§3f**, « Ne concerne pas les audiences partenaires (relation contractuelle déjà établie, cf.
+    acceptation de contrat par rôle) » : la conclusion (le rappel Habeas Data vise les audiences
+    clients) reste valable, mais sa justification ne tient plus.
+- **§3g, virement au bénéficiaire — révisé par
+  `docs/specs/19-paiement-mercadopago-acompte-ledger.md`** (statut `partiel`) : le règlement du
+  référent et la compensation établissement passent par Mercado Pago, déclenchés **par API** une
+  fois la prestation réalisée — plus un geste manuel admin avec dépôt de justificatif. Le moteur
+  17/10/7 et la règle A3 (non-remboursement, redistribution des 10 % vers le prestataire) sont
+  cités comme prémisses par cette spec : ils ne changent pas.
+- **§3c, « Hébergement adossé à un PMS : lecture seule pour l'admin » — trop large depuis
+  `docs/specs/24-modele-hebergement-et-surface-lobbypms.md`.** La frontière exacte y est posée :
+  **Lobby fait foi sur la DISPONIBILITÉ** (relue à chaud, jamais copiée en base) ; **sur tout le
+  reste — nom, description, photos, capacité, prix — hifago fait foi**, Lobby ne faisant que
+  *proposer* une valeur au moment de la liaison. L'admin édite donc bien un produit PMS-backed, et
+  deux gestes lui sont même réservés (`Desvincular`/`Actualizar`, import des photos Lobby via
+  `POST /api/pms/import-room-photos`, admin-only). Ce qui reste vrai : pas de second calendrier —
+  un logement PMS-backed n'a pas de calendrier de cupos interne, `create_order` saute verrou et
+  décrément pour ces lignes. Même remarque pour §6/A10.
+- **§2 et §3g, « date **et** créneau choisis par le client » — granularité périmée**, contredite
+  par `docs/specs/18-creneaux-horaires-reservables.md` : le créneau n'est plus le binaire
+  matin/après-midi mais un créneau horaire arbitraire issu de `product_slot_rules`. Le principe
+  (l'admin voit la date ET le créneau) est inchangé. Détail dans l'en-tête « Écarts connus » de
+  `01-cahier-des-charges-client.md`.
+- **§2, « notifications proactives pour l'admin » — livrées par
+  `docs/specs/23-notifications-email-transactionnelles.md`**, par email (Resend) : nouvelle
+  proposition à modérer et nouvelle exception de réconciliation sont branchées. Le troisième
+  déclencheur listé ici, « demande d'ouverture prestataire en attente », ne l'est pas — il dépend
+  d'un parcours self-service jamais construit (constat explicite de la spec 23).
+- **§7, point ouvert n°2 (« l'email groupé nécessite-t-il un vrai service d'envoi ? ») — tranché à
+  moitié.** Le service d'envoi existe et est choisi (Resend, spec 23), avec sa file et son journal ;
+  ce qui reste ouvert est le **groupé** : audiences, désabonnements, cadence. La question n'est plus
+  « faut-il un service » mais « que fait-on de celui qu'on a ».
+- **§3d, « Décision — administration du multi-utilisateurs » (voir les membres d'une organisation,
+  retirer un membre, réassigner le propriétaire) — toujours valide, toujours non construit.** Aucun
+  mécanisme d'invitation de coéquipier n'existe (cf. `02-cahier-des-charges-socio.md` §3b, point
+  ouvert non levé), et les niveaux d'accès différenciés restent un arbitrage Jérôme
+  (`CLAUDE.md` §10, `docs/backlog.md`).
+
 > Méthode : une section = une unité de validation avec Jérôme. Statut par section :
 > `brouillon` → `en relecture` → `✅ validé par Jérôme le AAAA-MM-JJ`.
 > Sources principales : `docs/2-reference/03-app-admin.md`, `docs/2-reference/05-data-model.md`.

@@ -4,7 +4,19 @@ titre: "Surface LobbyPMS exploitée, parcours front d'un produit lié, et cible 
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: "Lot A implémenté le 2026-08-26 ; Lot B gelé (observation préprod requise) ; T1/T2/T3 de la cible modèle LIVRÉS le 2026-08-27 — l'étage hôtel n'existe plus. T4 (import Lobby avancé) reste à faire."
+statut: partiel
+reste: >
+  Lot A implémenté le 2026-08-26 ; Lot B gelé (observation préprod requise) ; T1/T2/T3 de la cible
+  modèle LIVRÉS le 2026-08-27 — l'étage hôtel n'existe plus. T4 (import Lobby avancé) reste à
+  faire. Impact sur les quatre cahiers relu le 2026-09-07 (relecture intégrale) et reporté dans
+  leur en-tête « Écarts connus » — voir le champ `revise:` ci-dessous.
+revise:
+  - "docs/00-modele-de-donnees.md#1"
+  - "docs/00-modele-de-donnees.md#3"
+  - "docs/01-cahier-des-charges-client.md#4"
+  - "docs/01-cahier-des-charges-client.md#5"
+  - "docs/02-cahier-des-charges-socio.md#3d"
+  - "docs/03-cahier-des-charges-admin.md#3c"
 maj: 2026-08-27
 resume: >
   Audit de ce que l'API LobbyPMS expose réellement face à ce que hifago en consomme, refonte du

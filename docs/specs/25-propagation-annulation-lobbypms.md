@@ -4,7 +4,10 @@ titre: "Propagation d'une annulation hifago vers LobbyPMS (C2)"
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: "Implémentée et VÉRIFIÉE EN CONDITIONS RÉELLES le 2026-08-27 (booking créé puis annulé chez Casa Kayam) — 3 défauts trouvés par ce test live que les tests locaux ne voyaient pas"
+statut: implemente
+reste: >
+  Vérifiée en conditions réelles le 2026-08-27 (booking créé puis annulé chez Casa Kayam) —
+  3 défauts trouvés par ce test live que les tests locaux ne voyaient pas, tous corrigés.
 maj: 2026-08-27
 resume: >
   Quand une réservation hifago adossée à LobbyPMS est annulée, le booking correspondant reste

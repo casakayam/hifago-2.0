@@ -14,6 +14,55 @@ repond_a:
 
 # Cahier des charges — portail client
 
+## Écarts connus (alimenté par les specs qui révisent ce cahier — voir leur champ `revise:`)
+
+- **Paiement en ligne, statut « hors périmètre v1 »** (l.845, l.904 « Cibles futures importantes ») —
+  rouvert explicitement par `docs/specs/19-paiement-mercadopago-acompte-ledger.md` (statut
+  `partiel`) : Mercado Pago remplace Wompi comme gateway cible, l'acompte devient obligatoire en
+  ligne (moteur 17/10/7). La règle de non-remboursement/redistribution A3 (l.821-847) reste
+  inchangée — la spec la cite comme prémisse, elle ne la modifie pas. Sections ci-dessous non
+  réécrites — cette ligne en tient lieu. Deux endroits précis de ce cahier sont concernés au-delà
+  des lignes citées : §1 « Hors périmètre de ce portail : paiement en ligne (paiement à l'arrivée
+  uniquement) », et §3f décision 4 (« des statuts de paiement ne seront introduits que lorsque le
+  paiement en ligne sera réellement implémenté ») — la condition est remplie, ces statuts existent.
+
+Ajoutés par la relecture intégrale du 2026-09-07 :
+
+- **§3a (l.275 `schedule`), §3d (l.431 « produit à créneaux ») et §3e (l.499 `'slot'`) — contredits
+  par `docs/specs/18-creneaux-horaires-reservables.md`** (statut `implemente`, livrée le
+  2026-08-18). Un créneau n'est plus le binaire matin/après-midi hérité du legacy :
+  `product_slot_rules` définit des créneaux horaires arbitraires (jours de semaine, plage, durée,
+  capacité par règle), `product_slot_availability` porte leurs cupos, et `create_order` verrouille
+  par `(product_id, slot_date, slot_start_time)`. Deux conséquences sur le texte ci-dessous : la
+  phrase « une date n'est fermée que si ses **deux** créneaux sont pleins » n'a plus de sens (il y
+  en a autant que la règle en produit), et la colonne `product_calendar.closed_slot` qu'elle
+  décrivait a été droppée (spec 17 T0, migration `20260817160000`). `products.schedule` survit en
+  base mais son `'slot'` est mort : la spec 17 §10 a retenu `product_slot_rules` comme unique
+  mécanisme de créneau. La spec 18 avait explicitement renvoyé ces trois sections à une relecture
+  ultérieure (« Out : mise à jour des 3 cahiers des charges — référencés, pas réécrits »).
+- **§3a, « Périmètre — décision 2026-08-13 » (la remise par quantité/personnes « ne s'applique
+  jamais aux chambres, dortoirs ou logements entiers ») — contredit dans sa forme par
+  `docs/specs/12-admin-alojamiento-house.md`.** `price_tiers`/`min_qty`/`max_qty` y ont été
+  réutilisés tels quels pour `type='lodging'`, `qty` valant le nombre de personnes. La nuance qui
+  sauve l'intention : `price_tiers` est un **prix absolu par tranche**, pas un « seuil + pourcentage
+  de remise » — le mécanisme de *remise* décrit ici n'a jamais été construit, pour aucun type de
+  produit (cf. `00-modele-de-donnees.md` §3, ligne « Prix par palier de quantité/personnes »). Ce
+  qui est faux, c'est l'idée qu'un hébergement n'aurait aucune tarification par nombre de personnes.
+- **§4, renvoi au « gap critique » du modèle de données — périmé.** Fermé par
+  `docs/specs/24-modele-hebergement-et-surface-lobbypms.md` (T3, 2026-08-27) : une chambre est
+  désormais un produit `lodging` avec son `product_availability` et son `product_date_rates`. Voir
+  l'en-tête « Écarts connus » de `00-modele-de-donnees.md`.
+- **§5, dernier point des « Limites connues » (l'identifiant d'un type de chambre PMS-backed « EST
+  directement » l'identifiant de catégorie côté PMS) — périmé, même spec 24.** L'identifiant interne
+  est `products.id` ; le lien vers Lobby est une colonne à part, `products.lobby_category_id`.
+  L'invariant que ce paragraphe demandait « à construire » est donc acquis. Reste vrai, et posé par
+  la même spec : Lobby fait foi sur la **disponibilité** seule, hifago sur tout le reste (nom,
+  description, photos, capacité, prix), Lobby ne faisant que **proposer** une valeur à la liaison.
+- **§7/A11 et §8 « Cibles futures importantes », mention « tarif week-end différencié » — périmé
+  pour l'hébergement.** Livré par `docs/specs/12-admin-alojamiento-house.md` (majoration week-end
+  dans `products.stay_rates`, nouveauté assumée face à la v1). Séjour minimum et délai de préavis
+  minimum, eux, restent bien à construire.
+
 > Méthode : une section = une unité de validation avec Jérôme. Statut par section :
 > `brouillon` → `en relecture` → `✅ validé par Jérôme le AAAA-MM-JJ`.
 > Sources principales : `docs/2-reference/04-app-reservar.md`, `docs/1-manuels/10-client.md`,

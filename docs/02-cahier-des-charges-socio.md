@@ -14,6 +14,66 @@ repond_a:
 
 # Cahier des charges — portail socio
 
+## Écarts connus (alimenté par les specs qui révisent ce cahier — voir leur champ `revise:`)
+
+- **§3e** (l.419) — révisé par `docs/specs/15-socio-creation-produit.md` : la règle « jamais un
+  hébergement directement » ne s'applique plus à la CRÉATION (les 6 types, hôtel compris à
+  l'époque, sont couverts). Déjà annoté inline le 2026-08-17 (voir le bloc `> **Révisé le
+  2026-08-17**` ci-dessous). Depuis, le T3 du 2026-08-27 a retiré le type `hotel` du système : la
+  mention « y compris lodging/hotel » de ce bloc est devenue un détail historique, pas une erreur
+  fonctionnelle — les types restants demeurent couverts « sans exception ».
+- **§3g** — révisé par `docs/specs/19-paiement-mercadopago-acompte-ledger.md#3` (statut `partiel`) :
+  la méthode de paiement du référent n'est plus manuelle (Bancolombia/Nequi) mais passe par Mercado
+  Pago ; le MOMENT du virement (après réalisation de la prestation) ne change pas. §3g ci-dessous
+  n'a pas été réécrit — cette ligne en tient lieu tant que la relecture intégrale (docs/backlog.md)
+  n'a pas eu lieu.
+
+Ajoutés par la relecture intégrale du 2026-09-07 :
+
+- **§3d, « Mes réservations » (« **jamais** le contact du client (téléphone, email) : ce n'est pas
+  son canal de relation avec le client final ») — RENVERSÉ par une décision de Jérôme du
+  2026-08-19.** `order_lines` porte désormais `holder_phone`/`holder_email` (migration
+  `20260819180000_order_lines_holder_contact_operator.sql` : « Le prestataire a désormais besoin de
+  contacter son client et de filtrer sa liste de réservations par email »), et le portail les
+  affiche (`apps/admin/app/partner/(app)/reservations/`, liste et détail). Confirmé par
+  `docs/specs/24-modele-hebergement-et-surface-lobbypms.md` §10.C, qui s'appuie dessus pour envoyer
+  les coordonnées dans la note du booking Lobby. La pièce d'identité, elle, reste exclue.
+  ⚠️ Deux specs antérieures portent encore l'ancienne règle et sont périmées sur ce point précis :
+  `17-calendrier-disponibilite-refonte.md` (§ invariants, « PII minimale côté socio ») et
+  `20-agenda-reservations-socio.md` (l.73).
+- **§3d, « Cupos par créneau ... (matin/après-midi) » — contredit par
+  `docs/specs/18-creneaux-horaires-reservables.md`.** Le principe (la capacité vaut par créneau, pas
+  par jour) est conservé ; c'est la granularité binaire qui est fausse — `product_slot_rules` définit
+  des créneaux horaires arbitraires. Détail dans l'en-tête « Écarts connus » de
+  `01-cahier-des-charges-client.md`.
+- **Le type de produit `tour` n'existe plus** (§3d « hébergement / activités / **tours** /
+  transport… », §3e « activité, **tour**, transport », §3f « activité, **tour**, transport… »).
+  Retiré de la contrainte `products_type_check` par la spec 17 T0 (migration `20260817160000`) —
+  zéro ligne en base, zéro chemin de création. Cinq types subsistent : `lodging`, `activity`,
+  `transport`, `camp`, `evento`.
+- **§3b, point ouvert « Ajouter un établissement supplémentaire … self-service ou toujours via
+  l'admin ? » (repris en §7, point 3) — tranché par `docs/specs/06-gestion-etablissement.md`** :
+  self-service, via une **proposition** d'établissement (`establishment_proposals`) modérée par
+  l'admin, jamais en écriture directe — le même patron que les photos (spec 04) et le contenu
+  produit. Corollaire : la phrase de **§3e** « un prestataire **ne crée jamais** un hébergement — un
+  lieu de séjour s'enregistre au niveau du registre, pas depuis une proposition » est fausse depuis
+  le 2026-08-15. Ce qui reste vrai : il ne le **publie** jamais lui-même. Le second point ouvert de
+  §3b (inviter un coéquipier sur le même compte organisation) n'est, lui, toujours pas construit.
+- **§3h, « Point à challenger avec Jérôme — QR ré-attribuable » — tranché le 2026-08-13 et livré.**
+  La recommandation (faire pointer le QR vers une redirection interne courte plutôt que vers l'URL
+  finale) est le comportement réel : `apps/web/app/[locale]/r/[code]/route.ts` résout le code et
+  redirige vers `/<locale>?ref=<code>`. `docs/specs/26-referencement-seo-et-moteurs-ia.md` §5.3
+  s'appuie explicitement dessus. Ce n'est plus un point à challenger.
+- **§1, « Notifications proactives (canal à définir — email/WhatsApp) » — canal tranché par
+  `docs/specs/23-notifications-email-transactionnelles.md`** : l'email, via Resend, avec une file
+  Postgres et un journal d'envoi (`notification_emails`) ; 8 événements branchés, dont les trois
+  nommés ici (commission attribuée, proposition traitée, paiement effectué). WhatsApp n'est pas un
+  canal de notification transactionnelle et ne l'est jamais devenu.
+- **§4, renvoi au « gap critique » du modèle de données (repris à la fin de §7) — périmé.** Fermé
+  par `docs/specs/24-modele-hebergement-et-surface-lobbypms.md` (T3) : une chambre est un produit
+  `lodging` avec son propre calendrier de cupos et son prix par date. Le module Prestador peut donc
+  gérer un établissement à chambres sans PMS.
+
 > Méthode : une section = une unité de validation avec Jérôme. Statut par section :
 > `brouillon` → `en relecture` → `✅ validé par Jérôme le AAAA-MM-JJ`.
 > Sources principales : `docs/2-reference/02-app-partner.md`, `docs/2-reference/05-data-model.md`

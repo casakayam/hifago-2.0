@@ -4,7 +4,7 @@ titre: "Agenda de réservations socio (vue jour/semaine/mois)"
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: brouillon
+statut: implemente
 maj: 2026-08-18
 resume: >
   Remplace la page d'accueil du socio (/partner) par un agenda type Google Calendar (jour/semaine/

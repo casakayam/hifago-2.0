@@ -4,7 +4,15 @@ titre: "Calendrier/disponibilité — audit complet + refonte phasée (Tranches 
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: brouillon
+statut: partiel
+reste: >
+  Tranche 1 (crash price_cop null, Mis Reservas) et Tranche 2 (SVAR, moteur unifié chambre/
+  alojamiento) livrées. Créneaux réservables forkés dans la spec 18 (livrée séparément) ;
+  ressource partagée généralisée renvoyée à une future spec.
+revise:
+  - "docs/02-cahier-des-charges-socio.md#3d"
+  - "docs/02-cahier-des-charges-socio.md#3e"
+  - "docs/02-cahier-des-charges-socio.md#3f"
 maj: 2026-08-17
 resume: >
   Aucune spec « calendrier » n'existait pour le nouveau stack alors que la logique est dispersée

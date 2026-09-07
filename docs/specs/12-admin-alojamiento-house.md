@@ -5,6 +5,9 @@ theme: specs
 public: [ia, dev, jerome]
 langue: fr
 statut: implemente
+revise:
+  - "docs/01-cahier-des-charges-client.md#3a"
+  - "docs/01-cahier-des-charges-client.md#7"
 maj: 2026-08-16
 resume: >
   Active le type de produit `lodging`, dormant depuis la toute première migration catalogue et

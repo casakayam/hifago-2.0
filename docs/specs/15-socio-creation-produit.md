@@ -5,6 +5,7 @@ theme: specs
 public: [ia, dev, jerome]
 langue: fr
 statut: implemente
+revise: ["docs/02-cahier-des-charges-socio.md#3e"]
 maj: 2026-08-17
 resume: >
   Un partenaire prestataire (socio, capacité operator active) peut désormais proposer la création

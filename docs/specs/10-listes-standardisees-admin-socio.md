@@ -4,7 +4,7 @@ titre: "Listes admin/socio standardisées — pagination, tri, filtres, composan
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: brouillon
+statut: implemente
 maj: 2026-08-15
 resume: >
   Standardise les 13 pages liste d'apps/admin (admin + socio) derrière un composant réutilisable

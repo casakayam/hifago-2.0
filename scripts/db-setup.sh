@@ -9,7 +9,7 @@
 #
 # ATTENTION : `db reset` EFFACE la base locale, qui est partagée par toutes les sessions de
 # travail ouvertes sur ce dépôt. Ne pas lancer ce script sans savoir si quelqu'un d'autre a des
-# données en cours dessus (cf. CLAUDE.md §12).
+# données en cours dessus (cf. AGENTS-PARALLELES.md).
 #
 # Usage : npm run db:setup
 #         SUPABASE_BIN=supabase npm run db:setup   # pour une CLI déjà installée sur le PATH

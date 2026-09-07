@@ -1,7 +1,7 @@
 import type { StorybookConfig } from "@storybook/nextjs-vite";
 
 // Playground des composants de la vitrine. Décision de Jérôme du 2026-09-01 : Storybook plutôt
-// qu'une route interne — elle clôt le point laissé ouvert par apps/test-ux/README.md
+// qu'une route interne — elle clôt le point laissé ouvert par archive/apps/test-ux/README.md
 // (« Storybook ou preview interne, décision séparée »).
 //
 // ⚠️ Les stories sont découvertes par GLOB, sans registre central. C'est délibéré : plusieurs

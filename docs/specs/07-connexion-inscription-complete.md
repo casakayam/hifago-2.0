@@ -371,7 +371,7 @@ Templates email confirmation/recovery pointant vers
 - **2FA obligatoire pour le rôle admin — rendu OPTIONNEL le 2026-08-15 (non conforme temporaire à
   `hifago/docs/03-cahier-des-charges-admin.md` §1)** : un vrai test par Jérôme sur son propre compte
   Google a révélé un bug bloquant à l'enrôlement (cause non isolée avec certitude — voir
-  `hifago/CLAUDE.md` §12, entrée du 2026-08-15, pour le détail complet et la piste principale).
+  `docs/journal/2026-08.md`, entrée du 2026-08-15, pour le détail complet et la piste principale).
   `is_admin()` ne requiert plus l'AAL2 tant que la cause exacte n'est pas isolée et corrigée en
   conditions réelles (pas seulement via l'automatisation, qui n'a jamais reproduit le problème) ;
   les écrans `/mfa/enroll`/`/mfa/verify` restent fonctionnels en usage volontaire. **Point ouvert à

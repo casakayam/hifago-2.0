@@ -22,6 +22,48 @@ repond_a:
 > Chaque affirmation est vérifiée dans le code actuel — migrations SQL lues intégralement
 > (`src/services/migrations/001` à `014`), pas seulement le résumé de `05-data-model.md`.
 
+## Écarts connus (alimenté par les specs qui révisent ce cahier — voir leur champ `revise:`)
+
+Relevés par la relecture intégrale du 2026-09-07. Les sections ci-dessous ne sont pas réécrites —
+ces lignes en tiennent lieu. §2 fait exception : il a bien été réécrit le 2026-08-27.
+
+- **§1, ligne « Identifiant public stable (slug) » — périmé.** Révisé par
+  `docs/specs/24-modele-hebergement-et-surface-lobbypms.md` (T1, 2026-08-27) : `establishments.slug`
+  existe (dérivé du nom par trigger, jamais saisi — migration `20260827200000`) et la page publique
+  qui le consomme aussi (`apps/web/app/[locale]/establishments/[slug]`). La question « slug global
+  ou par langue » reste, elle, entière — un seul slug, non localisé.
+- **§1, ligne « Horaires check-in/check-out » — périmé.** Même spec, même migration :
+  `establishments.check_in_time`/`check_out_time` existent pour les deux modes. C'est une propriété
+  du LIEU. `products.check_in_time`/`check_out_time` subsistent à côté ; la déduplication reste
+  ouverte (spec 24 § « Ce que T3 étape 2 ne fait pas »).
+- **§1 « ❌ Gap critique — établissement en mode chambres SANS PMS » et la Synthèse « Premier gap
+  urgent » — fermés, contredits par la spec 24 (T3, 2026-08-27).** L'étage `products.type='hotel'`
+  + `product_room_types` n'existe plus (migration `20260827220000`) : une chambre EST un produit
+  `type='lodging'`, avec `product_availability` pour ses cupos et `product_date_rates` pour son
+  prix par date. Le mécanisme réclamé par ce gap existe donc, et pour tous les hébergements, PMS ou
+  non. Ce qui reste vrai et distinct : un établissement n'a toujours **pas** de tags/équipements
+  structurés (§1, ligne « Tags de catégorisation »), aucune table d'affectation n'existant côté
+  établissement.
+- **§3, son titre et deux de ses lignes — périmés.** « hors hôtel à chambres, cf. §2 », « exposé au
+  formulaire pour `activity`/`lodging`/`hotel`/`transport` » et « Toujours hors périmètre pour un
+  hôtel à chambres sans PMS » citent un type `hotel` supprimé par la même spec 24 (T3). Cinq types
+  subsistent : `lodging`, `activity`, `transport`, `camp`, `evento` (contrainte
+  `products_type_check`, migration `20260827220000`). Le type `tour`, encore cité par le cahier 02,
+  avait été retiré plus tôt (spec 17 T0, migration `20260817160000`).
+- **§6, ligne « Canal de notification préféré + journal d'envoi » — livrée à moitié.** Révisée par
+  `docs/specs/23-notifications-email-transactionnelles.md` : le **journal d'envoi tracé** existe
+  (`notification_emails` — événement, destinataire, statut `pending/sending/sent/failed/abandoned`,
+  tentatives, erreur, identifiant fournisseur, migration `20260824020000`), avec 8 événements
+  branchés. La **préférence de canal par compte** n'existe toujours pas, et il n'y a qu'un canal :
+  l'email, via Resend. Le « ❌ absent » de cette ligne reste donc vrai pour la préférence, faux pour
+  le journal.
+- **Section « 🌐 Système multilingue », décision « liste de langues extensible » — vraie en base,
+  fermée en pratique.** Le stockage JSONB par champ n'impose aucune liste, mais la spec 24 pose un
+  invariant opposé côté écriture : « une langue de contenu hors `es`/`en` n'est jamais écrite » —
+  l'éditeur (`LocalizedTextField`) est fermé à ces deux langues, et une clé importée dans une
+  troisième langue serait publiée par repli, invisible dans l'éditeur et non supprimable. Ouvrir une
+  langue de contenu supplémentaire reste donc un geste de code, pas une simple donnée.
+
 ## 🌙 Découverte majeure — du schéma dormant, jamais exposé
 
 Une lecture complète des 14 migrations SQL (pas seulement leur résumé documenté) révèle plusieurs

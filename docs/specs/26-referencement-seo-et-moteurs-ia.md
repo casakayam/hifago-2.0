@@ -4,7 +4,10 @@ titre: "Référencement de la vitrine : Google et moteurs de réponse IA"
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: "Implémentée et vérifiée EN LOCAL le 2026-09-01 (build, serveur réel, 3 e2e) — aucune validation par un outil externe n'est possible avant la bascule de domaine : le SSO Vercel renvoie un 302 à tout crawler."
+statut: implemente
+reste: >
+  Vérifiée en local le 2026-09-01 (build, serveur réel, 3 e2e). Validation par un outil externe
+  différée à la bascule de domaine — le SSO Vercel renvoie un 302 à tout crawler avant.
 maj: 2026-09-01
 resume: >
   Rend apps/web indexable par Google et citable par les moteurs de réponse IA : metadataBase,

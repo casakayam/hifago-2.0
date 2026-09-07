@@ -299,6 +299,21 @@ révision du 2026-08-14 — même principe, un troisième registre visuel borné
 que généralisé. Aucune dépendance MUI/Emotion ne reste dans le projet (installées puis retirées le
 même jour, avant tout usage réel en dehors de l'exploration de l'API).
 
+#### Révision du 2026-08-29 — react-day-picker conservé face à HeroUI `RangeCalendar` (évalué deux fois)
+
+Le calendrier react-aria/HeroUI a été évalué sur prototype réel le 2026-08-17 puis le 2026-08-29
+(arbitrage relu et soumis à contradiction indépendante, zéro objection tenue). Ne pas rouvrir sur
+« HeroUI n'a pas encore été regardé » : c'est faux. La raison est de fond et vaut pour les DEUX
+bibliothèques : le domaine est en **nuits à check-out exclusif**, et aucune des deux ne sait
+l'exprimer gratuitement — `isInvalidSelection` de react-aria ne s'évalue qu'après commit de la
+plage (il rejuge `value.end` APRÈS coup), et `excludeDisabled` de react-day-picker passe par
+`rangeIncludesDate(…, excludeEnds = false)`, donc inclut le jour de sortie. Sortir le matin de la
+première nuit indisponible est légitime, et aucune des deux ne sait le dire : le prédicat conscient
+de l'ancre (`reachableRangeWindow`, `apps/web/lib/products/reservationRange.ts`) doit être écrit
+par l'app dans les deux mondes — migrer n'achète aucune garantie. S'ajoute qu'un seul des trois
+formulaires est en `mode="range"`. Détail : `docs/journal/2026-08.md` (2026-08-29, « le grief se
+ferme »). Précédemment dans `CLAUDE.md` §2.2, déplacé ici le 2026-09-07.
+
 ### Internationalisation (i18n) et SEO multilingue — next-intl, routage par sous-chemin, indexation conditionnée à la vraie traduction
 
 Deux couches multilingues bien distinctes coexistent dans ce projet — une confusion entre les deux
@@ -866,6 +881,26 @@ Jérôme a explicitement demandé une vraie séparation préprod/prod (pas seule
 - Fournisseur email final (Resend vs Postmark) et détail de la politique de rétention/backup de
   Supabase Storage (photos, comprobantes) — décisions de principe actées ci-dessus, détail
   d'implémentation renvoyé au chiffrage.
+- **Synchronisation externe (iCal minimum)** pour les propriétés sans PMS — le calendrier interne
+  ne protège que contre une survente à l'intérieur du portail ; dès qu'un hôtel/maison vend aussi
+  sur Booking.com/Airbnb, le risque de survente inter-canaux devient réel (`01-cahier-des-charges-
+  client.md` §5).
+- **Options logement entier avancées** : tarif week-end différencié (séjour minimum et délai de
+  préavis minimum sont, eux, déjà appliqués — cf. `docs/journal/2026-08.md`, 2026-08-29).
+- **Avis/notes clients** par fiche et par prestataire, **liste de souhaits/favoris**.
+- **Flux self-service de paiement des rétributions** (demande de retrait à la volée par le
+  référent) — le virement est automatique dès la ligne réalisée, mais sans interface de demande.
+- **Méthodes de paiement au-delà de la Colombie**, si un partenaire hors zone Mercado Pago se
+  présente.
+- **Droit à l'export/suppression de ses données** (Habeas Data, self-service) côté socio.
+- **Statistiques de performance** pour un prestataire (vues, taux de conversion).
+- **Résolution de litige formalisée** (client/référent/prestataire).
+- **Passe de sécurité dédiée sur tous les tokens** (session, invitation, réinitialisation,
+  téléchargement de justificatif) — durée de vie, portée, révocation, jamais en URL — avant mise
+  en production, pas seulement les cas déjà repérés.
+
+*(Neuf points ci-dessus fusionnés depuis `hifago/README.md` le 2026-09-07 — ce README ne les
+répétait plus, cette liste-ci fait foi désormais.)*
 
 ## Validation — deux spikes exécutés le 2026-08-12, résultats positifs
 

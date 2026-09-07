@@ -4,7 +4,15 @@ titre: "Paiement en ligne Mercado Pago — acompte obligatoire, ledger de règle
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: brouillon
+statut: partiel
+reste: >
+  Tranche 1 (capture d'acompte, CheckoutForm branché, ledger) livrée et vérifiée en paiement réel.
+  Tranche 2 (remboursement) non commencée — cf. docs/backlog.md. MERCADOPAGO_WEBHOOK_SECRET
+  toujours manquant : webhook jamais testé en conditions réelles.
+revise:
+  - "docs/01-cahier-des-charges-client.md"
+  - "docs/02-cahier-des-charges-socio.md#3g"
+  - "docs/03-cahier-des-charges-admin.md#3g"
 maj: 2026-08-18
 resume: >
   Rouvre explicitement le « hors périmètre v1 » du paiement en ligne (décidé 2026-08-11/12) :
@@ -608,7 +616,7 @@ sans fait nouveau) :
 11. **Cahiers de cadrage corrigés directement** (`04-architecture-cible.md`, `00-modele-de-donnees.md`,
     `README.md`, `02-cahier-des-charges-socio.md` §3g) — pas seulement un renvoi depuis cette spec :
     Jérôme veut pousser Mercado Pago comme cible active, pas la documenter en creux. Fait dans
-    cette même session, cf. §12.
+    cette même session, cf. `docs/journal/2026-08.md`.
 12. **Mécanisme technique du virement automatique** — si l'API Mercado Pago ne permet pas un
     virement différé plateforme→tiers adapté (cf. point ouvert technique ci-dessous), le repli est
     un **virement manuel admin**, accepté explicitement par Jérôme — pas une contradiction à

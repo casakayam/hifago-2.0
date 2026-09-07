@@ -14,9 +14,10 @@ Tu n'es pas seul sur ce dépôt. D'autres agents travaillent peut-être EN CE MO
 d'autres specs, dans le même répertoire de travail hifago/, avec la même instance Supabase locale.
 Avant de commencer, et à chaque fois que quelque chose semble incohérent avec ce que tu attendais :
 
-1. Lire `hifago/CLAUDE.md` §12 (Curseur) puis, si besoin de plus de contexte, le dernier fichier de
-   `hifago/docs/journal/` — une autre session a peut-être livré quelque chose depuis ta dernière
-   lecture du repo.
+1. Lire `docs/backlog.md` (points ouverts) puis la dernière entrée du fichier du mois en cours de
+   `docs/journal/` — une autre session a peut-être livré quelque chose depuis ta dernière lecture
+   du repo. (`CLAUDE.md` ne porte plus de curseur d'état depuis le 2026-09-07 — c'est justement
+   pour éviter que plusieurs agents parallèles s'écrasent dessus, cf. `docs/journal/2026-09.md`.)
 2. Avant de créer une migration : `ls supabase/migrations/ | tail -5` pour repérer un timestamp
    très récent posé par une autre session en cours, et éviter toute collision de nom/ordre.
 3. Ne JAMAIS lancer `supabase db reset` (ou `/hifago-test` sans argument, qui le fait aussi via la
@@ -27,7 +28,7 @@ Avant de commencer, et à chaque fois que quelque chose semble incohérent avec 
    d'accueil, un formulaire déjà réutilisé ailleurs) : `git status`/`git diff` d'abord — vérifier
    qu'une autre session n'a pas déjà une modification en cours dessus. Une double-édition
    concurrente le même jour sur le même fichier est déjà arrivée sur ce projet
-   (`hifago/docs/journal/2026-08.md`, specs 03/04).
+   (`docs/journal/2026-08.md`, specs 03/04).
 5. Dans un test, ne jamais sélectionner un enregistrement seedé PARTAGÉ par son nom affiché à
    l'écran — une autre session peut le renommer en testant sa propre spec au même moment (déjà
    arrivé : contamination croisée entre `admin-product-price-tiers.spec.ts` et
@@ -50,7 +51,7 @@ Tâche réelle à partir d'ici :
 
 ## Pourquoi ce fichier existe
 
-Le journal de session (`hifago/docs/journal/2026-08.md`) documente déjà plusieurs collisions
+Le journal de session (`docs/journal/2026-08.md`) documente déjà plusieurs collisions
 réelles entre sessions concurrentes sur ce dépôt (édition simultanée de
 `NewEstablishmentForm.tsx`, désynchronisation `node_modules`/`package-lock.json`, rollout 2FA
 cassant les tests d'une autre session, contamination croisée entre deux specs partageant un
@@ -106,12 +107,19 @@ n'existe que dans une langue), `npx tsc --noEmit`, et le rendu de tes stories au
 
 ### Découpage en vagues (2026-09-01)
 
+⚠️ **Ce découpage n'a été suivi tel quel que jusqu'à la vague 2.** Les vagues réellement exécutées
+sont allées jusqu'à la vague 8 (`prompts/vague3-*.md` à `vague8-*.md`, plus `relais-B-*.md` et
+`suite-*.md`) sur un découpage différent de celui planifié ici pour la vague 2 — la table ci-dessous
+documente le PLAN d'origine, pas l'exécution réelle. Historique complet de ce qui a été fait à
+chaque lot : `docs/journal/2026-09.md`.
+
 Le risque n'est pas le conflit de fichier, c'est **deux agents qui créent le même atome** sous deux
 noms. D'où un ordre, pas un simple partage :
 
 - **Vague 1 — les atomes partagés, DEUX agents en parallèle.** `PageShell`, `Title` (niveau en
-  prop), `BackLink`, `Price`, `TypeBadge`, `Image`. Prompts prêts :
-  `hifago/prompts/vague1-agent-A.md` et `-B.md`.
+  prop), `BackLink`, `Price`, `TypeBadge`, `Image`. Livrée (`a21fe61`) — les prompts d'origine
+  (prompts vague1-agent-A et -B) sont partis avec `prompts/` (git rm le 2026-09-07, contenu
+  couvert par le journal) ; `git show a21fe61:prompts/vague1-agent-A.md` les retrouve au besoin.
 
   ⚠️ **Cette vague était planifiée séquentielle** (« tout le monde en dépend, goulot assumé »).
   Révisé le 2026-09-01 à la demande de Jérôme, et ce n'est tenable que parce que trois conditions

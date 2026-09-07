@@ -4,7 +4,7 @@ import { createTestUser } from "@hifago/e2e-support";
 
 // Les deux tests qui créent une invitation admin partagent le même compte admin seedé, dont le
 // facteur TOTP a montré une contention sous exécution parallèle (constaté 2026-08-17, cf. entrée
-// hifago/CLAUDE.md §12 la plus récente) — même rationale que partner-establishment-proposals.spec.ts.
+// docs/journal/2026-08.md, 2026-08-17) — même rationale que partner-establishment-proposals.spec.ts.
 test.describe.configure({ mode: "serial" });
 
 // Scénario complet à deux acteurs (cf. plan Feature 13) : un admin crée une invitation et copie le

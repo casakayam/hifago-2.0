@@ -4,7 +4,10 @@ titre: "Admin : active products.type='hotel' — un hôtel a plusieurs sous-prod
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: "SUPPRIMÉE le 2026-08-27 (T3 de la spec 24) — l'étage hôtel n'existe plus, ni en code ni en base. Ce document reste comme archive de ce qui a été construit et de pourquoi il a été défait."
+statut: supprimee
+reste: >
+  Supprimée le 2026-08-27 (T3 de la spec 24) — l'étage hôtel n'existe plus, ni en code ni en base.
+  Ce document reste comme archive de ce qui a été construit et de pourquoi il a été défait.
 maj: 2026-08-27
 resume: >
   Active un nouveau type de produit `hotel` : photos/description/lieu/check-in/check-out réutilisés

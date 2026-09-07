@@ -1,4 +1,4 @@
--- Bug de données réel trouvé le 2026-08-18 (hifago/CLAUDE.md §12 historique, jamais corrigé
+-- Bug de données réel trouvé le 2026-08-18 (docs/journal/2026-08.md, jamais corrigé
 -- jusqu'ici) : expire_stale_payment_orders (20260818230000) expire TOUTE commande dont
 -- payment_status reste 'unpaid'/'pending' 30 minutes après création — mais create_manual_order_line
 -- (20260818190000/20260819180000, réservation walk-in saisie par un operator) n'a jamais touché

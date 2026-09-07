@@ -4,7 +4,11 @@ titre: "Connecteur LobbyPMS — contrat générique multi-prestataire"
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: "implémenté (Tranche 1) le 2026-08-19, disponibilité live côté client comblée le 2026-08-21 — voir § Implémentation en fin de document"
+statut: partiel
+reste: >
+  Tranche 1 implémentée le 2026-08-19, disponibilité live côté client comblée le 2026-08-21 (voir
+  § Implémentation en fin de document). §10 points 3-5 non tranchés (traslado↔commission,
+  orders.status en échec PMS post-confirmation, chiffrement du token) — cf. docs/backlog.md.
 maj: 2026-08-21
 resume: >
   Porte le connecteur LobbyPMS (aujourd'hui unique voie legacy pour Casa Kayam) vers un
@@ -145,7 +149,7 @@ prêt à coder, sans les rouvrir — **et signale un fait nouveau découvert en 
 qui affecte directement la stratégie de test déjà validée (§10 point 1).
 
 Le déclencheur immédiat : « connecteur LobbyPMS » figure dans le backlog ouvert de hifago depuis
-plusieurs sessions (`hifago/CLAUDE.md` §12, curseur) sans jamais avoir été raffiné en spec.
+plusieurs sessions (`docs/backlog.md`, avant cette spec) sans jamais avoir été raffiné en spec.
 
 ## 2. Portée
 
@@ -480,7 +484,7 @@ cache partagé entre instances serverless concurrentes. Aucun de ces trois point
 l'anti-survente (toujours assurée par `reserve-nights`), seulement l'expérience d'affichage.
 
 **Deux bugs trouvés en FAISANT TOURNER les tests, pas en écrivant le code** (même discipline que
-les sessions précédentes, cf. `hifago/CLAUDE.md` §12 historique) :
+les sessions précédentes, cf. `docs/journal/2026-08.md`) :
 1. **Régression introduite par cette spec, corrigée dans la foulée** : le `REVOKE SELECT` +
    `GRANT SELECT` par colonne sur `establishments` (pour cacher `lobby_api_token`) cassait
    `update_establishment` (`security invoker`, préexistant), qui faisait `select *` — un `select *`

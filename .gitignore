@@ -49,3 +49,15 @@ next-env.d.ts
 
 # Sortie de `npm run build-storybook` — artefact de vérification, jamais versionné.
 storybook-static/
+
+# Préférences/permissions locales à une machine — jamais partagées entre postes.
+.claude/settings.local.json
+
+# Source universelle des skills tiers installés par `npx skills add` (ex. supabase/agent-skills) —
+# .claude/skills/<nom> n'en est qu'un LIEN SYMBOLIQUE ; committer les deux verserait soit du
+# contenu dupliqué, soit des pointeurs morts. Se réinstallent par `npx skills add
+# supabase/agent-skills` (source de vérité : skills-lock.json, lui, reste suivi).
+.agents/skills/
+/.claude/skills/supabase
+/.claude/skills/supabase-postgres-best-practices
+/skills-lock.json

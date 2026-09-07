@@ -4,7 +4,14 @@ titre: "Notifications email transactionnelles (invitation, modération, paiement
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: implémenté (Tranche 1 + Tranche 2) — envoi réel Resend non vérifié, domaine non configuré
+statut: implemente
+reste: >
+  Tranche 1 + Tranche 2 livrées. Envoi réel Resend confirmé le 2026-08-31 (8 emails reçus par un
+  humain pour la première fois) — l'incertitude sur le domaine, notée à l'écriture, est close.
+revise:
+  - "docs/00-modele-de-donnees.md#6"
+  - "docs/02-cahier-des-charges-socio.md#1"
+  - "docs/03-cahier-des-charges-admin.md#2"
 maj: 2026-08-24
 resume: >
   Premier fournisseur email applicatif du projet (Resend) : file Postgres + journal d'envoi +

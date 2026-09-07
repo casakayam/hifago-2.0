@@ -6,7 +6,7 @@ import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 
 // Les 3 tests de ce fichier créent une invitation via le même compte admin seedé, dont le facteur
 // TOTP a montré une contention sous exécution parallèle (constaté 2026-08-17, cf. entrée
-// hifago/CLAUDE.md §12) — même rationale que partner-join.spec.ts/partner-establishment-
+// docs/journal/2026-08.md, 2026-08-17) — même rationale que partner-join.spec.ts/partner-establishment-
 // proposals.spec.ts, appliquée ici aussi (gap découvert le 2026-08-26 en ajoutant un 3e test).
 test.describe.configure({ mode: "serial" });
 

@@ -4,7 +4,7 @@ titre: "Design system admin — fond beige, coins carrés (piste Argile)"
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: brouillon
+statut: implemente
 maj: 2026-08-15
 resume: >
   Nouveaux tokens de couleur/radius/bordure du thème admin HeroUI v3 (data-theme="admin") : fond

@@ -4,7 +4,7 @@ titre: "Notifications toast succès/échec sur toute création/édition/suppress
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: implémenté
+statut: implemente
 maj: 2026-08-17 (suite — cluster différé converti, bug noValidate corrigé)
 resume: >
   Remplace tous les messages inline (paragraphes role="alert"/role="status") par des popups toast

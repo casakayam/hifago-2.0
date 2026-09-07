@@ -2,7 +2,7 @@
 /**
  * Manifeste documentaire pour les agents IA — hifago/ (nouveau stack, dépôt séparé).
  *
- *   node scripts/docs_index.js --build   → (re)génère docs/ai-index.json
+ *   node scripts/docs_index.js --build   → (re)génère docs/ai-index.json ET docs/INDEX.md
  *   node scripts/docs_index.js --check   → vérifie la cohérence, sort en erreur si dérive
  *
  * Même mécanisme que le manifeste du dépôt racine (`scripts/docs_index.js` à la racine du repo
@@ -13,14 +13,24 @@
  *
  * Règle : tout nouveau document de `docs/` doit avoir un en-tête, et `npm run docs:check`
  * doit rester vert avant un commit.
+ *
+ * 2026-09-07 — étendu (chantier 4 du rangement) après le constat que `statut` mentait sur 6 specs
+ * sur 26 (`brouillon` alors que le code était livré) : l'énumération à 3 valeurs ne pouvait pas
+ * dire une livraison par lots sans mentir dans un sens ou l'autre. Ajouts : `statut` fermé à 4
+ * valeurs + `reste:` pour `partiel` ; `revise:` sur une spec qui touche un cahier des charges,
+ * vérifié contre la date du dernier commit du cahier (pas une date tapée à la main — 74 % des
+ * `maj` étaient déjà en retard) ; `docs/INDEX.md` humain, généré comme `ai-index.json`.
  */
 
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const DOCS = path.join(ROOT, 'docs');
 const OUT = path.join(DOCS, 'ai-index.json');
+const OUT_HUMAIN = path.join(DOCS, 'INDEX.md');
+const SPECS_README = path.join(DOCS, 'specs/README.md');
 
 /** Table de routage sujet → document. Éditée à la main, préservée à chaque régénération. */
 const ROUTAGE = {
@@ -37,27 +47,43 @@ const ROUTAGE = {
   'gabarit à copier pour spécifier une nouvelle feature': 'docs/specs/_modele.md',
   'comment poser les bonnes questions à Jérôme avant d\'écrire une spec, clarifier une ambiguïté': 'docs/specs/avant-la-spec.md',
   "historique complet d'une feature déjà livrée (jamais chargé automatiquement)": 'docs/journal/',
+  'points ouverts, arbitrages en attente de Jérôme, dette connue non traitée, quoi faire maintenant': 'docs/backlog.md',
 };
 
 /** Fiabilité d'un thème : ce qu'une IA a le droit d'en déduire. */
 const THEMES = {
   cadrage: { dossier: 'docs/', fiabilite: 'cible', note: "Cahiers des charges et architecture cible de la refonte. Décrit ce qui doit exister, pas forcément déjà codé — croiser avec le statut de la section." },
-  specs: { dossier: 'docs/specs/', fiabilite: 'cible', note: "⚠️ Spec d'une feature précise, prête à coder. Vérifier le statut (`implemente`/`brouillon`) avant de citer comme déjà livré." },
+  specs: { dossier: 'docs/specs/', fiabilite: 'cible', note: "⚠️ Spec d'une feature précise, prête à coder. Vérifier `statut` (voir STATUTS) avant de citer comme déjà livré." },
   journal: { dossier: 'docs/journal/', fiabilite: 'vivant', note: "Historique chronologique, jamais élagué. Jamais chargé automatiquement en session — à ouvrir seulement pour comprendre une décision passée." },
 };
+
+/** Les seules valeurs valides de `statut` pour un document de thème `specs`. */
+const STATUTS = ['brouillon', 'partiel', 'implemente', 'supprimee'];
+const LABEL_STATUT = { brouillon: 'Brouillon', partiel: 'Partiel', implemente: 'Implémenté', supprimee: 'Supprimée' };
+
+/** Cahiers des charges qu'une spec peut réviser via son champ `revise:`. */
+const CAHIERS = [
+  'docs/00-modele-de-donnees.md',
+  'docs/01-cahier-des-charges-client.md',
+  'docs/02-cahier-des-charges-socio.md',
+  'docs/03-cahier-des-charges-admin.md',
+];
 
 const PROTOCOLE = [
   "Lire `routage` (sujet → chemin) : il est en tête de ce fichier et couvre les cas courants. Si le sujet y figure, s'arrêter là.",
   "Sinon seulement, lire `documents` et croiser `cles` et `questions`.",
   "N'ouvrir qu'UN document. Son en-tête `---` répète ces métadonnées : les 20 premières lignes confirment le bon choix.",
   "Vérifier `themes[<theme>].fiabilite` avant de citer : `cible` ne décrit pas forcément un comportement déjà livré.",
-  "En cas de contradiction entre deux documents, le code fait foi, puis `hifago/docs/04-architecture-cible.md`.",
+  "Pour une spec (`theme: specs`) : `statut: partiel` a un champ `reste` — le lire avant de dire une feature terminée.",
+  "En cas de contradiction entre une spec `implemente`/`partiel` et un cahier des charges (00-03), la spec la plus récente prime — elle raffine le cahier, elle ne l'invente pas.",
+  "Sinon, en cas de contradiction entre deux documents, le code fait foi, puis `hifago/docs/04-architecture-cible.md`.",
   "Ne jamais parcourir docs/ en entier ni ouvrir plusieurs gros fichiers « pour voir ».",
 ];
 
 function walk(dir, acc = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
+    if (full === OUT_HUMAIN) continue; // généré par ce script, pas un document source
     if (entry.isDirectory()) walk(full, acc);
     else if (entry.name.endsWith('.md')) acc.push(full);
   }
@@ -97,6 +123,30 @@ function parseFrontMatter(text) {
   return out;
 }
 
+/**
+ * Date de dernière modification « réelle » de `file` (YYYY-MM-DD) : le jour même si le fichier a
+ * des changements non commités (working tree ou index — un `docs:check` lancé avant un commit doit
+ * voir la correction qu'on vient d'écrire, pas la dernière date commitée), sinon la date du dernier
+ * commit qui l'a touché, sinon `null` (jamais commité et inexistant en working tree).
+ */
+function gitMaj(file) {
+  try {
+    const statut = execFileSync('git', ['status', '--porcelain', '--', file], { cwd: ROOT, encoding: 'utf8' });
+    if (statut.trim()) return new Date().toISOString().slice(0, 10);
+  } catch {
+    // Pas un repo git (ou commande indisponible) : on retombe sur `log`, qui échouera pareil.
+  }
+  try {
+    const out = execFileSync(
+      'git', ['log', '-1', '--format=%ad', '--date=short', '--', file],
+      { cwd: ROOT, encoding: 'utf8' }
+    ).trim();
+    return out || null;
+  } catch {
+    return null;
+  }
+}
+
 function collect() {
   const docs = [];
   const problemes = [];
@@ -109,16 +159,48 @@ function collect() {
       if (!fm[champ]) problemes.push(`${rel} — champ « ${champ} » manquant`);
     }
     if (fm.theme && !THEMES[fm.theme]) problemes.push(`${rel} — thème inconnu « ${fm.theme} »`);
+
+    const estMetaSpec = rel === 'docs/specs/README.md' || rel.endsWith('/_modele.md') || rel.endsWith('/avant-la-spec.md');
+    if (fm.theme === 'specs' && !estMetaSpec) {
+      if (fm.statut && !STATUTS.includes(fm.statut)) {
+        problemes.push(`${rel} — statut « ${fm.statut} » hors énumération (${STATUTS.join(' | ')})`);
+      }
+      if (fm.statut === 'partiel' && !fm.reste) {
+        problemes.push(`${rel} — statut "partiel" sans champ « reste » : quoi manque-t-il ?`);
+      }
+      if (fm.revise) {
+        const cibles = Array.isArray(fm.revise) ? fm.revise : [fm.revise];
+        for (const cibleBrute of cibles) {
+          const cible = cibleBrute.split('#')[0].trim();
+          if (!CAHIERS.includes(cible)) {
+            problemes.push(`${rel} — revise « ${cibleBrute} » : ce n'est pas un cahier connu (${CAHIERS.join(', ')})`);
+            continue;
+          }
+          const majSpec = gitMaj(rel);
+          const majCahier = gitMaj(cible);
+          if (majSpec && majCahier && majCahier < majSpec) {
+            problemes.push(
+              `${rel} révise ${cibleBrute} (maj spec ${majSpec}) mais ${cible} n'a pas été touché ` +
+              `depuis (maj ${majCahier}) — reporter l'écart dans son en-tête « Écarts connus ».`
+            );
+          }
+        }
+      }
+    }
+
     const resume = fm.resume.length > 125 ? fm.resume.slice(0, 122).replace(/\s+\S*$/, '') + '…' : fm.resume;
     docs.push({
       chemin: rel,
       theme: fm.theme,
       statut: fm.statut,
+      reste: fm.reste || undefined,
       langue: fm.langue || 'fr',
+      maj: gitMaj(rel) || fm.maj || null,
       ko: Math.round(Buffer.byteLength(text, 'utf8') / 1024),
       resume,
       cles: (fm.mots_cles || []).join(', '),
       questions: (fm.repond_a || []).slice(0, 3).join(' | '),
+      titre: fm.titre,
       _id: fm.id,
     });
   }
@@ -130,7 +212,37 @@ function collect() {
     if (cible.endsWith('/')) continue; // pointeur vers un dossier (ex. docs/journal/), pas un fichier
     if (!fs.existsSync(path.join(ROOT, cible))) problemes.push(`routage → ${cible} : fichier introuvable`);
   }
+  problemes.push(...verifierSommaireSpecs(docs));
   return { docs, problemes };
+}
+
+/**
+ * Cohérence frontmatter ↔ table « Sommaire » de docs/specs/README.md : chaque spec `theme: specs`
+ * doit y avoir une ligne, et la colonne « État » doit commencer par le libellé du `statut` réel.
+ */
+function verifierSommaireSpecs(docs) {
+  const problemes = [];
+  if (!fs.existsSync(SPECS_README)) return problemes;
+  const table = fs.readFileSync(SPECS_README, 'utf8');
+  const specs = docs.filter((d) => d.theme === 'specs' && d.chemin !== 'docs/specs/README.md'
+    && !d.chemin.endsWith('/_modele.md') && !d.chemin.endsWith('/avant-la-spec.md'));
+  for (const spec of specs) {
+    const nomFichier = path.basename(spec.chemin);
+    const ligneRe = new RegExp(`\\[[^\\]]*\\]\\(${nomFichier.replace('.', '\\.')}\\)[^\\n]*`);
+    const m = ligneRe.exec(table);
+    if (!m) {
+      problemes.push(`docs/specs/README.md — aucune ligne du sommaire ne pointe vers ${nomFichier}`);
+      continue;
+    }
+    const label = LABEL_STATUT[spec.statut];
+    if (label && !m[0].includes(label)) {
+      problemes.push(
+        `docs/specs/README.md — la ligne de ${nomFichier} ne contient pas « ${label} » ` +
+        `(statut réel du frontmatter : ${spec.statut})`
+      );
+    }
+  }
+  return problemes;
 }
 
 function build(docs) {
@@ -141,7 +253,8 @@ function build(docs) {
     protocole_ia: PROTOCOLE,
     routage: ROUTAGE,
     themes: THEMES,
-    documents: docs.map(({ _id, ...reste }) => reste),
+    statuts_specs: STATUTS,
+    documents: docs.map(({ _id, titre, ...reste }) => reste),
   };
 }
 
@@ -153,26 +266,62 @@ function serialiser(manifeste) {
   return `${head},\n  "documents": [\n${lignes}\n  ]\n}\n`;
 }
 
+/** `docs/INDEX.md` — sommaire humain, par thème, généré (jamais édité à la main). */
+function construireIndexHumain(docs) {
+  const parThe = { cadrage: [], specs: [], journal: [] };
+  for (const d of docs) if (parThe[d.theme]) parThe[d.theme].push(d);
+
+  const tronquer = (s, n) => (s.length > n ? s.slice(0, n - 1).replace(/\s+\S*$/, '') + '…' : s);
+  const ligne = (d) => {
+    const reste = d.reste ? ` (reste : ${tronquer(d.reste, 90)})` : '';
+    const statut = d.theme === 'specs' && d.statut
+      ? ` — **${LABEL_STATUT[d.statut] || d.statut}**${reste}`
+      : '';
+    const maj = d.maj ? ` · maj ${d.maj}` : '';
+    return `- [${d.titre}](${d.chemin.replace(/^docs\//, '')})${statut}${maj}`;
+  };
+
+  return `# Index de la documentation hifago/
+
+> Généré par \`npm run docs:index\` — ne pas éditer à la main. Sommaire **humain** ; le
+> \`docs/ai-index.json\` voisin sert le même contenu à une IA (table de routage sujet → document).
+> Un seul fichier à ouvrir pour savoir ce qui existe : celui-ci.
+
+## Cadrage — architecture, modèle de données, cahiers des charges
+${parThe.cadrage.map(ligne).join('\n')}
+
+## Specs — features prêtes à coder ou livrées
+${parThe.specs.map(ligne).join('\n')}
+
+## Journal — historique chronologique (jamais chargé automatiquement)
+${parThe.journal.map(ligne).join('\n')}
+`;
+}
+
 const mode = process.argv.includes('--check') ? 'check' : 'build';
 const { docs, problemes } = collect();
 
 if (mode === 'check') {
-  let ecart = null;
-  if (!fs.existsSync(OUT)) ecart = 'docs/ai-index.json est absent';
+  const ecarts = [];
+  if (!fs.existsSync(OUT)) ecarts.push('docs/ai-index.json est absent');
   else {
     const actuel = JSON.parse(fs.readFileSync(OUT, 'utf8'));
-    const a = JSON.stringify(actuel.documents);
-    const b = JSON.stringify(build(docs).documents);
-    if (a !== b) ecart = 'docs/ai-index.json ne correspond plus aux documents';
+    if (JSON.stringify(actuel.documents) !== JSON.stringify(build(docs).documents)) {
+      ecarts.push('docs/ai-index.json ne correspond plus aux documents');
+    }
   }
-  const tout = [...problemes, ...(ecart ? [ecart] : [])];
+  if (!fs.existsSync(OUT_HUMAIN)) ecarts.push('docs/INDEX.md est absent');
+  else if (fs.readFileSync(OUT_HUMAIN, 'utf8') !== construireIndexHumain(docs)) {
+    ecarts.push('docs/INDEX.md ne correspond plus aux documents');
+  }
+  const tout = [...problemes, ...ecarts];
   if (tout.length) {
     console.error('Base documentaire hifago/ — problèmes détectés :\n');
     for (const p of tout) console.error(`  ✗ ${p}`);
     console.error('\nCorriger, puis lancer : npm run docs:index');
     process.exit(1);
   }
-  console.log(`Base documentaire hifago/ OK — ${docs.length} documents indexés, manifeste à jour.`);
+  console.log(`Base documentaire hifago/ OK — ${docs.length} documents indexés, manifeste et index à jour.`);
 } else {
   if (problemes.length) {
     console.error('Problèmes détectés :\n');
@@ -180,6 +329,7 @@ if (mode === 'check') {
     process.exit(1);
   }
   fs.writeFileSync(OUT, serialiser(build(docs)), 'utf8');
+  fs.writeFileSync(OUT_HUMAIN, construireIndexHumain(docs), 'utf8');
   const ko = Math.round((fs.statSync(OUT).size / 1024) * 10) / 10;
-  console.log(`docs/ai-index.json généré — ${docs.length} documents, ${ko} Ko.`);
+  console.log(`docs/ai-index.json généré — ${docs.length} documents, ${ko} Ko. docs/INDEX.md généré.`);
 }

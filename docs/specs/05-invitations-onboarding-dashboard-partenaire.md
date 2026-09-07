@@ -349,4 +349,4 @@ cause — non provoqué ni corrigé ici.
   précédent legacy de la faille code-comme-preuve-d'autorisation, déjà corrigée.
 - `docs/specs/03-admin-creation-etablissement.md` — rattachement établissement réutilisé tel quel.
 - `docs/specs/02-admin-accueil-et-navigation.md` — patrons sidebar/pagination/alertes réutilisés.
-- `hifago/CLAUDE.md` §3 (checklist RLS/RPC-only), §12 (journal des features).
+- `CLAUDE.md` §3 (checklist RLS/RPC-only) ; historique complet : `docs/journal/`.

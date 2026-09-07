@@ -26,7 +26,8 @@
     "test:notification-real": "node tests/notification-real/send_8_real_emails.mjs",
     "db:setup": "bash scripts/db-setup.sh",
     "docs:index": "node scripts/docs_index.js --build",
-    "docs:check": "node scripts/docs_index.js --check"
+    "docs:check": "node scripts/docs_index.js --check",
+    "check:instructions": "node scripts/check-instructions.mjs"
   },
   "devDependencies": {
     "concurrently": "^10.0.4"

@@ -5,6 +5,9 @@ theme: specs
 public: [ia, dev, jerome]
 langue: fr
 statut: implemente
+revise:
+  - "docs/02-cahier-des-charges-socio.md#3b"
+  - "docs/02-cahier-des-charges-socio.md#3e"
 maj: 2026-08-15
 resume: >
   Comble le gap admin (présentation d'établissement éditable après création, décision §3c déjà

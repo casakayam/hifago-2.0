@@ -4,7 +4,13 @@ titre: "Créneaux horaires réellement réservables (product_slot_rules)"
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: brouillon
+statut: implemente
+revise:
+  - "docs/01-cahier-des-charges-client.md#3a"
+  - "docs/01-cahier-des-charges-client.md#3d"
+  - "docs/01-cahier-des-charges-client.md#3e"
+  - "docs/02-cahier-des-charges-socio.md#3d"
+  - "docs/03-cahier-des-charges-admin.md#3g"
 maj: 2026-08-18
 resume: >
   Rend product_slot_rules (définition de créneaux horaires par activité, posée par la spec 11)
@@ -289,7 +295,7 @@ produit à créneaux.
    complément : masquer le champ « Cupo diario por defecto » dans `product-type-fields.tsx` dès
    qu'au moins une règle de créneau existe pour le produit, pour éviter la confusion à la saisie —
    pas la vraie barrière, juste un confort).
-6. **Cahiers des charges hors périmètre de cette spec** — référencés (§12), pas réécrits, même
+6. **Cahiers des charges hors périmètre de cette spec** — référencés (`docs/journal/`), pas réécrits, même
    précédent que toutes les tranches de la spec 17 (qui ont pourtant construit des mécanismes tout
    aussi éloignés des cahiers sans jamais les modifier en cours de route).
 7. **Compatibilité avec le futur connecteur LobbyPMS (prévu juste après ce chantier — contrainte
