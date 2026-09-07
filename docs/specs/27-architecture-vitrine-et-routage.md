@@ -22,24 +22,29 @@ repond_a:
 > **Cible stack** : hifago. Première spec du chantier front de `apps/web`. Elle ne construit
 > **aucun écran** : elle pose le terrain sur lequel les specs 28 et suivantes en construiront un
 > par lot.
+>
+> **✅ Validée par Jérôme le 2026-09-07.** Le `statut: brouillon` du frontmatter décrit l'état
+> d'**implémentation** (rien n'est encore construit), pas l'état de validation — l'énumération
+> vérifiée par `docs:check` est `brouillon | partiel | implemente | supprimee`. La validation vit
+> dans la table « Sommaire et statut » ci-dessous, section par section.
 
 ## Sommaire et statut
 
 | # | Section | Statut |
 |---|---|---|
-| 0 | **Contrat compact** | brouillon |
-| 1 | Contexte et problème | brouillon |
-| 2 | Portée | brouillon |
-| 3 | Décisions retenues | brouillon |
-| 4 | Parcours cible (flux d'une requête) | brouillon |
-| 5 | Les quatre coquilles | brouillon |
-| 6 | Modèle de données (delta) | brouillon |
-| 7 | Contrat de la couche d'accès | brouillon |
-| 8 | Règles et invariants | brouillon |
-| 9 | Cas limites | brouillon |
-| 10 | Décisions tranchées / points ouverts | brouillon |
-| 11 | Annexe — traçabilité | brouillon |
-| 12 | Documents liés | brouillon |
+| 0 | **Contrat compact** | ✅ validé 2026-09-07 |
+| 1 | Contexte et problème | ✅ validé 2026-09-07 |
+| 2 | Portée | ✅ validé 2026-09-07 |
+| 3 | Décisions retenues | ✅ validé 2026-09-07 |
+| 4 | Parcours cible (flux d'une requête) | ✅ validé 2026-09-07 |
+| 5 | Les quatre coquilles | ✅ validé 2026-09-07 |
+| 6 | Modèle de données (delta) | ✅ validé 2026-09-07 |
+| 7 | Contrat de la couche d'accès | ✅ validé 2026-09-07 |
+| 8 | Règles et invariants | ✅ validé 2026-09-07 |
+| 9 | Cas limites | ✅ validé 2026-09-07 |
+| 10 | Décisions tranchées / points ouverts | ✅ validé 2026-09-07 |
+| 11 | Annexe — traçabilité | ✅ validé 2026-09-07 |
+| 12 | Documents liés | ✅ validé 2026-09-07 |
 
 ---
 

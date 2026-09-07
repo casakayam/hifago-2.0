@@ -97,7 +97,7 @@ Ajoutés par la réécriture du §2 le 2026-09-07 — **contradictions internes 
 | # | Section | Statut |
 |---|---|---|
 | 1 | Périmètre et vision | ✅ validé 2026-08-11 |
-| 2 | Parcours utilisateurs | 🔄 réécrit 2026-09-07 — en relecture |
+| 2 | Parcours utilisateurs | ✅ réécrit et validé 2026-09-07 |
 | 3a | Catalogue et tarification produits | ✅ corrigé 2026-08-13 |
 | 3b | Moteur de commission (17/10/7) | ✅ validé 2026-08-11 |
 | 3c | Code partenaire / attribution référent | ✅ corrigé 2026-08-13 |
@@ -178,7 +178,7 @@ présence est actée ici comme un pré-requis du site.
 
 ## 2. Parcours utilisateurs
 
-**Statut : en relecture — section entièrement réécrite le 2026-09-07, à revalider par Jérôme.**
+**Statut : ✅ validé par Jérôme le 2026-09-07** — section entièrement réécrite le même jour.
 Version précédente (✅ validée le 2026-08-11) : `git show e5d3959:docs/01-cahier-des-charges-client.md`.
 Cette réécriture est issue d'une **interview étape par étape** menée avec Jérôme le 2026-09-07,
 avant l'ouverture du chantier front de `apps/web` — les quatre axes du parcours avaient changé.

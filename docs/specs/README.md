@@ -42,10 +42,17 @@ couvrir l'app legacy.
 - **Nommage** : `NN-slug-kebab.md`, `NN` = ordre de création — jamais réordonné, jamais réutilisé
   même si une spec est un jour archivée.
 - **Gabarit** : copier [`_modele.md`](_modele.md).
-- **Statut** : `brouillon` → `en relecture` → `validé par Jérôme le AAAA-MM-JJ`, porté à la fois
-  par le frontmatter (`statut`, un résumé global) et par une table interne « Sommaire et statut »
-  où **chaque section** a son propre statut — convention reprise de
-  `hifago/docs/03-cahier-des-charges-admin.md`.
+- **Statut** : deux axes distincts, à ne pas confondre (précisé le 2026-09-07, après que la
+  spec 27 se soit heurtée au contrôle).
+  - **Le frontmatter `statut` décrit l'état d'IMPLÉMENTATION**, et `npm run docs:check` en vérifie
+    l'énumération : `brouillon | partiel | implemente | supprimee`. Une spec validée par Jérôme mais
+    pas encore construite reste donc `brouillon` — écrire « validé par Jérôme le … » ici **échoue au
+    contrôle**.
+  - **L'état de VALIDATION vit dans la table interne « Sommaire et statut »**, où chaque section
+    porte le sien : `brouillon` → `en relecture` → `✅ validé 2026-09-07`. Convention reprise de
+    `hifago/docs/03-cahier-des-charges-admin.md`, où elle s'applique de la même façon.
+  - Quand une spec est validée sans être construite, le dire aussi en une ligne sous le titre, pour
+    qu'un lecteur qui voit `statut: brouillon` ne conclue pas qu'elle n'est pas arbitrée.
 - **Enregistrement obligatoire** dans `docs/ai-index.json` dans le même commit
   (`npm run docs:index` puis `npm run docs:check`).
 
