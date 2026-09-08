@@ -42,27 +42,42 @@ describe("SiteFooter", () => {
     expect(nav.getAttribute("aria-label")).toBe(messages.Chrome.footerNavLabel);
   });
 
-  it("porte les cinq liens institutionnels du cahier des charges, en liste", () => {
+  // ⚠️ RÉÉCRIT LE 2026-09-07, et c'est une décision, pas une régression. Ce test exigeait les cinq
+  // liens institutionnels (mentions légales, confidentialité, contact, aide, conditions). Ils
+  // pointaient vers des routes qui n'existent pas : le footer menait à cinq 404. Jérôme a repoussé
+  // ces pages à la fin du chantier (cahier §1 : « seule leur présence est actée », le contenu reste
+  // à rédiger). Le test garde donc la trace de ce qui est attendu À TERME, et vérifie en attendant
+  // qu'aucun lien mort n'est servi.
+  it("ne sert AUCUN lien institutionnel tant que les pages n'existent pas", () => {
     const { container } = rendu();
-    const liste = container.querySelector("nav ul") as HTMLElement;
-    expect(liste.querySelectorAll("li").length).toBe(CLES.length);
     for (const cle of CLES) {
-      const lien = container.querySelector(`[data-testid="footer-${cle}"]`) as HTMLAnchorElement;
-      expect(lien.textContent).toBe(messages.Chrome[cle]);
-      // ⚠️ Chaque lien interne passe par le `Link` de @/i18n/navigation : lui seul conserve le
-      // préfixe de locale. Un `<a href="/legal">` renverrait un hispanophone sur une page sans
-      // langue.
-      expect(lien.getAttribute("data-localized")).toBe("true");
+      expect(container.querySelector(`[data-testid="footer-${cle}"]`)).toBeNull();
     }
   });
 
-  it("garde une cible tactile de 44 px sur chaque lien", () => {
-    const { container } = rendu();
+  it("gardera ses liens localisés le jour où les pages arriveront", () => {
+    // Ce test ne vérifie pas le footer : il verrouille la CONVENTION que le lot des pages
+    // institutionnelles devra respecter — cinq clés, et des liens qui passent par le `Link` de
+    // @/i18n/navigation, seul à conserver le préfixe de locale. Un `<a href="/legal">` renverrait
+    // un hispanophone sur une page sans langue.
+    expect(CLES).toHaveLength(5);
     for (const cle of CLES) {
-      expect(
-        (container.querySelector(`[data-testid="footer-${cle}"]`) as HTMLElement).className
-      ).toContain("min-h-11");
+      expect(messages.Chrome[cle]).toBeTruthy();
     }
+  });
+
+  it("confie sa cible tactile au design system, pas à une classe posée à la main", () => {
+    // ⚠️ RÉÉCRIT LE 2026-09-07. Ce test mesurait `min-h-11` sur les cinq liens institutionnels,
+    // qui portaient cette classe eux-mêmes ; ils ont été retirés (pages inexistantes) et le test
+    // n'avait plus de sujet. Le seul lien encore servi est le bouton WhatsApp, et il ne porte
+    // AUCUNE classe de hauteur : sa cible vient de la variante `button--lg` du design system,
+    // stylée par les jetons `[data-theme]`. Vérifier ici une classe Tailwind serait vérifier une
+    // implémentation que ce composant n'a pas — la garantie des 44 px appartient à l'atome Button
+    // et à ses propres tests.
+    const { container } = rendu();
+    const whatsapp = container.querySelector('[data-testid="footer-whatsapp"]') as HTMLElement;
+    expect(whatsapp).not.toBeNull();
+    expect(whatsapp.className).toContain("button--lg");
   });
 
   // ⚠️ Le lien externe passe par `LinkButton`, qui impose `rel="noopener noreferrer"` (sa prop
@@ -99,13 +114,16 @@ describe("SiteFooter", () => {
   });
 
   it("traduit tout ce qu'il affiche", () => {
+    // Réécrit le 2026-09-07 : la clé `footerHelp` n'a plus de lien à traduire tant que les pages
+    // institutionnelles n'existent pas. On vérifie donc la traduction sur ce qui est RÉELLEMENT
+    // affiché — le nom accessible de la navigation, le bouton WhatsApp et la ligne d'identité.
     const { container } = rendu("en");
-    expect((container.querySelector('[data-testid="footer-footerHelp"]') as HTMLElement).textContent).toBe(
-      "Help and FAQ"
-    );
     expect((container.querySelector("nav") as HTMLElement).getAttribute("aria-label")).toBe(
       "Institutional links"
     );
+    expect(
+      (container.querySelector('[data-testid="footer-whatsapp"]') as HTMLElement).textContent
+    ).toContain("WhatsApp");
   });
 
   // ⚠️ Aucune couleur en dur : cinq pistes de thème sont montées et aucune n'est adoptée. Le couple
@@ -127,8 +145,12 @@ describe("SiteFooter", () => {
         <SiteFooter testId="footer" />
       </NextIntlClientProvider>
     );
+    // ⚠️ La raison d'être de ce test n'est pas la liste des href, c'est le rendu SERVEUR : Google
+    // indexe le HTML servi, et c'est le sélecteur de langue du footer qui fait découvrir la version
+    // anglaise par le maillage interne. Les cinq liens institutionnels ont été retirés le
+    // 2026-09-07 (pages inexistantes) ; ce qui reste doit toujours être SERVI, pas hydraté.
     for (const href of ["/legal", "/privacy", "/contact", "/help", "/terms"]) {
-      expect(html).toContain(`href="${href}"`);
+      expect(html).not.toContain(`href="${href}"`);
     }
     expect(html).toContain("https://wa.me/573215764841");
     expect(html).toContain('href="/en/products/kayak"');

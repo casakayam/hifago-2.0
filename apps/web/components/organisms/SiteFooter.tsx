@@ -27,13 +27,13 @@ import { LanguageSwitcher } from "./LanguageSwitcher";
 // D'où UNE SEULE constante : le jour où les routes existent, c'est le seul endroit à changer. Et
 // tant qu'elles n'existent pas, ce footer mène à cinq 404 — c'est dit dans le rapport de lot,
 // parce qu'un footer qui a l'air fini est pire qu'un footer visiblement en chantier.
-const LIENS_INSTITUTIONNELS = [
-  { href: "/legal", cle: "footerLegalNotice" },
-  { href: "/privacy", cle: "footerPrivacy" },
-  { href: "/contact", cle: "footerContact" },
-  { href: "/help", cle: "footerHelp" },
-  { href: "/terms", cle: "footerTerms" },
-] as const;
+// ⚠️ VIDE DEPUIS LE 2026-09-07, et c'est délibéré. Les cinq liens institutionnels (mentions
+// légales, confidentialité, contact, aide, conditions) pointaient vers des routes qui n'existent
+// pas : ce footer menait à cinq 404. Jérôme a repoussé ces pages à la fin du chantier (cahier §1 :
+// « seule leur présence est actée », leur contenu reste à rédiger). Un footer amputé pendant le
+// chantier vaut mieux que cinq liens morts en production — et le jour où les pages existent, il
+// suffit de remplir ce tableau, rien d'autre ne bouge.
+const LIENS_INSTITUTIONNELS: readonly { href: string; cle: string }[] = [];
 
 // ⚠️ Le numéro de WhatsApp est DÉJÀ dans le dépôt : `apps/admin/lib/whatsapp.ts` porte le même
 // (`SUPPORT_WHATSAPP_NUMBER`), lui-même repris du portail legacy (`public/reservar.js:15`), qui

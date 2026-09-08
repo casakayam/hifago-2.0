@@ -14,6 +14,7 @@
 import esChrome from "./es/Chrome.json";
 import esLocaleLayout from "./es/LocaleLayout.json";
 import esHomePage from "./es/HomePage.json";
+import esNotFound from "./es/NotFound.json";
 import esLogin from "./es/Login.json";
 import esSignup from "./es/Signup.json";
 import esVerifyEmail from "./es/VerifyEmail.json";
@@ -25,6 +26,7 @@ import esAccountOrdersPage from "./es/AccountOrdersPage.json";
 import enChrome from "./en/Chrome.json";
 import enLocaleLayout from "./en/LocaleLayout.json";
 import enHomePage from "./en/HomePage.json";
+import enNotFound from "./en/NotFound.json";
 import enLogin from "./en/Login.json";
 import enSignup from "./en/Signup.json";
 import enVerifyEmail from "./en/VerifyEmail.json";
@@ -45,6 +47,7 @@ const MESSAGES = {
     Chrome: esChrome,
     LocaleLayout: esLocaleLayout,
     HomePage: esHomePage,
+    NotFound: esNotFound,
     Login: esLogin,
     Signup: esSignup,
     VerifyEmail: esVerifyEmail,
@@ -58,6 +61,7 @@ const MESSAGES = {
     Chrome: enChrome,
     LocaleLayout: enLocaleLayout,
     HomePage: enHomePage,
+    NotFound: enNotFound,
     Login: enLogin,
     Signup: enSignup,
     VerifyEmail: enVerifyEmail,
