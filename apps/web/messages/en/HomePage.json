@@ -13,6 +13,13 @@
     "camp": "Camps",
     "evento": "Events"
   },
+  "tiposSingular": {
+    "activity": "Activity",
+    "lodging": "Place to stay",
+    "transport": "Transport",
+    "camp": "Camp",
+    "evento": "Event"
+  },
   "verMas": "See more",
   "verMasTags": "See all categories",
   "precioDesde": "From",
@@ -22,6 +29,12 @@
     "placeholder": "What are you looking for in Guatapé?",
     "submitLabel": "Search",
     "emptyLabel": "No suggestions"
+  },
+  "sugerencias": {
+    "metaEstablecimiento": "Place to stay",
+    "metaOferta": "{tipo} · {establecimiento}",
+    "metaOfertaSinLugar": "{tipo}",
+    "atajoTipo": "{count, plural, one {# offer} other {# offers}}"
   },
   "fechas": {
     "placeholderLabel": "Dates",

@@ -122,6 +122,10 @@ export default async function HomePage({ params, searchParams }: PageProps<"/[lo
         aujourdIso={todayInBogota()}
         localeCodigo={locale as Locale}
         labels={labels}
+        // Les raccourcis proposés avant la première frappe. Ils sortent des sections déjà
+        // calculées : aucune requête de plus, et ils décrivent le catalogue RÉELLEMENT servi —
+        // un type absent des résultats n'apparaît pas comme raccourci vers une page vide.
+        atajosTipo={secciones.map((seccion) => ({ tipo: seccion.tipo, total: seccion.total }))}
       />
 
       {secciones.length === 0 ? (

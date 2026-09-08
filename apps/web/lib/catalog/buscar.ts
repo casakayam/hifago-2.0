@@ -36,7 +36,11 @@ import {
 
 const BUCKET_MEDIA = "catalog-media";
 
-type FilaCatalogo = {
+/**
+ * Une ligne brute de `search_catalog`. Exportée depuis le 2026-09-08 : `sugerencias.ts` lit la
+ * MÊME RPC, donc il lui faut la même forme de ligne — pas une seconde description de la même chose.
+ */
+export type FilaCatalogo = {
   tipo: string;
   es_establecimiento: boolean;
   id: string;
@@ -78,6 +82,31 @@ function fotosDe(
     .map((ruta) => ({ url: urlPublica(ruta) }));
 }
 
+/**
+ * L'IDENTITÉ d'une ligne du catalogue : sa clé, son chemin, son nom, son établissement.
+ *
+ * Extraite d'`enTarjeta` le 2026-09-08 (spec 28 Tranche 2), parce qu'une SUGGESTION de la barre de
+ * recherche désigne exactement la même offre qu'une carte et doit donc la désigner PAREIL. Deux
+ * copies de ces quatre lignes ne resteraient pas identiques : le jour où une fiche change de
+ * segment d'URL, la carte irait au bon endroit et la suggestion qui la nomme au mauvais — sans
+ * qu'aucun test des deux modules ne devienne rouge, puisque chacun vérifierait sa propre copie.
+ *
+ * ⚠️ Rend des DONNÉES, jamais un libellé d'interface : `nombre` est du contenu partenaire (JSONB
+ * résolu), pas une phrase composée. C'est ce qui permet de la partager avec une couche qui, elle,
+ * n'affiche rien.
+ */
+export function identidadDeFila(fila: FilaCatalogo, locale: string) {
+  return {
+    clave: `${fila.es_establecimiento ? "establecimiento" : "producto"}-${fila.id}`,
+    href: fila.es_establecimiento
+      ? `/establecimientos/${fila.slug}`
+      : `/productos/${fila.slug}`,
+    // Repli sur le slug : une fiche sans nom dans aucune langue reste cliquable plutôt que vide.
+    nombre: resolveLocalizedField(asLocalizedField(fila.nombre), locale) ?? fila.slug,
+    establecimiento: nombreEstablecimiento(fila.establecimiento, locale),
+  };
+}
+
 function enTarjeta(
   fila: FilaCatalogo,
   locale: string,
@@ -85,16 +114,8 @@ function enTarjeta(
 ): TarjetaOferta | null {
   if (!esTipoOferta(fila.tipo)) return null; // un type inconnu ne casse pas la page, il disparaît
 
-  const href = fila.es_establecimiento
-    ? `/establecimientos/${fila.slug}`
-    : `/productos/${fila.slug}`;
-
   return {
-    clave: `${fila.es_establecimiento ? "establecimiento" : "producto"}-${fila.id}`,
-    href,
-    // Repli sur le slug : une fiche sans nom dans aucune langue reste cliquable plutôt que vide.
-    nombre: resolveLocalizedField(asLocalizedField(fila.nombre), locale) ?? fila.slug,
-    establecimiento: nombreEstablecimiento(fila.establecimiento, locale),
+    ...identidadDeFila(fila, locale),
     precio: precioDe(fila),
     fotos: fotosDe(fila.fotos, urlPublica),
     tipo: fila.tipo,

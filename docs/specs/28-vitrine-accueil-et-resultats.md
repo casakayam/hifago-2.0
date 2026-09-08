@@ -6,11 +6,10 @@ public: [ia, dev, jerome]
 langue: fr
 statut: partiel
 reste: >
-  Tranche 1 (l'accueil, les sections, les cartes, le contrat d'URL, le prix « desde ») livrée le
-  2026-09-08. Restent la Tranche 2 (suggestions de la barre de recherche) et la Tranche 3 (ordre
-  des sections selon le panier, qui dépend des specs « identité anonyme » puis « panier en base »).
-  Deux points à arbitrer : le décompte de couchages sur la carte groupée, et le carrousel de la
-  carte d'activité dans un visuel de 64 px (§10bis).
+  Tranches 1 (l'accueil) et 2 (les suggestions de la barre) livrées le 2026-09-08. Reste la
+  Tranche 3 — l'ordre des sections selon le panier — bloquée par deux specs non écrites :
+  l'identité anonyme, puis le panier en base. Deux points à arbitrer : le décompte de couchages sur
+  la carte groupée, et le carrousel de la carte d'activité dans un visuel de 64 px (§10bis).
 maj: 2026-09-08
 resume: >
   Construit le premier écran du chantier front : l'accueil de la vitrine, qui porte le bloc de
@@ -512,6 +511,46 @@ occupent la vignette entière. `Card.tsx` n'a pas été touché (c'est un lot à
 `Affichage/TarjetaOferta` → `Lista` existe pour regarder le défaut avant de trancher. ⚠️ Si le visuel
 est agrandi, la constante `SIZES_LISTA` de `TarjetaOferta.tsx` doit bouger avec lui, sinon
 `next/image` sert une image de 64 px dans un cadre plus grand.
+
+## 10ter. La Tranche 2 telle qu'elle a été construite (2026-09-08)
+
+Le §2 tenait en une phrase (« `SearchBar` accepte une liste vide, et `Entrée` soumet toujours le
+texte tapé »). Ce qu'une suggestion CONTIENT n'y était pas écrit : il a été repris des deux seules
+sources qui l'avaient déjà tranché — les stories de `SearchBar` (2026-09-02 : des offres, des
+établissements et des raccourcis de catégorie, chacun avec une ligne secondaire « nature · lieu »)
+et le cahier §2a (« on cherche par tag, par nom, par type d'offre et par établissement »).
+
+**Deux états, et le premier ne coûte rien.** Avant la deuxième frappe, la barre propose les
+**types réellement présents à l'écran** avec leur nombre d'offres — la page les a déjà comptés pour
+rendre ses sections, donc aucune requête. Un type absent des résultats n'apparaît pas : un raccourci
+ne mène jamais à une page vide. À partir de deux caractères, la liste vient du catalogue.
+
+**Le pont, et pourquoi il en fallait un.** Le champ est CLIENT, `lib/catalog/` est `server-only` :
+`GET /api/catalogo/sugerencias?q=&locale=` est le seul chemin possible. Il rend
+`{ sugerencias: SugerenciaCatalogo[] }`, appelle la même RPC `search_catalog` que l'accueil, avec le
+même client anonyme et les mêmes policies — il n'expose donc rien de plus que la page elle-même.
+Une panne rend `{ ok: false, reason }` **sans** clé `sugerencias` : une réponse d'échec ne doit pas
+avoir la forme d'un succès, sinon la panne s'affiche comme « aucun résultat ».
+
+**Aucun libellé dans la couche de données.** `SugerenciaCatalogo` porte le type de l'offre et le nom
+de son établissement ; c'est `BuscadorInicio` qui compose « Actividad · Casa Kayam ». Même règle que
+le texte alternatif des photos (§6), pour la même raison : un libellé est du texte d'interface, et
+le faire entrer dans `lib/catalog/` y ferait entrer next-intl.
+
+**Deux garde-fous distincts** sur la frappe, souvent confondus : un anti-rebond de 250 ms évite une
+requête par caractère ; un `AbortController` évite qu'une réponse lente à « kay » arrive **après**
+celle de « kayak » et réécrive la liste avec un résultat périmé — un défaut qui ne se voit qu'en
+réseau lent.
+
+**Ce qu'un raccourci de type fait, et ne fait pas.** Il n'a délibérément **pas** de `href` : il ne
+quitte pas la page, il change ses critères. Il passe donc par `onSuggestionSelect` et
+`escribirCriterios` reste le seul écrivain de l'URL. Les suggestions d'offre et d'établissement, à
+l'inverse, portent un vrai `href` — mais ⚠️ `SearchBar` rend l'option en `<a>` **natif**
+(`ListBox.Item href=`), pas avec le `Link` localisé : le préfixe de langue y est posé à la main.
+
+**Conséquence assumée** : les raccourcis de type ne se combinent jamais avec une recherche texte,
+puisqu'ils disparaissent dès la deuxième frappe. Ils se combinent bien avec les filtres venus de
+l'URL (dates, personnes), et c'est ce que vérifie leur test.
 
 ## 11. Annexe — traçabilité
 

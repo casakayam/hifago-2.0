@@ -36,8 +36,11 @@ import { seedDate } from "@hifago/e2e-support";
 // toute la surface cliquable.
 //
 // ⚠️ LA BARRE SE SOUMET PAR `Entrée`, JAMAIS PAR SON BOUTON. Contrat de `SearchBar` : `Entrée`
-// soumet TOUJOURS le texte tapé tant qu'aucune suggestion n'est active — et il n'y en a aucune en
-// Tranche 1 (`suggestions={[]}`). Le bouton « Buscar », lui, est `sr-only` sous `md` : le cliquer
+// soumet TOUJOURS le texte tapé tant qu'aucune suggestion n'est ACTIVE — c'est-à-dire tant qu'on
+// n'est pas descendu dessus aux flèches. Depuis la Tranche 2 la liste n'est plus vide, mais la
+// règle tient : à l'ouverture aucune option n'est présélectionnée, `Entrée` cherche donc toujours
+// le texte tapé (c'est le défaut de getyourguide que `SearchBar` corrige, cf. son en-tête). Le
+// bouton « Buscar », lui, est `sr-only` sous `md` : le cliquer
 // ferait dépendre ce spec de la largeur du viewport, alors que la touche de validation est le seul
 // chemin disponible sur mobile. On teste donc le chemin universel.
 //
@@ -258,4 +261,39 @@ test("un établissement à deux couchages apparaît comme UNE carte groupée, qu
     new RegExp(`/es/establecimientos/${ESTABLECIMIENTO_AGRUPADO}$`)
   );
   await expect(page.getByTestId("establishment-name")).toBeVisible();
+});
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Tranche 2 — les suggestions (2026-09-08)
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// Elles traversent une couche de plus que la recherche : le champ est CLIENT, `lib/catalog` est
+// `server-only`, et `/api/catalogo/sugerencias` est le seul pont entre les deux. Un test composant
+// bouchonne ce pont ; seul un e2e prouve qu'il existe et qu'il rend la bonne forme.
+test("la barre propose des raccourcis avant la frappe, puis des offres du catalogue", async ({
+  page,
+}) => {
+  await irAlInicio(page);
+
+  // Avant toute frappe : `menuTrigger="focus"` ouvre la liste, qui doit proposer les types
+  // présents à l'écran plutôt qu'un vide. Ils sortent des sections déjà rendues — aucune requête.
+  await page.getByTestId("buscador-bar-input").click();
+  await expect(page.getByRole("option", { name: /Actividades/ })).toBeVisible();
+
+  // Dès deux caractères, la liste vient du catalogue. Le seuil et l'anti-rebond sont côté client :
+  // on attend l'option, jamais une durée.
+  await page.getByTestId("buscador-bar-input").fill("kayak");
+  const sugerencia = page.getByRole("option", { name: /Kayak en el Embalse/ });
+  await expect(sugerencia).toBeVisible();
+
+  // La ligne secondaire est composée côté client à partir de DONNÉES (type + établissement) :
+  // `lib/catalog` ne traduit rien. Voir spec 28 §6, même règle que le texte alternatif des photos.
+  await expect(sugerencia).toContainText("Actividad");
+
+  // ⚠️ L'option est un vrai `<a href>` NATIF (`ListBox.Item href=`), pas le `Link` localisé : son
+  // préfixe de langue est posé à la main par `BuscadorInicio`. Sans lui, ce clic partirait sur une
+  // URL sans langue que le proxy devrait rattraper par une redirection.
+  await sugerencia.click();
+  await expect(page).toHaveURL(new RegExp(`/es/productos/${ACTIVIDAD_KAYAK}$`));
 });

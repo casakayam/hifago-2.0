@@ -66,3 +66,17 @@ export type Seccion = {
   /** Nombre d'offres du type AVANT plafonnement — c'est lui qui donne son chiffre au « Ver más ». */
   total: number;
 };
+
+/** Une suggestion de la barre de recherche, en DONNÉES : aucun libellé traduit ici. */
+export type SugerenciaCatalogo = {
+  /** Stable et unique dans la liste — reprend la `clave` d'une carte. */
+  id: string;
+  /** Déjà résolu dans la locale demandée. */
+  nombre: string;
+  tipo: TipoOferta;
+  esEstablecimiento: boolean;
+  /** Nom de l'établissement porteur, `null` pour une carte d'établissement. */
+  establecimiento: string | null;
+  /** Chemin SANS préfixe de langue : `/productos/<slug>` ou `/establecimientos/<slug>`. */
+  href: string;
+};

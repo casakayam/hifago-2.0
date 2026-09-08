@@ -77,8 +77,23 @@ const LABELS: SearchPanelLabels = {
 // nombre choisi, que la page ne peut pas fournir puisque ce nombre est un état client. D'où ce
 // provider : sans lui, `useTranslations` lève et les neuf tests tombent d'un coup.
 const MESSAGES = {
-  HomePage: { personas: { valueLabel: "{count, plural, one {# persona} other {# personas}}" } },
+  HomePage: {
+    personas: { valueLabel: "{count, plural, one {# persona} other {# personas}}" },
+    secciones: { activity: "Actividades", lodging: "Alojamientos" },
+    tiposSingular: { activity: "Actividad", lodging: "Alojamiento" },
+    sugerencias: {
+      metaEstablecimiento: "Establecimiento",
+      metaOferta: "{tipo} · {establecimiento}",
+      metaOfertaSinLugar: "{tipo}",
+      atajoTipo: "{count, plural, one {# oferta} other {# ofertas}}",
+    },
+  },
 };
+
+const ATAJOS = [
+  { tipo: "activity" as const, total: 12 },
+  { tipo: "lodging" as const, total: 3 },
+];
 
 function vue(criteriosIniciales: Criterios) {
   return (
@@ -88,6 +103,7 @@ function vue(criteriosIniciales: Criterios) {
         aujourdIso={AUJOURDHUI}
         localeCodigo="es"
         labels={LABELS}
+        atajosTipo={ATAJOS}
       />
     </NextIntlClientProvider>
   );
@@ -213,6 +229,109 @@ describe("BuscadorInicio", () => {
     rerender(vue({ q: "kayak" }));
 
     expect(champ().value).toBe("kaya");
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────────────────
+  // Les suggestions (Tranche 2)
+  // ─────────────────────────────────────────────────────────────────────────────────────────
+
+  it("propose les raccourcis de type AVANT la première frappe, sans aucune requête", () => {
+    const fetchEspion = vi.fn();
+    vi.stubGlobal("fetch", fetchEspion);
+    monter();
+
+    act(() => champ().focus());
+
+    // `menuTrigger="focus"` ouvre la liste à la prise de focus : elle ne doit pas être vide.
+    expect(screen.getByText("Actividades")).not.toBeNull();
+    expect(screen.getByText("12 ofertas")).not.toBeNull();
+    expect(screen.getByText("Alojamientos")).not.toBeNull();
+    expect(screen.getByText("3 ofertas")).not.toBeNull();
+    expect(fetchEspion).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("ne demande aucune suggestion sous deux caractères", async () => {
+    const fetchEspion = vi.fn();
+    vi.stubGlobal("fetch", fetchEspion);
+    vi.useFakeTimers();
+    monter();
+
+    taper("k");
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(fetchEspion).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("demande les suggestions au catalogue et compose leur ligne secondaire", async () => {
+    const fetchEspion = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        sugerencias: [
+          {
+            id: "producto-1",
+            nombre: "Kayak en el Embalse",
+            tipo: "activity",
+            esEstablecimiento: false,
+            establecimiento: "Casa Kayam",
+            href: "/productos/kayak-embalse",
+          },
+          {
+            id: "establecimiento-2",
+            nombre: "Casa Kayam",
+            tipo: "lodging",
+            esEstablecimiento: true,
+            establecimiento: null,
+            href: "/establecimientos/casa-kayam",
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchEspion);
+    vi.useFakeTimers();
+    monter();
+
+    taper("kayak");
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(fetchEspion).toHaveBeenCalledTimes(1);
+    expect(String(fetchEspion.mock.calls[0][0])).toBe(
+      "/api/catalogo/sugerencias?q=kayak&locale=es"
+    );
+    // La composition du libellé vit ICI, jamais dans lib/catalog (spec 28 §6).
+    expect(screen.getByText("Actividad · Casa Kayam")).not.toBeNull();
+    expect(screen.getByText("Establecimiento")).not.toBeNull();
+    // Le préfixe de langue est posé à la main : `SearchBar` rend un <a href> NATIF.
+    const lien = screen.getByText("Kayak en el Embalse").closest("a");
+    expect(lien?.getAttribute("href")).toBe("/es/productos/kayak-embalse");
+
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("un raccourci de type change les critères sans quitter la page", () => {
+    // ⚠️ Sans texte saisi, à dessein : les raccourcis de type ne s'affichent QUE sous le seuil de
+    // deux caractères — dès qu'on tape, la liste montre les correspondances du catalogue. Ils ne
+    // se combinent donc jamais avec une recherche texte, mais bien avec les filtres venus de
+    // l'URL, et c'est ce que ce test vérifie.
+    monter({ personas: 4 });
+
+    act(() => champ().focus());
+    act(() => {
+      (screen.getByText("Alojamientos").closest('[role="option"]') as HTMLElement).click();
+    });
+
+    // Le filtre hérité de l'URL est CONSERVÉ, et l'adresse passe par `escribirCriterios`, seul
+    // maître de son écriture — un raccourci n'est pas un chemin d'écriture d'URL parallèle.
+    expect(pushMock).toHaveBeenCalledWith("/?tipo=lodging&personas=4");
   });
 
   it("se resynchronise sur l'URL quand elle change sous lui (retour arrière)", () => {
