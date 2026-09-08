@@ -102,7 +102,7 @@ Ajoutés par la réécriture du §2 le 2026-09-07 — **contradictions internes 
 | 3b | Moteur de commission (17/10/7) | ✅ validé 2026-08-11 |
 | 3c | Code partenaire / attribution référent | ✅ corrigé 2026-08-13 |
 | 3d | Disponibilité, cupos, calendrier | ✅ corrigé 2026-08-13 |
-| 3e | Règles de panier | 🔄 réécrit 2026-09-07 — à revalider |
+| 3e | Règles de panier | ✅ réécrit et validé 2026-09-07 |
 | 3f | Cycle de vie de la commande | ✅ validé 2026-08-11 |
 | 4 | Entités de données touchées | ✅ corrigé 2026-08-13, amendé 2026-09-07 (§2c) |
 | 5 | Intégration LobbyPMS | ✅ validé 2026-08-11 |
@@ -652,10 +652,11 @@ survente).
 
 ### 3e. Règles de panier
 
-**Statut : 🔄 réécrit le 2026-09-07 sur trois points — à revalider par Jérôme.**
-Validé le 2026-08-11 ; rouvert par la réécriture du §2 le 2026-09-07 (persistance du panier), puis
-corrigé sur deux points périmés (plafonds dimensionnés pour un seul établissement, créneau binaire).
-Le reste de la section est inchangé.
+**Statut : ✅ validé par Jérôme le 2026-09-07** — section réécrite le même jour.
+Validée une première fois le 2026-08-11 ; rouverte par la réécriture du §2 (persistance du panier),
+puis corrigée sur trois points périmés — plafonds dimensionnés pour un seul établissement, créneau
+binaire matin/après-midi, et la promesse que les nuits resteraient réservables si le catalogue
+tombait. Le reste de la section est inchangé.
 
 **Composition d'une commande** — une commande peut combiner librement, dans un seul panier :
 - des **nuits en dortoir/chambre**, dans un ou plusieurs hôtels/hostels (plusieurs lignes
