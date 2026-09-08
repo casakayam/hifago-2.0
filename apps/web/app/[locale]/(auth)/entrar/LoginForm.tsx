@@ -2,8 +2,12 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
-import { Link } from "@/i18n/navigation";
+// ⚠️ `useRouter` vient d'`@/i18n/navigation`, JAMAIS de `next/navigation` (contrôlé par
+// scripts/check-i18n-links.sh depuis le 2026-09-07). `localePrefix: "always"` : le routeur nu
+// pousse `/pago`, un chemin qui n'existe pas — le proxy le rattrape par une redirection qui
+// redevine la langue depuis un cookie au lieu de garder celle de la page lue. Rien ne casse
+// visiblement, et c'est bien le problème.
+import { Link, useRouter } from "@/i18n/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { Button, Input, Label, TextField } from "@hifago/ui";
 

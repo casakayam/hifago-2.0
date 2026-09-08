@@ -90,4 +90,34 @@ if [ "$fail" -eq 0 ]; then
   echo "✓ Tout composant d'apps/web important @hifago/ui porte \"use client\"."
 fi
 
+echo
+echo "== Fichier de route d'apps/web important @hifago/ui =="
+# Spec 27 §0 invariant 1. Pour un COMPOSANT, la règle du bloc précédent suffit : il peut importer
+# le barrel s'il porte "use client". Pour un `page.tsx`/`layout.tsx`, elle ne suffit pas — la
+# réponse « ajouter "use client" » y serait pire que le mal : une route cliente perd le rendu
+# serveur, les métadonnées et l'accès aux données. Une route n'importe donc JAMAIS le barrel ; elle
+# monte un composant qui, lui, le fait.
+#
+# ⚠️ Les COMMENTAIRES sont retirés avant la recherche, et ce n'est pas une précaution théorique :
+# mesuré le 2026-09-07, une recherche naïve remonte QUATRE fichiers de route — `(vitrine)/page.tsx`,
+# `(vitrine)/layout.tsx`, `(vitrine)/establecimientos/[slug]/page.tsx` et `not-found.tsx` — dont
+# aucun n'importe quoi que ce soit : tous les quatre CITENT la règle pour expliquer pourquoi ils ne
+# l'enfreignent pas. Un contrôle qui punit les fichiers les plus soigneux est un contrôle qu'on
+# désactive (spec 27 §8).
+SANS_COMMENTAIRES="scripts/lib/sans-commentaires.pl"
+while IFS= read -r f; do
+  hits="$(perl -0777 -p "$SANS_COMMENTAIRES" "$f" | grep -nE 'from "@hifago/ui"' || true)"
+  [ -z "$hits" ] && continue
+  echo "✗ $f"
+  echo "$hits" | sed 's/^/    /'
+  echo "    → Une route ne monte pas HeroUI : passer par un composant d'apps/web/components."
+  fail=1
+done < <(find apps/web/app \
+           \( -name node_modules -o -name .next \) -prune -o \
+           -type f \( -name 'page.tsx' -o -name 'layout.tsx' -o -name 'not-found.tsx' \
+                      -o -name 'error.tsx' -o -name 'loading.tsx' -o -name 'template.tsx' \) -print 2>/dev/null | sort)
+if [ "$fail" -eq 0 ]; then
+  echo "✓ Aucun fichier de route d'apps/web n'importe @hifago/ui."
+fi
+
 exit $fail

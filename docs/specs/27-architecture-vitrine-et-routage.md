@@ -390,8 +390,8 @@ documentée que rien ne vérifie n'est pas une règle, c'est un souhait ») et c
 | tokens | hex, `oklch(`, `rgb(`, classe de palette Tailwind dans `apps/web/**` | `scripts/check-tokens.sh` (créé) |
 | couche de données | `.from(` ou `createClient` dans un `page.tsx`/`layout.tsx` | `scripts/check-data-layer.sh` (créé) |
 | liens i18n | `next/link` ou `<a href="/` dans `apps/web/**` | `scripts/check-i18n-links.sh` (créé) |
-| zones noindex | une route de `(tunnel)`/`(cuenta)`/`(auth)` sans `robots: { index: false }` | `scripts/check-seo.sh` (étendu) |
-| barrel RSC | `@hifago/ui` importé depuis un Server Component | `scripts/check-design-system.sh` (existe) |
+| zones noindex | une coquille de `(tunnel)`/`(cuenta)`/`(auth)` sans `robots: { index: false }`, ou une route de ces zones qui se redéclare `index: true` | `scripts/check-seo.sh` (étendu) |
+| barrel RSC | `@hifago/ui` importé depuis un Server Component **ou depuis un fichier de route** | `scripts/check-design-system.sh` (étendu) |
 
 ⚠️ **Deux pièges d'écriture, mesurés le 2026-09-07 en faisant tourner ces contrôles à la main sur
 l'état actuel du dépôt.** Sans eux, trois contrôles sur cinq naissent avec des faux positifs — et un
@@ -411,6 +411,37 @@ contrôle qui crie à tort est un contrôle qu'on désactive.
 fichiers — et ce sont exactement les cinq écrans que les specs 28 et suivantes remplacent. Les
 quatre autres contrôles passent déjà. Chaque contrôle reste néanmoins **vérifié par mutation** avant
 d'être considéré comme posé.
+
+### Ce que l'écriture réelle a corrigé (2026-09-07, lot C)
+
+Les cinq contrôles sont posés et vérifiés par mutation. Quatre écarts avec la prévision ci-dessus,
+tous constatés en les faisant tourner :
+
+1. **« Les quatre autres contrôles passent déjà » était faux.** Le contrôle de navigation localisée
+   a trouvé **deux violations réelles** : `LoginForm.tsx` et `SignupForm.tsx` prenaient `useRouter`
+   dans `next/navigation`, donc `router.push("/verificar-email?…")` produisait un chemin **sans
+   préfixe de langue**. Rien ne cassait — le proxy rattrape par une redirection — mais la langue
+   était alors redevinée depuis un cookie au lieu d'être celle de la page lue. Corrigé dans le même
+   lot ; c'est exactement le genre de défaut que la règle existe pour attraper.
+2. **Le contrôle des zones noindex ne peut pas porter sur les pages.** Les métadonnées Next se
+   fusionnent champ par champ du layout vers la page — **vérifié en réel dans les deux sens** sur le
+   serveur de dev : sans `robots`, `/es/pago` sert quand même `noindex, follow` (hérité) ; avec
+   `robots: { index: true }`, elle sert `index` et annule sa zone. Exiger un `robots` par page
+   aurait crié à tort sur `(cuenta)/cuenta/reservas/page.tsx`. Le contrôle porte donc sur la
+   **coquille de zone**, plus une seconde moitié qui refuse toute annulation.
+3. **`check-design-system.sh` ne couvrait pas l'invariant 1.** Il ne balayait que
+   `apps/web/components/`, jamais `apps/web/app/`. Un bloc a été ajouté — et pour une route la règle
+   est plus stricte que pour un composant : elle n'importe **jamais** le barrel, là où un composant
+   peut le faire avec `"use client"` (réponse qui, sur une route, coûterait le rendu serveur et les
+   métadonnées).
+4. **Six fichiers hérités, pas cinq** — `(cuenta)/layout.tsx` est né depuis. Il est exempté du seul
+   `createClient` (la garde d'accès du §5 doit résoudre la session), jamais du `.from(`.
+
+Le piège « ignorer les commentaires » s'est confirmé chiffré : une recherche naïve de `@hifago/ui`
+dans les fichiers de route remonte **quatre** fichiers, dont **aucun** ne l'importe — tous les
+quatre citent la règle pour expliquer qu'ils la respectent. D'où `scripts/lib/sans-commentaires.pl`,
+partagé par les trois contrôles concernés, qui retire les commentaires **en conservant les numéros
+de ligne**.
 
 ## 9. Cas limites
 

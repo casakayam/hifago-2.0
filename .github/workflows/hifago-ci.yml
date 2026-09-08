@@ -54,8 +54,21 @@ jobs:
       # (aucune table d'avis n'existe, donc aucune note ne doit être émise), l'autre sur deux
       # écritures visuellement identiques dont une seule échappe réellement le JSON-LD. Les deux
       # branches du script ont été vérifiées PAR MUTATION, pas seulement observées vertes.
-      - name: Référencement (données structurées honnêtes, JSON-LD échappé)
+      # `check-seo.sh` porte aussi, depuis le 2026-09-07, la troisième règle : les zones (tunnel),
+      # (cuenta) et (auth) sont noindex, et aucune route ne l'annule (spec 27 §0 invariant 6).
+      - name: Référencement (données structurées honnêtes, JSON-LD échappé, zones noindex)
         run: bash scripts/check-seo.sh
+      # Les trois contrôles de la vitrine (spec 27 §8), tous vérifiés PAR MUTATION avant d'être
+      # posés. Ils existent parce que les règles qu'ils portent sont invisibles à la relecture et
+      # ne cassent rien tout de suite : une couleur en dur ne se voit qu'au jour de l'habillage,
+      # une requête dans un page.tsx qu'au deuxième écran qui la réécrit autrement, un lien non
+      # localisé qu'à l'analytics d'un anglophone renvoyé en espagnol.
+      - name: Jetons de couleur (aucune couleur en dur dans la vitrine)
+        run: bash scripts/check-tokens.sh
+      - name: Couche d'accès (aucune requête Supabase dans un fichier de route)
+        run: bash scripts/check-data-layer.sh
+      - name: Navigation localisée (tout lien interne via @/i18n/navigation)
+        run: bash scripts/check-i18n-links.sh
       # Le manifeste docs/ai-index.json est ce que lisent les agents pour s'orienter : périmé, il
       # les envoie lire le mauvais document. `npm run docs:index` le régénère.
       - name: Manifeste documentaire à jour

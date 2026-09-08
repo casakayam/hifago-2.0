@@ -72,4 +72,43 @@ if [ "$fail" -eq 0 ]; then
   echo "✓ Tout insert de JSON-LD passe par un échappement explicite, et le sérialiseur échappe."
 fi
 
+echo
+echo "== Zones non publiques : (tunnel), (cuenta), (auth) jamais indexables =="
+# Spec 27 §0 invariant 6. Panier, paiement, compte et écrans d'authentification n'ont aucun contenu
+# indexable, et une confirmation de commande porte des données personnelles.
+#
+# ⚠️ Le contrôle porte sur la COQUILLE DE ZONE, pas sur chaque page — et ce n'est pas un
+# raccourci : les métadonnées Next se FUSIONNENT du layout vers la page, champ par champ. Vérifié
+# en réel le 2026-09-07 sur le serveur de dev, dans les deux sens : en retirant le `robots` de
+# `(tunnel)/pago/page.tsx`, la page sert TOUJOURS `noindex, follow` (hérité du layout) ; en lui
+# faisant déclarer `index: true`, elle sert `index` et annule sa zone. Exiger un `robots` sur
+# chaque page aurait donc crié à tort sur `(cuenta)/cuenta/reservas/page.tsx`, qui n'en a pas et
+# n'en a pas besoin — et un contrôle qui crie à tort est un contrôle qu'on désactive.
+#
+# D'où les deux moitiés ci-dessous : la coquille l'impose, aucun fichier de la zone ne l'annule.
+for zone in '(tunnel)' '(cuenta)' '(auth)'; do
+  layout="apps/web/app/[locale]/$zone/layout.tsx"
+  if [ ! -f "$layout" ]; then
+    echo "✗ $layout — la zone existe sans coquille, donc sans robots."
+    fail=1
+    continue
+  fi
+  if ! grep -qE 'robots' "$layout" || ! grep -qE 'index:\s*false' "$layout"; then
+    echo "✗ $layout — la coquille de zone doit exporter robots: { index: false }."
+    fail=1
+  fi
+done
+
+# Une page de ces zones qui REDÉCLARE robots en index:true écrase l'héritage sans bruit.
+annulations="$(grep -rnE 'index:\s*true' "apps/web/app/[locale]/(tunnel)" "apps/web/app/[locale]/(cuenta)" "apps/web/app/[locale]/(auth)" 2>/dev/null || true)"
+if [ -n "$annulations" ]; then
+  echo "$annulations" | sed 's/^/    /'
+  echo "✗ Une route de zone non publique se redéclare indexable — elle annule le noindex de sa coquille."
+  fail=1
+fi
+
+if [ "$fail" -eq 0 ]; then
+  echo "✓ Les trois zones non publiques sont noindex, et aucune route ne l'annule."
+fi
+
 exit $fail

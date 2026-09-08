@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
+// ⚠️ `useRouter` d'`@/i18n/navigation`, jamais de `next/navigation` — voir LoginForm.tsx.
+// Ici l'enjeu est direct : le `router.push` de fin d'inscription vise `/verificar-email`, et un
+// anglophone y arrivait en espagnol.
+import { Link, useRouter } from "@/i18n/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { buildAuthCallbackRedirect } from "@hifago/domain";
 import { Button, Input, Label, TextField } from "@hifago/ui";
@@ -36,7 +38,7 @@ export function SignupForm({ next }: { next: string }) {
 
     // emailRedirectTo absolu, locale déjà encodée dans `next` : ce lien part dans l'email de
     // confirmation (supabase/templates/confirmation.html, {{ .RedirectTo }}), une navigation
-    // externe hors client-side router — jamais un chemin nu comme pour router.push ci-dessous.
+    // externe hors client-side router — le router.push ci-dessous, lui, est localisé.
     // buildAuthCallbackRedirect (@hifago/domain) : même contrat déjà écrit à la main 3 fois côté
     // apps/admin (GoogleButton.tsx, ForgotPasswordForm.tsx, EmailBlock.tsx) — extrait ici plutôt
     // que dupliqué une 4e fois.
