@@ -102,11 +102,11 @@ test("un socio génère son lien/QR réel sur /partner/tools, un visiteur anonym
   // Le Route Handler /[locale]/r/[code] redirige en 302 vers /[locale]?ref=<code> (code actif) —
   // atterrissage confirmé sur l'accueil, avec le paramètre d'attribution capturé par proxy.ts.
   await expect(visitorPage).toHaveURL(`${WEB_APP_URL}/es?ref=${codeValue}`);
-  await expect(visitorPage.getByTestId("catalog-link-tour-lancha-guatape")).toBeVisible();
+  await expect(visitorPage.getByTestId("tarjeta-tour-lancha-guatape-link")).toBeVisible();
 
   // 6. Le visiteur réserve un produit en tant qu'invité (parcours établi par e2e/reserve.spec.ts /
   // e2e/attribution.spec.ts : catalogue → fiche produit → panier → checkout, guest checkout).
-  await visitorPage.getByTestId("catalog-link-tour-lancha-guatape").click();
+  await visitorPage.getByTestId("tarjeta-tour-lancha-guatape-link").click();
   await expect(visitorPage.getByTestId("product-name")).toBeVisible();
 
   await visitorPage.locator(`[data-date="${DATE}"]`).click();

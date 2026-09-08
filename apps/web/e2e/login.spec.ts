@@ -27,7 +27,7 @@ test("un compte seedé peut se connecter via le formulaire /[locale]/entrar", as
   // Redirection vers la page par défaut (pas de ?next= dans ce test).
   await expect(page).toHaveURL(/\/es\/?$/);
 
-  await page.getByTestId("catalog-link-tour-lancha-guatape").click();
+  await page.getByTestId("tarjeta-tour-lancha-guatape-link").click();
   await page.locator(`[data-date="${DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
   await expect(page.getByTestId("added-to-cart")).toBeVisible();

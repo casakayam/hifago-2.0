@@ -29,7 +29,6 @@ fail=0
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 est_ecran_herite() {
   case "$1" in
-    "apps/web/app/[locale]/(vitrine)/page.tsx") return 0 ;;
     "apps/web/app/[locale]/(vitrine)/establecimientos/[slug]/page.tsx") return 0 ;;
     "apps/web/app/[locale]/(vitrine)/productos/[slug]/page.tsx") return 0 ;;
     "apps/web/app/[locale]/(cuenta)/cuenta/reservas/page.tsx") return 0 ;;

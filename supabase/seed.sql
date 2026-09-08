@@ -535,3 +535,65 @@ values (
   'alojamiento-pms-backed-demo',
   9631
 );
+
+-- Spec 28 (accueil de la vitrine, Lot D) — SECOND couchage vendable de « Casa Kayam Guatapé »,
+-- ajouté le 2026-09-08.
+--
+-- POURQUOI IL EXISTE. Uniquement pour rendre OBSERVABLE la règle « un établissement à deux
+-- couchages vendables ou plus apparaît comme UNE carte » (`search_catalog`, CTE
+-- `conteo_alojamientos`, seuil `n_alojamientos >= 2`). Avant lui, `alojamiento-pms-backed-demo`
+-- ci-dessus était le SEUL produit `lodging` `sellable` de toute la base — donc `n_alojamientos`
+-- valait 1 partout, l'accueil ne pouvait JAMAIS produire de carte d'établissement, et l'e2e de
+-- l'accueil n'aurait eu aucune carte groupée à vérifier (constat sur base propre le 2026-09-07,
+-- spec 28 § « Fichiers touchés »).
+--
+-- DÉLIBÉRÉMENT SANS `lobby_category_id`. Le premier couchage est adossé au PMS ; si le second
+-- l'était aussi, l'accueil dépendrait de LobbyPMS pour une simple carte groupée. Celui-ci est un
+-- couchage ordinaire géré par le calendrier hifago — et le mélange PMS / non-PMS sur un même
+-- établissement est exactement ce que porte un vrai partenaire.
+--
+-- PRIX INFÉRIEUR À CELUI DU PREMIER (65 000 < 100 000), et c'est le point : le `precio_desde` de la
+-- carte groupée vaut le MINIMUM des couchages vendables de l'établissement. Deux prix identiques ne
+-- prouveraient pas que le minimum est bien calculé.
+--
+-- `capacity` RENSEIGNÉE : c'est la colonne que le filtre « personas » lit pour un logement
+-- (`search_catalog` : `when p.type = 'lodging' then p.capacity is null or p.capacity >= p_personas`).
+-- Le couchage PMS, lui, l'a à null et passe donc par ABSENCE de borne ; sans une capacité explicite
+-- ici, aucune donnée du seed n'exercerait la branche qui filtre réellement.
+insert into products (
+  id, partner_id, establishment_id, type, name, description, price_cop, unit, schedule, qty_unit,
+  capacity, sellable, slug
+)
+values (
+  'b0000000-0000-4000-8000-000000000008',
+  (select partner_id from partner_accounts where id = 'a0000000-0000-4000-8000-000000000003'),
+  'b0000000-0000-4000-8000-000000000002',
+  'lodging',
+  jsonb_build_object('es', 'Cama en dormitorio compartido (demo)', 'en', 'Shared dorm bed (demo)'),
+  jsonb_build_object(
+    'es', 'Cama en un dormitorio de seis, con baño compartido. Disponibilidad gestionada por el calendario de hifago, sin PMS.',
+    'en', 'Bed in a six-person dorm with shared bathroom. Availability managed by the hifago calendar, no PMS.'
+  ),
+  65000,
+  'per_person',
+  'date',
+  'qty',
+  6,
+  true,
+  'cama-dormitorio-compartido-demo'
+);
+
+-- Contrairement au couchage PMS ci-dessus, celui-ci n'a AUCUNE source externe de disponibilité :
+-- sans lignes ici, il apparaîtrait à l'accueil (le filtre de dates ne lit que `product_calendar`,
+-- creux et ouvert par défaut) mais serait impossible à réserver — un produit mort dans le seed.
+-- Huit nuits contiguës, donc une vraie plage arrivée → départ est sélectionnable.
+-- ⚠️ DATES RELATIVES, même mécanisme et mêmes raisons que le bloc de `tour-lancha-guatape`
+-- ci-dessus (mois SUIVANT, jamais « aujourd'hui + n » ; aucun jour au-delà de 28).
+insert into product_availability (product_id, date, capacity, booked)
+select
+  'b0000000-0000-4000-8000-000000000008',
+  (date_trunc('month', (now() at time zone 'America/Bogota')::date) + interval '1 month')::date
+    + (dia - 1),
+  6,
+  0
+from generate_series(5, 12) as dia;

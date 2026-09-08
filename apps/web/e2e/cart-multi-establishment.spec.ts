@@ -39,7 +39,7 @@ test("panier avec une ligne par établissement → une seule commande, 2 lignes"
   await loginAs(page.context(), SEEDED_ACCOUNTS.referentActif, SEEDED_PASSWORD);
 
   await page.goto("/es");
-  await page.getByTestId(`catalog-link-${TOUR_SLUG}`).click();
+  await page.getByTestId(`tarjeta-${TOUR_SLUG}-link`).click();
   await page.locator(`[data-date="${TOUR_DATE}"]`).click();
   await page.locator("#qty").fill("2");
   await page.getByTestId("add-to-cart-button").click();
@@ -50,7 +50,7 @@ test("panier avec une ligne par établissement → une seule commande, 2 lignes"
   await page.getByRole("link", { name: BACK_TO_CATALOG_LINK, exact: true }).click();
   await expect(page).toHaveURL(/\/es\/?$/);
 
-  await page.getByTestId(`catalog-link-${KAYAK_SLUG}`).click();
+  await page.getByTestId(`tarjeta-${KAYAK_SLUG}-link`).click();
   await page.locator(`[data-date="${KAYAK_DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
   await expect(page.getByTestId("added-to-cart")).toBeVisible();
@@ -110,13 +110,13 @@ test("une ligne dépasse la capacité restante de sa ressource → erreur ciblé
   await loginAs(page.context(), SEEDED_ACCOUNTS.operateurActif, SEEDED_PASSWORD);
 
   await page.goto("/es");
-  await page.getByTestId(`catalog-link-${TOUR_SLUG}`).click();
+  await page.getByTestId(`tarjeta-${TOUR_SLUG}-link`).click();
   await page.locator(`[data-date="${TOUR_DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
   await expect(page.getByTestId("added-to-cart")).toBeVisible();
 
   await page.getByRole("link", { name: BACK_TO_CATALOG_LINK, exact: true }).click();
-  await page.getByTestId(`catalog-link-${KAYAK_SLUG}`).click();
+  await page.getByTestId(`tarjeta-${KAYAK_SLUG}-link`).click();
   await page.locator(`[data-date="${KAYAK_DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
   await expect(page.getByTestId("added-to-cart")).toBeVisible();

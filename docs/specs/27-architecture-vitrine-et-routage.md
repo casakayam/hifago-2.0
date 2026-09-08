@@ -4,8 +4,14 @@ titre: "Architecture de la vitrine : routes, zones, coquilles et couche d'accès
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: brouillon
-maj: 2026-09-07
+statut: partiel
+reste: >
+  Livrés les 2026-09-07/08 : la couche lib/catalog et search_catalog, les quatre coquilles de zone,
+  le passage des routes à l'espagnol, et les cinq contrôles CI. Reste l'extraction de la logique
+  métier des trois formulaires de réservation vers lib/reservas/ puis la suppression des écrans
+  hérités (lot B3, différé jusqu'à la spec 30 qui en définit le consommateur), et les routes encore
+  « à créer » du §0 (listings, index de tags, carrito, cuenta, recuperar/restablecer).
+maj: 2026-09-08
 resume: >
   Pose la carte des routes de apps/web en espagnol, ses quatre zones et leurs coquilles, la garde
   d'accès du compte, et la couche lib/catalog qui devient le seul endroit d'où part une requête

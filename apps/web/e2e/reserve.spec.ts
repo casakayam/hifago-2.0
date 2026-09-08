@@ -30,7 +30,7 @@ test("connexion → catalogue → fiche produit → panier → checkout : comman
   await loginAs(page.context(), SEEDED_ACCOUNTS.referentActif, SEEDED_PASSWORD);
 
   await page.goto("/es");
-  await page.getByTestId("catalog-link-tour-lancha-guatape").click();
+  await page.getByTestId("tarjeta-tour-lancha-guatape-link").click();
   await expect(page.getByTestId("product-name")).toBeVisible();
 
   await page.locator(`[data-date="${DATE}"]`).click();
@@ -75,7 +75,7 @@ test("capacité épuisée entre l'ajout au panier et la validation → erreur cl
   await loginAs(page.context(), SEEDED_ACCOUNTS.operateurActif, SEEDED_PASSWORD);
 
   await page.goto("/es");
-  await page.getByTestId("catalog-link-tour-lancha-guatape").click();
+  await page.getByTestId("tarjeta-tour-lancha-guatape-link").click();
   await page.locator(`[data-date="${DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
   await expect(page.getByTestId("added-to-cart")).toBeVisible();

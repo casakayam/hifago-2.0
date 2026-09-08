@@ -1,21 +1,35 @@
-import { setRequestLocale, getTranslations } from "next-intl/server";
-import { createClient } from "@hifago/supabase/server";
-import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
 import type { Metadata } from "next";
-import { CatalogBrowser, type CatalogProduct } from "./CatalogBrowser";
+import { setRequestLocale, getTranslations } from "next-intl/server";
+import { todayInBogota } from "@hifago/domain";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { PageShell } from "@/components/atoms/PageShell";
+import { Title } from "@/components/atoms/Title";
+import { EstadoVacio } from "@/components/molecules/EstadoVacio";
+import { SeccionOfertas } from "@/components/organisms/SeccionOfertas";
+import { buscarSecciones, hrefSeccion } from "@/lib/catalog/buscar";
+import { escribirCriterios, leerCriterios } from "@/lib/catalog/criterios";
+import { buildWebSiteJsonLd } from "@/lib/seo/jsonld/site";
 import { buildPageMetadata } from "@/lib/seo/pageMetadata";
 import { getSiteUrl } from "@/lib/seo/siteUrl";
-import { buildWebSiteJsonLd } from "@/lib/seo/jsonld/site";
-import { JsonLd } from "@/components/seo/JsonLd";
+import type { Locale } from "@/messages";
+import { BuscadorInicio } from "./BuscadorInicio";
 
-// products_select_public (Tranche 2, étendue feature 32) : catalogue public, sellable=true
-// seulement. La recherche/le filtre restent volontairement basiques (texte + type, en mémoire
-// côté client, cf. CatalogBrowser.tsx) — pas de recherche géo/tags (cible différée, cf.
-// docs/01-cahier-des-charges-client.md §2). Piège CLAUDE.md §11.16 : ce fichier (Server
-// Component) ne doit JAMAIS importer quoi que ce soit depuis "@hifago/ui" (le barrel tire
-// app-nav-shell/lucide-react et fait planter next build) — tout le rendu HeroUI vit dans
-// CatalogBrowser.tsx ("use client").
-const PRODUCTS_COLUMNS = "id, slug, name, description, type, establishment_id";
+// L'ACCUEIL, QUI EST AUSSI L'ÉCRAN DE RÉSULTATS (spec 28, Tranche 1 — 2026-09-08).
+//
+// Le §2a du cahier client tranche les deux d'un coup : il n'y a pas de route `/buscar`, les
+// critères vivent dans l'URL de CETTE page, et les résultats restent groupés par type d'offre.
+// Une recherche ne change donc pas d'écran — elle change les paramètres de celui-ci.
+//
+// ⚠️ Ce fichier remplace un catalogue à plat qui faisait trois requêtes séquentielles et soixante
+// lignes de regroupement ici même, puis filtrait EN MÉMOIRE côté client (`CatalogBrowser`,
+// supprimé avec ce lot). Deux règles de la spec 27 en sont nées et sont vérifiées par la CI
+// (`scripts/check-data-layer.sh`) : aucune requête Supabase dans un fichier de route, et aucun
+// import de `@hifago/ui` — tout passe par `lib/catalog/`, et tout le HeroUI vit derrière une
+// frontière `"use client"` (`TarjetaOferta` → `Card`/`PhotoStrip`).
+
+/** Plafond par section, cahier §2a. Il vaut AUSSI sous recherche — sinon l'accueil filtrée
+ *  devient une page à rallonge et se confond avec les pages de listing (spec 28 §8). */
+const POR_SECCION = 8;
 
 export async function generateMetadata(
   props: Omit<PageProps<"/[locale]">, "searchParams">
@@ -30,7 +44,9 @@ export async function generateMetadata(
   // ⚠️ Le canonical auto-référent n'est pas décoratif ici : proxy.ts pose le cookie d'attribution
   // à partir de `?ref=` sur N'IMPORTE QUELLE page, et [locale]/r/[code]/route.ts redirige vers
   // `/<locale>?ref=<code>`. Chaque code promo distribué fabrique donc une URL indexable distincte
-  // de l'accueil ; sans canonical, rien ne les rassemble.
+  // de l'accueil ; sans canonical, rien ne les rassemble. Depuis la spec 28 il rassemble aussi
+  // toutes les variantes de recherche (`?q=`, `?personas=`…) — même mécanisme, sans une ligne de
+  // plus : `pathFor` ignore les paramètres.
   //
   // Pas de `nativeLocales` : ces textes viennent de next-intl (jeu d'interface fermé et complet
   // dans les deux locales), pas du contenu partenaire soumis au repli JSONB.
@@ -42,145 +58,101 @@ export async function generateMetadata(
   });
 }
 
-export default async function HomePage({
-  params,
-}: PageProps<"/[locale]">) {
+export default async function HomePage({ params, searchParams }: PageProps<"/[locale]">) {
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("HomePage");
 
-  const supabase = await createClient();
-  const { data: products } = await supabase
-    .from("products")
-    .select(PRODUCTS_COLUMNS)
-    .eq("sellable", true)
-    .order("created_at");
+  // Les critères de l'URL sont les SEULS qui filtrent (spec 28 §0 invariant 10) : plus aucun
+  // filtrage en mémoire. `leerCriterios` ne lève jamais — un paramètre invalide est ignoré, jamais
+  // une 400 : une URL mal recopiée doit rendre l'accueil normale, pas une page cassée.
+  const criterios = leerCriterios(await searchParams);
+  const sufijoCriterios = escribirCriterios(criterios);
 
-  const productIds = (products ?? []).map((p) => p.id);
-  const { data: media } =
-    productIds.length > 0
-      ? await supabase
-          .from("product_media")
-          .select("product_id, storage_path, sort")
-          .in("product_id", productIds)
-          .order("sort", { ascending: true })
-      : { data: [] };
+  // LA seule requête de la page, et elle ne part pas d'ici : `lib/catalog/` la porte, avec le
+  // client anonyme sans cookies. Les sections vides ne sont pas dans le tableau rendu.
+  const secciones = await buscarSecciones(criterios, { porSeccion: POR_SECCION, locale });
 
-  // Première photo par produit seulement (déjà triée par sort) — une carte n'a besoin que d'une
-  // vignette, pas de la galerie complète (celle-ci vit sur la fiche produit, ProductPhotos.tsx).
-  const firstMediaByProduct = new Map<string, string>();
-  for (const row of media ?? []) {
-    if (!firstMediaByProduct.has(row.product_id)) {
-      firstMediaByProduct.set(row.product_id, row.storage_path);
-    }
-  }
-
-  // T1/T3 (spec 24 §4) — REGROUPEMENT DES LOGEMENTS PAR ÉTABLISSEMENT.
-  //
-  // Le catalogue listait chaque produit à plat. Or les chambres SONT déjà des produits pour un
-  // hébergement adossé à LobbyPMS — Casa Kayam a six catégories — donc un seul hôtel occupait six
-  // cartes de la page d'accueil et noyait tout le reste. La spec 24 présentait ce travers comme une
-  // CONDITION de T3 (« un hôtel à 12 types produit 12 cartes ») ; en réalité il ne dépend pas du
-  // retrait de l'étage `hotel` : il existe aujourd'hui, et T1 vient de donner la destination qui
-  // manquait pour le régler.
-  //
-  // RÈGLE : on ne groupe qu'à partir de DEUX logements vendables sur le même établissement. Grouper
-  // une cabaña isolée ajouterait un clic vers une page qui n'aurait qu'elle à montrer.
-  //
-  // Les non-logements ne sont JAMAIS groupés : deux kayaks du même prestataire sont deux offres
-  // distinctes, alors que deux chambres du même hôtel sont deux façons de dormir au même endroit.
-  const establishmentIds = [
-    ...new Set(
-      (products ?? []).map((p) => p.establishment_id).filter((id): id is string => Boolean(id))
-    ),
-  ];
-  const { data: establishments } =
-    establishmentIds.length > 0
-      ? await supabase
-          .from("establishments")
-          // `status` : sans lui, un établissement archivé garde une carte groupée dans le catalogue
-          // alors que sa page publique répond 404 (elle filtre, elle, sur status='active'). Un
-          // établissement non résolu ici retombe simplement sur des cartes produit individuelles.
-          .select("id, slug, name, description")
-          .eq("status", "active")
-          .in("id", establishmentIds)
-      : { data: [] };
-  const establishmentById = new Map((establishments ?? []).map((e) => [e.id, e]));
-
-  const lodgingCountByEstablishment = new Map<string, number>();
-  for (const product of products ?? []) {
-    if (product.type !== "lodging" || !product.establishment_id) continue;
-    const current = lodgingCountByEstablishment.get(product.establishment_id) ?? 0;
-    lodgingCountByEstablishment.set(product.establishment_id, current + 1);
-  }
-
-  const MAX_DESCRIPTION_LENGTH = 140;
-  const snippet = (value: string | null): string | null =>
-    value && value.length > MAX_DESCRIPTION_LENGTH
-      ? `${value.slice(0, MAX_DESCRIPTION_LENGTH).trimEnd()}…`
-      : value;
-
-  const catalog: CatalogProduct[] = [];
-  const groupedEstablishments = new Set<string>();
-
-  for (const product of products ?? []) {
-    const establishmentId = product.establishment_id;
-    const lodgingCount = establishmentId ? (lodgingCountByEstablishment.get(establishmentId) ?? 0) : 0;
-    const establishment = establishmentId ? establishmentById.get(establishmentId) : undefined;
-    const storagePath = firstMediaByProduct.get(product.id);
-    const imageUrl = storagePath
-      ? supabase.storage.from("catalog-media").getPublicUrl(storagePath).data.publicUrl
-      : null;
-
-    if (product.type === "lodging" && establishmentId && lodgingCount >= 2 && establishment?.slug) {
-      // Une carte par établissement : les logements suivants du même lieu sont absorbés. L'image et
-      // la position viennent du PREMIER (la requête est triée par created_at), ce qui rend l'ordre
-      // stable d'un rendu à l'autre plutôt que dépendant du hasard de la jointure.
-      if (groupedEstablishments.has(establishmentId)) continue;
-      groupedEstablishments.add(establishmentId);
-
-      catalog.push({
-        id: `establishment-${establishmentId}`,
-        href: `/establecimientos/${establishment.slug}`,
-        testId: `catalog-link-establishment-${establishment.slug}`,
-        name: resolveLocalizedField(asLocalizedField(establishment.name), locale) ?? establishment.slug,
-        descriptionSnippet: snippet(
-          resolveLocalizedField(asLocalizedField(establishment.description), locale) ?? null
-        ),
-        type: "lodging",
-        subtitle: t("lodgingCount", { count: lodgingCount }),
-        imageUrl,
-      });
-      continue;
-    }
-
-    catalog.push({
-      id: product.id,
-      href: `/productos/${product.slug}`,
-      testId: `catalog-link-${product.slug}`,
-      name: resolveLocalizedField(asLocalizedField(product.name), locale) ?? product.slug,
-      descriptionSnippet: snippet(
-        resolveLocalizedField(asLocalizedField(product.description), locale) ?? null
-      ),
-      type: product.type as string,
-      subtitle: null,
-      imageUrl,
-    });
-  }
+  const labels = {
+    search: {
+      label: t("buscar.label"),
+      placeholder: t("buscar.placeholder"),
+      submitLabel: t("buscar.submitLabel"),
+      emptyLabel: t("buscar.emptyLabel"),
+    },
+    dates: {
+      placeholderLabel: t("fechas.placeholderLabel"),
+      calendar: {
+        complet: t("fechas.calendar.complet"),
+        selectionne: t("fechas.calendar.selectionne"),
+        aujourdhui: t("fechas.calendar.aujourdhui"),
+      },
+    },
+    people: {
+      placeholderLabel: t("personas.placeholderLabel"),
+      fieldLabel: t("personas.fieldLabel"),
+      stepLabels: {
+        increment: t("personas.stepLabels.increment"),
+        decrement: t("personas.stepLabels.decrement"),
+      },
+    },
+  };
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-8">
+    <PageShell variant="large">
       {/* Nœud d'identité du site : c'est le plus rentable pour être cité par un moteur de
           réponse, et il n'exige aucune colonne de base de données. */}
-      <JsonLd
-        data={buildWebSiteJsonLd(getSiteUrl(), locale, t("title"), t("description"))}
-      />
-      <div className="text-center">
-        <h1 className="text-2xl font-semibold">{t("title")}</h1>
-        <p className="text-muted">{t("description")}</p>
+      <JsonLd data={buildWebSiteJsonLd(getSiteUrl(), locale, t("title"), t("description"))} />
+
+      {/* ⚠️ Masqué VISUELLEMENT, jamais retiré du DOM (spec 28 §5). Le cahier §2a ne veut rien
+          au-dessus du bloc de recherche, mais une page sans `<h1>` est une faute d'accessibilité
+          comme de référencement. `sr-only` n'est pas le `hidden md:block` interdit par
+          `.claude/rules/ui.md` : le contenu reste indexé et lu par un lecteur d'écran.
+          Jérôme a annoncé un bloc titré à cet endroit ; le jour où il existe, la seule chose à
+          retirer est cette classe. */}
+      <div className="sr-only">
+        <Title as="h1">{t("h1")}</Title>
       </div>
 
-      <CatalogBrowser products={catalog} />
-    </main>
+      {/* ⚠️ Hôte CLIENT obligatoire : toutes les props de `SearchPanel` sont des fonctions, qu'un
+          Server Component ne sait pas sérialiser. `aujourdIso` est calculé à Guatapé — jamais dans
+          le fuseau du serveur (règle §11.20, vérifiée par scripts/check-timezone.sh). */}
+      <BuscadorInicio
+        criteriosIniciales={criterios}
+        aujourdIso={todayInBogota()}
+        localeCodigo={locale as Locale}
+        labels={labels}
+      />
+
+      {secciones.length === 0 ? (
+        // Un seul état vide global, jamais un « Aucune activité » répété cinq fois : sur une
+        // recherche pointue, ce serait cinq lignes de bruit. La barre reste utilisable au-dessus.
+        <EstadoVacio
+          titulo={t("emptyState.titulo")}
+          descripcion={t("emptyState.descripcion")}
+          testId="estado-vacio"
+        />
+      ) : (
+        secciones.map((seccion, indice) => (
+          <SeccionOfertas
+            key={seccion.tipo}
+            titulo={t(`secciones.${seccion.tipo}`)}
+            hrefVerMas={hrefSeccion(seccion.tipo, sufijoCriterios)}
+            // ⚠️ Le « Ver más » des activités ne mène PAS à une liste d'offres mais à un index de
+            // sous-catégories (`/es/actividades`, spec 29) : son libellé doit le dire, sinon le
+            // lien promet une chose et en donne une autre.
+            labelVerMas={seccion.tipo === "activity" ? t("verMasTags") : t("verMas")}
+            variante={seccion.tipo === "activity" ? "lista" : "grilla"}
+            tarjetas={seccion.tarjetas}
+            locale={locale as Locale}
+            // Une seule image de toute la page est prioritaire : la première carte de la première
+            // section, c'est-à-dire le LCP. Toutes les autres restent en `lazy` — cinq sections de
+            // huit cartes précharger ensemble, ce sont des dizaines de requêtes inutiles.
+            prioridad={indice === 0}
+            testId={`seccion-${seccion.tipo}`}
+          />
+        ))
+      )}
+    </PageShell>
   );
 }

@@ -4,8 +4,14 @@ titre: "Vitrine : l'accueil, qui est aussi l'écran de résultats de recherche"
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: brouillon
-maj: 2026-09-07
+statut: partiel
+reste: >
+  Tranche 1 (l'accueil, les sections, les cartes, le contrat d'URL, le prix « desde ») livrée le
+  2026-09-08. Restent la Tranche 2 (suggestions de la barre de recherche) et la Tranche 3 (ordre
+  des sections selon le panier, qui dépend des specs « identité anonyme » puis « panier en base »).
+  Deux points à arbitrer : le décompte de couchages sur la carte groupée, et le carrousel de la
+  carte d'activité dans un visuel de 64 px (§10bis).
+maj: 2026-09-08
 resume: >
   Construit le premier écran du chantier front : l'accueil de la vitrine, qui porte le bloc de
   recherche et une section par type d'offre, et qui devient l'écran de résultats dès que des
@@ -460,6 +466,52 @@ contenu non arrêté. **À porter au cahier §2a** quand il le sera : ce n'est p
 d'implémentation.
 
 **Hérité, non rouvert** : les six points du cahier §2f.
+
+## 10bis. Ce que l'implémentation a corrigé (2026-09-08, lot D)
+
+Tranche 1 livrée. Sept écarts avec le texte ci-dessus, tous constatés en codant.
+
+1. **Aucune migration n'a été nécessaire.** Le §6 annonçait trois colonnes à ajouter à
+   `search_catalog` (`fotos`, `precio_desde`, `price_label`, `total_seccion`) : le lot A les avait
+   déjà écrites, la spec ayant été rédigée avant. `supabase/migrations/<ts>_search_catalog_fotos_y_precios.sql`
+   n'existe pas et n'a pas lieu d'être.
+2. **`lib/catalog/criterios.ts` et `segmentos.ts` existaient déjà**, avec exactement le contrat du
+   §7 — plus un `hayCriterios` non prévu. Rien à créer.
+3. **`emptyState` est devenue deux clés** (`emptyState.titulo`, `emptyState.descripcion`) : le §7
+   n'en annonçait qu'une, alors que le bloc a deux emplacements — un titre et une phrase qui dit
+   quoi faire ensuite.
+4. **Un SIXIÈME fichier e2e dépendait de l'ancien `catalog-link-<slug>`** :
+   `apps/admin/e2e/partner-qr-tool.spec.ts`, que la liste des « fichiers touchés » ne nommait pas.
+   Le nouveau sélecteur est `tarjeta-<slug>-link` — le `testId` de la carte vient de `buscar.ts`,
+   le suffixe `-link` est dérivé par l'atome `Card` sur le lien du titre.
+5. **`personas.valueLabel` ne peut pas venir de la page.** C'est un pluriel accordé sur le nombre
+   choisi, et ce nombre est un état client : `BuscadorInicio` le traduit lui-même. Sans lui,
+   `PeopleField` affiche le nombre NU sur son déclencheur.
+6. **La resynchronisation du panneau sur l'URL (§9) a dû être écrite explicitement.** React garde
+   l'état d'un composant monté et l'initialiseur de `useState` ne rejoue pas : sans elle, le bouton
+   « précédent » affichait des champs qui ne décrivaient plus les résultats. La comparaison porte
+   sur la SIGNATURE de l'URL, jamais sur l'objet de props — sinon la saisie en cours s'efface à
+   chaque frappe. Les deux régressions ont leur test, et la première est vérifiée par mutation.
+7. **`SeccionOfertas` rend son « Ver más » même quand la section est vide** : c'est la page qui
+   décide de ne pas rendre une section sans résultat (§8), le composant n'a pas la vue d'ensemble.
+
+**Constat de conformité** : le contrôle `scripts/check-data-layer.sh` ne porte plus d'exemption pour
+`(vitrine)/page.tsx` — la nouvelle page passe la règle « aucune requête Supabase dans un fichier de
+route » sans dérogation. La liste des écrans hérités est passée de cinq à quatre.
+
+**Point ouvert qui s'est précisé — la carte groupée perd son décompte.** Le cahier §2b.4 montre
+« Casa Kayam · 6 alojamientos », mais le type `TarjetaOferta` fixé au §0 ne porte aucun nombre de
+couchages, et `search_catalog` calcule `n_alojamientos` sans le rendre. La carte livrée n'affiche
+donc pas ce décompte. Combler l'écart coûte une colonne dans le `returns` de la fonction et un champ
+dans le type — pas un chantier, mais une modification d'un contrat validé : **à arbitrer**, pas à
+trancher en codant.
+
+**Point ouvert inchangé — le carrousel de la carte d'activité.** La variante `lista` rend
+`PhotoStrip` dans le visuel de 64 px de `Card layout="row"` : les flèches et les points d'Embla
+occupent la vignette entière. `Card.tsx` n'a pas été touché (c'est un lot à part, §10). La story
+`Affichage/TarjetaOferta` → `Lista` existe pour regarder le défaut avant de trancher. ⚠️ Si le visuel
+est agrandi, la constante `SIZES_LISTA` de `TarjetaOferta.tsx` doit bouger avec lui, sinon
+`next/image` sert une image de 64 px dans un cadre plus grand.
 
 ## 11. Annexe — traçabilité
 

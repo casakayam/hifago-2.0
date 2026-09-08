@@ -32,7 +32,7 @@ test("un lien ?ref=<code> actif ne casse rien du parcours invité, et aucun cham
   await page.goto(`/es?ref=${REFERRAL_CODE}`);
   await assertNoCodeField(page);
 
-  await page.getByTestId("catalog-link-tour-lancha-guatape").click();
+  await page.getByTestId("tarjeta-tour-lancha-guatape-link").click();
   await expect(page.getByTestId("product-name")).toBeVisible();
   await assertNoCodeField(page);
 

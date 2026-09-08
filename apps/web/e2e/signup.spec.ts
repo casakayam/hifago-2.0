@@ -37,7 +37,7 @@ test("un client s'inscrit, confirme par email, puis paie connecté avec ses info
   // next=/es encodé dans emailRedirectTo (SignupForm.tsx) : atterrit connecté sur l'accueil.
   await page.waitForURL(/\/es\/?$/);
 
-  await page.getByTestId("catalog-link-tour-lancha-guatape").click();
+  await page.getByTestId("tarjeta-tour-lancha-guatape-link").click();
   await page.locator(`[data-date="${DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
   await expect(page.getByTestId("added-to-cart")).toBeVisible();

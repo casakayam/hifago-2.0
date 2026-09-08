@@ -1,17 +1,43 @@
 {
   "title": "Hifago",
   "description": "Actividades y experiencias en Guatapé.",
-  "searchLabel": "Buscar",
-  "searchPlaceholder": "Nombre del producto…",
-  "typeFilterLabel": "Tipo",
-  "typeFilterAllLabel": "Todos los tipos",
-  "noResults": "No encontramos productos con esos criterios.",
-  "types": {
-    "lodging": "Alojamiento",
-    "activity": "Actividad",
-    "transport": "Transporte",
-    "camp": "Camp",
-    "evento": "Evento"
+  "h1": "Actividades y alojamientos en Guatapé",
+  "emptyState": {
+    "titulo": "No encontramos ofertas con esos criterios.",
+    "descripcion": "Prueba con otras fechas, con menos personas o con una búsqueda más amplia."
   },
-  "lodgingCount": "{count, plural, one {# alojamiento} other {# alojamientos}}"
+  "secciones": {
+    "activity": "Actividades",
+    "lodging": "Alojamientos",
+    "transport": "Transportes",
+    "camp": "Camps",
+    "evento": "Eventos"
+  },
+  "verMas": "Ver más",
+  "verMasTags": "Ver todas las categorías",
+  "precioDesde": "Desde",
+  "fotoAlt": "{nombre}, foto {indice} de {total}",
+  "buscar": {
+    "label": "Buscar actividades y alojamientos",
+    "placeholder": "¿Qué buscas en Guatapé?",
+    "submitLabel": "Buscar",
+    "emptyLabel": "No hay sugerencias"
+  },
+  "fechas": {
+    "placeholderLabel": "Fechas",
+    "calendar": {
+      "complet": "Completo",
+      "selectionne": "seleccionado",
+      "aujourdhui": "hoy"
+    }
+  },
+  "personas": {
+    "placeholderLabel": "Personas",
+    "fieldLabel": "Número de personas",
+    "valueLabel": "{count, plural, one {# persona} other {# personas}}",
+    "stepLabels": {
+      "increment": "Agregar una persona",
+      "decrement": "Quitar una persona"
+    }
+  }
 }
