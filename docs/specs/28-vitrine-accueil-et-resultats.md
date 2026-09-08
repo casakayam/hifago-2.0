@@ -195,6 +195,9 @@ utilisent déjà — il sort du lot, comme la convention l'exige.
 `components/molecules/EstadoVacio.tsx` (chacun + test + story) · `lib/catalog/criterios.ts` · `lib/catalog/segmentos.ts` (table `tipo` → segment d'URL) ·
 `e2e/home.spec.ts` · `supabase/migrations/<ts>_search_catalog_fotos_y_precios.sql`.
 **Modifiés** : `messages/{es,en}/HomePage.json` · `lib/catalog/buscar.ts` ·
+`supabase/seed.sql` — ⚠️ **il ne couvre pas le regroupement** : aucun établissement n'y a deux
+couchages vendables (constaté sur base propre le 2026-09-07), donc l'e2e de l'accueil ne verrait
+jamais de carte groupée. Le lot doit ajouter un second couchage à un établissement existant ·
 `e2e/{reserve,reserve-lodging-range,attribution,cart-multi-establishment,establishment-page}.spec.ts`
 (elles entrent par l'accueil, dont les sélecteurs changent).
 **Supprimés** : `app/[locale]/page.tsx`, `app/[locale]/CatalogBrowser.tsx` et son test — **après**
