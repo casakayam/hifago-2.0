@@ -24,24 +24,28 @@ repond_a:
 > **Révisée en profondeur le 2026-09-07** après un audit adversarial (28 agents, 14 trouvailles
 > confirmées sur 24). Ce que l'audit a changé est signalé dans le texte ; le récit est dans
 > `docs/journal/2026-09.md`.
+>
+> **✅ Validée par Jérôme le 2026-09-07.** Le `statut: brouillon` du frontmatter décrit l'état
+> d'**implémentation** (rien n'est encore construit), pas l'état de validation — cf.
+> `docs/specs/README.md`.
 
 ## Sommaire et statut
 
 | # | Section | Statut |
 |---|---|---|
-| 0 | **Contrat compact** | brouillon |
-| 1 | Contexte et problème | brouillon |
-| 2 | Portée et tranches | brouillon |
-| 3 | Décisions retenues | brouillon |
-| 4 | Parcours cible | brouillon |
-| 5 | L'écran, bloc par bloc | brouillon |
-| 6 | Modèle de données (delta) | brouillon |
-| 7 | Contrat — URL, données, composants | brouillon |
-| 8 | Règles et invariants | brouillon |
-| 9 | Cas limites | brouillon |
-| 10 | Décisions tranchées / points ouverts | brouillon |
-| 11 | Annexe — traçabilité | brouillon |
-| 12 | Documents liés | brouillon |
+| 0 | **Contrat compact** | ✅ validé 2026-09-07 |
+| 1 | Contexte et problème | ✅ validé 2026-09-07 |
+| 2 | Portée et tranches | ✅ validé 2026-09-07 |
+| 3 | Décisions retenues | ✅ validé 2026-09-07 |
+| 4 | Parcours cible | ✅ validé 2026-09-07 |
+| 5 | L'écran, bloc par bloc | ✅ validé 2026-09-07 |
+| 6 | Modèle de données (delta) | ✅ validé 2026-09-07 |
+| 7 | Contrat — URL, données, composants | ✅ validé 2026-09-07 |
+| 8 | Règles et invariants | ✅ validé 2026-09-07 |
+| 9 | Cas limites | ✅ validé 2026-09-07 |
+| 10 | Décisions tranchées / points ouverts | ✅ validé 2026-09-07 |
+| 11 | Annexe — traçabilité | ✅ validé 2026-09-07 |
+| 12 | Documents liés | ✅ validé 2026-09-07 |
 
 ---
 
