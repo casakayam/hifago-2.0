@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
+import { abrirFiltros } from "./support/filtros";
 
 // Revue admin partenaires (Jérôme, 2026-08-19) — filtres classiques (nom/état) de la liste
 // refondue sur list_partners_admin. Jamais un test qui touche "Buscar ubicación" : convention déjà
@@ -18,7 +19,7 @@ test("admin ouvre /admin/partners, filtre par nom, voit la ligne attendue", asyn
 
   // Filtres repliés par défaut (chevron) depuis la refonte responsive mobile — ouvrir avant d'y
   // interagir, sinon les champs sont `hidden` (Disclosure, packages/ui/data-list.tsx).
-  await page.getByTestId("filters-toggle").click();
+  await abrirFiltros(page);
   await page.getByTestId("filter-q").fill("Prestador Propuestas");
   await page.getByTestId("server-filters-submit").click();
 

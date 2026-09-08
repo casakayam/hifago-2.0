@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 import { formatCop } from "@hifago/domain";
+import { abrirFiltros } from "./support/filtros";
 
 // Feature 14 (Socio : dashboard de commissions), rebranché sur le vrai ledger_entries en spec 19
 // §0 Tranche 0 (2026-08-18) — "operador.propuestas" (SEEDED_ACCOUNTS) est le référent (partenaire
@@ -65,7 +66,7 @@ test("un référent seedé voit sa liste de commissions et ses totaux corrects, 
   // Filtre par estado (retour Jérôme, 2026-08-20) — "Pagada" seule ne laisse que la ligne réglée.
   // Filtres repliés par défaut (chevron) depuis la refonte responsive mobile — ouvrir avant d'y
   // interagir, sinon les champs sont `hidden` (Disclosure, packages/ui/data-list.tsx).
-  await page.getByTestId("filters-toggle").click();
+  await abrirFiltros(page);
   await page.getByTestId("filter-status").click();
   await page.getByRole("option", { name: "Pagada" }).click();
   await page.getByTestId("server-filters-submit").click();

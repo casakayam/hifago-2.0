@@ -7,6 +7,7 @@ import {
   switchInput,
   toggleSwitch,
 } from "@hifago/e2e-support";
+import { abrirFiltros } from "./support/filtros";
 
 test("admin gère le registre d'un partenaire : capacité, statut, transfert, code", async ({
   page,
@@ -32,7 +33,7 @@ test("admin gère le registre d'un partenaire : capacité, statut, transfert, co
   await page.goto("/admin/partners");
   // Filtres repliés par défaut (chevron) depuis la refonte responsive mobile — ouvrir avant d'y
   // interagir, sinon les champs sont `hidden` (Disclosure, packages/ui/data-list.tsx).
-  await page.getByTestId("filters-toggle").click();
+  await abrirFiltros(page);
   await page.getByTestId("filter-q").fill("Référent Actif Org");
   await page.getByTestId("server-filters-submit").click();
   const partnerRow = page.locator("tr", { hasText: "Référent Actif Org" });

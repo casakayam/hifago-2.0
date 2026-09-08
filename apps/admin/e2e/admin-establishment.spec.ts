@@ -2,6 +2,7 @@ import path from "node:path";
 import { test, expect } from "@playwright/test";
 import { toggleCheckbox } from "@hifago/e2e-support";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
+import { abrirFiltros } from "./support/filtros";
 
 const FIXTURE_PHOTO = path.join(__dirname, "fixtures/test-photo.jpg");
 
@@ -102,7 +103,7 @@ test("la recherche unifiée de la liste établissements trouve un établissement
   // le permettait pas, cf. migration 20260819190000), sans dépendre d'un nom mutable par ailleurs.
   // Filtres repliés par défaut (chevron) depuis la refonte responsive mobile — ouvrir avant d'y
   // interagir, sinon les champs sont `hidden` (Disclosure, packages/ui/data-list.tsx).
-  await page.getByTestId("filters-toggle").click();
+  await abrirFiltros(page);
   await page.getByTestId("filter-q").fill("Prestador Propuestas");
   await page.getByTestId("server-filters-submit").click();
 

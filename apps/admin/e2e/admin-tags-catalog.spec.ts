@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 import { createSignedInClient } from "@hifago/e2e-support";
+import { abrirFiltros } from "./support/filtros";
 
 // docs/specs/10-listes-standardisees-admin-socio.md (lot 4) — Eliminar retiré de la liste
 // (décision Jérôme), reste uniquement sur la fiche /admin/tags/[id].
@@ -149,7 +150,7 @@ test("admin ouvre /admin/tags, presse Ver sur un tag, atterrit sur le catálogo 
   // peut être au-delà de la page 1 sans le filtre.
   // Filtres repliés par défaut (chevron) depuis la refonte responsive mobile — ouvrir avant d'y
   // interagir, sinon les champs sont `hidden` (Disclosure, packages/ui/data-list.tsx).
-  await page.getByTestId("filters-toggle").click();
+  await abrirFiltros(page);
   await page.getByTestId("filter-q").fill(tagLabel);
   await page.getByTestId("server-filters-submit").click();
 

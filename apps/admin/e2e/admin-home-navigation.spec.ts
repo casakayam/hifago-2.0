@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 import { createSignedInClient } from "@hifago/e2e-support";
 import { getAdminNavItems } from "../app/admin/nav-items";
+import { abrirFiltros } from "./support/filtros";
 
 // Feature 27 (docs/specs/02-admin-accueil-et-navigation.md) — jusqu'ici /admin ne faisait qu'une
 // redirection vide et aucune sidebar n'existait : plusieurs écrans étaient injoignables sans
@@ -116,7 +117,7 @@ test("clientes: filtro unifié nom/email, pagination, clic vers la fiche détail
   // déjà nom ET email côté RPC (list_clients).
   // Filtres repliés par défaut (chevron) depuis la refonte responsive mobile — ouvrir avant d'y
   // interagir, sinon les champs sont `hidden` (Disclosure, packages/ui/data-list.tsx).
-  await page.getByTestId("filters-toggle").click();
+  await abrirFiltros(page);
   await page.getByTestId("filter-q").fill("Cliente Referido");
   await page.getByTestId("server-filters-submit").click();
   await expect(page).toHaveURL(/\?q=Cliente\+Referido/);

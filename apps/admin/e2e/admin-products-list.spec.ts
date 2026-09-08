@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 import { createSignedInClient } from "@hifago/e2e-support";
+import { abrirFiltros } from "./support/filtros";
 
 // docs/specs/10-listes-standardisees-admin-socio.md (lot 2, 2e écran pilote) — /admin/products
 // sur DataList, 1er vrai passage du `Table` compound HeroUI. Produit seedé stable
@@ -18,7 +19,7 @@ test("admin ouvre /admin/products, filtre par nom et par tipo, voit Ver/Editar (
   // Filtres repliés par défaut (chevron) depuis la refonte responsive mobile — ServerFilters est
   // un <form method="GET"> à soumission native, chaque "server-filters-submit" recharge la page et
   // referme le panneau : réouvrir avant chaque interaction suivante.
-  await page.getByTestId("filters-toggle").click();
+  await abrirFiltros(page);
   await page.getByTestId("filter-q").fill("Tour en lancha");
   await page.getByTestId("server-filters-submit").click();
 
@@ -39,7 +40,7 @@ test("admin ouvre /admin/products, filtre par nom et par tipo, voit Ver/Editar (
   await expect(page.getByTestId(`delete-product-button-${PRODUCT_ID}`)).toHaveCount(0);
 
   // Le filtre "Tipo" préserve le filtre texte déjà actif (form GET unique, ServerFilters).
-  await page.getByTestId("filters-toggle").click();
+  await abrirFiltros(page);
   await page.getByTestId("filter-type").click();
   await page.getByRole("option", { name: "activity" }).click();
   await page.getByTestId("server-filters-submit").click();
@@ -60,7 +61,7 @@ test("catalogo: filtre par establecimiento retrouve le produit rattaché", async
   // : establishment_id est une vraie colonne FK sur products, filtrée par un simple .eq() côté
   // page.tsx, pas de RPC ni de contournement PostgREST nécessaire ici.
   // Filtres repliés par défaut (chevron) depuis la refonte responsive mobile.
-  await page.getByTestId("filters-toggle").click();
+  await abrirFiltros(page);
   await page.getByTestId("filter-establishment_id").click();
   await page.getByRole("option", { name: "Casa Kayam Guatapé" }).click();
   await page.getByTestId("server-filters-submit").click();
@@ -155,7 +156,7 @@ test("catalogo: filtre par etiqueta retrouve uniquement les productos taggés", 
   await expect(page.getByTestId(`product-row-${untaggedProduct.id}`)).toBeVisible();
 
   // Filtres repliés par défaut (chevron) depuis la refonte responsive mobile.
-  await page.getByTestId("filters-toggle").click();
+  await abrirFiltros(page);
   await page.getByTestId("filter-tag_id").click();
   await page.getByRole("option", { name: tagLabel }).click();
   await page.getByTestId("server-filters-submit").click();
