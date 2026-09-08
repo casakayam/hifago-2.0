@@ -34,10 +34,42 @@ deux modules déjà écrits, et un sixième fichier e2e concerné **dans l'autre
 | **Conception, spec, arbitrage, diagnostic d'une panne** | seul | `xhigh` |
 | **Écrire du code dont les contrats sont déjà fixés** | seul | `high` |
 | **Mécanique** — lancer les tests, corriger un lint, mettre à jour le journal, committer | seul | `low` / `medium` |
+| **Écrire une RPC anti-survente, diagnostiquer une race condition constatée** | seul | `max` |
 | **Migration lourde, balayage répétitif sur des dizaines de fichiers disjoints** | workflow, un agent par fichier | `medium` |
 
 **La règle courte** : orchestrer quand je ne sais pas encore ce qu'il y a dans le code, ou quand il
 faut être sûr avant de valider. Jamais quand je sais déjà quoi écrire.
+
+## Cinq niveaux, deux utilisés — et pourquoi (2026-09-08)
+
+`low` · `medium` · `high` · `xhigh` · `max`. En pratique on se stabilise sur deux, pour une raison
+mécanique : **changer d'effort demande une action de Jérôme** (`/effort`), donc personne ne bascule
+six fois dans une session — on choisit un niveau en début de bloc et on y reste.
+
+⚠️ **Conséquence à ne pas cacher : l'effort ANNONCÉ n'est pas toujours l'effort APPLIQUÉ.** Le
+2026-09-08, la mise à jour du journal a été annoncée `medium` et a tourné à l'effort de la session.
+L'annonce reste utile — elle dit ce que la tâche mérite — mais elle décrit une intention, pas une
+mesure. Le dire plutôt que laisser croire le contraire.
+
+`max` est réservé aux situations où se tromper coûte une **survente réelle**, pas un écran mal
+affiché : une nouvelle RPC critique au sens de `CLAUDE.md` §4, ou une race condition constatée en
+production. Rien du chantier front n'y entre.
+
+## Ce qui attrape les défauts n'est pas l'effort (mesuré le 2026-09-08)
+
+Sur la Tranche 1a de la spec 29 — une migration republiant une fonction de 300 lignes, faite à
+`xhigh` —, **l'effort n'a rien trouvé**. Les défauts ont été attrapés par des méthodes :
+
+- la règle posée AVANT d'écrire (« les 16 assertions existantes restent vertes sans être
+  modifiées ») ;
+- les **mutations exécutées** contre la vraie base : retirer la ligne corrigée fait rougir
+  l'assertion attendue, et elle seule ;
+- **imprimer le rendu réel** au lieu de le supposer (HeroUI rendait un `<ol>` sans `<nav>`) ;
+- le **lint**, qui a refusé tout seul une écriture de ref pendant le rendu.
+
+Le rendement marginal de l'effort est faible sur du code dont les contrats sont fixés ; celui de la
+vérification est élevé à tous les niveaux. Monter l'effort ne remplace jamais une vérification
+exécutée.
 
 ## Deux limites à dire franchement
 

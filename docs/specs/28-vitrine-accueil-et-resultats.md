@@ -614,9 +614,14 @@ correctif tient en trois lignes de SQL **dans une fonction de 300 lignes**, qu'i
 republier en entier. La spec 29 doit de toute façon redéfinir `search_catalog` (pour l'index de
 tags) et donner des tags au seed — qui n'en a **aucun** aujourd'hui, si bien que le volet « chercher
 par libellé de tag » du cahier §2a n'est couvert par rien. Le correctif y coûte zéro ligne de plus.
-**À faire dans le lot de la spec 29, pas plus tard** : le prédicat gagne
-`or not exists (select 1 from public.catalog_tags ct where ct.slug = p_tag_slug)`, plus un cas pgTAP
-et `&tag=zzz-inexistant` dans l'URL de l'e2e des paramètres invalides.
+**✅ CORRIGÉ le 2026-09-08** (spec 29 Tranche 1, migration `20260908120000_search_catalog_sin_tag.sql`).
+Exactement ce qui était prescrit ici : le prédicat a gagné
+`or not exists (select 1 from public.catalog_tags ct where ct.slug = p_tag_slug)`, l'assertion pgTAP
+19 (« un slug de tag INCONNU est ignoré — il ne filtre rien ») et `&tag=zzz-inexistant` dans l'URL de
+l'e2e des paramètres invalides. Les deux sont **vérifiés par mutation** : retirer cette seule ligne
+du corps de la fonction fait rougir l'assertion 19 et elle seule, et fait rougir l'e2e sur
+`home.spec.ts:233` — l'assertion « l'écran n'est jamais l'état vide », c'est-à-dire le symptôme
+exact décrit ci-dessus.
 
 ## 11. Annexe — traçabilité
 
