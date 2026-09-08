@@ -39,7 +39,7 @@ test("un client réserve un alojamiento par plage de nuits, depuis la fiche prod
     );
   });
 
-  await page.goto(`/es/products/${SLUG}`);
+  await page.goto(`/es/productos/${SLUG}`);
   await page.waitForLoadState("networkidle");
 
   const checkIn = isoDate(2);

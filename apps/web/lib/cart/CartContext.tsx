@@ -5,7 +5,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 // État React en mémoire uniquement, JAMAIS persisté (cahier des charges client §3e : « perdu si
 // l'onglet est fermé ») — pas de localStorage/sessionStorage, aucune sérialisation. Monté au
 // niveau du layout apps/web/app/[locale] : survit à une navigation client entre deux fiches produit et
-// vers /checkout, mais se réinitialise sur un rechargement complet de page (comportement voulu,
+// vers /pago, mais se réinitialise sur un rechargement complet de page (comportement voulu,
 // pas un bug).
 export type CartLine = {
   // Identifiant LOCAL à cette ligne, jamais product_id+date : deux lignes visant le même produit

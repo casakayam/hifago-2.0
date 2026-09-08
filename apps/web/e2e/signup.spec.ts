@@ -24,13 +24,13 @@ test("un client s'inscrit, confirme par email, puis paie connecté avec ses info
   const email = `e2e-signup-${Date.now()}@test.local`;
   const password = "Seed1234!";
 
-  await page.goto("/es/signup");
+  await page.goto("/es/registro");
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(password);
   await page.locator('input[name="confirm-password"]').fill(password);
   await page.getByTestId("signup-submit-button").click();
 
-  await page.waitForURL(new RegExp(`/es/verify-email\\?email=${encodeURIComponent(email)}`));
+  await page.waitForURL(new RegExp(`/es/verificar-email\\?email=${encodeURIComponent(email)}`));
 
   const confirmLink = await latestCallbackLink(page.request, email);
   await page.goto(confirmLink);
@@ -43,7 +43,7 @@ test("un client s'inscrit, confirme par email, puis paie connecté avec ses info
   await expect(page.getByTestId("added-to-cart")).toBeVisible();
 
   await page.getByTestId("go-to-checkout-link").click();
-  await expect(page).toHaveURL(/\/es\/checkout/);
+  await expect(page).toHaveURL(/\/es\/pago/);
 
   // §3.5 — premier achat de ce compte tout juste créé (aucune commande antérieure) : l'email doit
   // déjà être rempli depuis auth.users.email, nom/téléphone doivent rester vides.

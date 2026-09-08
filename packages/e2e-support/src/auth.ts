@@ -74,10 +74,10 @@ export const SEEDED_PASSWORD = "Seed1234!";
 export const WEB_APP_URL = "http://localhost:3100";
 export const ADMIN_APP_URL = "http://localhost:3101";
 
-// /es/products/[slug] et /es/r/[code] vivent dans apps/web, pas apps/admin — toute spec qui
+// /es/productos/[slug] et /es/r/[code] vivent dans apps/web, pas apps/admin — toute spec qui
 // vérifie l'effet d'une action admin/socio sur la fiche publique passe par ces helpers plutôt
 // que de reconstruire l'URL à la main.
-export const webProductUrl = (slug: string) => `${WEB_APP_URL}/es/products/${slug}`;
+export const webProductUrl = (slug: string) => `${WEB_APP_URL}/es/productos/${slug}`;
 export const webReferralUrl = (code: string) => `${WEB_APP_URL}/es/r/${code}`;
 
 export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";

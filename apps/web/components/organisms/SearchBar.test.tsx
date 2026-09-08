@@ -49,7 +49,7 @@ const SUGGESTIONS: SearchSuggestion[] = [
     label: "Casa Kayam",
     meta: "Alojamiento en Guatapé",
     kind: "establishment",
-    href: "/establishments/casa-kayam",
+    href: "/establecimientos/casa-kayam",
   },
 ];
 
@@ -226,7 +226,7 @@ describe("SearchBar", () => {
 
     const lien = screen.getByRole("option", { name: /Casa Kayam/ });
     expect(lien.tagName).toBe("A");
-    expect(lien.getAttribute("href")).toBe("/establishments/casa-kayam");
+    expect(lien.getAttribute("href")).toBe("/establecimientos/casa-kayam");
     // Les autres ne sont pas des liens : le href est facultatif, pas imposé.
     expect(screen.getByRole("option", { name: /Kayak en el Embalse/ }).tagName).not.toBe("A");
   });

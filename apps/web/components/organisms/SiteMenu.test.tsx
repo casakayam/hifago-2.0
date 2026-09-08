@@ -12,7 +12,7 @@ vi.mock("@/i18n/navigation", () => ({
       {children}
     </a>
   ),
-  usePathname: () => "/products/kayak",
+  usePathname: () => "/productos/kayak",
 }));
 
 const messages = loadMessages("es");
@@ -62,8 +62,8 @@ describe("SiteMenu", () => {
   });
 
   it("mène à la connexion ou au compte selon l'état de connexion", () => {
-    expect(rendu().compte.getAttribute("href")).toBe("/login");
-    expect(rendu({ isAuthenticated: true }).compte.getAttribute("href")).toBe("/account/orders");
+    expect(rendu().compte.getAttribute("href")).toBe("/entrar");
+    expect(rendu({ isAuthenticated: true }).compte.getAttribute("href")).toBe("/cuenta/reservas");
   });
 
   it("place la langue APRÈS la liste, jamais avant", () => {
@@ -94,8 +94,8 @@ describe("SiteMenu", () => {
         <SiteMenu isAuthenticated={false} isOpen={false} id="menu" testId="menu" />
       </NextIntlClientProvider>
     );
-    expect(html).toContain('href="/login"');
-    expect(html).toContain('href="/en/products/kayak"');
+    expect(html).toContain('href="/entrar"');
+    expect(html).toContain('href="/en/productos/kayak"');
     // Le libellé aussi : c'est du contenu, pas seulement un attribut.
     expect(html).toContain(messages.Chrome.loginLabel);
   });

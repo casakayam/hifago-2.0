@@ -15,14 +15,14 @@ import {
 // que Cypress (hifago/CLAUDE.md §6).
 //
 // Feature 6 : le bouton unique "Reservar" (Checkpoint B) a disparu. La barrière anti-survente
-// vit maintenant exclusivement dans create_order, appelée uniquement depuis /checkout au clic
+// vit maintenant exclusivement dans create_order, appelée uniquement depuis /pago au clic
 // "Validar pedido" — reserve_order_line est d'ailleurs supprimée par la migration
 // 20260813243000_create_order_rpc.sql. Chaque contexte doit donc désormais aller jusqu'au bout
 // du parcours panier (catalogue → produit → ajout au panier → checkout → formulaire rempli) et
 // c'est le clic final sur submit-order-button qui doit partir en concurrence réelle entre tous
 // les contextes, pas seulement le clic "Añadir al carrito" (purement local, sans aucun aller-
 // retour réseau — le faire concourir ne prouverait plus rien).
-const PRODUCT_URL = "/es/products/tour-lancha-guatape";
+const PRODUCT_URL = "/es/productos/tour-lancha-guatape";
 const PRODUCT_ID = "b0000000-0000-4000-8000-000000000001";
 const LAST_SPOT_DATE = seedDate(10); // capacity=1 — cf. supabase/seed.sql
 

@@ -14,7 +14,7 @@ const meta = {
   title: "Actions/LinkButton",
   component: LinkButton,
   parameters: { layout: "padded" },
-  args: { href: "/checkout", children: "Reservar" },
+  args: { href: "/pago", children: "Reservar" },
 } satisfies Meta<typeof LinkButton>;
 
 export default meta;
@@ -118,7 +118,7 @@ function Paire({ variant, color }: { variant: ButtonVariant; color: ButtonColor 
           </Button>
         </div>
         <div ref={attacher} className="contents">
-          <LinkButton href="/checkout" variant={variant} color={color}>
+          <LinkButton href="/pago" variant={variant} color={color}>
             Reservar
           </LinkButton>
         </div>
@@ -175,7 +175,7 @@ export const BoutonOuLien: Story = {
       <div className="flex flex-col gap-1">
         <Legende>LinkButton interne — navigue, garde le préfixe de locale</Legende>
         <div>
-          <LinkButton href="/checkout">Ir al pago</LinkButton>
+          <LinkButton href="/pago">Ir al pago</LinkButton>
         </div>
       </div>
       <div className="flex flex-col gap-1">
@@ -205,7 +205,7 @@ export const Tailles: Story = {
       {(["lg", "md", "sm"] as const).map((size) => (
         <div key={size} className="flex items-center gap-3">
           <span className="w-8 shrink-0 text-xs text-muted">{size}</span>
-          <LinkButton href="/checkout" size={size} testId={`lien-${size}`}>
+          <LinkButton href="/pago" size={size} testId={`lien-${size}`}>
             Reservar
           </LinkButton>
           <Hauteur cible={`lien-${size}`} />
@@ -282,7 +282,7 @@ function PaireLargeur({ libelle }: { libelle: string }) {
     <div className="flex flex-col gap-1">
       <div ref={attacher} className="flex flex-col gap-2 overflow-hidden">
         <Button>{libelle}</Button>
-        <LinkButton href="/checkout">{libelle}</LinkButton>
+        <LinkButton href="/pago">{libelle}</LinkButton>
       </div>
       <Legende>
         {mesure === null

@@ -56,7 +56,7 @@ test("panier avec une ligne par établissement → une seule commande, 2 lignes"
   await expect(page.getByTestId("added-to-cart")).toBeVisible();
 
   await page.getByTestId("go-to-checkout-link").click();
-  await expect(page).toHaveURL(/\/es\/checkout/);
+  await expect(page).toHaveURL(/\/es\/pago/);
   await expect(page.getByTestId(/^cart-line-/)).toHaveCount(2);
 
   const tourLine = page.locator('[data-testid^="cart-line-"]', { hasText: TOUR_DATE });

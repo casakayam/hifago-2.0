@@ -6,7 +6,7 @@ describe("buildBreadcrumbJsonLd", () => {
   it("numérote les échelons à partir de 1 et rend des URL absolues", () => {
     const result = buildBreadcrumbJsonLd("https://hifago.co", [
       { name: "Inicio", path: "/es" },
-      { name: "Tour en lancha", path: "/es/products/tour-lancha" },
+      { name: "Tour en lancha", path: "/es/productos/tour-lancha" },
     ]);
 
     expect(result).toMatchObject({
@@ -17,7 +17,7 @@ describe("buildBreadcrumbJsonLd", () => {
           "@type": "ListItem",
           position: 2,
           name: "Tour en lancha",
-          item: "https://hifago.co/es/products/tour-lancha",
+          item: "https://hifago.co/es/productos/tour-lancha",
         },
       ],
     });

@@ -12,7 +12,7 @@ import {
 
 // Feature 6 : le flux Checkpoint B (bouton unique "Reservar" appelant reserve_order_line
 // directement, cf. git history) a été remplacé par catalogue → fiche produit → panier React en
-// mémoire (lib/cart/CartContext.tsx, jamais persisté) → /checkout → create_order (une seule RPC
+// mémoire (lib/cart/CartContext.tsx, jamais persisté) → /pago → create_order (une seule RPC
 // tout-ou-rien, supabase/migrations/20260813243000_create_order_rpc.sql). Ce spec pilote donc
 // désormais le parcours complet plutôt qu'un unique clic déclenchant la RPC.
 const PRODUCT_ID = "b0000000-0000-4000-8000-000000000001"; // tour-lancha-guatape
@@ -38,7 +38,7 @@ test("connexion → catalogue → fiche produit → panier → checkout : comman
   await expect(page.getByTestId("added-to-cart")).toBeVisible();
 
   await page.getByTestId("go-to-checkout-link").click();
-  await expect(page).toHaveURL(/\/es\/checkout/);
+  await expect(page).toHaveURL(/\/es\/pago/);
   await expect(page.getByTestId(/^cart-line-/)).toHaveCount(1);
 
   // Jamais un prix COP figé en dur (cette base locale est partagée avec d'autres agents, cf.

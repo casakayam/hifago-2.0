@@ -122,7 +122,7 @@ export const DansUneCarte: Story = {
           // Une carte sur deux est cliquable : c'est la seule façon de VOIR côte à côte que les
           // flèches restent au-dessus de l'overlay du lien dans un cas et n'ont rien à franchir
           // dans l'autre.
-          href={i % 2 === 1 ? `/products/exemple-${i}` : undefined}
+          href={i % 2 === 1 ? `/productos/exemple-${i}` : undefined}
           // ⚠️ `loading="lazy"`, et c'est LE point de cette story : une grille de cartes n'est pas
           // au-dessus de la ligne de flottaison. Sans ce réglage, chaque carte préchargeait sa
           // première photo — mesuré à 3 preloads pour 3 cartes, donc 20 sur un vrai catalogue.

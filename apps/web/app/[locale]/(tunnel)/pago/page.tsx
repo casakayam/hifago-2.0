@@ -5,7 +5,7 @@ import { createClient } from "@hifago/supabase/server";
 import { CheckoutForm } from "./CheckoutForm";
 
 export async function generateMetadata(
-  props: Omit<PageProps<"/[locale]/checkout">, "searchParams">
+  props: Omit<PageProps<"/[locale]/pago">, "searchParams">
 ): Promise<Metadata> {
   const { locale } = await props.params;
   const t = await getTranslations({ locale, namespace: "CheckoutPage" });
@@ -16,7 +16,7 @@ export async function generateMetadata(
 
 export default async function CheckoutPage({
   params,
-}: PageProps<"/[locale]/checkout">) {
+}: PageProps<"/[locale]/pago">) {
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("CheckoutPage");
@@ -35,7 +35,7 @@ export default async function CheckoutPage({
   // Feature 32 — pré-remplissage pour un client connecté (cahier des charges client §2 point 6) :
   // l'email vient toujours du compte auth (garanti dès l'inscription email/mot de passe), nom/
   // téléphone viennent de la commande la plus récente du compte s'il en existe une (aucune table
-  // profil séparée). RLS déjà scopée à account_id = auth.uid() (même garde que /account/orders) —
+  // profil séparée). RLS déjà scopée à account_id = auth.uid() (même garde que /cuenta/reservas) —
   // un champ pré-rempli reste éditable, jamais un verrou (CheckoutForm.tsx).
   let initialHolderName = "";
   let initialHolderPhone = "";

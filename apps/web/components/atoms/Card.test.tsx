@@ -87,7 +87,7 @@ describe("Card", () => {
     // `getByRole(name)` passe par le calcul de nom accessible de @testing-library/dom — c'est ce
     // qu'un lecteur d'écran annonce, pas une approximation sur le textContent.
     const { getByRole, queryByRole } = render(
-      <Card href="/products/habitacion" title={TITRE} titleAs="h2" subtitle="2 habitaciones" description={DESCRIPTION}>
+      <Card href="/productos/habitacion" title={TITRE} titleAs="h2" subtitle="2 habitaciones" description={DESCRIPTION}>
         <p>Desde 180.000 COP</p>
       </Card>
     );
@@ -120,7 +120,7 @@ describe("Card", () => {
 
   it("garde un VRAI lien : <a href>, localisé, pas un gestionnaire de clic sur la carte", () => {
     const el = carte(
-      <Card href="/products/habitacion" title={TITRE} titleAs="h2" testId="produit">
+      <Card href="/productos/habitacion" title={TITRE} titleAs="h2" testId="produit">
         <p>x</p>
       </Card>
     );
@@ -128,7 +128,7 @@ describe("Card", () => {
     expect(el.tagName).toBe("DIV");
     const liens = el.querySelectorAll("a");
     expect(liens.length).toBe(1);
-    expect(liens[0].getAttribute("href")).toBe("/products/habitacion");
+    expect(liens[0].getAttribute("href")).toBe("/productos/habitacion");
     expect(liens[0].getAttribute("data-localized")).toBe("true");
     expect(liens[0].getAttribute("data-testid")).toBe("produit-link");
     // Le lien vit DANS le titre : c'est lui qui donne son nom au lien.

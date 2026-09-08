@@ -17,7 +17,7 @@ const meta = {
     // Sans ce paramètre, la story ne rend rien : le `LanguageSwitcher` réutilisé ici passe une
     // prop `locale` au `Link` de next-intl, qui lit le chemin courant — `null` hors d'une route
     // Next. Même geste que les stories du header.
-    nextjs: { appDirectory: true, navigation: { pathname: "/products/kayak" } },
+    nextjs: { appDirectory: true, navigation: { pathname: "/productos/kayak" } },
   },
 } satisfies Meta<typeof SiteFooter>;
 

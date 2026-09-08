@@ -39,7 +39,7 @@ function withSeconds(time: string): string {
  * dans ce schéma. Inventer une note déclenche une action manuelle Google, longue à lever.
  */
 export function buildProductJsonLd(input: ProductJsonLdInput): Record<string, unknown> {
-  const url = `${input.siteUrl}/${input.locale}/products/${input.slug}`;
+  const url = `${input.siteUrl}/${input.locale}/productos/${input.slug}`;
 
   const common = {
     "@context": "https://schema.org",

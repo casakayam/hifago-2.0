@@ -18,7 +18,7 @@ vi.mock("@/i18n/navigation", () => ({
       {children}
     </a>
   ),
-  usePathname: () => "/products/kayak",
+  usePathname: () => "/productos/kayak",
 }));
 
 const messages = loadMessages("es");
@@ -132,7 +132,7 @@ describe("SiteHeader", () => {
     it("est un LIEN vers la page du panier", () => {
       const panier = rendu().querySelector('[data-testid="header-cart"]') as HTMLAnchorElement;
       expect(panier.tagName).toBe("A");
-      expect(panier.getAttribute("href")).toBe("/checkout");
+      expect(panier.getAttribute("href")).toBe("/pago");
     });
   });
 
@@ -144,7 +144,7 @@ describe("SiteHeader", () => {
       const lien = rendu({ isAuthenticated: false }).querySelector(
         '[data-testid="header-menu-account"]'
       ) as HTMLAnchorElement;
-      expect(lien.getAttribute("href")).toBe("/login");
+      expect(lien.getAttribute("href")).toBe("/entrar");
       expect(lien.textContent).toBe(messages.Chrome.loginLabel);
     });
 
@@ -152,7 +152,7 @@ describe("SiteHeader", () => {
       const lien = rendu({ isAuthenticated: true }).querySelector(
         '[data-testid="header-menu-account"]'
       ) as HTMLAnchorElement;
-      expect(lien.getAttribute("href")).toBe("/account/orders");
+      expect(lien.getAttribute("href")).toBe("/cuenta/reservas");
       expect(lien.textContent).toBe(messages.Chrome.accountLabel);
     });
   });
@@ -200,10 +200,10 @@ describe("SiteHeader", () => {
       // `Link`. Ce que le test prouve n'est donc pas la forme de l'URL — c'est que le panneau est
       // RENDU et non conditionné, donc que ses liens existent dans le HTML servi. C'est le point
       // qui casserait au premier `{ouvert && …}`.
-      expect(html).toContain('href="/es/products/kayak"');
-      expect(html).toContain('href="/en/products/kayak"');
+      expect(html).toContain('href="/es/productos/kayak"');
+      expect(html).toContain('href="/en/productos/kayak"');
       // …ainsi que le lien du compte, qui vit dans le même panneau.
-      expect(html).toContain('href="/login"');
+      expect(html).toContain('href="/entrar"');
     });
   });
 

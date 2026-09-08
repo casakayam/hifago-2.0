@@ -36,7 +36,7 @@ export type EstablishmentJsonLdInput = {
 export function buildEstablishmentJsonLd(
   input: EstablishmentJsonLdInput
 ): Record<string, unknown> {
-  const url = `${input.siteUrl}/${input.locale}/establishments/${input.slug}`;
+  const url = `${input.siteUrl}/${input.locale}/establecimientos/${input.slug}`;
   const hasCoordinates =
     typeof input.latitude === "number" && typeof input.longitude === "number";
 

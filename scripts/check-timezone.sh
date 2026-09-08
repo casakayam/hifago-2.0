@@ -58,7 +58,12 @@ est_exempte() {
     packages/domain/src/time/bogotaDates.ts) return 0 ;;
     # Leurs tests : ils REPRODUISENT le geste interdit comme témoin, pour prouver l'écart.
     packages/domain/src/time/bogotaDates.test.ts) return 0 ;;
-    apps/web/app/\[locale\]/products/\[slug\]/LodgingReservationForm.timezone.test.tsx) return 0 ;;
+    # ⚠️ Chemin refait DEUX fois en une journée le 2026-09-07 : le fichier est passé sous le groupe
+    # de routes `(vitrine)` (lot B1), puis le segment `products` est devenu `productos` (lot B2).
+    # Les deux fois, l'exemption a cessé de matcher et la CI est passée au rouge sans que rien en
+    # local ne le dise — `npm run lint` ne lance pas ce script. Une exemption listée par CHEMIN est
+    # solidaire de l'arborescence des routes : la revérifier dans tout commit qui déplace un écran.
+    apps/web/app/\[locale\]/\(vitrine\)/productos/\[slug\]/LodgingReservationForm.timezone.test.tsx) return 0 ;;
     supabase/tests/database/clients_stage_timezone.test.sql) return 0 ;;
 
     # Arithmétique de date ancrée UTC des DEUX côtés (parse `${iso}T00:00:00Z`, formate en UTC) :
@@ -70,6 +75,14 @@ est_exempte() {
     # jour, et l'entrée est restée obsolète quelques heures. Une exemption qui survit à sa raison
     # d'être envoie le prochain lecteur chercher un problème qui n'existe plus. Vérifier avant
     # d'ajouter, et retirer dans le commit qui opère la convergence.
+    # RÉIMPLÉMENTE todayInBogota() au lieu de l'importer, et c'est assumé : ce script est du JS nu
+    # lancé par `npm run docs:index` hors des workspaces, sans étape de compilation TypeScript
+    # devant lui — il ne peut pas consommer `packages/domain/src/time/`. La formule y est identique
+    # (Intl.DateTimeFormat + formatToParts sur America/Bogota), et son en-tête dit pourquoi.
+    # `scripts/` est balayé depuis le 2026-09-07 : ce fichier calculait sa date en UTC et a mis la
+    # CI au rouge cinq commits de suite sans qu'aucune vérification ne le voie.
+    scripts/docs_index.js) return 0 ;;
+
     packages/domain/src/pms/getNightAvailabilityWindow.test.ts) return 0 ;;
     packages/domain/src/pms/buildEvenRatesPerDay.ts) return 0 ;;
 
@@ -105,7 +118,7 @@ while IFS= read -r f; do
   [ -z "$hits" ] && continue
   signale "$f" "$hits" \
     "Utiliser packages/domain/src/time/ : todayInBogota(), startOfTodayInBogota(), addDaysIso(), nowIsoInstant()."
-done < <(find apps packages supabase/functions tests \
+done < <(find apps packages supabase/functions tests scripts \
            \( -name node_modules -o -name .next -o -name dist -o -name out -o -name build \) -prune -o \
            -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.mjs' -o -name '*.cjs' -o -name '*.js' -o -name '*.jsx' -o -name '*.mts' -o -name '*.cts' \) -print 2>/dev/null | sort)
 

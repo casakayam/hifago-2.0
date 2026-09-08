@@ -29,10 +29,10 @@ const SIZES: ButtonSize[] = ["sm", "md", "lg"];
 
 describe("LinkButton", () => {
   it("rend un vrai <a href>, pas un <button>", () => {
-    const { container } = render(<LinkButton href="/checkout">Reservar</LinkButton>);
+    const { container } = render(<LinkButton href="/pago">Reservar</LinkButton>);
     expect(container.querySelector("button")).toBeNull();
     const el = container.querySelector("a") as HTMLAnchorElement;
-    expect(el.getAttribute("href")).toBe("/checkout");
+    expect(el.getAttribute("href")).toBe("/pago");
     expect(el.textContent).toBe("Reservar");
   });
 

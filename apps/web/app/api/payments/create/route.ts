@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     forwardedHost: request.headers.get("x-forwarded-host"),
     forwardedProto: request.headers.get("x-forwarded-proto"),
   });
-  const returnUrl = `${origin}/es/checkout`;
+  const returnUrl = `${origin}/es/pago`;
 
   try {
     const { initPoint } = await createCheckoutPreference({

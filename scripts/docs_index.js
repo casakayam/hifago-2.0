@@ -124,6 +124,30 @@ function parseFrontMatter(text) {
 }
 
 /**
+ * « Aujourd'hui » à Guatapé (YYYY-MM-DD), jamais à UTC — même règle que
+ * `packages/domain/src/time/bogotaDates.ts`, recopiée plutôt qu'importée parce que ce script est
+ * du JS nu lancé hors des workspaces (aucune étape de compilation TypeScript ne le précède).
+ *
+ * ⚠️ Ce n'est pas une précaution théorique. Ce fichier calculait `new Date().toISOString()` : entre
+ * 19 h et minuit à Guatapé, il datait du LENDEMAIN. La CI, elle, relit la date du COMMIT — donc
+ * tout `docs:index` lancé en soirée produisait un index que `docs:check` déclarait périmé dès le
+ * push. C'est ce qui a mis `hifago-ci` au rouge cinq commits de suite les 2026-09-07/08, sans
+ * qu'aucune vérification locale ne le dise (`npm run lint` ne lance pas les scripts de la CI).
+ * `scripts/` n'était pas non plus balayé par `check-timezone.sh` — il l'est depuis le 2026-09-07.
+ */
+const partsBogota = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Bogota',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+function aujourdHuiBogota() {
+  const parts = partsBogota.formatToParts(new Date());
+  const get = (type) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+/**
  * Date de dernière modification « réelle » de `file` (YYYY-MM-DD) : le jour même si le fichier a
  * des changements non commités (working tree ou index — un `docs:check` lancé avant un commit doit
  * voir la correction qu'on vient d'écrire, pas la dernière date commitée), sinon la date du dernier
@@ -132,7 +156,7 @@ function parseFrontMatter(text) {
 function gitMaj(file) {
   try {
     const statut = execFileSync('git', ['status', '--porcelain', '--', file], { cwd: ROOT, encoding: 'utf8' });
-    if (statut.trim()) return new Date().toISOString().slice(0, 10);
+    if (statut.trim()) return aujourdHuiBogota();
   } catch {
     // Pas un repo git (ou commande indisponible) : on retombe sur `log`, qui échouera pareil.
   }
@@ -249,7 +273,7 @@ function build(docs) {
   return {
     _lisez_moi: "Manifeste de la base documentaire hifago/. Généré par `npm run docs:index`. Ne pas éditer à la main : éditer l'en-tête `---` des documents, puis régénérer.",
     version: 1,
-    maj: new Date().toISOString().slice(0, 10),
+    maj: aujourdHuiBogota(),
     protocole_ia: PROTOCOLE,
     routage: ROUTAGE,
     themes: THEMES,

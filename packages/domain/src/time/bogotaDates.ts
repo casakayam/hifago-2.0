@@ -150,7 +150,7 @@ function splitIsoDate(dateIso: string): { year: number; month: number; day: numb
  * `toLocaleDateString`/`toLocaleString` : sur les sites qui passaient DÉJÀ une locale explicite
  * (`("es")`, la grande majorité), le format rendu est rigoureusement identique et seul le fuseau de
  * projection change. Ce n'est PAS vrai partout, et une version antérieure de ce commentaire
- * l'affirmait à tort : sur `apps/web/app/[locale]/account/orders/OrdersList.tsx`, l'appel était
+ * l'affirmait à tort : sur `apps/web/app/[locale]/(cuenta)/cuenta/reservas/OrdersList.tsx`, l'appel était
  * `toLocaleDateString()` SANS argument, donc la locale du serveur au rendu SSR puis celle du
  * NAVIGATEUR après hydratation — la date affichée changeait entre les deux. Ce site passe désormais
  * `useLocale()` (next-intl) : la locale change volontairement, parce que l'ancienne était un

@@ -33,9 +33,9 @@ describe("BackLink", () => {
 
   it("rend le href et le libellé déjà traduit qu'on lui donne", () => {
     const element = lien(
-      <BackLink href="/establishments/casa-kayam-guatape" label="Volver al alojamiento" />
+      <BackLink href="/establecimientos/casa-kayam-guatape" label="Volver al alojamiento" />
     );
-    expect(element.getAttribute("href")).toBe("/establishments/casa-kayam-guatape");
+    expect(element.getAttribute("href")).toBe("/establecimientos/casa-kayam-guatape");
     expect(element.textContent).toBe("Volver al alojamiento");
   });
 

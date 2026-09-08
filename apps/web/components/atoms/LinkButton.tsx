@@ -39,7 +39,7 @@ import {
 //    `sr-only` : rien ne change à l'œil, tout change à l'oreille.
 // 3. ⚠️ **Un lien interne passe forcément par le `Link` de `@/i18n/navigation`.** Lui seul conserve
 //    le préfixe de locale (règle de components/README.md, déjà rendue vraie par construction dans
-//    `BackLink`). Un `<a href="/products/x">` renvoie un hispanophone sur une page qui perd sa
+//    `BackLink`). Un `<a href="/productos/x">` renvoie un hispanophone sur une page qui perd sa
 //    langue.
 //
 // ─────────────────────────────────────────────────────────────────────────────────────────────

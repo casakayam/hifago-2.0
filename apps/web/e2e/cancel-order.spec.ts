@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 import { resetAvailability, getOrderLineStatuses, createSignedInClient, seedDate } from "@hifago/e2e-support";
 
-// Feature 8 (Client : annuler sa réservation) : pilote réellement /account/orders — la commande
+// Feature 8 (Client : annuler sa réservation) : pilote réellement /cuenta/reservas — la commande
 // apparaît, clic sur Annuler, l'état affiché change, un rechargement de page confirme la
 // persistance réelle (pas un état client optimiste non sauvegardé). La logique de cancel_order
 // elle-même (order_not_found, booked inchangé, ligne fulfilled intacte, no_active_lines) est déjà
@@ -11,7 +11,7 @@ import { resetAvailability, getOrderLineStatuses, createSignedInClient, seedDate
 const PRODUCT_ID = "b0000000-0000-4000-8000-000000000001"; // tour-lancha-guatape
 const DATE = seedDate(14); // date dédiée à ce spec (cf. supabase/seed.sql)
 
-test("un client connecté annule sa réservation depuis /account/orders, l'état persiste après rechargement", async ({
+test("un client connecté annule sa réservation depuis /cuenta/reservas, l'état persiste après rechargement", async ({
   page,
 }) => {
   await resetAvailability(PRODUCT_ID, DATE, { capacity: 5, booked: 0 });
@@ -32,7 +32,7 @@ test("un client connecté annule sa réservation depuis /account/orders, l'état
   const orderId = created.order_id;
 
   await loginAs(page.context(), SEEDED_ACCOUNTS.referentActif, SEEDED_PASSWORD);
-  await page.goto("/es/account/orders");
+  await page.goto("/es/cuenta/reservas");
 
   const orderRow = page.getByTestId(`order-row-${orderId}`);
   await expect(orderRow).toBeVisible();

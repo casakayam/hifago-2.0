@@ -13,7 +13,7 @@ const meta = {
     layout: "padded",
     // Sans ce paramètre, la story ne rend rien : le `Link` de next-intl auquel on passe une prop
     // `locale` lit le chemin courant, `null` hors d'une route Next. Voir Organisms/SiteHeader.
-    nextjs: { appDirectory: true, navigation: { pathname: "/products/kayak" } },
+    nextjs: { appDirectory: true, navigation: { pathname: "/productos/kayak" } },
   },
 } satisfies Meta<typeof SiteMenu>;
 

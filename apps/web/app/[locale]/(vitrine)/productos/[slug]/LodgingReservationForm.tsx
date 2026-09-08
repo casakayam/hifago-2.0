@@ -558,7 +558,7 @@ export function LodgingReservationForm({
       {justAdded ? (
         <p role="status" data-testid="added-to-cart" className="text-sm font-medium text-accent">
           {t("addedToCart")}{" "}
-          <Link href="/checkout" className="underline" data-testid="go-to-checkout-link">
+          <Link href="/pago" className="underline" data-testid="go-to-checkout-link">
             {t("goToCheckout")}
           </Link>
         </p>

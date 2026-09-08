@@ -16,7 +16,7 @@ describe("buildProductJsonLd — produit vendable", () => {
     expect(buildProductJsonLd(base)).toMatchObject({
       "@type": "Product",
       name: "Tour en lancha",
-      url: "https://hifago.co/es/products/tour-lancha",
+      url: "https://hifago.co/es/productos/tour-lancha",
       sku: "tour-lancha",
       inLanguage: "es",
       offers: { "@type": "Offer", price: 60000, priceCurrency: "COP" },

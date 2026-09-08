@@ -49,7 +49,7 @@ const getProduct = cache(async (slug: string) => {
 });
 
 export async function generateMetadata(
-  props: Omit<PageProps<"/[locale]/products/[slug]">, "searchParams">
+  props: Omit<PageProps<"/[locale]/productos/[slug]">, "searchParams">
 ): Promise<Metadata> {
   const { locale, slug } = await props.params;
   const product = await getProduct(slug);
@@ -71,7 +71,7 @@ export async function generateMetadata(
 
   return buildPageMetadata({
     locale,
-    pathFor: (candidate) => `/${candidate}/products/${product.slug}`,
+    pathFor: (candidate) => `/${candidate}/productos/${product.slug}`,
     title,
     description,
     nativeLocales,
@@ -80,7 +80,7 @@ export async function generateMetadata(
 
 export default async function ProductPage({
   params,
-}: PageProps<"/[locale]/products/[slug]">) {
+}: PageProps<"/[locale]/productos/[slug]">) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
   // Le rendu JSX vit désormais dans ProductDetailView.tsx ("use client"), qui appelle
@@ -285,7 +285,7 @@ export default async function ProductPage({
   });
   const breadcrumbJsonLd = buildBreadcrumbJsonLd(siteUrl, [
     { name: tCommon("breadcrumbHome"), path: `/${locale}` },
-    { name, path: `/${locale}/products/${product.slug}` },
+    { name, path: `/${locale}/productos/${product.slug}` },
   ]);
 
   return (

@@ -41,7 +41,7 @@ test("un lien ?ref=<code> actif ne casse rien du parcours invité, et aucun cham
   await expect(page.getByTestId("added-to-cart")).toBeVisible();
 
   await page.getByTestId("go-to-checkout-link").click();
-  await expect(page).toHaveURL(/\/es\/checkout/);
+  await expect(page).toHaveURL(/\/es\/pago/);
   await assertNoCodeField(page);
 
   // Parcours invité (correctif réservation invité) : aucune connexion, soumission directe — le

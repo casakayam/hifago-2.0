@@ -6,6 +6,14 @@
 -- qui compte le catalogue entier serait vert aujourd'hui et rouge demain sans qu'une ligne de code
 -- ait bougé.
 --
+-- ⚠️ ET LE SCOPAGE NE SUFFIT PAS — corrigé le 2026-09-07, après que ce fichier soit passé de vert à
+-- SIX assertions rouges sans qu'aucune ligne de SQL ait bougé. `search_catalog()` porte un
+-- `p_limite` par DÉFAUT de 24 et un `order by tipo`, et `activity` trie en premier : le jour où la
+-- base locale a dépassé 24 activités accumulées, la fenêtre s'est refermée avant les couchages et
+-- le `where id = …` d'ici filtrait un ensemble qui ne les contenait déjà plus. D'où le
+-- `p_limite => 100000` explicite sur CHAQUE appel : le filtre de l'assertion doit s'appliquer au
+-- catalogue entier, jamais à une page de résultats. Ne jamais appeler `search_catalog()` nu ici.
+--
 -- Tout tourne en `anon` : c'est le rôle réel d'un visiteur de la vitrine, et ça vérifie du même
 -- geste que les policies `_select_public` laissent bien passer ce qu'il faut.
 
@@ -70,52 +78,52 @@ set local role anon;
 
 -- ── Visibilité ──────────────────────────────────────────────────────────────────────────────────
 select is(
-  (select count(*)::int from search_catalog()
+  (select count(*)::int from search_catalog(p_limite => 100000)
    where id = 'aaaa1111-0000-0000-0000-000000000103'),
   0, 'un produit non vendable n''apparaît jamais'
 );
 
 select is(
-  (select count(*)::int from search_catalog()
+  (select count(*)::int from search_catalog(p_limite => 100000)
    where id = 'aaaa1111-0000-0000-0000-000000000105'),
   0, 'un produit d''un établissement archivé n''apparaît jamais'
 );
 
 -- ── Regroupement d'établissement ────────────────────────────────────────────────────────────────
 select is(
-  (select count(*)::int from search_catalog()
+  (select count(*)::int from search_catalog(p_limite => 100000)
    where id = 'aaaa1111-0000-0000-0000-00000000000a' and es_establecimiento),
   1, 'un établissement à deux couchages vendables sort comme UNE carte'
 );
 
 select is(
-  (select count(*)::int from search_catalog()
+  (select count(*)::int from search_catalog(p_limite => 100000)
    where id in ('aaaa1111-0000-0000-0000-000000000101',
                 'aaaa1111-0000-0000-0000-000000000102')),
   0, 'ses couchages n''apparaissent PAS en plus de la carte groupée'
 );
 
 select is(
-  (select count(*)::int from search_catalog()
+  (select count(*)::int from search_catalog(p_limite => 100000)
    where id = 'aaaa1111-0000-0000-0000-000000000104' and not es_establecimiento),
   1, 'un établissement à un seul couchage n''est pas groupé — le produit sort seul'
 );
 
 select is(
-  (select count(*)::int from search_catalog()
+  (select count(*)::int from search_catalog(p_limite => 100000)
    where id = 'aaaa1111-0000-0000-0000-00000000000b' and es_establecimiento),
   0, '…et son établissement ne sort pas comme carte'
 );
 
 -- ── Prix ────────────────────────────────────────────────────────────────────────────────────────
 select is(
-  (select precio_desde from search_catalog()
+  (select precio_desde from search_catalog(p_limite => 100000)
    where id = 'aaaa1111-0000-0000-0000-00000000000a'),
   90000::bigint, 'la carte groupée porte le prix MINIMUM de ses couchages vendables'
 );
 
 select is(
-  (select precio_cop from search_catalog()
+  (select precio_cop from search_catalog(p_limite => 100000)
    where id = 'aaaa1111-0000-0000-0000-000000000104'),
   150000::bigint, 'une carte produit porte son propre prix'
 );
@@ -123,45 +131,45 @@ select is(
 -- ── Total de section : des CARTES, pas des produits ─────────────────────────────────────────────
 -- A donne 1 carte (2 couchages groupés) + B donne 1 carte = 2, jamais 3.
 select ok(
-  (select total_seccion from search_catalog()
+  (select total_seccion from search_catalog(p_limite => 100000)
    where id = 'aaaa1111-0000-0000-0000-00000000000a') >= 2,
   'total_seccion compte des cartes, pas des produits (le regroupement précède le comptage)'
 );
 
 -- ── Recherche texte ─────────────────────────────────────────────────────────────────────────────
 select is(
-  (select count(*)::int from search_catalog(p_query => 'guatape')
+  (select count(*)::int from search_catalog(p_limite => 100000, p_query => 'guatape')
    where id = 'aaaa1111-0000-0000-0000-000000000104'),
   1, 'unaccent : « guatape » sans accent trouve « Guatapé »'
 );
 
 select is(
-  (select count(*)::int from search_catalog(p_query => 'JETSKI')
+  (select count(*)::int from search_catalog(p_limite => 100000, p_query => 'JETSKI')
    where id = 'aaaa1111-0000-0000-0000-000000000201'),
   1, 'la recherche ignore la casse'
 );
 
 select is(
-  (select count(*)::int from search_catalog(p_query => 'Cabaña Sola')
+  (select count(*)::int from search_catalog(p_limite => 100000, p_query => 'Cabaña Sola')
    where id = 'aaaa1111-0000-0000-0000-000000000201'),
   1, 'chercher un nom d''établissement remonte ses offres'
 );
 
 -- ── Filtre personas : la colonne juste de chaque type ────────────────────────────────────────────
 select is(
-  (select count(*)::int from search_catalog(p_personas => 4)
+  (select count(*)::int from search_catalog(p_limite => 100000, p_personas => 4)
    where id = 'aaaa1111-0000-0000-0000-000000000104'),
   1, 'un logement de capacité 6 passe le filtre « 4 personnes »'
 );
 
 select is(
-  (select count(*)::int from search_catalog(p_personas => 4)
+  (select count(*)::int from search_catalog(p_limite => 100000, p_personas => 4)
    where id = 'aaaa1111-0000-0000-0000-000000000201'),
   0, 'une activité bornée à max_qty=2 ne passe pas « 4 personnes »'
 );
 
 select is(
-  (select count(*)::int from search_catalog(p_personas => 99)
+  (select count(*)::int from search_catalog(p_limite => 100000, p_personas => 99)
    where id = 'aaaa1111-0000-0000-0000-000000000202'),
   1, 'une borne ABSENTE ne filtre pas — sinon un trou de saisie cacherait une offre réelle'
 );
@@ -169,7 +177,7 @@ select is(
 -- ── Filtre dates : le calendrier est CREUX ──────────────────────────────────────────────────────
 select is(
   (select count(*)::int
-   from search_catalog(p_desde => date '2030-03-10', p_hasta => date '2030-03-11')
+   from search_catalog(p_limite => 100000, p_desde => date '2030-03-10', p_hasta => date '2030-03-11')
    where id in ('aaaa1111-0000-0000-0000-000000000203',   -- fermée sur TOUTE la plage
                 'aaaa1111-0000-0000-0000-000000000202')), -- aucune ligne : défaut = ouvert
   1, 'fermée sur toute la plage → absente ; sans ligne de calendrier → présente (défaut ouvert)'

@@ -4,10 +4,10 @@ import { resetAvailability, countOrderLines, mockMercadoPagoCheckout, seedDate }
 
 // Feature 6 : la fiche produit n'a plus aucun état dépendant de l'authentification (le bouton
 // "Añadir al carrito" est identique connecté ou non — la vérification de session a été déplacée
-// au checkout, cf. app/(public)/[locale]/checkout/CheckoutForm.tsx). La preuve que la session
+// au checkout, cf. app/[locale]/(tunnel)/pago/CheckoutForm.tsx). La preuve que la session
 // posée par le formulaire de login survit à une navigation serveur suivante (proxy.ts +
 // lib/supabase/server.ts) se fait donc désormais en poussant le parcours jusqu'au bout : si la
-// session ne survivait pas, /checkout lirait isAuthenticated=false et create_order échouerait en
+// session ne survivait pas, /pago lirait isAuthenticated=false et create_order échouerait en
 // not_authenticated au lieu de réussir.
 const PRODUCT_ID = "b0000000-0000-4000-8000-000000000001"; // tour-lancha-guatape
 const DATE = seedDate(12); // date dédiée à ce spec (cf. supabase/seed.sql), disjointe de
@@ -16,10 +16,10 @@ const DATE = seedDate(12); // date dédiée à ce spec (cf. supabase/seed.sql), 
 // Seul test qui pilote vraiment le formulaire de connexion (cf. hifago/CLAUDE.md §6 — jamais de
 // clic UI pour l'auth des tests qui n'en ont pas besoin, mais celui-ci teste précisément l'écran
 // de login lui-même, pas seulement un contournement).
-test("un compte seedé peut se connecter via le formulaire /[locale]/login", async ({ page }) => {
+test("un compte seedé peut se connecter via le formulaire /[locale]/entrar", async ({ page }) => {
   await resetAvailability(PRODUCT_ID, DATE, { capacity: 5, booked: 0 });
 
-  await page.goto("/es/login");
+  await page.goto("/es/entrar");
   await page.locator('input[name="email"]').fill(SEEDED_ACCOUNTS.referentActif);
   await page.locator('input[name="password"]').fill(SEEDED_PASSWORD);
   await page.locator('button[type="submit"]').click();
@@ -33,7 +33,7 @@ test("un compte seedé peut se connecter via le formulaire /[locale]/login", asy
   await expect(page.getByTestId("added-to-cart")).toBeVisible();
 
   await page.getByTestId("go-to-checkout-link").click();
-  await expect(page).toHaveURL(/\/es\/checkout/);
+  await expect(page).toHaveURL(/\/es\/pago/);
   // Preuve directe : isAuthenticated=true a été lu côté serveur pour CETTE requête — le message
   // "Inicia sesión para validar tu pedido." ne doit jamais apparaître ici.
   await expect(page.getByText("Inicia sesión")).toHaveCount(0);
@@ -56,12 +56,12 @@ test("un compte seedé peut se connecter via le formulaire /[locale]/login", asy
 });
 
 test("un identifiant invalide affiche une erreur claire, sans redirection", async ({ page }) => {
-  await page.goto("/es/login");
+  await page.goto("/es/entrar");
 
   await page.locator('input[name="email"]').fill(SEEDED_ACCOUNTS.referentActif);
   await page.locator('input[name="password"]').fill("mot-de-passe-invalide");
   await page.locator('button[type="submit"]').click();
 
   await expect(page.getByTestId("login-error")).toBeVisible();
-  await expect(page).toHaveURL(/\/es\/login/);
+  await expect(page).toHaveURL(/\/es\/entrar/);
 });

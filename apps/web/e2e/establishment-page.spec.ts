@@ -55,7 +55,7 @@ test("la page publique d'un établissement le présente, regroupe ses produits, 
 
   try {
     // --- La page présente le lieu et regroupe ses produits -------------------------------------
-    await page.goto(`/es/establishments/${establishment.slug}`);
+    await page.goto(`/es/establecimientos/${establishment.slug}`);
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByTestId("establishment-name")).toBeVisible();
@@ -75,13 +75,13 @@ test("la page publique d'un établissement le présente, regroupe ses produits, 
     await expect(lodgings).toContainText("3 en total");
 
     // --- La fiche produit renvoie vers l'établissement ------------------------------------------
-    await page.goto(`/es/products/${productSlug}`);
+    await page.goto(`/es/productos/${productSlug}`);
     await page.waitForLoadState("networkidle");
     await page.getByTestId("establishment-name").getByRole("link").click();
-    await expect(page).toHaveURL(new RegExp(`/es/establishments/${establishment.slug}$`));
+    await expect(page).toHaveURL(new RegExp(`/es/establecimientos/${establishment.slug}$`));
 
     // --- Un slug inconnu est un 404, jamais une page vide ---------------------------------------
-    const missing = await page.goto("/es/establishments/no-existe-jamas-2026");
+    const missing = await page.goto("/es/establecimientos/no-existe-jamas-2026");
     expect(missing?.status()).toBe(404);
   } finally {
     await withDb((client) => client.query("delete from products where slug = $1", [productSlug]));

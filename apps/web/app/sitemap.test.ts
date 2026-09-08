@@ -66,14 +66,14 @@ describe("sitemap — une entrée par locale réellement traduite", () => {
       { slug: "tour-lancha", name: { es: "Tour en lancha", en: "Boat tour" }, updated_at: "2026-08-30T10:00:00Z" },
     ];
     const entries = await sitemap();
-    expect(urls(entries)).toContain("https://hifago.co/es/products/tour-lancha");
-    expect(urls(entries)).toContain("https://hifago.co/en/products/tour-lancha");
+    expect(urls(entries)).toContain("https://hifago.co/es/productos/tour-lancha");
+    expect(urls(entries)).toContain("https://hifago.co/en/productos/tour-lancha");
 
-    const en = entries.find((e) => e.url.includes("/en/products/"));
+    const en = entries.find((e) => e.url.includes("/en/productos/"));
     expect(en?.alternates?.languages).toMatchObject({
-      es: "https://hifago.co/es/products/tour-lancha",
-      en: "https://hifago.co/en/products/tour-lancha",
-      "x-default": "https://hifago.co/es/products/tour-lancha",
+      es: "https://hifago.co/es/productos/tour-lancha",
+      en: "https://hifago.co/en/productos/tour-lancha",
+      "x-default": "https://hifago.co/es/productos/tour-lancha",
     });
   });
 
@@ -83,8 +83,8 @@ describe("sitemap — une entrée par locale réellement traduite", () => {
       { slug: "boat-only", name: { en: "Boat tour" }, updated_at: "2026-08-30T10:00:00Z" },
     ];
     const entries = await sitemap();
-    expect(urls(entries)).toContain("https://hifago.co/en/products/boat-only");
-    expect(urls(entries)).not.toContain("https://hifago.co/es/products/boat-only");
+    expect(urls(entries)).toContain("https://hifago.co/en/productos/boat-only");
+    expect(urls(entries)).not.toContain("https://hifago.co/es/productos/boat-only");
   });
 
   it("fait pointer x-default vers la langue servie quand l'espagnol n'est pas traduit", async () => {
@@ -93,7 +93,7 @@ describe("sitemap — une entrée par locale réellement traduite", () => {
     ];
     const entry = (await sitemap()).find((e) => e.url.includes("boat-only"));
     // Jamais une URL qu'on vient de déclarer non indexable.
-    expect(entry?.alternates?.languages?.["x-default"]).toBe("https://hifago.co/en/products/boat-only");
+    expect(entry?.alternates?.languages?.["x-default"]).toBe("https://hifago.co/en/productos/boat-only");
   });
 
   it("écarte une fiche sans aucune locale d'interface traduite", async () => {
@@ -115,7 +115,7 @@ describe("sitemap — établissements et métadonnées d'entrée", () => {
     state.establishments = [
       { slug: "casa-kayam", name: { es: "Casa Kayam", en: "Casa Kayam" }, updated_at: "2026-08-29T08:00:00Z" },
     ];
-    expect(urls(await sitemap())).toContain("https://hifago.co/es/establishments/casa-kayam");
+    expect(urls(await sitemap())).toContain("https://hifago.co/es/establecimientos/casa-kayam");
   });
 
   it("reporte updated_at en lastModified", async () => {

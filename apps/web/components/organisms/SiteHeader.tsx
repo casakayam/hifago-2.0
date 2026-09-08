@@ -45,13 +45,19 @@ import { SiteMenu } from "./SiteMenu";
 //
 // L'architecture des pages de panier sera revue (décision de Jérôme, 2026-09-02) : une seule
 // constante à changer ce jour-là. Les routes de compte vivent dans `SiteMenu`, où sont leurs liens.
-const ROUTE_PANIER = "/checkout";
+//
+// ⚠️ Ce jour-là n'est PAS le renommage en espagnol (2026-09-07). La spec 27 sépare `/carrito`
+// (le panier) de `/pago` (le tunnel de paiement), mais `/carrito` n'existe pas encore : l'écran
+// pointé ici est celui qui, aujourd'hui, porte À LA FOIS la liste du panier et le formulaire de
+// paiement. Le faire pointer sur `/carrito` maintenant donnerait un 404 depuis chaque page du
+// site. La constante bascule le jour où `/carrito` naît, et ce commentaire disparaît avec elle.
+const ROUTE_PANIER = "/pago";
 
 export type SiteHeaderProps = {
   /**
    * ⚠️ Résolu côté SERVEUR et passé en prop : ce composant est client, il ne peut pas appeler
    * `supabase.auth.getUser()` lui-même. Même geste que `CheckoutForm`, qui reçoit déjà son
-   * `isAuthenticated` de `checkout/page.tsx`.
+   * `isAuthenticated` de `pago/page.tsx`.
    */
   isAuthenticated: boolean;
   testId?: string;

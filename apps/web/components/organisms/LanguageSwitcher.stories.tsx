@@ -19,7 +19,7 @@ const meta = {
   // `.storybook/preview.tsx` appartient à l'agent thème. Constaté le 2026-09-02 : ce lot est le
   // premier à exercer un lien localisé dans le playground depuis que la story CatalogBrowser, qui
   // le prouvait, a été supprimée.
-  nextjs: { appDirectory: true, navigation: { pathname: "/products/kayak" } },
+  nextjs: { appDirectory: true, navigation: { pathname: "/productos/kayak" } },
   },
 } satisfies Meta<typeof LanguageSwitcher>;
 

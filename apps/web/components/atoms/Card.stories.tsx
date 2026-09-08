@@ -113,7 +113,7 @@ export const AvecImage: Story = {
  * dessus : il agit. Clique n'importe où ailleurs : la carte navigue.
  */
 export const Cliquable: Story = {
-  args: { href: "/products/habitacion-privada", subtitle: "2 habitaciones" },
+  args: { href: "/productos/habitacion-privada", subtitle: "2 habitaciones" },
   render: (args) => (
     <Cadre>
       <Card {...args} media={<Photo />} testId="carte-cliquable">
@@ -209,7 +209,7 @@ export const GrilleDeCartes: Story = {
         {CATALOGUE.map((p) => (
           <Card
             key={p.id}
-            href={`/products/${p.id}`}
+            href={`/productos/${p.id}`}
             title={p.title}
             titleAs="h2"
             subtitle={p.subtitle}
@@ -284,7 +284,7 @@ export const EnLigne: Story = {
     <div className="flex flex-col gap-3">
       <Card
         layout="row"
-        href="/products/habitacion-privada"
+        href="/productos/habitacion-privada"
         title="Habitación privada"
         titleAs="h3"
         media={<Photo />}
@@ -293,14 +293,14 @@ export const EnLigne: Story = {
       </Card>
       <Card
         layout="row"
-        href="/products/paseo-en-lancha"
+        href="/productos/paseo-en-lancha"
         title="Paseo en lancha por el Embalse de Guatapé con guía local y parada en la Piedra del Peñol"
         titleAs="h3"
         media={<Photo />}
       >
         <span className="text-xs text-muted">3 horas</span>
       </Card>
-      <Card layout="row" href="/products/sin-foto" title="Producto sin foto" titleAs="h3">
+      <Card layout="row" href="/productos/sin-foto" title="Producto sin foto" titleAs="h3">
         <span className="text-xs text-muted">Sin visual</span>
       </Card>
     </div>
@@ -362,7 +362,7 @@ export const EnfantsInteractifs: Story = {
   render: () => (
     <Cadre>
       <Card
-        href="/products/habitacion-privada"
+        href="/productos/habitacion-privada"
         title="Habitación privada con vista al lago"
         titleAs="h2"
         description="Tous les contrôles ci-dessous agissent sur place ; le reste de la carte navigue."

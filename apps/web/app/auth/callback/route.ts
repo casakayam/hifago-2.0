@@ -44,7 +44,7 @@ export async function GET(request: Request) {
       : { error: new Error("missing_code_or_token_hash") };
 
   if (error) {
-    return NextResponse.redirect(new URL("/login?error=auth_callback_failed", origin));
+    return NextResponse.redirect(new URL("/entrar?error=auth_callback_failed", origin));
   }
 
   return NextResponse.redirect(new URL(next, origin));

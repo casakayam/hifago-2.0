@@ -214,7 +214,7 @@ export function ProductDetailView({
                 publique — on garde le texte nu plutôt qu'un lien mort. */}
             <p className="font-medium" data-testid="establishment-name">
               {establishmentSlug ? (
-                <Link href={`/establishments/${establishmentSlug}`} className="hover:underline">
+                <Link href={`/establecimientos/${establishmentSlug}`} className="hover:underline">
                   {establishmentName}
                 </Link>
               ) : (

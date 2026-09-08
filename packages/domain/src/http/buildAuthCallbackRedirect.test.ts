@@ -10,7 +10,7 @@ describe("buildAuthCallbackRedirect", () => {
 
   it("encode correctement un chemin next avec des segments multiples", () => {
     expect(
-      buildAuthCallbackRedirect({ origin: "https://example.com", next: "/es/checkout" })
-    ).toBe("https://example.com/auth/callback?next=%2Fes%2Fcheckout");
+      buildAuthCallbackRedirect({ origin: "https://example.com", next: "/es/pago" })
+    ).toBe("https://example.com/auth/callback?next=%2Fes%2Fpago");
   });
 });

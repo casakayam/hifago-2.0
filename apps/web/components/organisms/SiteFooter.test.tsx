@@ -12,7 +12,7 @@ vi.mock("@/i18n/navigation", () => ({
       {children}
     </a>
   ),
-  usePathname: () => "/products/kayak",
+  usePathname: () => "/productos/kayak",
 }));
 
 const messages = loadMessages("es");
@@ -103,7 +103,7 @@ describe("SiteFooter", () => {
     expect(declencheur).not.toBeNull();
     const en = container.querySelector('[data-testid="footer-language-en"]') as HTMLAnchorElement;
     expect(en.tagName).toBe("A");
-    expect(en.getAttribute("href")).toBe("/en/products/kayak");
+    expect(en.getAttribute("href")).toBe("/en/productos/kayak");
   });
 
   it("affiche la ligne d'identité reprise du footer legacy", () => {
@@ -153,6 +153,6 @@ describe("SiteFooter", () => {
       expect(html).not.toContain(`href="${href}"`);
     }
     expect(html).toContain("https://wa.me/573215764841");
-    expect(html).toContain('href="/en/products/kayak"');
+    expect(html).toContain('href="/en/productos/kayak"');
   });
 });

@@ -10,7 +10,7 @@
 // appartiennent à `PriceBlock` (molecule, vague 2).
 // ⚠️ Il ne connaît pas le cas `evento` : un evento porte un `price_label` en TEXTE LIBRE, affiché
 // tel quel et jamais formaté en COP (règle métier, cahier des charges admin §3c). L'aiguillage
-// vit déjà dans `app/[locale]/products/[slug]/page.tsx` — lui ajouter ici une branche texte libre
+// vit déjà dans `app/[locale]/productos/[slug]/page.tsx` — lui ajouter ici une branche texte libre
 // ferait entrer une décision métier dans un atome de présentation.
 import { formatCop } from "@hifago/domain";
 import type { Locale } from "@/messages";

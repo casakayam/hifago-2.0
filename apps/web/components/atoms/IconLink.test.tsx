@@ -29,14 +29,14 @@ describe("IconLink", () => {
   // NAVIGUE — n'était constructible ni avec `IconButton` (un vrai <button>, sans href) ni avec
   // `LinkButton` (qui exige un libellé visible).
   it("est un LIEN, pas un bouton", () => {
-    const element = lien(<IconLink icon={<Croix />} label="Carrito" href="/checkout" />);
+    const element = lien(<IconLink icon={<Croix />} label="Carrito" href="/pago" />);
     expect(element.tagName).toBe("A");
-    expect(element.getAttribute("href")).toBe("/checkout");
+    expect(element.getAttribute("href")).toBe("/pago");
     expect(element.getAttribute("data-localized")).toBe("true");
   });
 
   it("porte son nom accessible et rend l'icône décorative", () => {
-    const element = lien(<IconLink icon={<Croix />} label="Carrito, 2 artículos" href="/checkout" />);
+    const element = lien(<IconLink icon={<Croix />} label="Carrito, 2 artículos" href="/pago" />);
     expect(element.getAttribute("aria-label")).toBe("Carrito, 2 artículos");
     expect(element.textContent).toBe("");
     const cache = element.querySelector('[aria-hidden="true"]');

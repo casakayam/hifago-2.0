@@ -141,7 +141,7 @@ export default async function HomePage({
 
       catalog.push({
         id: `establishment-${establishmentId}`,
-        href: `/establishments/${establishment.slug}`,
+        href: `/establecimientos/${establishment.slug}`,
         testId: `catalog-link-establishment-${establishment.slug}`,
         name: resolveLocalizedField(asLocalizedField(establishment.name), locale) ?? establishment.slug,
         descriptionSnippet: snippet(
@@ -156,7 +156,7 @@ export default async function HomePage({
 
     catalog.push({
       id: product.id,
-      href: `/products/${product.slug}`,
+      href: `/productos/${product.slug}`,
       testId: `catalog-link-${product.slug}`,
       name: resolveLocalizedField(asLocalizedField(product.name), locale) ?? product.slug,
       descriptionSnippet: snippet(

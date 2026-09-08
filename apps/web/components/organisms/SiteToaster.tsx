@@ -9,7 +9,7 @@ import { Toast } from "@hifago/ui";
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 //
 // ⚠️ `Toast.Provider` n'était monté NULLE PART dans `apps/web`. Or
-// `app/[locale]/verify-email/ResendConfirmationForm.tsx:36,38` appelle déjà `toast.danger()` et
+// `app/[locale]/verificar-email/ResendConfirmationForm.tsx:36,38` appelle déjà `toast.danger()` et
 // `toast.success()` : ces deux notifications ne s'affichaient donc jamais, et l'écran « renvoyer
 // l'email de confirmation » était muet — le bouton passe en compte à rebours, rien d'autre ne dit
 // si l'envoi a réussi ou échoué.

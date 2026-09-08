@@ -107,12 +107,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...home,
     ...localizedEntries(
       (products.data ?? []) as PublishableRow[],
-      (locale, slug) => `/${locale}/products/${slug}`,
+      (locale, slug) => `/${locale}/productos/${slug}`,
       siteUrl
     ),
     ...localizedEntries(
       (establishments.data ?? []) as PublishableRow[],
-      (locale, slug) => `/${locale}/establishments/${slug}`,
+      (locale, slug) => `/${locale}/establecimientos/${slug}`,
       siteUrl
     ),
   ];

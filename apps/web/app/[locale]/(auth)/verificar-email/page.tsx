@@ -3,7 +3,7 @@ import { setRequestLocale, getTranslations } from "next-intl/server";
 import { ResendConfirmationForm } from "./ResendConfirmationForm";
 
 export async function generateMetadata(
-  props: Omit<PageProps<"/[locale]/verify-email">, "searchParams">
+  props: Omit<PageProps<"/[locale]/verificar-email">, "searchParams">
 ): Promise<Metadata> {
   const { locale } = await props.params;
   const t = await getTranslations({ locale, namespace: "VerifyEmail" });
@@ -21,7 +21,7 @@ export async function generateMetadata(
 export default async function VerifyEmailPage({
   params,
   searchParams,
-}: PageProps<"/[locale]/verify-email">) {
+}: PageProps<"/[locale]/verificar-email">) {
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("VerifyEmail");

@@ -9,7 +9,7 @@ import { isoDateToLocalMidnight } from "@hifago/domain";
 // ⚠️ CE COMPOSANT NE CONNAÎT AUCUNE RÈGLE MÉTIER, et c'est sa raison d'être. Les règles de
 // réservation — nuits à check-out EXCLUSIF, `min_stay` ancré sur la nuit d'arrivée, `lead_days` qui
 // relève le plancher, interdiction d'enjamber une nuit pleine — restent où elles ont été écrites et
-// prouvées : `app/[locale]/products/[slug]/LodgingReservationForm.tsx` (journal des 2026-08-28 et
+// prouvées : `app/[locale]/productos/[slug]/LodgingReservationForm.tsx` (journal des 2026-08-28 et
 // 2026-08-29). Elles ne sont ni déplacées, ni recopiées, ni « généralisées » ici. L'anti-survente
 // en dépend.
 //

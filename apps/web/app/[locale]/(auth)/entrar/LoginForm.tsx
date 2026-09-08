@@ -60,7 +60,7 @@ export function LoginForm({ next }: { next: string }) {
           contexte-là, sans rapport ici) — lien discret vers l'inscription, jamais mis en avant. */}
       <p className="text-center text-sm text-muted">
         <Link
-          href={next !== "/" ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}
+          href={next !== "/" ? `/registro?next=${encodeURIComponent(next)}` : "/registro"}
           className="underline"
         >
           {t("signupLink")}

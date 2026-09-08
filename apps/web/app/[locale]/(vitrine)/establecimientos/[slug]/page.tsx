@@ -47,7 +47,7 @@ const getEstablishment = cache(async (slug: string) => {
 });
 
 export async function generateMetadata(
-  props: Omit<PageProps<"/[locale]/establishments/[slug]">, "searchParams">
+  props: Omit<PageProps<"/[locale]/establecimientos/[slug]">, "searchParams">
 ): Promise<Metadata> {
   const { locale, slug } = await props.params;
   const establishment = await getEstablishment(slug);
@@ -71,7 +71,7 @@ export async function generateMetadata(
 
   return buildPageMetadata({
     locale,
-    pathFor: (candidate) => `/${candidate}/establishments/${slug}`,
+    pathFor: (candidate) => `/${candidate}/establecimientos/${slug}`,
     title,
     description,
     nativeLocales,
@@ -80,7 +80,7 @@ export async function generateMetadata(
 
 export default async function EstablishmentPage({
   params,
-}: PageProps<"/[locale]/establishments/[slug]">) {
+}: PageProps<"/[locale]/establecimientos/[slug]">) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("EstablishmentPage");
@@ -170,7 +170,7 @@ export default async function EstablishmentPage({
   });
   const breadcrumbJsonLd = buildBreadcrumbJsonLd(siteUrl, [
     { name: tCommon("breadcrumbHome"), path: `/${locale}` },
-    { name, path: `/${locale}/establishments/${slug}` },
+    { name, path: `/${locale}/establecimientos/${slug}` },
   ]);
 
   return (

@@ -20,10 +20,17 @@ import { Link } from "@/i18n/navigation";
 // fonctionnelle, pas un durcissement.
 //
 // ⚠️ Un layout ne connaît pas le chemin courant, donc cette garde ne peut pas construire un
-// `?next=<chemin>` précis. La spec 27 prévoit que `proxy.ts` pose le pathname en en-tête de requête
-// pour le lui donner — non fait dans ce lot, qui ne touche pas au proxy. En attendant, la
-// redirection est nue et la connexion renvoie vers l'accueil du compte : comportement identique à
-// l'existant tant qu'il n'y a qu'un écran de compte, à corriger avec le renommage des routes.
+// `?next=<chemin>` précis. La spec 27 §5 prévoit que `proxy.ts` pose le pathname en en-tête de
+// requête pour le lui donner. TOUJOURS PAS FAIT au 2026-09-07, et le renommage des routes n'était
+// pas le bon déclencheur : ce n'est pas un renommage, c'est un mécanisme. Un middleware ne peut
+// pas ajouter un en-tête de REQUÊTE à une réponse qu'il n'a pas construite lui-même — or celle-ci
+// vient d'`intlMiddleware` — donc la ligne annoncée par la spec n'est pas une ligne, et la câbler
+// à l'aveugle ferait construire un `?next=undefined` sans que rien ne le signale.
+//
+// Conséquence assumée en attendant : la redirection est nue, et se connecter depuis `/cuenta/*`
+// renvoie à l'accueil du site. Aucune perte tant qu'il n'existe qu'UN écran de compte
+// (`/cuenta/reservas`) ; le vrai déclencheur est le lot qui ajoute `/cuenta` et `/cuenta/perfil`,
+// où l'utilisateur perdra réellement l'écran qu'il visait. Porté au backlog.
 
 export const metadata: Metadata = { robots: { index: false } };
 
@@ -41,7 +48,7 @@ export default async function CuentaLayout({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect({ href: "/login", locale });
+    redirect({ href: "/entrar", locale });
   }
 
   return (

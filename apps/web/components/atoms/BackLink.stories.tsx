@@ -26,7 +26,7 @@ export const Defaut: Story = {
 // deux lignes ne doit pas perdre sa hauteur de cible ni son alignement. À regarder en Mobile 390.
 export const TexteLong: Story = {
   args: {
-    href: "/establishments/casa-kayam-guatape",
+    href: "/establecimientos/casa-kayam-guatape",
     label: "Volver a todos los alojamientos y actividades de Casa Kayam Guatapé",
   },
 };

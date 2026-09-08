@@ -67,7 +67,7 @@ export function SignupForm({ next }: { next: string }) {
       return;
     }
 
-    router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+    router.push(`/verificar-email?email=${encodeURIComponent(email)}`);
   }
 
   return (
@@ -103,7 +103,7 @@ export function SignupForm({ next }: { next: string }) {
       <p className="text-center text-sm text-muted">
         {t("loginLink")}{" "}
         <Link
-          href={next !== "/" ? `/login?next=${encodeURIComponent(next)}` : "/login"}
+          href={next !== "/" ? `/entrar?next=${encodeURIComponent(next)}` : "/entrar"}
           className="underline"
         >
           {t("loginLinkAction")}

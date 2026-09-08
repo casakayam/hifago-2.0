@@ -39,8 +39,8 @@ export type SiteMenuProps = {
 
 // L'architecture des pages de compte sera revue (décision de Jérôme, 2026-09-02) : une seule
 // constante à changer ce jour-là.
-const ROUTE_COMPTE = "/account/orders";
-const ROUTE_CONNEXION = "/login";
+const ROUTE_COMPTE = "/cuenta/reservas";
+const ROUTE_CONNEXION = "/entrar";
 
 function IconeCompte() {
   return (

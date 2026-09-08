@@ -15,7 +15,7 @@ vi.mock("@/i18n/navigation", () => ({
       {children}
     </a>
   ),
-  usePathname: () => "/products/kayak",
+  usePathname: () => "/productos/kayak",
 }));
 
 function rendu(locale: Locale = "es") {
@@ -41,11 +41,11 @@ describe("LanguageSwitcher", () => {
   it("propose les deux langues, chacune en vrai lien préfixé", () => {
     const { container } = rendu("es");
     expect((container.querySelector('[data-testid="lang-es"]') as HTMLAnchorElement).getAttribute("href")).toBe(
-      "/es/products/kayak"
+      "/es/productos/kayak"
     );
     const en = container.querySelector('[data-testid="lang-en"]') as HTMLAnchorElement;
     expect(en.tagName).toBe("A");
-    expect(en.getAttribute("href")).toBe("/en/products/kayak");
+    expect(en.getAttribute("href")).toBe("/en/productos/kayak");
   });
 
   it("marque la langue active autrement que par un signe visuel", () => {
@@ -68,7 +68,7 @@ describe("LanguageSwitcher", () => {
     );
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain("hidden=");
-    expect(html).toContain('href="/en/products/kayak"');
+    expect(html).toContain('href="/en/productos/kayak"');
   });
 
   it("annonce son état et ce qu'il commande", () => {

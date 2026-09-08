@@ -27,11 +27,11 @@ const Panier = () => (
 );
 
 export const Defaut: Story = {
-  args: { icon: <Panier />, label: "Carrito, 2 artículos", href: "/checkout" },
+  args: { icon: <Panier />, label: "Carrito, 2 artículos", href: "/pago" },
 };
 
 export const Formes: Story = {
-  args: { icon: <Panier />, label: "Carrito", href: "/checkout" },
+  args: { icon: <Panier />, label: "Carrito", href: "/pago" },
   render: (args) => (
     <div className="flex items-end gap-3">
       <IconLink {...args} />
@@ -42,7 +42,7 @@ export const Formes: Story = {
 };
 
 export const Couleurs: Story = {
-  args: { icon: <Panier />, label: "Carrito", href: "/checkout" },
+  args: { icon: <Panier />, label: "Carrito", href: "/pago" },
   render: (args) => (
     <div className="flex flex-col gap-4">
       {(["solid", "soft", "outline", "ghost"] as const).map((variant) => (
@@ -60,7 +60,7 @@ export const Couleurs: Story = {
 // ⚠️ Côte à côte avec `IconButton` : à l'œil ils sont identiques (même table de couleurs, même
 // rayon, même taille), à l'oreille et à l'usage ils ne le sont pas.
 export const CompareAIconButton: Story = {
-  args: { icon: <Panier />, label: "Carrito", href: "/checkout" },
+  args: { icon: <Panier />, label: "Carrito", href: "/pago" },
   render: (args) => (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">

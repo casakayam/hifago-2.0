@@ -23,7 +23,7 @@ export function ResendConfirmationForm({ email }: { email: string | null }) {
 
   if (!email) {
     return (
-      <Link href="/login" className="text-sm underline">
+      <Link href="/entrar" className="text-sm underline">
         {t("backToLogin")}
       </Link>
     );
@@ -51,7 +51,7 @@ export function ResendConfirmationForm({ email }: { email: string | null }) {
       >
         {cooldown > 0 ? t("resendCooldown", { seconds: cooldown }) : t("resend")}
       </Button>
-      <Link href="/login" className="text-sm underline">
+      <Link href="/entrar" className="text-sm underline">
         {t("backToLogin")}
       </Link>
     </div>

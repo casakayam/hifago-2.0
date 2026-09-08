@@ -53,7 +53,7 @@ test("le calendrier d'un logement PMS-backed reflète la disponibilité Lobby, e
     ],
   });
 
-  await page.goto(`/es/products/${SLUG}`);
+  await page.goto(`/es/productos/${SLUG}`);
   await page.waitForLoadState("networkidle");
 
   // Nuit pleine chez Lobby → visuellement barrée (modifier "unavailable" appliqué à la cellule

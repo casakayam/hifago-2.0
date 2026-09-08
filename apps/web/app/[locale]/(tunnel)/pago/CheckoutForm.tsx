@@ -296,11 +296,11 @@ export function CheckoutForm({
             {t("paymentProcessing")}
           </p>
         )}
-        {/* Feature 8 : lien discret vers /account/orders pour un client connecté — cohérence de
+        {/* Feature 8 : lien discret vers /cuenta/reservas pour un client connecté — cohérence de
             parcours à coût nul, jamais montré à un invité (rien à lister sans session). */}
         {isAuthenticated ? (
           <Link
-            href="/account/orders"
+            href="/cuenta/reservas"
             data-testid="view-orders-link"
             className="text-sm text-muted hover:underline"
           >
@@ -414,7 +414,7 @@ export function CheckoutForm({
             jamais une obligation (correctif réservation invité). */}
         {!isAuthenticated ? (
           <Link
-            href="/login?next=/checkout"
+            href="/entrar?next=/pago"
             data-testid="login-link"
             className="text-center text-sm text-muted hover:underline"
           >

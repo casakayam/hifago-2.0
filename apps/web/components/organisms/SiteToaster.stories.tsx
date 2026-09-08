@@ -39,7 +39,7 @@ const meta = {
     // header : le `Link` de next-intl auquel le sélecteur de langue passe une prop `locale` lit le
     // chemin courant, `null` hors d'une route Next — la story ne rendait RIEN, sans autre indice
     // qu'un « Cannot read properties of null (reading 'pathname') » en console.
-    nextjs: { appDirectory: true, navigation: { pathname: "/verify-email" } },
+    nextjs: { appDirectory: true, navigation: { pathname: "/verificar-email" } },
   },
 } satisfies Meta<typeof SiteToaster>;
 

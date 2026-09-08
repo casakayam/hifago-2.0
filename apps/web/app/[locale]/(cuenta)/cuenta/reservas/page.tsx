@@ -8,7 +8,7 @@ import { OrdersList } from "./OrdersList";
 // déjà en place depuis la Tranche 3), pas de vue détaillée ligne par ligne.
 export default async function AccountOrdersPage({
   params,
-}: PageProps<"/[locale]/account/orders">) {
+}: PageProps<"/[locale]/cuenta/reservas">) {
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("AccountOrdersPage");
@@ -18,7 +18,7 @@ export default async function AccountOrdersPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect({ href: "/login?next=/account/orders", locale });
+    redirect({ href: "/entrar?next=/cuenta/reservas", locale });
   }
 
   // order_lines(id, status) : orders_select/order_lines_select (Tranche 3) filtrent déjà sur

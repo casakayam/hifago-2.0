@@ -73,16 +73,16 @@ test("une fiche produit porte un canonical absolu et un JSON-LD valide, sans not
   if (insertError) throw new Error(`e2e setup : création du produit a échoué — ${insertError.message}`);
 
   try {
-    await page.goto(`/es/products/${productSlug}`);
+    await page.goto(`/es/productos/${productSlug}`);
 
     // --- Canonical ABSOLU : c'est ce que metadataBase rend possible ------------------------------
     const canonical = await page.locator('link[rel="canonical"]').getAttribute("href");
-    expect(canonical).toMatch(/^https?:\/\/.+\/es\/products\//);
+    expect(canonical).toMatch(/^https?:\/\/.+\/es\/productos\//);
 
     // --- Une seule source de hreflang -----------------------------------------------------------
     // next-intl posait les siens en en-tête HTTP `Link` (alternateLinks, actif par défaut) : ils
     // sont désormais coupés, et seules les métadonnées les portent.
-    const headResponse = await request.get(`/es/products/${productSlug}`);
+    const headResponse = await request.get(`/es/productos/${productSlug}`);
     expect(headResponse.headers()["link"] ?? "").not.toContain("hreflang");
     await expect(page.locator('link[rel="alternate"][hreflang="x-default"]')).toHaveCount(1);
 
@@ -100,12 +100,12 @@ test("une fiche produit porte un canonical absolu et un JSON-LD valide, sans not
     expect(JSON.stringify(parsed)).not.toMatch(/aggregateRating|ratingValue|reviewCount/);
 
     // --- La version non traduite reste noindex --------------------------------------------------
-    await page.goto(`/en/products/${productSlug}`);
+    await page.goto(`/en/productos/${productSlug}`);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
     // ...et elle n'est pas au sitemap, qui ne liste que des URL indexables.
     const sitemap = await (await request.get("/sitemap.xml")).text();
-    expect(sitemap).toContain(`/es/products/${productSlug}`);
-    expect(sitemap).not.toContain(`/en/products/${productSlug}`);
+    expect(sitemap).toContain(`/es/productos/${productSlug}`);
+    expect(sitemap).not.toContain(`/en/productos/${productSlug}`);
   } finally {
     await withDb((client) => client.query("delete from products where slug = $1", [productSlug]));
   }

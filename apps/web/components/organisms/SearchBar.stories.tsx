@@ -20,7 +20,7 @@ const SUGGESTIONS: SearchSuggestion[] = [
     label: "Kayak en el Embalse de Guatapé",
     meta: "Actividad en Guatapé",
     kind: "product",
-    href: "/products/kayak-embalse",
+    href: "/productos/kayak-embalse",
   },
   {
     id: "c-activity",
@@ -34,14 +34,14 @@ const SUGGESTIONS: SearchSuggestion[] = [
     label: "Casa Kayam",
     meta: "Alojamiento en Guatapé",
     kind: "establishment",
-    href: "/establishments/casa-kayam",
+    href: "/establecimientos/casa-kayam",
   },
   {
     id: "p-lancha",
     label: "Paseo en lancha por el Peñón",
     meta: "Actividad en Guatapé",
     kind: "product",
-    href: "/products/paseo-lancha",
+    href: "/productos/paseo-lancha",
   },
 ];
 

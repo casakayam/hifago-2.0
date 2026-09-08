@@ -31,7 +31,7 @@ function renderCatalog(products: CatalogProduct[]) {
 const PRODUCTS: CatalogProduct[] = [
   {
     id: "1",
-    href: "/products/tour-lancha-guatape",
+    href: "/productos/tour-lancha-guatape",
     testId: "catalog-link-tour-lancha-guatape",
     name: "Tour en lancha por el Embalse de Guatapé",
     descriptionSnippet: "Recorrido en lancha por el embalse.",
@@ -41,7 +41,7 @@ const PRODUCTS: CatalogProduct[] = [
   },
   {
     id: "2",
-    href: "/products/alojamiento-demo",
+    href: "/productos/alojamiento-demo",
     testId: "catalog-link-alojamiento-demo",
     name: "Alojamiento PMS-backed (demo)",
     descriptionSnippet: "Dormitorio de demostración.",
@@ -54,7 +54,7 @@ const PRODUCTS: CatalogProduct[] = [
   // catégories occupait six cartes de la page d'accueil.
   {
     id: "establishment-abc",
-    href: "/establishments/casa-kayam-guatape",
+    href: "/establecimientos/casa-kayam-guatape",
     testId: "catalog-link-establishment-casa-kayam-guatape",
     name: "Casa Kayam Guatapé",
     descriptionSnippet: "Hostal en la colina.",
@@ -68,7 +68,7 @@ describe("CatalogBrowser", () => {
   it("une carte groupée mène à la page établissement et annonce son décompte", () => {
     renderCatalog(PRODUCTS);
     const grouped = screen.getByTestId("catalog-link-establishment-casa-kayam-guatape");
-    expect(grouped.getAttribute("href")).toContain("/establishments/casa-kayam-guatape");
+    expect(grouped.getAttribute("href")).toContain("/establecimientos/casa-kayam-guatape");
     expect(grouped.textContent).toContain("6 alojamientos");
   });
 

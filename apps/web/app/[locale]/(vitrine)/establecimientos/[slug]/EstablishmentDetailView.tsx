@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Card } from "@hifago/ui";
 import { Link } from "@/i18n/navigation";
 import type { LodgingKind } from "@hifago/domain";
-import { ProductPhotos } from "../../products/[slug]/ProductPhotos";
+import { ProductPhotos } from "../../productos/[slug]/ProductPhotos";
 
 export type EstablishmentProduct = {
   id: string;
@@ -136,7 +136,7 @@ function ProductRow({ product }: { product: EstablishmentProduct }) {
   ].filter(Boolean);
 
   return (
-    <Link href={`/products/${product.slug}`} className="block" data-testid="establishment-product">
+    <Link href={`/productos/${product.slug}`} className="block" data-testid="establishment-product">
       <Card className="transition hover:border-accent">
         <Card.Content className="flex flex-row items-center gap-4 p-4">
           {product.imageUrl ? (

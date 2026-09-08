@@ -142,7 +142,7 @@ export function SlotReservationForm({
 
     // Purement local : aucun aller-retour réseau, le panier n'existe qu'en mémoire côté client
     // (cf. lib/cart/CartContext.tsx). La vraie barrière de capacité reste exclusivement
-    // create_order, appelée uniquement depuis /checkout.
+    // create_order, appelée uniquement depuis /pago.
     addLine({
       productId,
       productName,
@@ -266,7 +266,7 @@ export function SlotReservationForm({
       {justAdded ? (
         <p role="status" data-testid="added-to-cart" className="text-sm font-medium text-accent">
           {t("addedToCart")}{" "}
-          <Link href="/checkout" className="underline" data-testid="go-to-checkout-link">
+          <Link href="/pago" className="underline" data-testid="go-to-checkout-link">
             {t("goToCheckout")}
           </Link>
         </p>
