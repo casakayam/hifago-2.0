@@ -1,0 +1,455 @@
+---
+id: specs-vitrine-accueil-et-resultats
+titre: "Vitrine : l'accueil, qui est aussi l'écran de résultats de recherche"
+theme: specs
+public: [ia, dev, jerome]
+langue: fr
+statut: brouillon
+maj: 2026-09-07
+resume: >
+  Construit le premier écran du chantier front : l'accueil de la vitrine, qui porte le bloc de
+  recherche et une section par type d'offre, et qui devient l'écran de résultats dès que des
+  critères sont présents dans son URL.
+mots_cles: [accueil, vitrine, recherche, sections, cartes, apps/web, search_catalog]
+repond_a:
+  - "Que montre l'accueil de la vitrine, et comment la recherche s'y branche-t-elle ?"
+  - "Que contient une carte d'offre, et en quoi celle d'une activité diffère-t-elle ?"
+---
+
+# Vitrine : l'accueil, qui est aussi l'écran de résultats de recherche
+
+> **Cible stack** : hifago. **Premier écran** du chantier front. S'appuie sur la spec 27
+> (routes, coquilles, `lib/catalog/`, `search_catalog`) : elle doit être livrée avant.
+>
+> **Révisée en profondeur le 2026-09-07** après un audit adversarial (28 agents, 14 trouvailles
+> confirmées sur 24). Ce que l'audit a changé est signalé dans le texte ; le récit est dans
+> `docs/journal/2026-09.md`.
+
+## Sommaire et statut
+
+| # | Section | Statut |
+|---|---|---|
+| 0 | **Contrat compact** | brouillon |
+| 1 | Contexte et problème | brouillon |
+| 2 | Portée et tranches | brouillon |
+| 3 | Décisions retenues | brouillon |
+| 4 | Parcours cible | brouillon |
+| 5 | L'écran, bloc par bloc | brouillon |
+| 6 | Modèle de données (delta) | brouillon |
+| 7 | Contrat — URL, données, composants | brouillon |
+| 8 | Règles et invariants | brouillon |
+| 9 | Cas limites | brouillon |
+| 10 | Décisions tranchées / points ouverts | brouillon |
+| 11 | Annexe — traçabilité | brouillon |
+| 12 | Documents liés | brouillon |
+
+---
+
+## 0. Contrat compact (pour coder — lire seul, sans le reste)
+
+### Route et paramètres
+
+`app/[locale]/(vitrine)/page.tsx` → `/es`, `/en`. Zone vitrine, **indexable**, rendu **dynamique**.
+
+| Paramètre | Type | Effet |
+|---|---|---|
+| `q` | texte | cherche dans **le nom de l'offre, le nom de son établissement et les libellés de ses tags** — jamais le libellé du type, qui n'est qu'une chaîne d'interface |
+| `tipo` | `activity\|lodging\|transport\|camp\|evento` | restreint à ce type |
+| `tag` | slug de `catalog_tags` | restreint aux offres portant ce tag |
+| `personas` | entier ≥ 1 | voir « Sens de `personas` » ci-dessous |
+| `desde`, `hasta` | `YYYY-MM-DD` | **chevauchement** de période, jamais inclusion |
+
+**Sens de `personas` — une intention, trois colonnes** (tranché le 2026-09-07) : « l'offre marche
+pour n personnes ».
+
+| Type | Prédicat |
+|---|---|
+| `lodging` | `capacity >= n` — combien de personnes y dorment |
+| `activity`, `camp`, `transport`, `evento` | `max_qty is null or max_qty >= n` — combien on peut en réserver |
+
+Jamais `capacity` sur un non-logement : cette colonne y désigne le cupo d'une date, pas la taille
+d'un groupe.
+
+**Normalisation des paramètres** (aucun n'échoue jamais, tous sont ignorés s'ils sont invalides) :
+une seule date → la période est **ce jour-là** · `hasta < desde` → les deux ignorés · `personas`
+non entier ou < 1 → ignoré · `tipo`/`tag` inconnu → ignoré · un paramètre à sa valeur par défaut
+n'est **jamais écrit** dans l'URL.
+
+Le canonical de l'accueil **ignore les paramètres** (déjà en place, posé pour `?ref=`).
+
+### Arbre de la page
+
+⚠️ **`SearchPanel` a des fonctions dans ses props** : le rendre depuis un Server Component lève une
+erreur de sérialisation à l'exécution. Il lui faut un hôte client, que voici.
+
+```
+(vitrine)/layout.tsx        SiteHeader · SiteFooter          (spec 27 — ne pose PAS <main>)
+└─ page.tsx                 Server Component
+   ├─ buscarSecciones(…)    LA seule requête
+   ├─ generateMetadata      titre, description, canonical    (repris de l'ancien accueil)
+   ├─ JsonLd WebSite        rendu serveur                    (repris de l'ancien accueil)
+   └─ PageShell variant="large"        pose l'unique <main>
+      ├─ <h1> masqué visuellement      provisoire (§10)
+      ├─ BuscadorInicio    "use client"  ← NOUVEAU : hôte de SearchPanel
+      └─ SeccionOfertas × n              données déjà sérialisées
+         └─ TarjetaOferta × 8
+            └─ PhotoStrip                (molécule existante, pas un carrousel réécrit)
+```
+
+**Ordre des sections** : `activity`, `lodging`, `transport`, `camp`, `evento`. *(Le
+réordonnancement selon le panier part en Tranche 3 — voir §2.)*
+**Ordre dans une section** : `created_at desc` — les plus récentes d'abord.
+
+### Données
+
+Un seul appel : `buscarSecciones(criterios, { porSeccion: 8 })` (`lib/catalog/buscar.ts`).
+
+```ts
+type FotoTarjeta = { url: string; alt: string };
+
+type PrecioTarjeta =
+  | { tipo: "monto"; cop: number }     // price_cop
+  | { tipo: "desde"; cop: number }     // établissement groupé
+  | { tipo: "texto"; label: string }   // price_label (vitrine)
+  | null;                              // aucun des deux
+
+type TarjetaOferta = {
+  clave: string;                 // `producto-<id>` | `establecimiento-<id>`
+  href: string;                  // /productos/<slug> | /establecimientos/<slug>
+  nombre: string;                // déjà résolu dans la locale
+  establecimiento: string | null;
+  precio: PrecioTarjeta;
+  fotos: FotoTarjeta[];          // toutes ; alt = `<nombre>, foto <i> de <n>`
+  tipo: string;
+  testId: string;                // `tarjeta-<slug>`
+};
+
+type Seccion = { tipo: string; tarjetas: TarjetaOferta[]; total: number };
+```
+
+`total` = nombre d'offres du type **avant** le plafond de 8 — il alimente le libellé « Ver más ».
+
+### Modèle de données (delta)
+
+| Objet | État | Détail |
+|---|---|---|
+| `search_catalog` — colonne `fotos jsonb` | **à ajouter** | `jsonb_agg(jsonb_build_object('storage_path', m.storage_path) order by m.sort)` sur `product_media` / `establishment_media` |
+| `search_catalog` — colonne `precio_desde` | **à ajouter** | `min(p.price_cop) filter (where p.type='lodging' and p.sellable and p.price_cop is not null)` |
+| `search_catalog` — colonnes `price_label`, `total_seccion` | **à ajouter** | `total_seccion = count(*) over (partition by tipo)` |
+| `product_media`, `establishment_media` | réutilisés tels quels | policies publiques déjà en place ; **aucune colonne de texte alternatif** — voir §6 |
+| `lib/supabase/publicClient.ts` | réutilisé | résolution `storage_path` → URL publique dans `buscar.ts`, **jamais** dans `page.tsx` |
+
+Aucune table créée, aucune écriture ajoutée, aucune RPC `security definer`.
+
+### Invariants
+
+1. `page.tsx` n'appelle **aucune** requête Supabase et n'importe **rien** de `@hifago/ui`.
+2. **Un seul `<main>`** — posé par `PageShell`, jamais par le layout de zone (§5).
+3. Un seul `<h1>` ; les titres de section sont des `<h2>`.
+4. Une section sans résultat n'est **pas rendue**.
+5. Le plafond de 8 vaut **aussi** sous recherche ; « Ver más » emporte les critères.
+6. **Seule la première image de chaque carrousel est chargée** ; `loading="priority"` sur la
+   première carte de la première section, `"lazy"` partout ailleurs.
+7. Le carrousel d'une carte passe par **`PhotoStrip`**, jamais par un `Carousel` remonté à la main.
+8. Aucune couleur en dur ; aucune largeur en dur ; rien de masqué selon la largeur.
+9. Tout lien passe par le `Link` de `@/i18n/navigation`.
+10. Les critères de l'URL sont **les seuls** qui filtrent : aucun filtrage en mémoire.
+
+### Cas limites
+
+| Situation | Traitement |
+|---|---|
+| Aucun critère | les 5 sections, 8 cartes chacune |
+| Critères, aucun résultat nulle part | état vide explicite sous la barre, la barre reste utilisable |
+| Une section vide, les autres non | la section n'est pas rendue |
+| Offre sans photo | `PhotoStrip` avec une liste vide → son état `AucunePhoto` |
+| Offre sans prix chiffré ni `price_label` | aucun prix affiché, la carte reste valide |
+| Établissement groupé dont **aucun** couchage n'a de prix chiffré | `precio = null` — jamais « desde 0 » |
+| Paramètre invalide | ignoré, jamais d'erreur (voir « Normalisation ») |
+| « Ver más » de la section activités | mène à `/es/actividades`, qui est un **index de tags** et non une liste d'offres (spec 29) — le libellé de ce lien diffère donc des quatre autres |
+
+### Fichiers touchés
+
+**Créés** : `app/[locale]/(vitrine)/page.tsx` · `app/[locale]/(vitrine)/BuscadorInicio.tsx` ·
+`components/organisms/SeccionOfertas.tsx` · `components/molecules/TarjetaOferta.tsx` (chacun + test
++ story) · `lib/catalog/criterios.ts` · `lib/catalog/segmentos.ts` (table `tipo` → segment d'URL) ·
+`e2e/home.spec.ts` · `supabase/migrations/<ts>_search_catalog_fotos_y_precios.sql`.
+**Modifiés** : `messages/{es,en}/HomePage.json` · `lib/catalog/buscar.ts` ·
+`e2e/{reserve,reserve-lodging-range,attribution,cart-multi-establishment,establishment-page}.spec.ts`
+(elles entrent par l'accueil, dont les sélecteurs changent).
+**Supprimés** : `app/[locale]/page.tsx`, `app/[locale]/CatalogBrowser.tsx` et son test — **après**
+avoir repris leur `generateMetadata` et leur `JsonLd`.
+
+---
+
+## 1. Contexte et problème
+
+L'accueil actuel est un **catalogue à plat** : `page.tsx` (186 l.) fait trois requêtes séquentielles
+et soixante lignes de regroupement, puis passe le tout à `CatalogBrowser` (125 l.), qui filtre
+**en mémoire côté client**. Son propre commentaire l'assume : « la recherche/le filtre restent
+volontairement basiques — pas de recherche géo/tags, cible différée ».
+
+En face, `SearchPanel` est construit depuis le 4 septembre et **n'est branché nulle part**. Son
+fichier documente le manque : « il n'existe pas encore de route de recherche pour porter les dates
+et le nombre de personnes ».
+
+Le §2a du cahier client, validé le 2026-09-07, tranche les deux d'un coup : **l'accueil et l'écran
+de résultats sont la même page**, les critères vivent dans son URL, et les résultats restent
+groupés par type.
+
+## 2. Portée et tranches
+
+**Tranche 1 — l'accueil.** La page, l'hôte client du bloc de recherche, les cinq sections, les deux
+variantes de carte, le contrat d'URL, le prix « desde ». **Livrable** : le catalogue s'affiche, on
+cherche, on filtre, on clique.
+
+**Tranche 2 — les suggestions de la barre.** `SearchBar` accepte une liste vide, et `Entrée` soumet
+toujours le texte tapé — c'est son contrat. La recherche est donc complète sans elles.
+
+**Tranche 3 — le réordonnancement des sections selon le panier.**
+⚠️ **Sorti de la Tranche 1 le 2026-09-07, sur constat d'infaisabilité.** Deux raisons cumulées,
+trouvées par l'audit : `CartLine` **ne porte pas le type de l'offre** (rien dans le panier ne dit
+si une ligne est une activité ou un transport), et le panier est un état **client** que `page.tsx`,
+Server Component, ne peut pas lire. Jérôme a tranché le même jour que **le panier vivra en base, sur
+l'identité du visiteur** (cahier §3e) — ce qui rend le réordonnancement faisable côté serveur, mais
+**après** deux specs dont celle-ci dépend alors : l'identité anonyme, puis le panier en base.
+
+**Out.** Les pages de listing et l'index de tags (spec 29) · les fiches (spec 30) · le tunnel · le
+compte · la recherche géographique, différée · les tokens du thème `vitrine` et les polices Geist.
+
+## 3. Décisions retenues
+
+Actées au cahier §2a et §2b.5 ou tranchées le 2026-09-07, non rouvertes ici :
+
+- Une section par type, cinq au total ; camps et eventos jamais fusionnés ; activités d'abord.
+- Huit offres par section, un « Ver más », **section vide non affichée** — y compris sous recherche.
+- Carte = carrousel · nom · prix · établissement.
+- **`personas` = capacité déclarée**, avec la colonne juste de chaque type ; **dates =
+  chevauchement**. La recherche n'interroge donc aucune disponibilité et **jamais LobbyPMS**.
+- Un établissement apparaît comme une seule offre **dès deux couchages vendables**.
+- **Ordre dans une section : `created_at desc`** — les nouveautés remontent, l'ordre est stable
+  d'un chargement à l'autre, et ça reste un point d'extension isolé.
+- **Texte alternatif d'une photo : `<nom de l'offre>, foto <i> de <n>`** — aucune colonne à créer,
+  et chaque photo reste distinguable pour un lecteur d'écran.
+
+## 4. Parcours cible
+
+1. **Arrivée sans critère** — cinq sections, huit cartes chacune.
+2. **Le visiteur tape et valide** — `BuscadorInicio` reçoit les critères de `SearchPanel` et
+   **navigue vers l'URL de la page** enrichie des paramètres. Le serveur re-rend.
+3. **Il clique une carte** — vers la fiche. L'URL de destination **ne porte pas les critères**
+   (spec 27) ; le calendrier de la fiche se pré-remplit depuis la mémoire du navigateur.
+4. **Il clique « Ver más »** — vers `/es/<segmento>` **avec les critères**.
+5. *(Tranche 3)* **Il ajoute au panier depuis une fiche** — il revient ici, sections réordonnées.
+
+## 5. L'écran, bloc par bloc
+
+**L'unique `<main>`.** ⚠️ **Corrigé le 2026-09-07** : la spec 27 décrivait un `<main>` dans
+`(vitrine)/layout.tsx`, or `PageShell` en pose déjà un — deux `<main>` imbriqués sont une faute de
+structure et un défaut d'accessibilité. **Le layout ne pose que `SiteHeader` et `SiteFooter`** ;
+c'est la page qui pose son `<main>` via `PageShell`, comme l'atome a été construit pour le faire
+(« L'unique `<main>` d'une page »). La spec 27 doit être corrigée du même geste.
+
+**Le titre.** Un seul `<h1>`, **provisoirement masqué visuellement** mais présent dans le DOM :
+l'accueil du cahier §2a ne porte rien au-dessus du bloc de recherche, et une page sans `h1` est une
+faute d'accessibilité comme de référencement. Masquer **visuellement** n'est pas le `hidden
+md:block` interdit, qui retire le contenu de l'index mobile.
+**État de transition** : Jérôme a indiqué qu'un **bloc titré** viendra plus tard au-dessus du bloc
+de recherche ; le jour où il existe, la seule chose à retirer est la classe de masquage.
+
+**`BuscadorInicio` — l'hôte client.** ⚠️ Sans lui, l'écran ne compile pas : toutes les props de
+`SearchPanel` (`onSubmit`, `onCriteriaChange`, `onSuggestionSelect`) sont des fonctions, et un
+Server Component ne peut pas les sérialiser. `BuscadorInicio` porte `"use client"`, reçoit les
+critères initiaux et les libellés **déjà traduits** en props sérialisables, tient l'état du panneau,
+et pousse la nouvelle URL au `onSubmit` via le `useRouter` de `@/i18n/navigation`.
+⚠️ Il fournit aussi `aujourdIso` à `SearchPanel` — **calculé dans le fuseau `America/Bogota`** via
+`bogotaDates` de `@hifago/domain`, seule échappatoire autorisée à la règle de lint sur les dates
+(§11.20, `scripts/check-timezone.sh`).
+
+**Une section.** `SeccionOfertas` : un `<h2>`, une grille ou une liste, un lien « Ver más ».
+Grille : **1 colonne** en mobile, 2 à partir de `md`, 3 à partir de `lg`. Aucune largeur en dur.
+
+**Deux variantes de carte.**
+
+| Section | Variante | Forme |
+|---|---|---|
+| Activités | `Card layout="row"` | visuel à gauche, texte à droite — **une liste** |
+| Les quatre autres | `Card layout="stack"` | photos à fleur de carte, texte dessous, ratio `4/3` |
+
+**Emplacement des champs** : le **nom** est le titre de la carte (`titleAs="h3"`, sous le `<h2>` de
+la section) · l'**établissement** est le `subtitle` · le **prix** est le contenu.
+
+**Les photos passent par `PhotoStrip`.** ⚠️ **Corrigé le 2026-09-07** : la première rédaction
+faisait construire un carrousel dans la carte, alors que la molécule `PhotoStrip` existe depuis le
+4 septembre et a été bâtie exactement pour ça (`Carousel` de `@hifago/ui` + `next/image`). La
+réécrire aurait été une rupture de la règle « un composant qui duplique quelque chose d'existant ».
+
+**Le chargement des images.** Cinq sections de huit cartes peuvent monter à plusieurs centaines
+d'images. Seule la **première** de chaque carrousel est chargée ; les suivantes à l'interaction.
+La toute première carte de la première section porte `loading="priority"` (c'est elle, le LCP).
+`sizes` suit la grille : `(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw`.
+
+**Les métadonnées et le JSON-LD.** ⚠️ L'ancien `page.tsx` porte un `generateMetadata` (titre,
+description, **canonical auto-référent** — celui qui rassemble les variantes `?ref=` et désormais
+`?q=`) et un `JsonLd` de type `WebSite`. Les **reprendre** dans le nouveau fichier avant de
+supprimer l'ancien : les perdre reviendrait à défaire une partie de la spec 26.
+
+## 6. Modèle de données (delta)
+
+Aucune table, aucune écriture. Trois colonnes de retour s'ajoutent à `search_catalog` (spec 27).
+
+**Les photos.** `search_catalog` ne rendait aucun média : le carrousel, élément central de la carte,
+n'avait **aucune source**. Elle rend désormais `fotos jsonb`, agrégé depuis `product_media` (ou
+`establishment_media` pour une ligne groupée) et **trié par `sort`**. La résolution
+`storage_path` → URL publique se fait dans `buscar.ts` via le client anonyme — jamais dans
+`page.tsx`, qui n'a pas le droit de toucher Supabase.
+**Photos d'une carte groupée** : celles du **premier couchage** de l'établissement, la requête étant
+triée par `created_at` — c'est la règle déjà appliquée par le catalogue actuel, reconduite telle
+quelle plutôt que réinventée.
+
+**Le texte alternatif.** `product_media` ne porte **aucune colonne** pour lui — seulement `id`,
+`product_id`, `storage_path`, `sort`, `created_at`. Décision du 2026-09-07 : il est **calculé**,
+`<nom de l'offre>, foto <i> de <n>`. Une colonne rédigée par le partenaire serait meilleure pour le
+référencement image, mais elle exige une migration, un champ dans deux écrans d'administration, et
+surtout quelqu'un pour l'écrire sur chaque photo — en pratique elle resterait vide et il faudrait
+ce repli de toute façon.
+
+**Le prix « desde ».** ⚠️ **Corrigé le 2026-09-07 — collision entre deux décisions du même jour.**
+La spec 27 a relâché la contrainte de prix (une offre en vitrine peut n'avoir aucun `price_cop`) ;
+la première rédaction de cette spec calculait `min(price_cop)`. Sur des colonnes nulles, l'agrégat
+rend une valeur fausse ou nulle. D'où le filtre explicite :
+
+```sql
+min(p.price_cop) filter (where p.type = 'lodging' and p.sellable and p.price_cop is not null)
+```
+
+et la règle qui va avec : si **aucun** couchage n'a de prix chiffré, la carte n'affiche **aucun
+prix** — jamais « desde 0 ».
+
+Cet agrégat est retenu contre une colonne dénormalisée, pour les raisons écrites en spec 27 §6 :
+une dénormalisation non maintenue dérive en silence, et les écritures de produit passent par trois
+chemins distincts. **Condition de bascule** inchangée : si la requête dépasse un budget mesuré, on
+dénormalise, et la colonne devient un cache écrit dans la même transaction, avec son test.
+
+## 7. Contrat — URL, données, composants
+
+**Lecture et écriture des critères** — `lib/catalog/criterios.ts`, partagé avec les listings :
+
+```ts
+type ParamsBrutos = Record<string, string | string[] | undefined>;  // ce que Next passe à une page
+export function leerCriterios(params: ParamsBrutos): Criterios
+export function escribirCriterios(criterios: Criterios): string      // "?q=…&personas=2"
+```
+
+⚠️ Le type d'entrée est bien `Record<string, string | string[] | undefined>` — **pas
+`URLSearchParams`** : c'est la forme que Next passe à `searchParams`, et une valeur peut être un
+tableau si le paramètre est répété. Un tableau : on prend la **première** valeur.
+
+**Table `tipo` → segment d'URL** — `lib/catalog/segmentos.ts`, seule source :
+
+| `tipo` | segment |
+|---|---|
+| `activity` | `actividades` |
+| `lodging` | `alojamientos` |
+| `transport` | `transportes` |
+| `camp` | `camps` |
+| `evento` | `eventos` |
+
+**`SeccionOfertas`** :
+
+```ts
+export type SeccionOfertasProps = {
+  titulo: string;                       // déjà traduit
+  tituloAs?: "h2";
+  hrefVerMas: string;                   // critères inclus
+  labelVerMas: string;                  // déjà traduit — diffère pour les activités (§0)
+  variante: "grilla" | "lista";
+  tarjetas: TarjetaOferta[];
+  testId?: string;
+};
+```
+
+**Clés de traduction** — namespace `HomePage`, à ajouter dans les **deux** locales (le test de
+parité échoue sur toute clé manquante) : `h1`, `emptyState`, `secciones.<tipo>` (5),
+`verMas`, `verMasTags`, `precioDesde`, `fotoAlt`, plus les libellés de `SearchPanelLabels`
+(`buscar.*`, `fechas.*`, `personas.*`). Les clés devenues inutiles de l'ancien écran
+(`typeFilterLabel`, `typeFilterAllLabel`, `noResults`, `searchLabel`, `searchPlaceholder`) sont
+retirées des deux fichiers.
+
+## 8. Règles et invariants
+
+Le tableau sec est en §0. Ce qui mérite justification :
+
+**Le composant ne filtre rien en mémoire.** C'est ce que fait `CatalogBrowser`, et c'est ce qui rend
+la recherche inutilisable au-delà de quelques dizaines d'offres — et invisible pour Google, qui ne
+voit que le catalogue complet.
+
+**Une section vide n'est pas rendue.** Un bloc « Aucune activité » répété cinq fois sur une
+recherche pointue est du bruit ; l'état vide global existe une seule fois.
+
+**Le plafond de 8 vaut aussi sous recherche.** Sinon l'accueil filtrée devient une page à rallonge
+et la distinction avec les pages de listing disparaît.
+
+**L'ordre doit être déterministe.** Sans `order by`, la base rend les lignes dans l'ordre qui
+l'arrange : le même visiteur qui recharge voit d'autres cartes, et un crawler voit une page
+différente à chaque passage. `created_at desc` est le minimum, et il reste changeable en un endroit.
+
+## 9. Cas limites
+
+Le tableau sec est en §0. Trois méritent d'être justifiés.
+
+**Paramètres invalides ignorés, jamais une erreur.** `?personas=abc` doit rendre l'accueil normale.
+Une 400 sur une URL malformée transforme un lien mal recopié en page cassée, et donne à un crawler
+une raison de croire le site instable.
+
+**Établissement sans aucun prix chiffré → aucun prix.** « desde 0 » serait un mensonge affiché.
+
+**États de l'écran.** Pendant une soumission, le panneau reste utilisable et la navigation est
+signalée (`loading.tsx` de la zone). Chaque recherche **pousse une entrée d'historique** : le retour
+arrière revient aux critères précédents, et le panneau se resynchronise depuis l'URL — jamais depuis
+son état interne, qui n'est pas la source de vérité.
+
+## 10. Décisions tranchées / points ouverts
+
+**Tranché le 2026-09-07** — suggestions en Tranche 2 · `<h1>` masqué visuellement, provisoire ·
+prix « desde » en agrégat filtré, pas en colonne · `alt` calculé depuis le nom et le rang · ordre
+`created_at desc` dans une section · `personas` avec la colonne juste de chaque type ·
+réordonnancement en Tranche 3.
+
+**Corrigé le 2026-09-07 après audit** — le `<main>` est posé par `PageShell` et non par le layout
+(la spec 27 doit être corrigée) · les photos passent par `PhotoStrip` · `search_catalog` rend les
+médias, `price_label` et le total de section · `generateMetadata` et le `JsonLd` sont repris avant
+suppression de l'ancien écran · `leerCriterios` prend la forme que Next passe réellement.
+
+**Point ouvert — la carte d'activité en ligne garde-t-elle son carrousel ?** Le visuel de
+`Card layout="row"` fait **64 px** — dimensionné pour la ligne produit d'une fiche établissement,
+trop petit pour un carrousel. Trois issues : agrandir le visuel de la variante `row`, renoncer au
+carrousel sur cette seule variante, ou faire de la carte d'activité une molécule à part.
+**Recommandation** : agrandir le visuel et garder le carrousel — seule issue qui ne crée pas deux
+cartes divergentes. Décision visuelle, à voir dans Storybook avant de coder.
+
+**Point ouvert — un bloc titré au-dessus du bloc de recherche.** Annoncé par Jérôme le 2026-09-07,
+contenu non arrêté. **À porter au cahier §2a** quand il le sera : ce n'est pas une décision
+d'implémentation.
+
+**Hérité, non rouvert** : les six points du cahier §2f.
+
+## 11. Annexe — traçabilité
+
+| Sujet | Sources |
+|---|---|
+| Accueil, sections, filtres, réordonnancement | `docs/01-cahier-des-charges-client.md` §2a, §2b.5 |
+| Routes, coquilles, `lib/catalog/`, `search_catalog` | `docs/specs/27-architecture-vitrine-et-routage.md` |
+| Regroupement des couchages, photos de la carte groupée | `app/[locale]/page.tsx`, spec 24 T1/T3 |
+| Photos du catalogue (bucket, tables, URL publique) | `supabase/migrations/20260815110000_gestion_images.sql`, spec 04, `app/[locale]/products/[slug]/page.tsx` |
+| Bloc de recherche et ses pièges | `components/organisms/{SearchBar,SearchPanel}.tsx` |
+| Carte, image, prix, titre, coquille | `components/atoms/{Card,Image,Price,Title,PageShell}.tsx`, `components/molecules/PhotoStrip.tsx`, `components/README.md` |
+| Fuseau de référence | `packages/domain/src/time/bogotaDates.ts`, `scripts/check-timezone.sh` |
+| Canonical de l'accueil et `?ref=` | spec 26, `lib/seo/pageMetadata.ts` |
+| Panier et son modèle de ligne | `lib/cart/CartContext.tsx`, cahier §3e |
+| Écran remplacé | `app/[locale]/page.tsx`, `app/[locale]/CatalogBrowser.tsx` |
+
+## 12. Documents liés
+
+`docs/01-cahier-des-charges-client.md` (§1, §2a, §2b, §3a, §3e) · specs `04`, `24`, `26`, `27` ·
+`apps/web/components/README.md` · `.claude/rules/{apps,seo,ui,tests}.md`.

@@ -6,7 +6,7 @@
 
 ## Cadrage — architecture, modèle de données, cahiers des charges
 - [Audit du modèle de données cible — entités partagées](00-modele-de-donnees.md) · maj 2026-09-07
-- [Cahier des charges — portail client (marketplace global, Guatapé = première localisation)](01-cahier-des-charges-client.md) · maj 2026-09-07
+- [Cahier des charges — portail client (marketplace global, Guatapé = première localisation)](01-cahier-des-charges-client.md) · maj 2026-09-08
 - [Cahier des charges — portail socio (aujourd'hui /partner)](02-cahier-des-charges-socio.md) · maj 2026-09-07
 - [Cahier des charges — back-office admin (aujourd'hui /admin)](03-cahier-des-charges-admin.md) · maj 2026-09-07
 - [Choix de stack et architecture cible](04-architecture-cible.md) · maj 2026-09-07
@@ -40,12 +40,13 @@
 - [Surface LobbyPMS exploitée, parcours front d'un produit lié, et cible du modèle hébergement](specs/24-modele-hebergement-et-surface-lobbypms.md) — **Partiel** (reste : Lot A implémenté le 2026-08-26 ; Lot B gelé (observation préprod requise) ; T1/T2/T3 de…) · maj 2026-09-07
 - [Propagation d'une annulation hifago vers LobbyPMS (C2)](specs/25-propagation-annulation-lobbypms.md) — **Implémenté** (reste : Vérifiée en conditions réelles le 2026-08-27 (booking créé puis annulé chez Casa Kayam)…) · maj 2026-09-07
 - [Référencement de la vitrine : Google et moteurs de réponse IA](specs/26-referencement-seo-et-moteurs-ia.md) — **Implémenté** (reste : Vérifiée en local le 2026-09-01 (build, serveur réel, 3 e2e). Validation par un outil…) · maj 2026-09-07
-- [Architecture de la vitrine : routes, zones, coquilles et couche d'accès aux données](specs/27-architecture-vitrine-et-routage.md) — **Brouillon** · maj 2026-09-07
-- [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-07
+- [Architecture de la vitrine : routes, zones, coquilles et couche d'accès aux données](specs/27-architecture-vitrine-et-routage.md) — **Brouillon** · maj 2026-09-08
+- [Vitrine : l'accueil, qui est aussi l'écran de résultats de recherche](specs/28-vitrine-accueil-et-resultats.md) — **Brouillon** · maj 2026-09-08
+- [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-08
 - [Gabarit de spec de feature (à copier, ne décrit aucune feature réelle)](specs/_modele.md) — **modele** · maj 2026-08-16
 - [Avant d'écrire une spec — poser les bonnes questions](specs/avant-la-spec.md) — **modele** · maj 2026-08-16
 
 ## Journal — historique chronologique (jamais chargé automatiquement)
-- [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-07
+- [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-08
 - [Journal hifago — août 2026](journal/2026-08.md) · maj 2026-09-01
-- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-07
+- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-08

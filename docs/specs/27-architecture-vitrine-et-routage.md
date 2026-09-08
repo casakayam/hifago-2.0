@@ -91,7 +91,7 @@ et leurs vues. Aucune redirection à poser : `apps/web` n'a jamais été servi e
 | Zone | Layout | Contenu de la coquille | robots | Garde |
 |---|---|---|---|---|
 | — | `app/[locale]/layout.tsx` | `<html data-theme="vitrine">`, `NextIntlClientProvider`, `CartProvider`, `SiteToaster` **en sibling** | — | aucune |
-| vitrine | `(vitrine)/layout.tsx` | `SiteHeader` + `<main>` + `SiteFooter` | indexable | aucune |
+| vitrine | `(vitrine)/layout.tsx` | `SiteHeader` + `{children}` + `SiteFooter` — **pas de `<main>`** (voir §5) | indexable | aucune |
 | tunnel | `(tunnel)/layout.tsx` | en-tête allégé (logo seul), ni menu ni footer | `index:false, follow:true` | aucune — **l'invité réserve de bout en bout** |
 | compte | `(cuenta)/layout.tsx` | en-tête + nav de compte | `index:false` | `getUser()` → `redirect("/entrar?next=…")` |
 | auth | `(auth)/layout.tsx` | coquille centrée minimale | `index:false, follow:true` | aucune |
@@ -138,6 +138,7 @@ spec ne touche à rien de capacitaire, donc rien ne relève de la frontière RPC
 8. La garde d'accès vit dans `(cuenta)/layout.tsx`, **jamais** dans `proxy.ts`.
 9. Un `<h1>` par page, hiérarchie sans saut, aucun contenu masqué selon la largeur.
 10. Le préfixe de locale est toujours présent ; aucune URL sans locale n'existe.
+11. **Un seul `<main>` par page**, posé par `PageShell` et jamais par un layout de zone (corrigé le 2026-09-07, cf. §5).
 
 ### Cas limites
 
@@ -252,7 +253,14 @@ providers, et `SiteToaster`. ⚠️ `SiteToaster` se monte **en frère** de `{ch
 est un render-prop consommé par toast ; en wrapper, toute l'app rend `null` tant qu'aucun toast
 n'existe — page blanche, aucune erreur, build vert (`.claude/rules/apps.md`).
 
-**`(vitrine)`.** `SiteHeader` + `<main>` + `SiteFooter`. Seule zone indexable. La barre de recherche
+**`(vitrine)`.** `SiteHeader` + `{children}` + `SiteFooter`. Seule zone indexable.
+⚠️ **Corrigé le 2026-09-07 (audit de la spec 28)** : la première rédaction plaçait le `<main>` dans
+ce layout. Or l'atome `PageShell` en pose déjà un, et son en-tête le dit — « l'unique `<main>` d'une
+page ». Les deux ensemble donnaient **deux `<main>` imbriqués** : faute de structure et défaut
+d'accessibilité, invisibles au typecheck comme au lint. C'est donc **la page** qui pose son `<main>`
+via `PageShell` ; le layout ne pose que l'en-tête et le pied de page. La règle SEO « landmarks dans
+la coquille » reste tenue : `<header>`, `<footer>` et `<nav>` viennent bien du layout, et chaque
+page apporte le sien. La barre de recherche
 n'est **pas** dans l'en-tête et n'est pas collante : elle vit dans le premier bloc des pages à
 résultats (décision de Jérôme du 2026-09-02, documentée dans `SearchBar.tsx`).
 

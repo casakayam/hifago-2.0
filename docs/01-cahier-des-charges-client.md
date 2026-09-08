@@ -102,7 +102,7 @@ Ajoutés par la réécriture du §2 le 2026-09-07 — **contradictions internes 
 | 3b | Moteur de commission (17/10/7) | ✅ validé 2026-08-11 |
 | 3c | Code partenaire / attribution référent | ✅ corrigé 2026-08-13 |
 | 3d | Disponibilité, cupos, calendrier | ✅ corrigé 2026-08-13 |
-| 3e | Règles de panier | 🔄 à rouvrir — contredit par §2b.6 (2026-09-07) |
+| 3e | Règles de panier | 🔄 réécrit 2026-09-07 — à revalider |
 | 3f | Cycle de vie de la commande | ✅ validé 2026-08-11 |
 | 4 | Entités de données touchées | ✅ corrigé 2026-08-13, amendé 2026-09-07 (§2c) |
 | 5 | Intégration LobbyPMS | ✅ validé 2026-08-11 |
@@ -357,8 +357,9 @@ Décidé le 2026-08-11 (cf. §1), révisé le 2026-09-07.
 - **Annuler la réservation** signifie annuler **toute la commande** et toutes ses lignes
   (hébergements, activités, transports, camps et eventos). Une annulation côté client n'est
   **jamais remboursée** (§7/A3). *Inchangé.*
-- **Attribution partenaire persistante** : sauvegardée durablement **uniquement** pour un client
-  disposant d'un compte enregistré. Un invité peut réserver via un QR/lien attribué sans que ce
+- **Attribution partenaire persistante** : sauvegardée durablement en base pour tout client
+  **disposant d'une identité**, ce qui inclut depuis le 2026-09-07 l'invité muni d'une **session
+  anonyme** (§3e) — et non plus seulement le titulaire d'un compte enregistré. Un invité peut réserver via un QR/lien attribué sans que ce
   rattachement devienne une préférence durable (§3c). *Inchangé.*
 - **Voucher/e-ticket, recommandation toujours à confirmer** : l'écran de résultat adressable
   (§2b.9) en pose la fondation — le justificatif présentable sur place et sa forme (QR, PDF)
@@ -651,16 +652,17 @@ survente).
 
 ### 3e. Règles de panier
 
-**Statut : ✅ validé par Jérôme le 2026-08-11.**
+**Statut : 🔄 réécrit le 2026-09-07 sur trois points — à revalider par Jérôme.**
+Validé le 2026-08-11 ; rouvert par la réécriture du §2 le 2026-09-07 (persistance du panier), puis
+corrigé sur deux points périmés (plafonds dimensionnés pour un seul établissement, créneau binaire).
+Le reste de la section est inchangé.
 
 **Composition d'une commande** — une commande peut combiner librement, dans un seul panier :
 - des **nuits en dortoir/chambre**, dans un ou plusieurs hôtels/hostels (plusieurs lignes
-  possibles, bornées en nombre et en quantité totale — aujourd'hui max 4 lignes, 12 unités
-  réservées au total, mais ce plafond était pensé pour un seul établissement, cf. ci-dessous) ;
+  possibles, bornées en nombre et en quantité totale — cf. « Plafonds » ci-dessous) ;
 - une ou plusieurs **maisons/logements entiers** ;
-- des **prestations** (activités, transport, camps, eventos) — **correction (2026-08-12)** :
-  aujourd'hui bornées aux **deux** dimensions, pas une seule — max 20 lignes distinctes par
-  commande **et** max 20 en quantité par ligne (`MAX_PRODUCT_LINES`/`MAX_QTY`, tous deux à 20) ;
+- des **prestations** (activités, transport, camps, eventos), bornées elles aussi sur **deux**
+  dimensions, pas une seule — nombre de lignes **et** quantité par ligne (cf. « Plafonds ») ;
 - une commande **sans aucune nuit** (prestations seules) est valide.
 
 **Nouvelle règle décidée (2026-08-11)** : une commande doit pouvoir combiner des nuits dans
@@ -669,20 +671,96 @@ en même temps, pas un seul établissement à la fois. Ça généralise la restr
 système (aujourd'hui : un seul hébergement à chambres OU une seule maison entière par commande,
 jamais plusieurs établissements combinés).
 
-*À trancher plus tard (chiffrage technique)* : les plafonds actuels (4 lignes/12 unités pour les
-chambres, une seule maison, et — précision 2026-08-12 — 20 lignes/20 en quantité pour les
-prestations) étaient tous dimensionnés pour un seul établissement — à revoir pour plusieurs
-établissements combinés : plafond global sur toute la commande, ou plafond par établissement
-répété autant de fois qu'il y a d'établissements dans le panier ?
+**Plafonds — tranché le 2026-09-07, remplace le point laissé ouvert le 2026-08-11.**
 
-Le panier n'est pas persisté au-delà de la session en cours (perdu si l'onglet est fermé) — sauf
-demande contraire. L'attribution partenaire persistante, lorsqu'elle existe, appartient au **compte
-client enregistré** et non au panier/navigateur (§3c).
+Ce ne sont **pas des règles métier** : personne ne réserve légitimement deux cents lignes. Ce sont
+des garde-fous techniques, et c'est ce qui fixe leur niveau. Trois raisons, dans l'ordre :
 
-**Ce qu'exige une ligne de prestation**, selon son `schedule` (cf. §3a) :
-- `'slot'` : une date **et** un créneau (matin/après-midi) ;
-- `'date'` : une date, sans créneau ;
-- `'none'` : aucune date requise.
+1. **Une commande immobilise des places, et n'importe qui peut en créer une.** Réserver n'exige pas
+   de compte : un visiteur anonyme appelle `create_order`, qui décrémente la disponibilité de chaque
+   ligne. Sans plafond, une commande scriptée bloque l'inventaire sans jamais payer. Le plafond
+   borne le pire cas ; la limite de débit par IP le complète.
+2. **C'est une seule transaction, avec un verrou par ligne** (`SELECT … FOR UPDATE`, §3d). Une
+   commande de plusieurs centaines de lignes tient autant de verrous pendant qu'elle s'exécute : les
+   autres clients attendent, et le risque d'interblocage monte.
+3. **Un défaut d'interface reste borné** — un compteur qui s'emballe ne devient jamais un défaut de
+   données.
+
+**Forme retenue : un plafond GLOBAL sur toute la commande**, pas un plafond répété par
+établissement — une seule règle à tenir et à tester, et elle protège tout aussi bien. Les valeurs
+sont **relevées**, parce que les précédentes avaient été posées quand une commande ne pouvait
+toucher qu'un seul établissement :
+
+| Borne | Avant (un seul établissement) | Retenu le 2026-09-07 |
+|---|---|---|
+| Lignes de nuits par commande | 4 | **12** |
+| Unités de nuits par commande | 12 | **36** |
+| Lignes de prestations par commande | 20 | **40** |
+| Quantité par ligne de prestation | 20 | **20** (inchangé — autre garde-fou) |
+
+⚠️ **Ces bornes sont codées en dur dans `create_order`** (`v_lodging_lines > 4 or v_lodging_units >
+12`, `v_prestation_lines > 20`) : les changer demande une **migration**, pas seulement une mise à
+jour de ce texte.
+
+**Persistance — révisé le 2026-09-07 (§2b.6), renverse le 2026-08-11.** Le panier **survit** à un
+rechargement et à la fermeture de l'onglet ; il peut donc porter des lignes vieilles de plusieurs
+jours.
+
+**Où il vit — décidé le 2026-09-07 : en base, rattaché à l'identité du visiteur** (anonyme ou
+réelle, cf. l'attribution ci-dessous), et non dans le navigateur. Quatre conséquences voulues :
+il persiste réellement ; il **suit l'appareil** (commencé sur téléphone, terminé sur ordinateur) ;
+le **serveur peut le lire**, ce qui rend faisable le réordonnancement des sections de l'accueil
+(§2b.5) sans code client ; et la conversion d'un invité en client enregistré **garde son panier**
+sans rien migrer, puisque l'identifiant ne change pas. Prix payé, assumé : une table et ses
+policies, et un aller-retour réseau à chaque ajout au lieu d'un simple état React.
+⚠️ **Le modèle de la ligne de panier reste à concevoir** : la structure actuelle
+(`apps/web/lib/cart/CartContext.tsx`) ne porte ni le **type** de l'offre — ce qui rend le
+réordonnancement littéralement inécrivable — ni son **slug**, ni son établissement, ni sa photo.
+Spec dédiée, qui vient **après** celle de l'identité anonyme dont elle dépend. Il n'est **jamais** un stock réservé : rien n'est immobilisé tant que la commande n'est pas
+créée (§3d). La disponibilité est **revérifiée à la reprise**, et une ligne devenue indisponible est
+signalée en place avec le moyen de la retirer — jamais de retrait automatique. Le prix, lui, ne
+bouge pas ; et de toute façon `create_order` calcule tous les montants côté serveur, le navigateur
+n'en envoyant aucun : un panier ancien ne peut pas faire payer un ancien prix.
+*(L'ancienne rédaction disait « non persisté au-delà de la session en cours — sauf demande
+contraire » ; la demande contraire est arrivée.)*
+
+**L'attribution d'un invité survit elle aussi — décidé le 2026-09-07, et par un moyen qui change
+l'architecture.** Le problème est né du panier persistant : le cookie d'attribution d'un invité est
+volontairement perdu à la fermeture de l'onglet, si bien qu'un invité revenant le lendemain
+retrouvait son panier **sans** son attribution — et la commission de son référent avec.
+
+La réponse retenue n'est pas d'allonger la durée du cookie, mais de **donner une identité à
+l'invité** : une **session anonyme Supabase**, ouverte **au premier geste engageant** — un ajout au
+panier, ou une arrivée par un lien attribué (`?ref=`). Un visiteur qui ne fait que regarder n'en
+reçoit aucune : robots, crawlers et curieux ne créent rien. L'attribution vit alors **en base**,
+comme celle d'un compte enregistré, et non plus dans un cookie.
+
+Deux conséquences heureuses, hors du problème posé : la commande d'un invité devient **lisible par
+son propre auteur** (`orders_select` cesse de l'exclure — sur le même navigateur ; un lien ouvert
+depuis un email sur un autre appareil réclame toujours le code secret de §2b.9) ; et le
+**rattachement à un compte cesse d'être un rattachement** — Supabase convertit l'identité anonyme
+en identité réelle en lui liant un email **sans changer son identifiant**, donc les commandes
+suivent d'elles-mêmes, sans RPC de rapprochement et sans le risque du « qui crée un compte avec cet
+email récupère ces commandes ».
+
+⚠️ **Ampleur mesurée le 2026-09-07, à traiter dans une spec dédiée** : 79 fichiers de migration
+accordent des droits à `authenticated`, 67 policies existent, et **`is_anonymous` n'apparaît nulle
+part** dans le projet. Aujourd'hui `authenticated` signifie « une personne réelle ayant vérifié son
+email » ; demain il signifiera aussi « n'importe quel visiteur ». Chaque droit et chaque policy doit
+être relu avant, pas après. Le trigger `handle_new_auth_user` crée par ailleurs une ligne
+`partner_accounts` à chaque nouvel utilisateur — à revoir pour ne pas remplir la table d'identité de
+visiteurs.
+
+**Ce qu'exige une ligne de prestation** — *corrigé le 2026-09-07* :
+- **produit à créneaux** (`product_slot_rules`) : une date **et** une heure de début de créneau ;
+- **produit à date** : une date, sans créneau ;
+- **produit sans date** : aucune date requise.
+
+*L'ancienne rédaction parlait de `schedule='slot'` et d'« un créneau (matin/après-midi) » : c'est le
+mécanisme binaire du portail legacy, mort depuis la spec 18. `product_slot_rules` produit autant de
+créneaux que la règle en définit, et `create_order` verrouille par `(product_id, slot_date,
+slot_start_time)`. Écart déjà signalé dans l'en-tête « Écarts connus », corrigé ici puisque la
+section était rouverte.*
 
 > **Révisé le 2026-08-17** (décision Jérôme, cf. `hifago/docs/specs/17-calendrier-disponibilite-refonte.md`) :
 > l'email passe d'optionnel à **requis**, au même titre que le nom et le WhatsApp — un client a
@@ -703,8 +781,12 @@ client enregistré** et non au panier/navigateur (§3c).
   clients (admin §3f). Sans elle, ce rappel légal n'a aucune donnée à vérifier derrière.
 
 **Robustesse** : si le catalogue est indisponible au moment de composer le panier, aucune liste
-de prestations fictive n'est proposée — l'ajout et la validation des prestations sont bloqués,
-mais les nuits restent réservables indépendamment (elles ne dépendent pas du même service).
+fictive n'est proposée — l'ajout et la validation sont bloqués. *Corrigé le 2026-09-07 : la phrase
+disait « mais les nuits restent réservables indépendamment (elles ne dépendent pas du même
+service) ». C'était vrai du portail legacy, où les prestations venaient de SQLite et les nuits de
+LobbyPMS. Ça ne l'est plus : depuis la spec 24, **une chambre est un produit du catalogue** comme
+une activité, avec son `product_availability`. Si le catalogue tombe, plus rien n'est réservable —
+et c'est cohérent avec la règle d'échec fermé (§3d).*
 
 *Traçabilité : `src/services/portalService.js` (`reserve()`, validation/bornage synchrone en
 tête de fonction).*
