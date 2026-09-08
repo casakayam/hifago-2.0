@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import { loadMessages } from "@/messages";
 import { formatCop } from "@hifago/domain";
 import type { TarjetaOferta as OfertaTarjeta } from "@/lib/catalog/tipos";
 import { TarjetaOferta } from "./TarjetaOferta";
@@ -29,12 +30,16 @@ vi.mock("@/i18n/navigation", () => ({
 // `precioDesde` sont écrites par le lot i18n de l'accueil, en parallèle de celui-ci. Un test qui
 // dépendrait du fichier échouerait selon l'ordre des lots — et surtout il ne dirait plus quelle
 // FORME de message le composant attend. Ici le format ICU est sous les yeux, à côté des assertions.
-const MESSAGES = {
-  HomePage: {
-    fotoAlt: "{nombre}, foto {indice} de {total}",
-    precioDesde: "Desde",
-  },
-};
+// ⚠️ Le catalogue de messages est le VRAI (`loadMessages`), jamais un objet écrit à la main — c'est
+// la convention déjà majoritaire du dépôt (SiteHeader, SiteMenu, SiteFooter, LanguageSwitcher,
+// ProductDetailView, formatOccurrenceLabel) et sa raison est mécanique : un catalogue de test
+// recopié à la main teste le catalogue de test. Mesuré le 2026-09-08 par la revue du lot : renommer
+// `{indice}` en `{index}` dans messages/{es,en}/HomePage.json laissait les 514 tests VERTS pendant
+// que chaque photo du catalogue aurait porté `alt="HomePage.fotoAlt"` en production — `t()` n'est
+// pas typé sur le catalogue (aucune augmentation `IntlMessages` dans ce dépôt), donc ni tsc ni le
+// lint ne voient rien, et `parity.test.ts` ne compare que des CHEMINS de clés, jamais leurs
+// variables.
+const MESSAGES = loadMessages("es");
 
 // ⚠️ Trois API de navigateur qu'Embla (le Carousel de PhotoStrip) appelle au MONTAGE et que jsdom
 // n'implémente pas — sans ces bouchons, tout rendu lève depuis un effet passif. Repris tels quels

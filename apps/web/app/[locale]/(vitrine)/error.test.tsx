@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import { loadMessages } from "@/messages";
 import ErrorVitrine from "./error";
 
 // Pas de @testing-library/jest-dom dans ce monorepo — assertions DOM natives uniquement.
@@ -17,16 +18,16 @@ vi.mock("@/i18n/navigation", () => ({
   ),
 }));
 
-const MESSAGES = {
-  Common: {
-    error: {
-      titulo: "Algo salió mal",
-      descripcion: "No pudimos cargar esta página.",
-      reintentar: "Reintentar",
-      volver: "Volver al inicio",
-    },
-  },
-};
+// ⚠️ Le catalogue de messages est le VRAI (`loadMessages`), jamais un objet écrit à la main — c'est
+// la convention déjà majoritaire du dépôt (SiteHeader, SiteMenu, SiteFooter, LanguageSwitcher,
+// ProductDetailView, formatOccurrenceLabel) et sa raison est mécanique : un catalogue de test
+// recopié à la main teste le catalogue de test. Mesuré le 2026-09-08 par la revue du lot : renommer
+// `{indice}` en `{index}` dans messages/{es,en}/HomePage.json laissait les 514 tests VERTS pendant
+// que chaque photo du catalogue aurait porté `alt="HomePage.fotoAlt"` en production — `t()` n'est
+// pas typé sur le catalogue (aucune augmentation `IntlMessages` dans ce dépôt), donc ni tsc ni le
+// lint ne voient rien, et `parity.test.ts` ne compare que des CHEMINS de clés, jamais leurs
+// variables.
+const MESSAGES = loadMessages("es");
 
 function monter(reset = () => {}) {
   const erreur = Object.assign(new Error('relation "public.products" does not exist'), {

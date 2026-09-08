@@ -72,11 +72,15 @@ describe("buscarSugerencias", () => {
     expect(state.llamadas[0].args).not.toHaveProperty("p_por_tipo");
   });
 
-  it("transmet la limite demandée, et six par défaut", async () => {
+  it("transmet la limite demandée — multipliée par la réserve — et six par défaut", async () => {
+    // ⚠️ Ce test affirmait `p_limite === limite` avant le 2026-09-08. Il encodait donc le défaut
+    // qu'il était censé protéger : demander exactement le nombre affiché à une requête triée PAR
+    // TYPE, c'est demander « les six premières activités ». Le facteur cinq (une section) est ce
+    // qui garantit d'atteindre la dernière — voir le bloc « L'ORDRE » plus bas.
     await buscarSugerencias("kayak", { locale: "es" });
-    expect(state.llamadas[0].args.p_limite).toBe(6);
+    expect(state.llamadas[0].args.p_limite).toBe(30);
     await buscarSugerencias("kayak", { locale: "es", limite: 3 });
-    expect(state.llamadas[1].args.p_limite).toBe(3);
+    expect(state.llamadas[1].args.p_limite).toBe(15);
   });
 
   it("mappe un produit : id de carte, chemin de produit, établissement porteur", async () => {
@@ -140,5 +144,79 @@ describe("buscarSugerencias", () => {
     // à la place d'une panne (CLAUDE.md §4.4).
     state.error = { message: "boom" };
     await expect(buscarSugerencias("kayak", { locale: "es" })).rejects.toBeTruthy();
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────────────────
+  // L'ORDRE — le défaut trouvé par la revue du 2026-09-08
+  // ─────────────────────────────────────────────────────────────────────────────────────────
+  //
+  // `search_catalog` finit par `order by c.tipo, c.rango_seccion`, un ordre pensé pour l'accueil
+  // qui range ses cinq sections. `products.type` est du texte : activity < camp < evento < lodging
+  // < transport. Demander six lignes à cette requête, c'est donc demander « les six premières
+  // ACTIVITÉS » — et la carte d'un établissement, de type `lodging`, est servie en dernier.
+  //
+  // Reproduit en réel contre le Postgres local : taper « Casa Kayam » proposait l'hôtel ; en
+  // ajoutant cinq activités au même établissement, le même appel rendait six `activity` et l'hôtel
+  // avait disparu. Le prédicat texte couvre le nom de l'établissement, donc son nom fait
+  // correspondre TOUS ses produits.
+  //
+  // ⚠️ L'ancien test de ce fichier était structurellement aveugle à ça : il mockait la RPC et
+  // n'assertait que l'absence de `p_por_tipo`, c'est-à-dire la même croyance que le code.
+
+  it("⚠️ demande une RÉSERVE à la base, jamais juste le nombre affiché", async () => {
+    state.filas = [];
+
+    await buscarSugerencias("casa", { locale: "es", limite: 6 });
+
+    // Six lignes demandées à un ordre trié par type, ce sont six activités. La réserve est ce qui
+    // garantit d'atteindre la dernière section, quelle que soit la répartition.
+    expect(state.llamadas[0].args.p_limite).toBe(30);
+  });
+
+  it("⚠️ remonte l'ÉTABLISSEMENT quand son nom est tapé, même noyé sous ses propres offres", async () => {
+    // Exactement la forme que rend la base : les activités d'abord (tri alphabétique du type),
+    // l'établissement en dernier.
+    state.filas = [
+      ...Array.from({ length: 6 }, (_, i) =>
+        fila({
+          id: `aaaaaaaa-0000-0000-0000-00000000000${i}`,
+          slug: `actividad-${i}`,
+          nombre: { es: `Paseo ${i} desde Casa Kayam` },
+        })
+      ),
+      fila({
+        tipo: "lodging",
+        es_establecimiento: true,
+        id: "bbbbbbbb-0000-0000-0000-000000000001",
+        slug: "casa-kayam-guatape",
+        nombre: { es: "Casa Kayam Guatapé" },
+        establecimiento: null,
+      }),
+    ];
+
+    const sugerencias = await buscarSugerencias("casa kayam", { locale: "es", limite: 6 });
+
+    // Sans le classement par pertinence, cette assertion échoue : les six activités remplissent la
+    // liste et l'établissement tombe hors du plafond.
+    expect(sugerencias[0].esEstablecimiento).toBe(true);
+    expect(sugerencias[0].href).toBe("/establecimientos/casa-kayam-guatape");
+    expect(sugerencias).toHaveLength(6);
+  });
+
+  it("le classement ignore la casse ET les accents, comme le filtre de la base", async () => {
+    // La base cherche en `unaccent` : un classement plus strict que le filtre remonterait une
+    // correspondance moins bonne quand on tape sans accent.
+    state.filas = [
+      fila({ slug: "otro", nombre: { es: "Tour por el embalse de Guatapé" } }),
+      fila({
+        id: "cccccccc-0000-0000-0000-000000000001",
+        slug: "guatape-directo",
+        nombre: { es: "Guatapé en lancha" },
+      }),
+    ];
+
+    const sugerencias = await buscarSugerencias("guatape", { locale: "es", limite: 6 });
+
+    expect(sugerencias[0].nombre).toBe("Guatapé en lancha");
   });
 });

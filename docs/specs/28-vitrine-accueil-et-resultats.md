@@ -577,6 +577,47 @@ Les trois autres zones n'ont toujours pas leur `error.tsx` ni leur `loading.tsx`
 prévoit pour chacune) : la vitrine est la seule à porter aujourd'hui un écran qui interroge le
 catalogue, et créer trois fichiers sans écran pour les justifier serait de l'anticipation.
 
+## 10quinquies. Ce que la revue adversariale a trouvé (2026-09-08)
+
+29 trouvailles remontées par quatre chercheurs, **16 tuées par les réfuteurs**, 5 confirmées et
+reproduites en réel. Quatre sont corrigées dans le même geste ; la cinquième est datée ci-dessous.
+
+**Corrigé — les suggestions ne proposaient pas ce qu'on leur demandait.** `search_catalog` finit par
+`order by c.tipo, c.rango_seccion`, un ordre pensé pour l'accueil qui range ses cinq sections. Or
+`products.type` est du texte : `activity < camp < evento < lodging < transport`. Demander six lignes
+à cette requête, c'était donc demander « les six premières ACTIVITÉS ». Reproduit contre le Postgres
+local : taper « Casa Kayam » proposait l'hôtel ; en lui ajoutant cinq activités, le même appel
+rendait six activités et **la carte de l'hôtel disparaissait** — le prédicat texte couvre le nom de
+l'établissement, donc son nom fait correspondre tous ses produits, et sa propre carte est servie en
+dernier. `sugerencias.ts` demande désormais une réserve (`limite × 5`, une par section) et classe en
+TypeScript : préfixe d'abord, établissement pour départager, ordre de la base ensuite. Sans migration.
+
+**Corrigé — trois trous de couverture, chacun refermé et vérifié par mutation.** (a) Retirer
+`useTransition` en ENTIER laissait 515 tests sur 515 au vert : la moitié du §10quater pouvait
+disparaître sans qu'un garde-fou bouge. (b) Retirer le `if (!reponse.ok) throw` du pont de
+suggestions laissait la suite verte, alors que le rendu partait en `TypeError` — donc sur l'écran
+d'erreur. (c) Les trois tests du lot montaient un catalogue i18n **écrit à la main** : renommer
+`{indice}` en `{index}` dans les messages laissait tout vert pendant que chaque photo aurait porté
+`alt="HomePage.fotoAlt"` en production. Ils utilisent maintenant `loadMessages("es")`, la convention
+déjà majoritaire du dépôt — et la justification qui les excusait (« le lot i18n est écrit en
+parallèle ») était fausse : `git log -S` montre que les deux sont nés dans le MÊME commit.
+
+**Non corrigé, et daté — `?tag=<slug inconnu>` vide l'accueil.** Le §0 dit « `tipo`/`tag` inconnu →
+ignoré ». C'est vrai pour `tipo`, validé par `esTipoOferta` à la lecture ; c'est **faux pour `tag`**,
+qui part tel quel en `p_tag_slug` et dont le prédicat SQL n'a qu'une échappatoire (`is null`) : un
+slug absent de `catalog_tags` filtre tout, et `BuscadorInicio` le reporte à chaque soumission, donc
+la page reste vide indéfiniment. Mesuré en réel (7 lignes sans tag, 0 avec `zzz-inexistant`).
+
+**Pourquoi ce n'est pas corrigé ici** : rien ne fabrique de lien `?tag=` aujourd'hui — les pages de
+tags sont la spec 29 — donc le chemin n'est atteignable qu'en tapant l'URL à la main ; et le
+correctif tient en trois lignes de SQL **dans une fonction de 300 lignes**, qu'il faudrait
+republier en entier. La spec 29 doit de toute façon redéfinir `search_catalog` (pour l'index de
+tags) et donner des tags au seed — qui n'en a **aucun** aujourd'hui, si bien que le volet « chercher
+par libellé de tag » du cahier §2a n'est couvert par rien. Le correctif y coûte zéro ligne de plus.
+**À faire dans le lot de la spec 29, pas plus tard** : le prédicat gagne
+`or not exists (select 1 from public.catalog_tags ct where ct.slug = p_tag_slug)`, plus un cas pgTAP
+et `&tag=zzz-inexistant` dans l'URL de l'e2e des paramètres invalides.
+
 ## 11. Annexe — traçabilité
 
 | Sujet | Sources |

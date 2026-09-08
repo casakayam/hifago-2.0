@@ -34,9 +34,30 @@ import { esTipoOferta, type SugerenciaCatalogo } from "./tipos";
 const MINIMO_CARACTERES = 2;
 
 /**
- * Les suggestions à proposer pour un texte en cours de frappe.
+ * Combien de lignes demander à la base pour en garder `limite`.
  *
- * ⚠️ Pas de `p_por_tipo` : on veut les MEILLEURES correspondances, tous types confondus. Le plafond
+ * ⚠️ CE FACTEUR N'EST PAS UNE MARGE DE CONFORT, il répare un défaut mesuré le 2026-09-08 par la
+ * revue du lot. `search_catalog` finit par `order by c.tipo, c.rango_seccion` — un ordre pensé pour
+ * l'ACCUEIL, qui range ses cinq sections. `products.type` est du texte, donc l'ordre est
+ * alphabétique : activity < camp < evento < lodging < transport. Demander six lignes à cette
+ * requête, c'est donc demander « les six premières ACTIVITÉS », jamais « les six meilleures
+ * correspondances ».
+ *
+ * Reproduit contre le Postgres local : taper « Casa Kayam » proposait bien l'hôtel ; en ajoutant
+ * cinq activités au même établissement, le même appel rendait six lignes `activity` et **la carte
+ * de l'hôtel avait disparu**. Le prédicat texte couvre le nom de l'établissement, donc son nom fait
+ * correspondre TOUS ses produits — et sa propre carte, de type `lodging`, est servie en dernier.
+ *
+ * Cinq sections, donc cinq fois la réserve : c'est le seul facteur qui garantit d'atteindre la
+ * dernière section quelle que soit la répartition. L'accueil ne souffre pas du même défaut, elle
+ * passe déjà `porSeccion * ORDEN_SECCIONES.length` pour la même raison (`buscar.ts`).
+ */
+const RESERVA_POR_SECCION = 5;
+
+/**
+ * Les suggestions à proposer pour un texte en cours de frappe, **classées par pertinence**.
+ *
+ * ⚠️ Pas de `p_por_tipo` : on veut les meilleures correspondances, tous types confondus. Le plafond
  * par section est un besoin de l'accueil (cinq rangées à remplir), pas d'une liste de six lignes —
  * l'y poser rendrait « huit par type » et noierait la correspondance exacte sous les autres.
  */
@@ -50,7 +71,7 @@ export async function buscarSugerencias(
   const supabase = createPublicClient();
   const { data, error } = await supabase.rpc("search_catalog", {
     p_query: texto,
-    p_limite: limite,
+    p_limite: limite * RESERVA_POR_SECCION,
   });
 
   // Échec franc, comme `buscarSecciones` : un tableau vide se lit « aucun résultat », donc rendre
@@ -59,7 +80,42 @@ export async function buscarSugerencias(
 
   return ((data ?? []) as FilaCatalogo[])
     .map((fila) => enSugerencia(fila, locale))
-    .filter((s): s is SugerenciaCatalogo => s !== null);
+    .filter((s): s is SugerenciaCatalogo => s !== null)
+    .sort(porPertinencia(texto))
+    .slice(0, limite);
+}
+
+/**
+ * L'ordre d'une liste de suggestions, qui n'est PAS celui d'une page de résultats.
+ *
+ * Trois critères, du plus fort au plus faible :
+ *  1. le nom COMMENCE par ce qui est tapé — c'est ce que cherche quelqu'un qui tape un nom ;
+ *  2. à égalité, un ÉTABLISSEMENT passe devant ses propres offres : taper « Casa Kayam » doit
+ *     proposer Casa Kayam, pas sa troisième activité ;
+ *  3. à égalité encore, l'ordre rendu par la base est conservé (`sort` est stable en JS depuis
+ *     ES2019, donc `0` préserve vraiment la position d'origine — ce n'est pas une supposition).
+ *
+ * ⚠️ Comparaison insensible à la casse ET aux accents (`localeCompare` ne le fait pas ; la
+ * normalisation Unicode si) : la base, elle, cherche déjà en `unaccent`, et un classement plus
+ * strict que le filtre remonterait « Guatapé » derrière une correspondance moins bonne quand on
+ * tape « guatape ».
+ */
+function porPertinencia(texto: string) {
+  const buscado = normalizar(texto);
+  return (a: SugerenciaCatalogo, b: SugerenciaCatalogo) => {
+    const prefijoA = normalizar(a.nombre).startsWith(buscado) ? 0 : 1;
+    const prefijoB = normalizar(b.nombre).startsWith(buscado) ? 0 : 1;
+    if (prefijoA !== prefijoB) return prefijoA - prefijoB;
+    if (a.esEstablecimiento !== b.esEstablecimiento) return a.esEstablecimiento ? -1 : 1;
+    return 0;
+  };
+}
+
+function normalizar(valor: string) {
+  return valor
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLocaleLowerCase();
 }
 
 function enSugerencia(fila: FilaCatalogo, locale: string): SugerenciaCatalogo | null {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import { loadMessages } from "@/messages";
 import type { SearchPanelLabels } from "@/components/organisms/SearchPanel";
 import type { Criterios } from "@/lib/catalog/tipos";
 import { BuscadorInicio } from "./BuscadorInicio";
@@ -76,20 +77,16 @@ const LABELS: SearchPanelLabels = {
 // Le composant traduit UNE seule chose lui-même — `personas.valueLabel`, un pluriel accordé sur le
 // nombre choisi, que la page ne peut pas fournir puisque ce nombre est un état client. D'où ce
 // provider : sans lui, `useTranslations` lève et les neuf tests tombent d'un coup.
-const MESSAGES = {
-  HomePage: {
-    personas: { valueLabel: "{count, plural, one {# persona} other {# personas}}" },
-    secciones: { activity: "Actividades", lodging: "Alojamientos" },
-    tiposSingular: { activity: "Actividad", lodging: "Alojamiento" },
-    buscando: "Buscando…",
-    sugerencias: {
-      metaEstablecimiento: "Establecimiento",
-      metaOferta: "{tipo} · {establecimiento}",
-      metaOfertaSinLugar: "{tipo}",
-      atajoTipo: "{count, plural, one {# oferta} other {# ofertas}}",
-    },
-  },
-};
+// ⚠️ Le catalogue de messages est le VRAI (`loadMessages`), jamais un objet écrit à la main — c'est
+// la convention déjà majoritaire du dépôt (SiteHeader, SiteMenu, SiteFooter, LanguageSwitcher,
+// ProductDetailView, formatOccurrenceLabel) et sa raison est mécanique : un catalogue de test
+// recopié à la main teste le catalogue de test. Mesuré le 2026-09-08 par la revue du lot : renommer
+// `{indice}` en `{index}` dans messages/{es,en}/HomePage.json laissait les 514 tests VERTS pendant
+// que chaque photo du catalogue aurait porté `alt="HomePage.fotoAlt"` en production — `t()` n'est
+// pas typé sur le catalogue (aucune augmentation `IntlMessages` dans ce dépôt), donc ni tsc ni le
+// lint ne voient rien, et `parity.test.ts` ne compare que des CHEMINS de clés, jamais leurs
+// variables.
+const MESSAGES = loadMessages("es");
 
 const ATAJOS = [
   { tipo: "activity" as const, total: 12 },
@@ -314,6 +311,39 @@ describe("BuscadorInicio", () => {
     const lien = screen.getByText("Kayak en el Embalse").closest("a");
     expect(lien?.getAttribute("href")).toBe("/es/productos/kayak-embalse");
 
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("une panne du pont ne casse pas l'accueil, et ne se tait pas au journal", async () => {
+    // ⚠️ Ce test épingle le `if (!reponse.ok) throw` — le seul garde qui sépare une panne d'un
+    // crash. Vérifié par mutation le 2026-09-08 : retirer cette ligne laissait la suite ENTIÈREMENT
+    // verte, alors que le rendu partait en `TypeError: Cannot read properties of undefined
+    // (reading 'map')` dans le useMemo, c'est-à-dire sur l'écran d'erreur de la zone.
+    //
+    // Le corps d'échec de la route ne porte PAS de clé `sugerencias` (spec 28 §10ter) : une réponse
+    // d'échec ne doit pas avoir la forme d'un succès. C'est exactement ce que ce bouchon rend.
+    const fetchEspion = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ ok: false, reason: "catalogo_no_disponible" }),
+    });
+    vi.stubGlobal("fetch", fetchEspion);
+    const journal = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.useFakeTimers();
+    monter();
+
+    taper("kayak");
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
+
+    // La recherche reste utilisable sans suggestions — `Entrée` soumet toujours le texte tapé.
+    expect(champ().value).toBe("kayak");
+    // Dégradé côté visiteur, jamais côté journal.
+    expect(journal).toHaveBeenCalledTimes(1);
+
+    journal.mockRestore();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
