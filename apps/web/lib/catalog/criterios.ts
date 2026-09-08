@@ -97,6 +97,41 @@ export function escribirCriterios(criterios: Criterios): string {
   return cadena ? `?${cadena}` : "";
 }
 
+/**
+ * Combien d'offres une page de listing sert d'un coup (spec 29 §7b).
+ *
+ * 24 est un multiple de 1, 2 et 3 — les trois largeurs de la grille (`grid-cols-1`, `md:2`,
+ * `lg:3`) : aucune rangée n'est laissée incomplète en bas de page, quel que soit l'écran.
+ */
+export const TAMANO_PAGINA = 24;
+
+/**
+ * Le plafond dur de `?pagina` (spec 29 §0).
+ *
+ * ⚠️ **Ce n'est pas un réglage d'affichage, c'est une protection.** Ces pages sont publiques et
+ * anonymes, et `pagina` est multiplié par `TAMANO_PAGINA` pour construire la limite SQL : sans
+ * plafond, `?pagina=99999` fait demander 2,4 millions de lignes à Postgres depuis une simple URL,
+ * autant de fois qu'on la recharge. 20 pages = 480 offres, très au-delà de ce qu'un visiteur
+ * atteint en défilant.
+ */
+export const MAX_PAGINAS = 20;
+
+/**
+ * Combien de pages sont déjà chargées, lu depuis l'URL.
+ *
+ * ⚠️ **`pagina` n'est PAS un critère**, et ne rejoint jamais `Criterios` : il décrit où en est le
+ * DÉFILEMENT, pas ce qu'on cherche. L'y mettre le ferait écrire par `escribirCriterios` dans les
+ * liens « Ver más » de l'accueil et dans le canonical — deux endroits où il n'a rien à faire.
+ *
+ * Même règle que tous les paramètres de ce dépôt : rien n'échoue jamais. Une valeur illisible,
+ * nulle, négative ou au-delà du plafond retombe sur 1 — jamais une erreur, jamais une page vide.
+ */
+export function leerPagina(params: ParamsBrutos): number {
+  const bruto = Number(primero(params.pagina));
+  if (!Number.isInteger(bruto) || bruto < 1 || bruto > MAX_PAGINAS) return 1;
+  return bruto;
+}
+
 /** Vrai si au moins un filtre est actif — l'accueil s'en sert pour choisir son état vide. */
 export function hayCriterios(criterios: Criterios): boolean {
   return Object.keys(criterios).length > 0;

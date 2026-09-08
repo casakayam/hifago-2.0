@@ -213,9 +213,20 @@ test("une recherche sans résultat rend l'état vide, et la barre reste utilisab
 
 test("un paramètre invalide rend l'accueil normale, jamais une erreur", async ({ page }) => {
   // Les quatre familles de paramètres, toutes invalides d'un coup : entier non numérique, date mal
-  // formée, type inconnu. `leerCriterios` les ignore un par un — une URL mal recopiée ou tronquée
-  // par un client mail doit rendre l'accueil, pas une 400 (spec 28 §9).
-  const response = await irAlInicio(page, "?personas=abc&desde=no-es-una-fecha&tipo=inexistante");
+  // formée, type inconnu, TAG inconnu. `leerCriterios` les ignore un par un — une URL mal recopiée
+  // ou tronquée par un client mail doit rendre l'accueil, pas une 400 (spec 28 §9).
+  //
+  // ⚠️ `tag` est le seul des quatre qui n'était PAS ignoré jusqu'au 2026-09-08 : il ne passe pas
+  // par une validation TypeScript (aucune liste fermée à comparer — les slugs vivent en base), il
+  // part tel quel en `p_tag_slug`. Le prédicat SQL n'avait qu'une échappatoire (`is null`), donc un
+  // slug absent de `catalog_tags` filtrait TOUT — et comme le panneau de recherche reporte ses
+  // critères à chaque soumission, la page ne se déverrouillait plus jamais. Corrigé en base
+  // (spec 29 §6c, migration `20260908120000`) ; ce test est ce qui empêche la régression de
+  // revenir par le haut, là où les assertions pgTAP la tiennent par le bas.
+  const response = await irAlInicio(
+    page,
+    "?personas=abc&desde=no-es-una-fecha&tipo=inexistante&tag=zzz-inexistant"
+  );
   expect(response?.status()).toBe(200);
 
   await expect(page.locator("h1")).toHaveCount(1);

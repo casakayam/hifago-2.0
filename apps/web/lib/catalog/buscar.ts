@@ -1,5 +1,10 @@
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
 import { createPublicClient } from "@/lib/supabase/publicClient";
+// ⚠️ Le MÊME prédicat que le sitemap et que les `generateMetadata` des fiches — jamais une
+// deuxième version : deux copies divergeraient, et le sitemap listerait des URL que les
+// métadonnées déclarent `noindex`. Le module est un prédicat pur, sans dépendance.
+import { hasNativeContent } from "@/lib/seo/nativeContent";
+import { routing } from "@/i18n/routing";
 import { segmentoDeTipo } from "./segmentos";
 import {
   ORDEN_SECCIONES,
@@ -8,6 +13,7 @@ import {
   type FotoTarjeta,
   type PrecioTarjeta,
   type Seccion,
+  type CategoriaConOferta,
   type TarjetaOferta,
   type TipoOferta,
 } from "./tipos";
@@ -185,16 +191,31 @@ export async function buscarSecciones(
   );
 }
 
-/** Une page de listing : un seul type, sans plafond par section, paginé pour le défilement. */
+/**
+ * Une page de listing : un seul type, sans plafond par section, paginé pour le défilement.
+ *
+ * ⚠️ `sinTag` est une OPTION, jamais un critère (spec 29 §7a). Il vient du segment d'URL
+ * `/actividades/otras`, pas d'un paramètre de recherche : le mettre dans `Criterios` le ferait
+ * écrire dans les liens par `escribirCriterios`, et « les activités que personne n'a classées »
+ * deviendrait un filtre partageable qui n'a de sens que sur cette page-là.
+ */
 export async function buscarTipo(
   tipo: TipoOferta,
   criterios: Criterios,
-  { limite, desplazamiento, locale }: { limite: number; desplazamiento: number; locale: string }
+  {
+    limite,
+    desplazamiento,
+    locale,
+    sinTag,
+  }: { limite: number; desplazamiento: number; locale: string; sinTag?: boolean }
 ): Promise<{ tarjetas: TarjetaOferta[]; total: number; hayMas: boolean }> {
   const supabase = createPublicClient();
 
   const { data, error } = await supabase.rpc("search_catalog", {
     ...argumentos(criterios, [tipo]),
+    // `undefined` plutôt que `false` : la RPC porte son propre défaut, et n'envoyer que ce qui
+    // filtre garde les appels lisibles dans les journaux Postgres.
+    p_sin_tag: sinTag ? true : undefined,
     p_por_tipo: undefined,
     p_limite: limite,
     p_offset: desplazamiento,
@@ -216,4 +237,105 @@ export async function buscarTipo(
 /** Le lien « Ver más » d'une section : le listing du type, critères conservés. */
 export function hrefSeccion(tipo: TipoOferta, sufijoCriterios: string): string {
   return `/${segmentoDeTipo(tipo)}${sufijoCriterios}`;
+}
+
+/** Le slug RÉSERVÉ de la page des activités qu'aucune catégorie ne classe (spec 29 §6a).
+ *
+ *  ⚠️ Il est aussi interdit à `catalog_tags` par une contrainte SQL — la valeur vit donc à deux
+ *  endroits, et c'est assumé : le TypeScript ne peut pas lire une contrainte Postgres. Le test
+ *  pgTAP `search_catalog_tags.test.sql` tient l'autre bout. */
+export const SLUG_SIN_TAG = "otras";
+
+/**
+ * Les CATÉGORIES à montrer sur `/es/actividades` (spec 29 §7a).
+ *
+ * ⚠️ Elle prend les CRITÈRES et la LOCALE, là où la spec 27 §0 annonçait `listarTagsConOferta(tipo)` :
+ * l'index respecte la recherche en cours (décision 3 — une tuile ne mène jamais à une page vide), et
+ * l'ordre alphabétique porte sur le libellé résolu, donc dépend de la langue.
+ *
+ * ⚠️ LE TRI EST FAIT ICI, PAS EN SQL, et ce n'est pas un choix de commodité : la base ne connaît ni
+ * la locale demandée ni le repli JSONB. Un `order by label->>'es'` classerait la version anglaise
+ * par ses libellés espagnols, et ignorerait la collation — « Ñandú » après « Zip line », les accents
+ * rangés au hasard. `Intl.Collator` fait les deux correctement.
+ */
+export async function listarTagsConOferta(
+  tipo: TipoOferta,
+  criterios: Criterios,
+  { locale }: { locale: string }
+): Promise<CategoriaConOferta[]> {
+  const supabase = createPublicClient();
+
+  const { data, error } = await supabase.rpc("search_catalog_tags", {
+    p_tipo: tipo,
+    p_query: criterios.q ?? undefined,
+    p_personas: criterios.personas ?? undefined,
+    p_desde: criterios.desde ?? undefined,
+    p_hasta: criterios.hasta ?? undefined,
+  });
+
+  // Échec franc : un index de catégories vide rendu comme un index normal ferait croire au visiteur
+  // qu'il n'y a rien à visiter. Même règle qu'`buscarSecciones` (CLAUDE.md §4.4, en lecture).
+  if (error) throw error;
+
+  const urlPublica = (ruta: string) =>
+    supabase.storage.from(BUCKET_MEDIA).getPublicUrl(ruta).data.publicUrl;
+
+  type FilaTag = {
+    slug: string | null;
+    label: unknown;
+    description: unknown;
+    image_path: string | null;
+    total: number;
+    es_sin_tag: boolean;
+  };
+
+  const categorias: CategoriaConOferta[] = [];
+  let sinTag: CategoriaConOferta | null = null;
+
+  for (const fila of (data ?? []) as FilaTag[]) {
+    if (fila.es_sin_tag) {
+      // ⚠️ `nombre` et `descripcion` restent VIDES : « Otras actividades » n'est pas une ligne de
+      // `catalog_tags`, ses libellés viennent de next-intl et donc de la page. Cette couche ne
+      // traduit rien (spec 29 §0).
+      sinTag = {
+        slug: SLUG_SIN_TAG,
+        href: `/actividades/${SLUG_SIN_TAG}`,
+        nombre: "",
+        descripcion: null,
+        foto: null,
+        esSinTag: true,
+        // ⚠️ Native PARTOUT : ses libellés viennent de next-intl (jeu d'interface fermé et complet
+        // dans les deux locales), pas du contenu partenaire. Sa page est donc indexable dans les
+        // deux langues, contrairement à une catégorie rédigée dans une seule.
+        localesNativas: [...routing.locales],
+        testId: `categoria-${SLUG_SIN_TAG}`,
+      };
+      continue;
+    }
+
+    // Une ligne sans slug ne peut pas être un lien : elle disparaît plutôt que de casser la page.
+    if (!fila.slug) continue;
+
+    categorias.push({
+      slug: fila.slug,
+      href: `/actividades/${fila.slug}`,
+      // Repli sur le slug : une catégorie sans libellé dans aucune langue reste cliquable.
+      nombre: resolveLocalizedField(asLocalizedField(fila.label), locale) ?? fila.slug,
+      descripcion: resolveLocalizedField(asLocalizedField(fila.description), locale) ?? null,
+      foto: fila.image_path ? { url: urlPublica(fila.image_path) } : null,
+      esSinTag: false,
+      localesNativas: routing.locales.filter((candidate) =>
+        hasNativeContent(fila.label, candidate)
+      ),
+      testId: `categoria-${fila.slug}`,
+    });
+  }
+
+  const collator = new Intl.Collator(locale);
+  categorias.sort((a, b) => collator.compare(a.nombre, b.nombre));
+
+  // ⚠️ « Otras actividades » TOUJOURS EN DERNIER, jamais dans l'ordre alphabétique : ce n'est pas
+  // une catégorie parmi les autres, c'est ce qui reste. La placer entre « Kayak » et « Senderismo »
+  // laisserait croire à une catégorie éditoriale de plus.
+  return sinTag ? [...categorias, sinTag] : categorias;
 }

@@ -80,3 +80,43 @@ export type SugerenciaCatalogo = {
   /** Chemin SANS préfixe de langue : `/productos/<slug>` ou `/establecimientos/<slug>`. */
   href: string;
 };
+
+/**
+ * Une CATÉGORIE de l'index `/es/actividades` (spec 29 §0).
+ *
+ * ⚠️ Le mot « catégorie » et non « tag » est délibéré : depuis la décision de Jérôme du 2026-09-08,
+ * une ligne de `catalog_tags` porte une image, un nom et un texte — c'est une entité éditoriale que
+ * le visiteur voit, plus une étiquette technique.
+ *
+ * Comme `TarjetaOferta`, tout est DÉJÀ RÉSOLU ici : le nom et le texte dans la locale demandée,
+ * l'URL de l'image depuis son `storage_path`. Un composant ne parle jamais à Storage et ne résout
+ * jamais un champ JSONB.
+ */
+export type CategoriaConOferta = {
+  /** `kayak` — ou `otras` pour la tuile qui rattrape ce qu'aucune catégorie ne classe. */
+  slug: string;
+  /** Chemin SANS préfixe de langue : `/actividades/kayak`. */
+  href: string;
+  /**
+   * ⚠️ VIDE quand `esSinTag` est vrai. « Otras actividades » n'est pas une ligne de la base : son
+   * nom et son texte viennent des messages next-intl, donc de la page. Cette couche ne traduit
+   * rien — même règle que le texte alternatif des photos et que les libellés de suggestion.
+   */
+  nombre: string;
+  /** Déjà résolu, `null` si la catégorie n'a pas encore été rédigée. */
+  descripcion: string | null;
+  /** URL publique déjà résolue, `null` → la tuile rend un aplat. */
+  foto: FotoTarjeta | null;
+  /** Vrai pour LA seule tuile « Otras actividades », toujours rendue en dernier. */
+  esSinTag: boolean;
+  /**
+   * Les locales où le NOM est réellement saisi — pas obtenu par repli.
+   *
+   * ⚠️ C'est une donnée d'INDEXATION, pas d'affichage : une page de catégorie servie en repli
+   * (nom espagnol sous une URL `/en/`) doit rester `noindex` avec un canonical vers la langue
+   * source (règle SEO 2). Elle est calculée dans la couche parce que c'est elle qui tient le champ
+   * JSONB brut — le résoudre puis tenter de deviner s'il vient d'un repli serait impossible.
+   */
+  localesNativas: string[];
+  testId: string;
+};

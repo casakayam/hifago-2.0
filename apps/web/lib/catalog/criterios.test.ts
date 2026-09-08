@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { escribirCriterios, hayCriterios, leerCriterios } from "./criterios";
+import {
+  MAX_PAGINAS,
+  escribirCriterios,
+  hayCriterios,
+  leerCriterios,
+  leerPagina,
+} from "./criterios";
 
 // Les deux règles que ce module existe pour tenir (spec 28 §7) : rien n'échoue jamais, et une même
 // recherche produit toujours la même URL. Les cas ci-dessous sont ceux qu'un humain ou un robot
@@ -89,5 +95,35 @@ describe("hayCriterios", () => {
   it("distingue une recherche vide d'une recherche filtrée", () => {
     expect(hayCriterios({})).toBe(false);
     expect(hayCriterios({ q: "kayak" })).toBe(true);
+  });
+});
+
+describe("leerPagina", () => {
+  it("lit une page valide", () => {
+    expect(leerPagina({ pagina: "3" })).toBe(3);
+  });
+
+  it("retombe sur 1 sur tout ce qui n'est pas un entier positif", () => {
+    // Aucun de ces cas n'échoue : une URL est recopiée de travers, tronquée par un client mail,
+    // ou fabriquée par un robot. La règle du dépôt est la même partout — ignoré, jamais 400.
+    for (const valeur of ["abc", "0", "-2", "1.5", "", " ", undefined]) {
+      expect(leerPagina({ pagina: valeur })).toBe(1);
+    }
+    expect(leerPagina({})).toBe(1);
+  });
+
+  it("⚠️ plafonne : une page hors bornes ne fait pas demander des millions de lignes", () => {
+    // LE test de cette fonction. `pagina` multiplie la limite SQL, et ces pages sont publiques et
+    // anonymes : sans ce plafond, `?pagina=99999` est un vecteur de charge à une seule requête.
+    expect(leerPagina({ pagina: String(MAX_PAGINAS) })).toBe(MAX_PAGINAS);
+    expect(leerPagina({ pagina: String(MAX_PAGINAS + 1) })).toBe(1);
+    expect(leerPagina({ pagina: "99999" })).toBe(1);
+  });
+
+  it("ne fuit jamais dans les critères : escribirCriterios ne l'écrit pas", () => {
+    // La régression qu'on empêche : `pagina` recopié dans les liens « Ver más » de l'accueil et
+    // dans le canonical, deux endroits où il n'a rien à faire.
+    const criterios = leerCriterios({ q: "kayak", pagina: "3" });
+    expect(escribirCriterios(criterios)).toBe("?q=kayak");
   });
 });

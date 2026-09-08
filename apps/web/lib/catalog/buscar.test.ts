@@ -22,7 +22,7 @@ vi.mock("@/lib/supabase/publicClient", () => ({
   }),
 }));
 
-import { buscarSecciones, buscarTipo } from "./buscar";
+import { buscarSecciones, buscarTipo, listarTagsConOferta } from "./buscar";
 
 function fila(over: Record<string, unknown> = {}) {
   return {
@@ -176,5 +176,118 @@ describe("buscarTipo", () => {
     state.filas = [];
     const r = await buscarTipo("evento", {}, { limite: 8, desplazamiento: 0, locale: "es" });
     expect(r).toEqual({ tarjetas: [], total: 0, hayMas: false });
+  });
+
+  it("transmet `sinTag` à la base — la page « Otras actividades » (spec 29 §7a)", async () => {
+    state.filas = [fila()];
+    await buscarTipo("activity", {}, { limite: 24, desplazamiento: 0, locale: "es", sinTag: true });
+    expect(state.ultimosArgs).toMatchObject({ p_sin_tag: true });
+  });
+
+  it("n'envoie pas `p_sin_tag` quand on ne le demande pas", async () => {
+    // La RPC porte son propre défaut : envoyer `false` à chaque appel de listing n'ajouterait rien
+    // et brouillerait les journaux Postgres.
+    state.filas = [fila()];
+    await buscarTipo("activity", {}, { limite: 24, desplazamiento: 0, locale: "es" });
+    expect(state.ultimosArgs).toMatchObject({ p_sin_tag: undefined });
+  });
+});
+
+function filaTag(over: Record<string, unknown> = {}) {
+  return {
+    slug: "kayak",
+    label: { es: "Kayak", en: "Kayaking" },
+    description: { es: "Recorridos por el embalse" },
+    image_path: "tags/kayak.webp",
+    total: 3,
+    es_sin_tag: false,
+    ...over,
+  };
+}
+
+describe("listarTagsConOferta", () => {
+  it("résout le nom, le texte et l'URL de l'image dans la locale demandée", async () => {
+    state.filas = [filaTag()];
+    const [categoria] = await listarTagsConOferta("activity", {}, { locale: "en" });
+
+    expect(categoria).toMatchObject({
+      slug: "kayak",
+      href: "/actividades/kayak",
+      nombre: "Kayaking",
+      esSinTag: false,
+      testId: "categoria-kayak",
+    });
+    // La couche résout l'URL publique : un composant ne parle jamais à Storage.
+    expect(categoria.foto).toEqual({ url: "https://cdn.test/tags/kayak.webp" });
+  });
+
+  it("rend `foto` et `descripcion` à null quand la catégorie n'est pas rédigée", async () => {
+    state.filas = [filaTag({ image_path: null, description: null })];
+    const [categoria] = await listarTagsConOferta("activity", {}, { locale: "es" });
+    expect(categoria.foto).toBeNull();
+    expect(categoria.descripcion).toBeNull();
+  });
+
+  it("se rabat sur le slug quand aucune langue ne porte de libellé", async () => {
+    state.filas = [filaTag({ label: {} })];
+    const [categoria] = await listarTagsConOferta("activity", {}, { locale: "es" });
+    // Une catégorie sans nom reste CLIQUABLE plutôt que d'afficher un vide.
+    expect(categoria.nombre).toBe("kayak");
+  });
+
+  // ⚠️ LE test de l'ordre. Sans `Intl.Collator`, un tri naïf range « Ñandú » après « Zip line » et
+  // « Édredon » après « Zumba » : la base ne connaît ni la locale ni la collation, c'est pour ça
+  // que le tri n'est pas en SQL.
+  it("classe par ordre alphabétique de la locale, accents et « ñ » compris", async () => {
+    state.filas = [
+      filaTag({ slug: "zip", label: { es: "Zip line" } }),
+      filaTag({ slug: "nandu", label: { es: "Ñandú" } }),
+      filaTag({ slug: "buceo", label: { es: "Buceo" } }),
+    ];
+    const categorias = await listarTagsConOferta("activity", {}, { locale: "es" });
+    expect(categorias.map((c) => c.nombre)).toEqual(["Buceo", "Ñandú", "Zip line"]);
+  });
+
+  // ⚠️ « Otras actividades » n'est PAS une catégorie parmi les autres : c'est ce qui reste. La
+  // ranger alphabétiquement la ferait passer pour une catégorie éditoriale de plus.
+  it("place la tuile « sans tag » en DERNIER, hors de l'ordre alphabétique", async () => {
+    state.filas = [
+      filaTag({ slug: "zip", label: { es: "Zip line" } }),
+      filaTag({ es_sin_tag: true, slug: null, label: null, description: null, image_path: null }),
+      filaTag({ slug: "buceo", label: { es: "Buceo" } }),
+    ];
+    const categorias = await listarTagsConOferta("activity", {}, { locale: "es" });
+
+    expect(categorias.map((c) => c.slug)).toEqual(["buceo", "zip", "otras"]);
+    // ⚠️ Son nom reste VIDE : il vient des messages next-intl, pas de la base. Cette couche ne
+    // traduit rien.
+    expect(categorias[2]).toMatchObject({
+      esSinTag: true,
+      nombre: "",
+      descripcion: null,
+      foto: null,
+      href: "/actividades/otras",
+    });
+  });
+
+  it("transmet les critères à la base — l'index respecte la recherche en cours", async () => {
+    state.filas = [];
+    await listarTagsConOferta(
+      "activity",
+      { q: "kayak", personas: 3, desde: "2026-03-12", hasta: "2026-03-15" },
+      { locale: "es" }
+    );
+    expect(state.ultimosArgs).toMatchObject({
+      p_tipo: "activity",
+      p_query: "kayak",
+      p_personas: 3,
+      p_desde: "2026-03-12",
+      p_hasta: "2026-03-15",
+    });
+  });
+
+  it("lève quand la base échoue — jamais un index vide qui aurait l'air normal", async () => {
+    state.error = { message: "boom" };
+    await expect(listarTagsConOferta("activity", {}, { locale: "es" })).rejects.toBeTruthy();
   });
 });

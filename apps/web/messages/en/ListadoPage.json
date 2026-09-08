@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "title": "{seccion} in Guatapé",
+    "description": "Discover {seccion} available in Guatapé and book online."
+  },
+  "migasEtiqueta": "Breadcrumb",
+  "cargarMas": "Load more",
+  "cargando": "Loading…",
+  "reintentar": "Try again",
+  "errorCarga": "We couldn't load more offers. Please try again.",
+  "conteo": "{cargadas} of {total, plural, one {# offer} other {# offers}}",
+  "emptyState": {
+    "titulo": "We found no offers matching those criteria.",
+    "descripcion": "Try other dates, fewer people, or a broader search."
+  },
+  "sinOfertas": {
+    "titulo": "There are no offers in this section yet.",
+    "descripcion": "Check back soon — our partners publish new experiences regularly."
+  },
+  "sinTag": {
+    "nombre": "Other activities",
+    "descripcion": "Everything that doesn't fit a category yet."
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "title": "{seccion} en Guatapé",
+    "description": "Descubre {seccion} disponibles en Guatapé y reserva en línea."
+  },
+  "migasEtiqueta": "Ruta de navegación",
+  "cargarMas": "Cargar más",
+  "cargando": "Cargando…",
+  "reintentar": "Reintentar",
+  "errorCarga": "No pudimos cargar más ofertas. Vuelve a intentarlo.",
+  "conteo": "{cargadas} de {total, plural, one {# oferta} other {# ofertas}}",
+  "emptyState": {
+    "titulo": "No encontramos ofertas con esos criterios.",
+    "descripcion": "Prueba con otras fechas, con menos personas o con una búsqueda más amplia."
+  },
+  "sinOfertas": {
+    "titulo": "Todavía no hay ofertas en esta sección.",
+    "descripcion": "Vuelve pronto: nuestros aliados publican nuevas experiencias con frecuencia."
+  },
+  "sinTag": {
+    "nombre": "Otras actividades",
+    "descripcion": "Todo lo que todavía no entra en una categoría."
+  }
+}
