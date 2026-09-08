@@ -4,7 +4,8 @@
 > racine de travail ; rien du dépôt legacy parent ne s'y applique. Répondre en français. Ce fichier
 > ne porte que des invariants : règles situationnelles dans `.claude/rules/` (chargées quand on
 > touche les fichiers concernés), procédures dans `.claude/skills/`, état dans `docs/journal/` et
-> `docs/backlog.md`.
+> `docs/backlog.md`. ⚠️ Annoncer la forme et l'effort de CHAQUE tâche avant de commencer :
+> `.claude/rules/orchestration.md`.
 
 ## Projet en une phrase
 Refonte complète de Casa Kayam/Hifago : monorepo Next.js (App Router, npm workspaces) sur Vercel +
