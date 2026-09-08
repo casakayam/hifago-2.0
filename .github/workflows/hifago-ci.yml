@@ -25,7 +25,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # ⚠️ `fetch-depth: 0` — PAS une optimisation, une correction. `actions/checkout` clone par
+      # défaut à la profondeur 1, et dans un dépôt superficiel `git log -1 -- <fichier>` rend le
+      # commit de TÊTE pour n'importe quel chemin : `scripts/docs_index.js` datait alors chaque
+      # document du jour du push, quand l'index commité porte les vraies dates. `docs:check`
+      # échouait donc à CHAQUE push, quoi qu'on corrige — 17 runs rouges d'affilée entre le
+      # 2026-09-04 et le 2026-09-07 avant que quiconque regarde la CI. Le script refuse désormais
+      # de tourner sur un clone superficiel plutôt que de mentir en silence.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22

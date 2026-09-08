@@ -153,6 +153,25 @@ function aujourdHuiBogota() {
  * voir la correction qu'on vient d'écrire, pas la dernière date commitée), sinon la date du dernier
  * commit qui l'a touché, sinon `null` (jamais commité et inexistant en working tree).
  */
+// Un clone SUPERFICIEL (`--depth 1`, le défaut d'`actions/checkout`) rend le commit de tête pour
+// n'importe quel chemin : `gitMaj` daterait alors tous les documents du même jour et l'index serait
+// déclaré périmé à chaque push, sans qu'aucun message ne dise pourquoi. Refuser franchement plutôt
+// que produire un index faux — c'est ce silence-là qui a coûté 17 runs rouges (2026-09-07).
+function refuseSiSuperficiel() {
+  try {
+    const out = execFileSync('git', ['rev-parse', '--is-shallow-repository'], { cwd: ROOT, encoding: 'utf8' }).trim();
+    if (out === 'true') {
+      console.error(
+        "Dépôt cloné en superficiel (--depth) : les dates par fichier seraient toutes fausses.\n" +
+        "En CI, poser `fetch-depth: 0` sur actions/checkout. En local, `git fetch --unshallow`."
+      );
+      process.exit(2);
+    }
+  } catch {
+    // Pas un dépôt git : `gitMaj` retombera sur le frontmatter, comportement déjà prévu.
+  }
+}
+
 function gitMaj(file) {
   try {
     const statut = execFileSync('git', ['status', '--porcelain', '--', file], { cwd: ROOT, encoding: 'utf8' });
@@ -323,6 +342,7 @@ ${parThe.journal.map(ligne).join('\n')}
 }
 
 const mode = process.argv.includes('--check') ? 'check' : 'build';
+refuseSiSuperficiel();
 const { docs, problemes } = collect();
 
 if (mode === 'check') {
