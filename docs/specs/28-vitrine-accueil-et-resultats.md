@@ -168,11 +168,27 @@ Aucune table créée, aucune écriture ajoutée, aucune RPC `security definer`.
 | Paramètre invalide | ignoré, jamais d'erreur (voir « Normalisation ») |
 | « Ver más » de la section activités | mène à `/es/actividades`, qui est un **index de tags** et non une liste d'offres (spec 29) — le libellé de ce lien diffère donc des quatre autres |
 
+### Ce que le design system n'a pas encore
+
+Trois manques, nommés ici plutôt que découverts en codant (convention posée le 2026-09-07 dans
+`apps/web/components/README.md`) :
+
+| Manque | Où | Quand |
+|---|---|---|
+| `SeccionOfertas` — titre, grille ou liste, lien « Ver más » | `organisms/` | **dans ce lot** |
+| `TarjetaOferta` — les deux variantes de carte | `molecules/` | **dans ce lot** |
+| `EstadoVacio` — le bloc « aucun résultat », qui **n'existe nulle part** aujourd'hui | `molecules/` | **dans ce lot** |
+| Un visuel plus grand sur `Card layout="row"` | `atoms/Card.tsx` — **modifie un composant existant** | **lot à part**, après arbitrage visuel (§10) |
+
+Les trois premiers ne servent que cet écran et ne demandent aucune décision visuelle : ils naissent
+avec l'écran, chacun avec son test et sa story. Le quatrième touche un atome que d'autres écrans
+utilisent déjà — il sort du lot, comme la convention l'exige.
+
 ### Fichiers touchés
 
 **Créés** : `app/[locale]/(vitrine)/page.tsx` · `app/[locale]/(vitrine)/BuscadorInicio.tsx` ·
-`components/organisms/SeccionOfertas.tsx` · `components/molecules/TarjetaOferta.tsx` (chacun + test
-+ story) · `lib/catalog/criterios.ts` · `lib/catalog/segmentos.ts` (table `tipo` → segment d'URL) ·
+`components/organisms/SeccionOfertas.tsx` · `components/molecules/TarjetaOferta.tsx` ·
+`components/molecules/EstadoVacio.tsx` (chacun + test + story) · `lib/catalog/criterios.ts` · `lib/catalog/segmentos.ts` (table `tipo` → segment d'URL) ·
 `e2e/home.spec.ts` · `supabase/migrations/<ts>_search_catalog_fotos_y_precios.sql`.
 **Modifiés** : `messages/{es,en}/HomePage.json` · `lib/catalog/buscar.ts` ·
 `e2e/{reserve,reserve-lodging-range,attribution,cart-multi-establishment,establishment-page}.spec.ts`

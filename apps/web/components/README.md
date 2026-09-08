@@ -150,6 +150,35 @@ Le playground se lance avec `npm run storybook` (port 6006) et **découvre les s
 aucun fichier central à modifier. Le gabarit **Mobile 390 est actif par défaut**, et la barre
 d'outils permet de basculer la langue (es/en) et le thème (vitrine/admin).
 
+## Quand une spec d'écran a besoin d'un composant qui n'existe pas
+
+Posé le 2026-09-07, à l'ouverture du chantier front — l'accueil (spec 28) a fait apparaître le cas
+trois fois d'un coup.
+
+**Une spec d'écran doit NOMMER les composants manquants**, dans sa liste de fichiers touchés, avec
+leur dossier. Un composant découvert manquant *pendant* le codage est le mode d'échec à éviter : il
+finit improvisé dans le fichier de la route, sans test, sans story, invisible au prochain écran qui
+en aurait eu besoin — et c'est comme ça qu'on se retrouve avec deux composants qui font la même
+chose. `PhotoStrip` a failli être réécrit exactement de cette façon.
+
+**Où le construire, deux cas seulement :**
+
+- **Dans le même lot que l'écran**, quand il ne sert que cet écran et qu'il ne demande aucune
+  décision visuelle — la carte d'une section, le bloc d'un état vide. Il naît avec son test et sa
+  story comme n'importe quel autre.
+- **Dans un lot à part**, quand il servira plusieurs écrans, quand il **modifie un composant
+  existant** (une variante, une taille, un état de plus), ou quand il demande un arbitrage visuel.
+  Modifier un atome au milieu d'un lot d'écran, c'est toucher un fichier que d'autres agents
+  utilisent, et c'est la collision garantie.
+
+**Jamais un troisième cas.** Un composant n'est jamais écrit à l'intérieur d'un `page.tsx`, même
+« provisoirement » : la règle du barrel RSC l'interdit de fait dès qu'il touche `@hifago/ui`, et
+rien ne le rattraperait ensuite.
+
+**Avant d'en créer un, chercher.** Le dossier `components/` tient sur un écran, et Storybook les
+range par ce qu'ils font (`Actions/`, `Saisie/`, `Affichage/`, `Structure/`, `Coquille/`) plutôt que
+par leur dossier — c'est fait pour ça.
+
 ## Travailler à plusieurs agents
 
 Voir `hifago/AGENTS-PARALLELES.md`, section « Agent qui crée des composants ». En résumé : un agent
