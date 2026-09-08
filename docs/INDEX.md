@@ -40,8 +40,8 @@
 - [Surface LobbyPMS exploitée, parcours front d'un produit lié, et cible du modèle hébergement](specs/24-modele-hebergement-et-surface-lobbypms.md) — **Partiel** (reste : Lot A implémenté le 2026-08-26 ; Lot B gelé (observation préprod requise) ; T1/T2/T3 de…) · maj 2026-09-07
 - [Propagation d'une annulation hifago vers LobbyPMS (C2)](specs/25-propagation-annulation-lobbypms.md) — **Implémenté** (reste : Vérifiée en conditions réelles le 2026-08-27 (booking créé puis annulé chez Casa Kayam)…) · maj 2026-09-07
 - [Référencement de la vitrine : Google et moteurs de réponse IA](specs/26-referencement-seo-et-moteurs-ia.md) — **Implémenté** (reste : Vérifiée en local le 2026-09-01 (build, serveur réel, 3 e2e). Validation par un outil…) · maj 2026-09-07
-- [Architecture de la vitrine : routes, zones, coquilles et couche d'accès aux données](specs/27-architecture-vitrine-et-routage.md) — **Brouillon** · maj 2026-09-07
-- [Vitrine : l'accueil, qui est aussi l'écran de résultats de recherche](specs/28-vitrine-accueil-et-resultats.md) — **Brouillon** · maj 2026-09-08
+- [Architecture de la vitrine : routes, zones, coquilles et couche d'accès aux données](specs/27-architecture-vitrine-et-routage.md) — **Brouillon** · maj 2026-09-08
+- [Vitrine : l'accueil, qui est aussi l'écran de résultats de recherche](specs/28-vitrine-accueil-et-resultats.md) — **Brouillon** · maj 2026-09-07
 - [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-07
 - [Gabarit de spec de feature (à copier, ne décrit aucune feature réelle)](specs/_modele.md) — **modele** · maj 2026-08-16
 - [Avant d'écrire une spec — poser les bonnes questions](specs/avant-la-spec.md) — **modele** · maj 2026-08-16

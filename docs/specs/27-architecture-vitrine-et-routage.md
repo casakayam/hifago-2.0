@@ -393,6 +393,25 @@ documentée que rien ne vérifie n'est pas une règle, c'est un souhait ») et c
 | zones noindex | une route de `(tunnel)`/`(cuenta)`/`(auth)` sans `robots: { index: false }` | `scripts/check-seo.sh` (étendu) |
 | barrel RSC | `@hifago/ui` importé depuis un Server Component | `scripts/check-design-system.sh` (existe) |
 
+⚠️ **Deux pièges d'écriture, mesurés le 2026-09-07 en faisant tourner ces contrôles à la main sur
+l'état actuel du dépôt.** Sans eux, trois contrôles sur cinq naissent avec des faux positifs — et un
+contrôle qui crie à tort est un contrôle qu'on désactive.
+
+1. **Ignorer les commentaires.** Une recherche naïve de `@hifago/ui` dans les `page.tsx` remonte
+   deux fichiers… qui ne font que **citer la règle en commentaire** pour expliquer pourquoi ils ne
+   l'importent pas. Idem pour `next/link` : les deux seules occurrences du dépôt sont les
+   commentaires de `LinkButton` et `BackLink` qui expliquent quoi ne pas faire. Ne matcher que la
+   ligne `import`, jamais le texte libre.
+2. **Exempter les couleurs qui ne sont pas des couleurs de thème.** Les huit valeurs hexadécimales
+   du dépôt sont les **drapeaux SVG** de `LanguageSwitcher` (colombien, britannique). Un drapeau n'a
+   pas de jeton sémantique : sa couleur *est* sa définition. Le contrôle doit exempter les attributs
+   `fill`/`stroke` d'un SVG, ou ce fichier avec sa raison écrite.
+
+**État de départ mesuré** : seul le contrôle « aucune requête dans un `page.tsx` » échoue, sur cinq
+fichiers — et ce sont exactement les cinq écrans que les specs 28 et suivantes remplacent. Les
+quatre autres contrôles passent déjà. Chaque contrôle reste néanmoins **vérifié par mutation** avant
+d'être considéré comme posé.
+
 ## 9. Cas limites
 
 Le tableau sec est en §0. Deux méritent d'être justifiés.
