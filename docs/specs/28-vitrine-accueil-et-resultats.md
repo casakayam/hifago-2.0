@@ -109,7 +109,7 @@ réordonnancement selon le panier part en Tranche 3 — voir §2.)*
 Un seul appel : `buscarSecciones(criterios, { porSeccion: 8 })` (`lib/catalog/buscar.ts`).
 
 ```ts
-type FotoTarjeta = { url: string; alt: string };
+type FotoTarjeta = { url: string };   // ⚠️ pas d'`alt` ici — voir ci-dessous
 
 type PrecioTarjeta =
   | { tipo: "monto"; cop: number }     // price_cop
@@ -123,7 +123,7 @@ type TarjetaOferta = {
   nombre: string;                // déjà résolu dans la locale
   establecimiento: string | null;
   precio: PrecioTarjeta;
-  fotos: FotoTarjeta[];          // toutes ; alt = `<nombre>, foto <i> de <n>`
+  fotos: FotoTarjeta[];          // toutes, URL déjà résolues
   tipo: string;
   testId: string;                // `tarjeta-<slug>`
 };
@@ -329,7 +329,11 @@ quelle plutôt que réinventée.
 
 **Le texte alternatif.** `product_media` ne porte **aucune colonne** pour lui — seulement `id`,
 `product_id`, `storage_path`, `sort`, `created_at`. Décision du 2026-09-07 : il est **calculé**,
-`<nom de l'offre>, foto <i> de <n>`. Une colonne rédigée par le partenaire serait meilleure pour le
+`<nom de l'offre>, foto <i> de <n>`.
+⚠️ **Corrigé à l'implémentation (2026-09-07)** : il est construit par le **composant qui affiche la
+photo**, pas par `lib/catalog/`. Un texte alternatif est du texte d'INTERFACE — le mettre dans la
+couche de données y ferait entrer next-intl et rendrait la couche intestable sans contexte i18n. La
+carte reçoit déjà `nombre` et connaît le rang de chaque photo : elle a tout ce qu'il faut. Une colonne rédigée par le partenaire serait meilleure pour le
 référencement image, mais elle exige une migration, un champ dans deux écrans d'administration, et
 surtout quelqu'un pour l'écrire sur chaque photo — en pratique elle resterait vide et il faudrait
 ce repli de toute façon.
