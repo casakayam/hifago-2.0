@@ -1,4 +1,5 @@
 export * from "./db";
+export * from "./cleanup";
 export * from "./auth";
 export * from "./dom";
 export * from "./mfa";

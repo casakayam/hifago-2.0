@@ -2,6 +2,14 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
+  // ⚠️ NETTOYAGE DE FIN DE SUITE (2026-09-08). Les specs créent de vrais produits,
+  // établissements et catégories, et ne les supprimaient pas : 78 résidus contre 7 lignes de
+  // seed en base locale, mesuré le 2026-09-08. Ce n'est pas cosmétique — les sections de
+  // l'accueil et des listings plafonnent à 8 offres en `created_at desc`, donc les résidus
+  // poussent les offres SEEDÉES hors de l'écran et font échouer des tests sur des sélecteurs
+  // pourtant justes (`home.spec.ts`, `reserve.spec.ts`). Un teardown GLOBAL plutôt qu'un
+  // `afterAll` par fichier : un nettoyage réparti s'oublie au spec suivant.
+  globalTeardown: "../../packages/e2e-support/src/cleanup.ts",
   fullyParallel: true,
   reporter: "html",
   use: {

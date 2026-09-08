@@ -68,15 +68,21 @@ test("admin crée une etiqueta, l'assigne à une activité, puis la supprime dep
 
   await page.getByTestId(`tag-detail-link-${tag.id}`).click();
   await expect(page.getByTestId("tag-detail-label")).toHaveText(tagLabel);
+
+  // ⚠️ L'ATTENTE EST AVANT LE PREMIER CLIC, et elle y a été DÉPLACÉE le 2026-09-08. Elle existait
+  // déjà, avec le bon diagnostic écrit à côté — mais placée après le clic qui ouvre le dialogue,
+  // donc elle ne protégeait que le second. Le premier passait tant que cette page s'hydratait
+  // vite ; la spec 29 Tranche 3 y a ajouté `CategoriaEditorialBlock`, qui tire `MediaGallery` et
+  // `ImageCrop`, et le clic s'est mis à atteindre un bouton encore sans gestionnaire — visuellement
+  // actionnable, sans effet, aucune erreur. C'est le piège nommé dans `.claude/rules/tests.md`
+  // (« écran client-heavy après une navigation client-side »), et il ne se corrige pas en allégeant
+  // l'écran : il se corrige en attendant l'hydratation AVANT d'interagir.
+  await page.waitForLoadState("networkidle");
+
   // Avertissement explicite avant suppression (DeleteTagButton.tsx) : preuve que l'admin est
   // informé de l'impact avant de confirmer, pas seulement que la cascade DB fonctionne à l'aveugle.
   await page.getByTestId(`delete-tag-${tag.id}`).click();
   await expect(page.getByRole("dialog")).toContainText("retirada de 1 actividad");
-  // /admin/tags/[id] est une route neuve : au tout premier accès, Next.js dev-mode la compile à
-  // la demande (badge "Compiling…" visible) après que le HTML server-rendu soit déjà là — le
-  // libellé s'affiche avant que le bundle client (DeleteTagButton) ait fini de s'hydrater. Cliquer
-  // trop tôt laisse le bouton visuellement actionnable mais sans handler encore attaché.
-  await page.waitForLoadState("networkidle");
 
   await page.getByTestId(`confirm-delete-tag-${tag.id}`).click();
 
