@@ -52,5 +52,6 @@
       "increment": "Add one person",
       "decrement": "Remove one person"
     }
-  }
+  },
+  "buscando": "Searching…"
 }

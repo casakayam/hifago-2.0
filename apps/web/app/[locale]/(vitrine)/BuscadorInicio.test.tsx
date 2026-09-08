@@ -81,6 +81,7 @@ const MESSAGES = {
     personas: { valueLabel: "{count, plural, one {# persona} other {# personas}}" },
     secciones: { activity: "Actividades", lodging: "Alojamientos" },
     tiposSingular: { activity: "Actividad", lodging: "Alojamiento" },
+    buscando: "Buscando…",
     sugerencias: {
       metaEstablecimiento: "Establecimiento",
       metaOferta: "{tipo} · {establecimiento}",
@@ -332,6 +333,19 @@ describe("BuscadorInicio", () => {
     // Le filtre hérité de l'URL est CONSERVÉ, et l'adresse passe par `escribirCriterios`, seul
     // maître de son écriture — un raccourci n'est pas un chemin d'écriture d'URL parallèle.
     expect(pushMock).toHaveBeenCalledWith("/?tipo=lodging&personas=4");
+  });
+
+  it("porte une région d'état MONTÉE AU REPOS, et vide", () => {
+    monter();
+
+    // ⚠️ La règle que ce test protège n'est pas « le texte apparaît » mais « la région existe
+    // avant d'avoir quelque chose à dire » : un `role="status"` monté au moment où son contenu
+    // arrive n'est PAS annoncé par un lecteur d'écran. C'est la faute classique du motif, et elle
+    // est invisible à l'œil comme au typecheck.
+    const estado = screen.getByTestId("buscador-estado");
+    expect(estado.getAttribute("role")).toBe("status");
+    expect(estado.getAttribute("aria-live")).toBe("polite");
+    expect(estado.textContent).toBe("");
   });
 
   it("se resynchronise sur l'URL quand elle change sous lui (retour arrière)", () => {

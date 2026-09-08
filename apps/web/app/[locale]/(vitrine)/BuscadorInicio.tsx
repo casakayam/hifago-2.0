@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { enUS, es } from "date-fns/locale";
 // ⚠️ `useRouter` vient d'`@/i18n/navigation`, JAMAIS de `next/navigation` (contrôlé par
@@ -88,6 +88,13 @@ export function BuscadorInicio({
 }: BuscadorInicioProps) {
   const router = useRouter();
   const t = useTranslations("HomePage");
+
+  // ⚠️ `useTransition` plutôt qu'un `router.push` nu, et ce n'est pas une optimisation (spec 28 §9,
+  // « États de l'écran »). Une recherche re-rend la page CÔTÉ SERVEUR : sans transition, React
+  // remplacerait l'écran par un vide le temps de la réponse — le panneau compris, alors que la spec
+  // exige qu'il reste utilisable. Une transition garde l'écran précédent monté et donne, en prime,
+  // le seul signal fiable que quelque chose est en cours.
+  const [navegando, iniciarNavegacion] = useTransition();
 
   // L'état du panneau, dérivé des critères de l'URL : ce qui est écrit dans l'adresse est ce que le
   // visiteur doit relire dans les champs (un lien partagé, un retour depuis une fiche).
@@ -237,36 +244,48 @@ export function BuscadorInicio({
     // `escribirCriterios` rend `""` ou `"?q=…"` — jamais `"?"` seul. L'expression donne donc `/`
     // ou `/?q=…`, et le `useRouter` localisé y remet le préfixe de langue. Les `undefined`
     // ci-dessus sont ignorés par lui : rien à filtrer ici.
-    router.push(`/${escribirCriterios(nuevos)}`);
+    iniciarNavegacion(() => {
+      router.push(`/${escribirCriterios(nuevos)}`);
+    });
   }
 
   return (
-    <SearchPanel
-      criteria={criterios}
-      onCriteriaChange={setCriterios}
-      onSubmit={buscar}
-      suggestions={sugerenciasMostradas}
-      onSuggestionSelect={elegirSugerencia}
-      aujourdIso={aujourdIso}
-      // ⚠️ Un objet date-fns n'est pas sérialisable : c'est pour ça que la page passe un CODE de
-      // langue et que la traduction en objet se fait ici, du côté client de la frontière.
-      locale={localeCodigo === "en" ? enUS : es}
-      // ⚠️ `people.valueLabel` ne peut PAS venir de la page : c'est un pluriel accordé sur le
-      // nombre choisi (« 1 persona » / « 3 personas »), et ce nombre est un état client. La page
-      // fournit tous les autres libellés déjà traduits ; celui-ci se recalcule ici à chaque
-      // changement. Sans lui, `PeopleField` affiche le nombre NU sur son déclencheur — un « 3 »
-      // seul là où le visiteur attend « 3 personas ».
-      labels={{
-        ...labels,
-        people: {
-          ...labels.people,
-          valueLabel:
-            criterios.people === null
-              ? undefined
-              : t("personas.valueLabel", { count: criterios.people }),
-        },
-      }}
-      testId={testId}
-    />
+    <div className="flex flex-col gap-2">
+      <SearchPanel
+        criteria={criterios}
+        onCriteriaChange={setCriterios}
+        onSubmit={buscar}
+        suggestions={sugerenciasMostradas}
+        onSuggestionSelect={elegirSugerencia}
+        aujourdIso={aujourdIso}
+        // ⚠️ Un objet date-fns n'est pas sérialisable : c'est pour ça que la page passe un CODE de
+        // langue et que la traduction en objet se fait ici, du côté client de la frontière.
+        locale={localeCodigo === "en" ? enUS : es}
+        // ⚠️ `people.valueLabel` ne peut PAS venir de la page : c'est un pluriel accordé sur le
+        // nombre choisi (« 1 persona » / « 3 personas »), et ce nombre est un état client. La page
+        // fournit tous les autres libellés déjà traduits ; celui-ci se recalcule ici à chaque
+        // changement. Sans lui, `PeopleField` affiche le nombre NU sur son déclencheur — un « 3 »
+        // seul là où le visiteur attend « 3 personas ».
+        labels={{
+          ...labels,
+          people: {
+            ...labels.people,
+            valueLabel:
+              criterios.people === null
+                ? undefined
+                : t("personas.valueLabel", { count: criterios.people }),
+          },
+        }}
+        testId={testId}
+      />
+      {/* ⚠️ `role="status"` et pas un simple texte : le changement se produit APRÈS que le visiteur
+          a validé, donc hors de son point d'attention. Un lecteur d'écran ne l'annoncerait jamais
+          sans ça. Et le nœud est rendu EN PERMANENCE, vide au repos — un `role="status"` monté au
+          moment où il a quelque chose à dire n'est pas annoncé (la région doit exister avant que
+          son contenu change). */}
+      <p role="status" aria-live="polite" className="text-sm text-muted" data-testid={`${testId}-estado`}>
+        {navegando ? t("buscando") : ""}
+      </p>
+    </div>
   );
 }

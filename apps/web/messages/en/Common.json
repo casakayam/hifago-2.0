@@ -1,4 +1,10 @@
 {
   "cancellationPolicy": "A cancellation or a no-show on your part is never refunded.",
-  "breadcrumbHome": "Home"
+  "breadcrumbHome": "Home",
+  "error": {
+    "titulo": "Something went wrong",
+    "descripcion": "We could not load this page. Please try again in a moment.",
+    "reintentar": "Try again",
+    "volver": "Back to home"
+  }
 }

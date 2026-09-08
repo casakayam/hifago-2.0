@@ -552,6 +552,31 @@ l'inverse, portent un vrai `href` — mais ⚠️ `SearchBar` rend l'option en `
 puisqu'ils disparaissent dès la deuxième frappe. Ils se combinent bien avec les filtres venus de
 l'URL (dates, personnes), et c'est ce que vérifie leur test.
 
+## 10quater. Le §9 « États de l'écran », tenu pour de bon (2026-09-08)
+
+Le §9 promettait deux choses que le code ne tenait pas encore.
+
+**« Le panneau reste utilisable et la navigation est signalée. »** Une recherche re-rend la page
+côté serveur. Sans transition, React remplace l'écran par un vide le temps de la réponse — le
+panneau compris. `BuscadorInicio` pousse donc l'URL dans un `useTransition` : l'écran précédent
+reste monté, et l'état `isPending` donne le seul signal fiable qu'une recherche est en cours.
+⚠️ La région qui le porte est rendue **en permanence, vide au repos** : un `role="status"` monté au
+moment où il a quelque chose à dire n'est jamais annoncé par un lecteur d'écran — la région doit
+exister avant que son contenu change. Un test le vérifie, parce que c'est invisible à l'œil.
+
+**« Base injoignable → la page échoue franchement »** (spec 27 §9). C'était déjà vrai —
+`lib/catalog/` lève — mais l'échec rendait la page d'erreur NUE de Next : ni traduite, ni habillée.
+`(vitrine)/error.tsx` la remplace. Trois choses à connaître : `"use client"` y est imposé par Next
+(un `error.tsx` s'attache à une frontière d'erreur React) ; elle ne rend **pas** la coquille, à la
+différence de `not-found.tsx`, parce qu'un `error.tsx` de groupe est rendu à l'intérieur du layout
+de sa zone — la rendre donnerait deux en-têtes ; et **le message brut de l'erreur n'atteint jamais
+l'écran**, il peut porter un fragment de requête SQL. Il part au journal du navigateur avec son
+`digest`, et le visiteur lit un texte écrit pour lui.
+
+Les trois autres zones n'ont toujours pas leur `error.tsx` ni leur `loading.tsx` (spec 27 §5 les
+prévoit pour chacune) : la vitrine est la seule à porter aujourd'hui un écran qui interroge le
+catalogue, et créer trois fichiers sans écran pour les justifier serait de l'anticipation.
+
 ## 11. Annexe — traçabilité
 
 | Sujet | Sources |

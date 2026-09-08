@@ -1,4 +1,10 @@
 {
   "cancellationPolicy": "Una cancelación o una ausencia de tu parte nunca es reembolsada.",
-  "breadcrumbHome": "Inicio"
+  "breadcrumbHome": "Inicio",
+  "error": {
+    "titulo": "Algo salió mal",
+    "descripcion": "No pudimos cargar esta página. Vuelve a intentarlo en un momento.",
+    "reintentar": "Reintentar",
+    "volver": "Volver al inicio"
+  }
 }
