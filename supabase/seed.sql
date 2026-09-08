@@ -597,3 +597,117 @@ select
   6,
   0
 from generate_series(5, 12) as dia;
+
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- Spec 29 (Tranche 2) — LES CATÉGORIES D'ACTIVITÉ, ajoutées le 2026-09-08.
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+--
+-- POURQUOI ELLES EXISTENT. `catalog_tags` était VIDE — aucune ligne, aucune assignation (constaté
+-- le 2026-09-08). Trois conséquences, toutes silencieuses :
+--   • `/es/actividades` n'aurait eu aucune tuile à montrer ;
+--   • le volet « chercher par libellé de tag » du cahier §2a, pourtant implémenté dans
+--     `search_catalog` depuis le lot A, n'était couvert par AUCUN test de bout en bout ;
+--   • et rien n'exerçait la règle « seuls les tags portant au moins une offre publiée figurent ».
+--
+-- ⚠️ `label` ET `description` DANS LES DEUX LANGUES. Sans l'anglais, rien ne prouverait que le repli
+-- JSONB et la locale `/en/` fonctionnent — et une page de catégorie servie en repli doit rester
+-- `noindex` (règle SEO 2), un comportement qu'il faut pouvoir observer.
+--
+-- ⚠️ AUCUNE IMAGE, ET CE N'EST PAS UN OUBLI. `storage.objects` ne se remplit pas depuis un fichier
+-- SQL : il y faudrait le binaire. Les tuiles rendront donc l'aplat gris en local comme en e2e —
+-- c'est le substitut prévu par l'atome `Image`, et la variante illustrée est couverte par la story
+-- `Affichage/TarjetaCategoria` → `Completa` et par son test de composant.
+insert into catalog_tags (id, label, slug, description) values
+  (
+    'c0000000-0000-4000-8000-000000000001',
+    jsonb_build_object('es', 'Deportes náuticos', 'en', 'Water sports'),
+    'deportes-nauticos',
+    jsonb_build_object(
+      'es', 'Kayak, lancha y paddle en el embalse, con equipo incluido.',
+      'en', 'Kayak, boat and paddle on the reservoir, equipment included.'
+    )
+  ),
+  (
+    'c0000000-0000-4000-8000-000000000002',
+    jsonb_build_object('es', 'Naturaleza', 'en', 'Nature'),
+    'naturaleza',
+    jsonb_build_object(
+      'es', 'Caminatas y miradores alrededor del Peñón.',
+      'en', 'Hikes and viewpoints around the Peñón.'
+    )
+  ),
+  -- ⚠️ Une catégorie DÉLIBÉRÉMENT NON RÉDIGÉE : c'est l'état d'un catalogue en cours de
+  -- remplissage, et le seul moyen de voir en local qu'une tuile sans texte n'ouvre pas de bloc
+  -- vide sous son titre (story `SinTexto`).
+  (
+    'c0000000-0000-4000-8000-000000000003',
+    jsonb_build_object('es', 'Cultura', 'en', 'Culture'),
+    'cultura',
+    null
+  ),
+  -- ⚠️ Une catégorie SANS AUCUNE OFFRE, et c'est tout son intérêt : elle ne doit JAMAIS apparaître
+  -- dans l'index (cahier §2a — « un tag vide produirait une page vide que Google indexerait »), et
+  -- sa page doit rendre 404. Sans elle, rien dans le seed n'exercerait cette règle.
+  (
+    'c0000000-0000-4000-8000-000000000004',
+    jsonb_build_object('es', 'Gastronomía', 'en', 'Food & drink'),
+    'gastronomia',
+    jsonb_build_object('es', 'Sabores del embalse.', 'en', 'Flavours of the reservoir.')
+  );
+
+-- ⚠️ `category` N'EST PAS UN TAG, et la confusion coûte une contrainte violée : c'est l'ancienne
+-- liste FERMÉE de six familles (`products_category_check` : musica, arte, bienestar, nautica,
+-- adrenalina, gastronomia), celle que `catalog_tags` remplace précisément (spec 08 §5). Les deux
+-- coexistent tant que la colonne n'est pas retirée — on y met donc une valeur VALIDE de l'ancienne
+-- liste, sans rapport avec la catégorie assignée plus bas.
+
+-- Deux activités vendables de plus. Avec les deux existantes, l'index n'aurait montré qu'une ou
+-- deux tuiles — et l'ordre alphabétique n'est vérifiable qu'à partir de deux catégories réellement
+-- distinctes. Elles sont rattachées au partenaire et à l'établissement déjà seedés : aucun
+-- troisième partenaire créé pour la forme.
+insert into products (
+  id, partner_id, establishment_id, type, name, description, price_cop, unit, schedule, qty_unit,
+  category, max_qty, sellable, slug
+)
+values
+  (
+    'b0000000-0000-4000-8000-000000000009',
+    'b0000000-0000-4000-8000-000000000003',
+    'b0000000-0000-4000-8000-000000000004',
+    'activity',
+    jsonb_build_object('es', 'Caminata al mirador del Peñón', 'en', 'Hike to the Peñón viewpoint'),
+    jsonb_build_object(
+      'es', 'Caminata guiada de tres horas hasta el mirador, con parada en el bosque nativo.',
+      'en', 'Three-hour guided hike to the viewpoint, with a stop in the native forest.'
+    ),
+    55000, 'per_person', 'date', 'qty', 'bienestar', 12, true, 'caminata-mirador-penon'
+  ),
+  -- ⚠️ Celle-ci reste DÉLIBÉRÉMENT NON TAGUÉE (voir les assignations ci-dessous) : c'est elle qui
+  -- rend la tuile « Otras actividades » atteignable en e2e. Sans une activité publiée qu'aucune
+  -- catégorie ne classe, la décision 1 de la spec 29 ne serait observable nulle part.
+  (
+    'b0000000-0000-4000-8000-00000000000a',
+    'b0000000-0000-4000-8000-000000000003',
+    'b0000000-0000-4000-8000-000000000004',
+    'activity',
+    jsonb_build_object('es', 'Taller de cerámica de zócalos', 'en', 'Zócalo pottery workshop'),
+    jsonb_build_object(
+      'es', 'Taller de dos horas para pintar tu propio zócalo, materiales incluidos.',
+      'en', 'Two-hour workshop to paint your own zócalo, materials included.'
+    ),
+    70000, 'per_person', 'date', 'qty', 'arte', 8, true, 'taller-ceramica-zocalos'
+  );
+
+-- Les assignations. `taller-ceramica-zocalos` n'y figure PAS, à dessein (cf. ci-dessus).
+--
+-- ⚠️ `kayak-embalse-guatape` et `tour-lancha-guatape` reçoivent la MÊME catégorie : c'est ce qui
+-- rend observable qu'une tuile compte plusieurs offres, et non une par tag.
+insert into product_tag_assignments (product_id, tag_id) values
+  ('b0000000-0000-4000-8000-000000000006', 'c0000000-0000-4000-8000-000000000001'),
+  ('b0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001'),
+  ('b0000000-0000-4000-8000-000000000009', 'c0000000-0000-4000-8000-000000000002'),
+  -- ⚠️ Une assignation vers une activité NON VENDABLE (`caminata-ecologica-propuestas`,
+  -- `sellable = false`) : la catégorie « Cultura » n'a donc AUCUNE offre publiée et ne doit pas
+  -- apparaître dans l'index. C'est le cas limite le plus facile à casser sans s'en apercevoir —
+  -- il suffirait d'oublier le prédicat `p.sellable` dans `search_catalog`.
+  ('b0000000-0000-4000-8000-000000000005', 'c0000000-0000-4000-8000-000000000003');

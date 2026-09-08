@@ -123,19 +123,25 @@ export type Database = {
       catalog_tags: {
         Row: {
           created_at: string
+          description: Json | null
           id: string
+          image_path: string | null
           label: Json
           slug: string
         }
         Insert: {
           created_at?: string
+          description?: Json | null
           id?: string
+          image_path?: string | null
           label: Json
           slug: string
         }
         Update: {
           created_at?: string
+          description?: Json | null
           id?: string
+          image_path?: string | null
           label?: Json
           slug?: string
         }
@@ -2418,6 +2424,7 @@ export type Database = {
           p_personas?: number
           p_por_tipo?: number
           p_query?: string
+          p_sin_tag?: boolean
           p_tag_slug?: string
           p_tipos?: string[]
         }
@@ -2435,6 +2442,23 @@ export type Database = {
           slug: string
           tipo: string
           total_seccion: number
+        }[]
+      }
+      search_catalog_tags: {
+        Args: {
+          p_desde?: string
+          p_hasta?: string
+          p_personas?: number
+          p_query?: string
+          p_tipo?: string
+        }
+        Returns: {
+          description: Json
+          es_sin_tag: boolean
+          image_path: string
+          label: Json
+          slug: string
+          total: number
         }[]
       }
       set_capability_status: {

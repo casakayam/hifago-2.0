@@ -18,7 +18,7 @@
 -- geste que les policies `_select_public` laissent bien passer ce qu'il faut.
 
 begin;
-select plan(16);
+select plan(21);
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────────────────────────
 insert into partners (id, display_name) values
@@ -73,6 +73,14 @@ values
 insert into product_calendar (product_id, date, open) values
   ('aaaa1111-0000-0000-0000-000000000203', date '2030-03-10', false),
   ('aaaa1111-0000-0000-0000-000000000203', date '2030-03-11', false);
+
+-- Spec 29 — fixtures de tags. `sc-jetski` est classée, `sc-sin-tope` et `sc-cerrada` ne le sont
+-- pas : c'est ce contraste qui rend `p_sin_tag` vérifiable.
+insert into catalog_tags (id, label, slug) values
+  ('aaaa1111-0000-0000-0000-000000000301', '{"es":"Kayak de prueba"}'::jsonb, 'sc-tag-kayak');
+
+insert into product_tag_assignments (product_id, tag_id) values
+  ('aaaa1111-0000-0000-0000-000000000201', 'aaaa1111-0000-0000-0000-000000000301');
 
 set local role anon;
 
@@ -181,6 +189,42 @@ select is(
    where id in ('aaaa1111-0000-0000-0000-000000000203',   -- fermée sur TOUTE la plage
                 'aaaa1111-0000-0000-0000-000000000202')), -- aucune ligne : défaut = ouvert
   1, 'fermée sur toute la plage → absente ; sans ligne de calendrier → présente (défaut ouvert)'
+);
+
+-- ── Filtre par tag, et le slug inconnu (spec 29 §6c) ────────────────────────────────────────────
+select is(
+  (select count(*)::int from search_catalog(p_limite => 100000, p_tag_slug => 'sc-tag-kayak')
+   where id = 'aaaa1111-0000-0000-0000-000000000201'),
+  1, 'un tag connu remonte l''offre qui le porte'
+);
+
+select is(
+  (select count(*)::int from search_catalog(p_limite => 100000, p_tag_slug => 'sc-tag-kayak')
+   where id = 'aaaa1111-0000-0000-0000-000000000202'),
+  0, '…et écarte celle qui ne le porte pas'
+);
+
+-- ⚠️ LE correctif du 2026-09-08 (spec 28 §10quinquies). Avant lui, un slug absent de catalog_tags
+-- filtrait TOUT : la page restait vide, et comme le bloc de recherche reportait le paramètre à
+-- chaque soumission, elle ne se déverrouillait plus jamais. Un tag inconnu est un paramètre
+-- invalide, donc il est IGNORÉ — exactement comme un `tipo` inconnu.
+select is(
+  (select count(*)::int from search_catalog(p_limite => 100000, p_tag_slug => 'zzz-inexistant')
+   where id = 'aaaa1111-0000-0000-0000-000000000202'),
+  1, 'un slug de tag INCONNU est ignoré — il ne filtre rien'
+);
+
+-- ── p_sin_tag : la page « Otras actividades » (spec 29 §0) ──────────────────────────────────────
+select is(
+  (select count(*)::int from search_catalog(p_limite => 100000, p_sin_tag => true)
+   where id = 'aaaa1111-0000-0000-0000-000000000201'),
+  0, 'p_sin_tag écarte une offre qui porte au moins un tag'
+);
+
+select is(
+  (select count(*)::int from search_catalog(p_limite => 100000, p_sin_tag => true)
+   where id = 'aaaa1111-0000-0000-0000-000000000202'),
+  1, '…et garde celle qu''aucune catégorie ne classe'
 );
 
 select * from finish();
