@@ -22,6 +22,34 @@ export function isoDate(daysFromNow: number): string {
 }
 
 /**
+ * LA date que `supabase/seed.sql` pose pour un jour donné.
+ *
+ * ⚠️ Un seul nom pour une seule convention, posée le 2026-09-07 : le seed écrit ses disponibilités
+ * sur le **mois suivant**, au jour indiqué. Toute spec qui clique une date seedée passe par ici —
+ * plus jamais un littéral `"2026-09-05"`.
+ *
+ * Pourquoi le mois suivant et pas « aujourd'hui + n » : le calendrier d'une fiche produit n'affiche
+ * QU'UN mois (son `defaultMonth` est celui de la première disponibilité). Un décalage relatif
+ * traverse la frontière de mois une fois sur trois, et la date visée n'est alors pas dans le DOM —
+ * le sélecteur `[data-date]` échoue sans rien dire d'utile. Le mois suivant est toujours entier et
+ * toujours futur.
+ *
+ * Ce que ça remplace : jusqu'au 2026-09-07, le seed ET douze specs codaient les mêmes littéraux.
+ * Le 05 est devenu passé et le 07 est devenu « aujourd'hui, déjà plein » — trois specs sont mortes
+ * le même jour, et les cinq autres seraient tombées dans la semaine.
+ *
+ * ⚠️ Jamais un jour au-delà de 28 : février existe.
+ */
+export function seedDate(dayOfMonth: number): string {
+  if (dayOfMonth < 1 || dayOfMonth > 28) {
+    throw new Error(
+      `seedDate(${dayOfMonth}) : le seed ne pose que des jours 1-28, pour que la date existe dans tous les mois.`
+    );
+  }
+  return nextMonthIsoDate(dayOfMonth);
+}
+
+/**
  * Une date du mois SUIVANT, en jour civil de Guatapé — jamais le mois courant, dont le nombre de
  * jours restants dépend de la date d'exécution (piège qui a déjà fait échouer partner-agenda.spec.ts
  * le 2026-08-27, à mesure qu'on approchait du 31).

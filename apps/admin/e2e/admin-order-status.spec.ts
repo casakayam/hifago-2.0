@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { resetAvailability, getOrderLineStatuses, createSignedInClient } from "@hifago/e2e-support";
+import { resetAvailability, getOrderLineStatuses, createSignedInClient, seedDate } from "@hifago/e2e-support";
 
 // Feature 10 (Admin : changer manuellement le statut d'une ligne de commande) — extension de
 // /admin/orders (feature 9). La logique de set_order_line_status elle-même (non-admin, motif
@@ -8,7 +8,7 @@ import { resetAvailability, getOrderLineStatuses, createSignedInClient } from "@
 // pgTAP (supabase/tests/database/set_order_line_status.test.sql) — pas re-prouvée ici, seul le
 // parcours écran l'est.
 const PRODUCT_ID = "b0000000-0000-4000-8000-000000000001"; // tour-lancha-guatape
-const DATE = "2026-09-15"; // date dédiée à ce spec (cf. supabase/seed.sql)
+const DATE = seedDate(15); // date dédiée à ce spec (cf. supabase/seed.sql)
 
 test("admin ouvre /admin/orders, fait passer une ligne reserved à no_show avec un motif, le badge se met à jour sans rechargement", async ({
   page,

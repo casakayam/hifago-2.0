@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { resetAvailability, countOrderLines, mockMercadoPagoCheckout } from "@hifago/e2e-support";
+import { resetAvailability, countOrderLines, mockMercadoPagoCheckout, seedDate } from "@hifago/e2e-support";
 
 // Feature 6 : la fiche produit n'a plus aucun état dépendant de l'authentification (le bouton
 // "Añadir al carrito" est identique connecté ou non — la vérification de session a été déplacée
@@ -10,7 +10,7 @@ import { resetAvailability, countOrderLines, mockMercadoPagoCheckout } from "@hi
 // session ne survivait pas, /checkout lirait isAuthenticated=false et create_order échouerait en
 // not_authenticated au lieu de réussir.
 const PRODUCT_ID = "b0000000-0000-4000-8000-000000000001"; // tour-lancha-guatape
-const DATE = "2026-09-12"; // date dédiée à ce spec (cf. supabase/seed.sql), disjointe de
+const DATE = seedDate(12); // date dédiée à ce spec (cf. supabase/seed.sql), disjointe de
 // 2026-09-05/07/10 utilisées par reserve.spec.ts / reserve-concurrency.spec.ts.
 
 // Seul test qui pilote vraiment le formulaire de connexion (cf. hifago/CLAUDE.md §6 — jamais de

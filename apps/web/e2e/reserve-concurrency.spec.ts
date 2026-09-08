@@ -5,6 +5,7 @@ import {
   getAvailability,
   countOrderLines,
   mockMercadoPagoCheckout,
+  seedDate,
 } from "@hifago/e2e-support";
 
 // Le test le plus important de ce jalon (cf. plan Checkpoint B) : jusqu'ici l'invariant
@@ -23,7 +24,7 @@ import {
 // retour réseau — le faire concourir ne prouverait plus rien).
 const PRODUCT_URL = "/es/products/tour-lancha-guatape";
 const PRODUCT_ID = "b0000000-0000-4000-8000-000000000001";
-const LAST_SPOT_DATE = "2026-09-10"; // capacity=1 — cf. supabase/seed.sql
+const LAST_SPOT_DATE = seedDate(10); // capacity=1 — cf. supabase/seed.sql
 
 const ACCOUNTS = [
   SEEDED_ACCOUNTS.referentActif,

@@ -9,6 +9,7 @@ import {
   ADMIN_APP_URL,
   webReferralUrl,
   mockMercadoPagoCheckout,
+  seedDate,
 } from "@hifago/e2e-support";
 import { formatCop } from "@hifago/domain";
 
@@ -20,7 +21,7 @@ import { formatCop } from "@hifago/domain";
 // distinct du propriétaire de tour-lancha-guatape → commission_case='external_referrer' (10/7) une
 // fois la commande créée (cf. create_order, supabase/migrations/20260814180000_*.sql).
 const PRODUCT_ID = "b0000000-0000-4000-8000-000000000001"; // tour-lancha-guatape
-const DATE = "2026-09-20"; // date dédiée à ce spec (cf. supabase/seed.sql), disjointe de toutes
+const DATE = seedDate(20); // date dédiée à ce spec (cf. supabase/seed.sql), disjointe de toutes
 // les dates 2026-09-05/07/10/12/13/14/15 déjà utilisées par les autres specs du panier.
 
 test("un socio génère son lien/QR réel sur /partner/tools, un visiteur anonyme réserve via ce lien, la commande apparaît sur /partner/commissions", async ({

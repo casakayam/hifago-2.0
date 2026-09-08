@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { resetAvailability, createSignedInClient } from "@hifago/e2e-support";
+import { resetAvailability, createSignedInClient, seedDate } from "@hifago/e2e-support";
 
 // Spec 17 §0 Tranche 1 (« Modificar » — modify_order_line) — la logique de la RPC elle-même
 // (arithmétique de capacité, exclusion camp, re-résolution de prix, transfert de réconciliation
@@ -8,7 +8,7 @@ import { resetAvailability, createSignedInClient } from "@hifago/e2e-support";
 // 26 assertions) — pas re-prouvée ici, seul le parcours écran (bouton → dialogue → RPC → mise à
 // jour sans rechargement) l'est, même patron que admin-order-status.spec.ts.
 const PRODUCT_ID = "b0000000-0000-4000-8000-000000000001"; // tour-lancha-guatape
-const DATE = "2026-09-20"; // date dédiée à ce spec, distincte de admin-order-status.spec.ts (09-15)
+const DATE = seedDate(20); // date dédiée à ce spec, distincte de admin-order-status.spec.ts (09-15)
 
 test("admin modifie la quantité d'une réservation depuis /admin/orders, la ligne d'origine disparaît, la nouvelle apparaît", async ({
   page,

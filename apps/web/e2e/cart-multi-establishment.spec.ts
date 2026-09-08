@@ -8,6 +8,7 @@ import {
   countOrdersByPhone,
   getOrderLinesForPhone,
   mockMercadoPagoCheckout,
+  seedDate,
 } from "@hifago/e2e-support";
 
 // Feature 6 : "Client : composer un panier à plusieurs lignes sur une même commande
@@ -18,11 +19,11 @@ import {
 // lien plutôt que d'appeler page.goto().
 const TOUR_ID = "b0000000-0000-4000-8000-000000000001"; // tour-lancha-guatape (établissement A)
 const TOUR_SLUG = "tour-lancha-guatape";
-const TOUR_DATE = "2026-09-07";
+const TOUR_DATE = seedDate(7);
 
 const KAYAK_ID = "b0000000-0000-4000-8000-000000000006"; // kayak-embalse-guatape (établissement B)
 const KAYAK_SLUG = "kayak-embalse-guatape";
-const KAYAK_DATE = "2026-09-05";
+const KAYAK_DATE = seedDate(5);
 
 const BACK_TO_CATALOG_LINK = "← Volver al catálogo";
 

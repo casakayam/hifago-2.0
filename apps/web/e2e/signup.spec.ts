@@ -4,6 +4,7 @@ import {
   countOrderLines,
   mockMercadoPagoCheckout,
   latestCallbackLink,
+  seedDate,
 } from "@hifago/e2e-support";
 
 // Feature 32 : chemin heureux unique — inscription client sur apps/web (jusqu'ici inexistante,
@@ -13,7 +14,7 @@ import {
 // les variantes de validation (mot de passe trop court, emails déjà pris) n'ont pas de logique
 // dérivée non triviale dans SignupForm.tsx (cf. CLAUDE.md §6.5) — pas de test composant dédié.
 const PRODUCT_ID = "b0000000-0000-4000-8000-000000000001"; // tour-lancha-guatape
-const DATE = "2026-09-15"; // dédiée à ce spec, disjointe de 2026-09-05/07/10/12/13/14 (autres specs).
+const DATE = seedDate(15); // dédiée à ce spec, disjointe de 2026-09-05/07/10/12/13/14 (autres specs).
 
 test("un client s'inscrit, confirme par email, puis paie connecté avec ses infos pré-remplies", async ({
   page,

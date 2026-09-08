@@ -164,22 +164,50 @@ values (
 -- le vrai formulaire de connexion survit jusqu'au bout du parcours panier → checkout → create_order)
 -- et une réservée exclusivement à e2e/attribution.spec.ts (feature 7 : parcours invité complet via
 -- un lien ?ref=, sans partager de ressource avec les autres specs qui manipulent 2026-09-05/07/10/12).
+-- ⚠️ DATES RELATIVES DEPUIS LE 2026-09-07 — elles étaient EN DUR, et c'était une bombe à
+-- retardement qui a explosé ce jour-là. Le seed posait `2026-09-05/07/10/12/13/14/15/20` et douze
+-- specs e2e codaient les mêmes littéraux ; le 2026-09-07, le 05 était passé et le 07 était le jour
+-- même (déjà plein), donc trois specs échouaient. Les cinq autres seraient mortes dans la semaine.
+-- Personne ne l'avait vu parce que les e2e n'étaient pas lancés.
+--
+-- Deux contraintes commandent la forme choisie, et aucune n'est évidente :
+--
+--   1. **Le MOIS SUIVANT, jamais « aujourd'hui + n ».** Un décalage relatif traverse la frontière
+--      de mois une fois sur trois, et le calendrier d'une fiche produit n'affiche QU'UN mois — son
+--      `defaultMonth` est celui de la PREMIÈRE disponibilité (`ReservationForm.tsx`). Une date du
+--      mois d'après ne serait tout simplement pas dans le DOM, et le sélecteur `[data-date]`
+--      échouerait sans rien dire d'utile. Le mois suivant, lui, est toujours entier et toujours
+--      futur. C'est déjà la leçon de `nextMonthIsoDate()` dans `packages/e2e-support`, née d'un
+--      échec de `partner-agenda.spec.ts` le 2026-08-27.
+--   2. **Aucun jour au-delà de 28.** Février existe. Les jours retenus (5 à 20) valent dans tous
+--      les mois.
+--
+-- Le jour du mois est CONSERVÉ pour chaque scénario : une spec qui visait le 12 vise toujours un 12,
+-- ce qui garde lisibles à la fois ce fichier et les specs (`seedDate(12)` côté e2e).
 insert into product_availability (product_id, date, capacity, booked)
-values
-  ('b0000000-0000-4000-8000-000000000001', '2026-09-05', 10, 0),
-  ('b0000000-0000-4000-8000-000000000001', '2026-09-07', 1, 1),
-  ('b0000000-0000-4000-8000-000000000001', '2026-09-10', 1, 0),
-  ('b0000000-0000-4000-8000-000000000001', '2026-09-12', 10, 0),
-  ('b0000000-0000-4000-8000-000000000001', '2026-09-13', 10, 0),
+select
+  'b0000000-0000-4000-8000-000000000001',
+  (date_trunc('month', (now() at time zone 'America/Bogota')::date) + interval '1 month')::date
+    + (v.dia - 1),
+  v.capacity,
+  v.booked
+from (values
+  -- (jour, capacity, booked)
+  ( 5, 10, 0),   -- largement disponible : reserve.spec.ts, et le panier multi-établissement
+  ( 7,  1, 1),   -- DÉJÀ PLEINE : message d'échec clair
+  (10,  1, 0),   -- dernière place : Checkpoint B + reserve-concurrency.spec.ts
+  (12, 10, 0),   -- réservée à login.spec.ts
+  (13, 10, 0),   -- réservée à attribution.spec.ts (parcours invité via ?ref=)
   -- Feature 8 : réservée exclusivement à e2e/cancel-order.spec.ts (setup direct via create_order,
   -- resetAvailability exige une ligne product_availability déjà existante pour ce (product, date)).
-  ('b0000000-0000-4000-8000-000000000001', '2026-09-14', 10, 0),
+  (14, 10, 0),
   -- Feature 10 : réservée exclusivement à e2e/admin-order-status.spec.ts (même raison : setup
   -- direct via create_order pour créer une ligne reserved à faire passer à un statut terminal).
-  ('b0000000-0000-4000-8000-000000000001', '2026-09-15', 10, 0),
+  (15, 10, 0),
   -- Feature 18 : réservée exclusivement à e2e/partner-qr-tool.spec.ts (parcours bout-en-bout via le
   -- vrai lien /[locale]/r/[code] généré par /partner/tools, disjointe de toutes les dates ci-dessus).
-  ('b0000000-0000-4000-8000-000000000001', '2026-09-20', 10, 0);
+  (20, 10, 0)
+) as v(dia, capacity, booked);
 
 -- Feature 15 (Socio : soumettre une proposition d'édition) — profil dédié isolé. Constat en
 -- préparant cette feature : aucun compte seedé n'a de capacité operator à la fois ACTIVE et
@@ -282,7 +310,10 @@ values (
 -- tour-lancha-guatape (2026-09-07, capacity=1/booked=1) est réutilisée telle quelle pour le cas
 -- "capacité dépassée" de ce même test — pas besoin d'une deuxième ressource pleine ici.
 insert into product_availability (product_id, date, capacity, booked)
-values ('b0000000-0000-4000-8000-000000000006', '2026-09-05', 10, 0);
+select
+  'b0000000-0000-4000-8000-000000000006',
+  (date_trunc('month', (now() at time zone 'America/Bogota')::date) + interval '1 month')::date + 4,
+  10, 0;   -- même jour 5 que la disponibilité principale ci-dessus (+4 car le 1er = décalage 0)
 
 -- Feature 9 (Admin : liste des commandes) — 2 commandes de démonstration pour exercer les deux cas
 -- d'affichage du référent dès le premier chargement de /admin/orders : une "directe" et une avec

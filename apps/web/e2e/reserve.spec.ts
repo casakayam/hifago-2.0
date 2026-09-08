@@ -7,6 +7,7 @@ import {
   countOrderLines,
   getAvailability,
   mockMercadoPagoCheckout,
+  seedDate,
 } from "@hifago/e2e-support";
 
 // Feature 6 : le flux Checkpoint B (bouton unique "Reservar" appelant reserve_order_line
@@ -15,7 +16,7 @@ import {
 // tout-ou-rien, supabase/migrations/20260813243000_create_order_rpc.sql). Ce spec pilote donc
 // désormais le parcours complet plutôt qu'un unique clic déclenchant la RPC.
 const PRODUCT_ID = "b0000000-0000-4000-8000-000000000001"; // tour-lancha-guatape
-const DATE = "2026-09-05"; // cf. supabase/seed.sql — remis à un état connu avant chaque test.
+const DATE = seedDate(5); // cf. supabase/seed.sql — remis à un état connu avant chaque test.
 
 // Les 2 tests ciblent la même ressource (produit, date) : jamais en parallèle l'un de l'autre,
 // sans quoi le reset fait par le second pourrait s'exécuter pendant que le premier est encore en

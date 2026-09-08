@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { resetAvailability, getOrderLineStatuses, createSignedInClient } from "@hifago/e2e-support";
+import { resetAvailability, getOrderLineStatuses, createSignedInClient, seedDate } from "@hifago/e2e-support";
 
 // Feature 8 (Client : annuler sa réservation) : pilote réellement /account/orders — la commande
 // apparaît, clic sur Annuler, l'état affiché change, un rechargement de page confirme la
@@ -9,7 +9,7 @@ import { resetAvailability, getOrderLineStatuses, createSignedInClient } from "@
 // entièrement couverte par pgTAP (supabase/tests/database/cancel_order.test.sql) — pas re-prouvée
 // ici, seul le parcours écran l'est.
 const PRODUCT_ID = "b0000000-0000-4000-8000-000000000001"; // tour-lancha-guatape
-const DATE = "2026-09-14"; // date dédiée à ce spec (cf. supabase/seed.sql)
+const DATE = seedDate(14); // date dédiée à ce spec (cf. supabase/seed.sql)
 
 test("un client connecté annule sa réservation depuis /account/orders, l'état persiste après rechargement", async ({
   page,

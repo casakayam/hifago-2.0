@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { resetAvailability, mockMercadoPagoCheckout } from "@hifago/e2e-support";
+import { resetAvailability, mockMercadoPagoCheckout, seedDate } from "@hifago/e2e-support";
 
 // Feature 7 (attribution) — portée honnête (cf. plan) : aucun écran admin de consultation des
 // commandes n'existe encore à ce stade du backlog (feature 9, plus loin) pour vérifier visuellement
@@ -11,7 +11,7 @@ import { resetAvailability, mockMercadoPagoCheckout } from "@hifago/e2e-support"
 // (assertion négative explicite) — pas une extension artificielle juste pour « couvrir » un effet
 // serveur déjà prouvé autrement.
 const PRODUCT_ID = "b0000000-0000-4000-8000-000000000001"; // tour-lancha-guatape
-const DATE = "2026-09-13"; // date dédiée à ce spec (cf. supabase/seed.sql), disjointe de
+const DATE = seedDate(13); // date dédiée à ce spec (cf. supabase/seed.sql), disjointe de
 // 2026-09-05/07/10/12 utilisées par les autres specs.
 const REFERRAL_CODE = "SEED-REFACTIVE"; // code seedé actif depuis la Tranche 1, cf. supabase/seed.sql.
 

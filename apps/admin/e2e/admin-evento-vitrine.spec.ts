@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { WEB_APP_URL } from "@hifago/e2e-support";
+import { WEB_APP_URL, nextMonthIsoDate } from "@hifago/e2e-support";
 
 // Feature 21 (Admin : créer une fiche evento, vitrine) — parcours complet : création (publiée
 // direct depuis le 2026-08-20, retour Jérôme — product-form.tsx n'écrase plus le défaut colonne
@@ -33,7 +33,7 @@ test("admin crée un evento récurrent vitrine, le publie, la fiche publique aff
   // sans lui, "cada 7 días" ne dirait jamais sur quel jour de semaine tombe l'evento.
   await page.getByTestId("occurrence-type-select").click();
   await page.getByRole("option", { name: "Recurrente" }).click();
-  await page.getByTestId("occurrence-date-input").fill("2026-09-22");
+  await page.getByTestId("occurrence-date-input").fill(nextMonthIsoDate(22))   // date SAISIE par l'admin, pas seedée : elle doit seulement être future;
   await page.getByTestId("recurrence-frequency-input").fill("7");
 
   await page.getByTestId("external-booking-url-input").fill("https://example.com/reservar");
