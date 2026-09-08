@@ -31,7 +31,12 @@ export function RenameTagButton({ tagId, currentLabel }: { tagId: string; curren
       toast.danger(
         updateError.code === "23505"
           ? "Ya existe una etiqueta con ese nombre."
-          : "No se pudo renombrar la etiqueta.",
+          : updateError.code === "23514"
+            ? // ⚠️ Renommer RECALCULE le slug (`slugify`) : cette contrainte est donc atteignable
+              // ici comme à la création. `otras` est réservé à la page des activités qu'aucune
+              // catégorie ne classe (spec 29 §6a).
+              "«\u00a0Otras\u00a0» está reservado para la página de actividades sin categoría. Usa otro nombre."
+            : "No se pudo renombrar la etiqueta.",
       );
       return;
     }

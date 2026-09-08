@@ -18,7 +18,11 @@ export const runtime = "nodejs";
 // même rendu.
 export async function POST(request: Request, context: RouteContext<"/api/upload/[entity]">) {
   const { entity } = await context.params;
-  if (entity !== "product" && entity !== "establishment") {
+  // ⚠️ `tag` ajouté le 2026-09-08 (spec 29 Tranche 3) — une ENTRÉE de plus dans la liste blanche,
+  // et rien d'autre : ce Route Handler est le chemin d'upload canonique de TOUT le module images
+  // (photos de produits et d'établissements, propositions socio, import PMS). Sa signature, son
+  // ordre de vérifications et ses deux chemins existants sont intacts.
+  if (entity !== "product" && entity !== "establishment" && entity !== "tag") {
     return Response.json({ ok: false, reason: "invalid_entity" }, { status: 400 });
   }
 
@@ -55,11 +59,11 @@ export async function POST(request: Request, context: RouteContext<"/api/upload/
   }
 
   const service = createServiceRoleClient();
-  const stored = await uploadCatalogWebp(
-    service,
-    entity === "product" ? "products" : "establishments",
-    processed.buffer,
-  );
+  // ⚠️ Table explicite plutôt qu'un ternaire imbriqué : à trois valeurs, un `a ? b : c ? d : e`
+  // devient l'endroit exact où une quatrième entité partira dans le mauvais dossier sans que rien
+  // ne le signale — le fichier atterrirait dans `products/` et la page l'afficherait quand même.
+  const DOSSIER = { product: "products", establishment: "establishments", tag: "tags" } as const;
+  const stored = await uploadCatalogWebp(service, DOSSIER[entity], processed.buffer);
   if (!stored.ok) {
     return Response.json({ ok: false, reason: "upload_failed" }, { status: 500 });
   }

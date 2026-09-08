@@ -4,6 +4,8 @@ import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, formatDateTimeInBogota, resolveLocalizedField } from "@hifago/domain";
 import { RenameTagButton } from "../RenameTagButton";
 import { DeleteTagButton } from "../DeleteTagButton";
+import { CategoriaEditorialBlock } from "./CategoriaEditorialBlock";
+import type { LocalizedValue } from "@/components/localized-text-field";
 
 // docs/specs/10-listes-standardisees-admin-socio.md §5.4 — fiche minimale, n'existait pas avant
 // (seule la liste montrait ces champs, via modal). Eliminar réservé ici (décision Jérôme, jamais
@@ -16,7 +18,11 @@ export default async function AdminTagDetailPage({ params }: PageProps<"/admin/t
   // Les deux requêtes ne dépendent que du paramètre de route `id`, jamais l'une de l'autre —
   // lancées en concurrence plutôt qu'attendre `tag` avant de lancer `assignments`.
   const [{ data: tag }, { data: assignments }] = await Promise.all([
-    supabase.from("catalog_tags").select("id, label, slug, created_at").eq("id", id).maybeSingle(),
+    supabase
+      .from("catalog_tags")
+      .select("id, label, slug, created_at, description, image_path")
+      .eq("id", id)
+      .maybeSingle(),
     supabase.from("product_tag_assignments").select("product:products(id, name)").eq("tag_id", id),
   ]);
 
@@ -52,6 +58,23 @@ export default async function AdminTagDetailPage({ params }: PageProps<"/admin/t
           <dd>{formatDateTimeInBogota(tag.created_at, "es")}</dd>
         </div>
       </dl>
+
+      {/* Le contenu éditorial (spec 29 Tranche 3) : c'est ce que la vitrine affiche sur
+          `/es/actividades`. Placé AVANT la liste des activités — c'est ce qu'un admin vient
+          remplir, la liste étant une conséquence des assignations faites ailleurs. */}
+      <CategoriaEditorialBlock
+        tagId={tag.id}
+        // ⚠️ `asLocalizedField` est un cast SANS validation : un JSONB scalaire passerait au
+        // travers. On rend donc un objet de chaînes, en écartant tout ce qui n'en est pas une —
+        // sinon `LocalizedTextField` recevrait un `undefined` par langue et afficherait « [object
+        // Object] » dans son champ.
+        initialDescription={Object.fromEntries(
+          Object.entries((tag.description ?? {}) as Record<string, unknown>).filter(
+            (entree): entree is [string, string] => typeof entree[1] === "string"
+          )
+        ) satisfies LocalizedValue}
+        initialImagePath={tag.image_path}
+      />
 
       <div className="flex flex-col gap-2">
         <h2 className="text-lg font-medium">Actividades con esta etiqueta ({products.length})</h2>

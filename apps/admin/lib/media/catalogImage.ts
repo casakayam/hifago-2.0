@@ -28,7 +28,12 @@ export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_DIMENSION = 2400;
 const ALLOWED_FORMATS = new Set(["jpeg", "png", "webp"]);
 
-export type CatalogImageFolder = "products" | "establishments";
+// `tags` ajouté le 2026-09-08 (spec 29 Tranche 3) : l'image de couverture d'une catégorie.
+// ⚠️ Contrairement aux deux autres, elle n'a PAS de table de médias — le chemin est écrit
+// directement dans `catalog_tags.image_path` par l'appelant. Ce module ne change pas pour
+// autant : il ne fait que traiter et écrire dans Storage, le rattachement ne l'a jamais
+// concerné (voir `uploadCatalogWebp`).
+export type CatalogImageFolder = "products" | "establishments" | "tags";
 
 export type ProcessResult =
   | { ok: true; buffer: Buffer }
