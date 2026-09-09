@@ -7,7 +7,7 @@
 -- `set local role authenticated` (le vrai rôle Postgres change, contrairement à test_login qui ne
 -- simule qu'un claim JWT), pas seulement l'un ou l'autre.
 begin;
-select plan(42);
+select plan(43);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -170,6 +170,24 @@ select is(
   'order_not_found',
   'cas 5 : un autre compte authentifié ne peut pas payer la commande du buyer'
 );
+
+-- Cas 5bis : un appelant SANS AUCUNE SESSION (rôle anon, aucun claim JWT) sur la commande du
+-- buyer → order_not_found. C'EST LE CAS QUI MANQUAIT : le cas 5 ci-dessus, avec un autre compte
+-- AUTHENTIFIÉ, passait déjà — la garde d'origine (`v_account_id is not null and …`) se désarmait
+-- justement quand l'appelant n'avait pas de session, et laissait alors créer un payment sur la
+-- commande d'autrui en renvoyant l'email du titulaire. Reproduit en réel le 2026-09-09, corrigé par
+-- la migration 20260909190000. Sans cette assertion, la correction serait un souhait (§11.20).
+reset role;
+set local role anon;
+select is(
+  (select create_payment_intent('88970000-0000-4000-8000-000000000042') ->> 'reason'),
+  'order_not_found',
+  'cas 5bis : un appelant SANS session ne peut pas payer la commande d''un compte'
+);
+reset role;
+-- (Pas d'assertion « aucune ligne créée » ici : la commande 42 porte DÉJÀ le payment légitime du
+-- cas 4, donc un comptage serait faux. Le `order_not_found` ci-dessus suffit à prouver la garde —
+-- la fonction retourne avant d'atteindre le moindre insert.)
 
 -- Cas 6 : commande dont toutes les lignes sont déjà annulées → nothing_to_pay.
 select test_logout();
