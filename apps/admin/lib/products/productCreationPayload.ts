@@ -6,11 +6,15 @@ import { toSlotRuleRows } from "@/lib/products/slotRules";
 import { productTypeGating, type ProductType, type ProductTypeFieldsState } from "@/lib/products/useProductTypeFieldsState";
 
 // Construit le payload jsonb attendu par submit_product_creation_proposal / le
-// p_corrected_payload de moderate_product_proposal (kind='create') — miroir exact de ce que
-// handleSubmit écrit directement dans `products` pour l'admin-direct (product-form.tsx), mêmes
-// fonctions de conversion (toPriceTiersColumn/toStayRatesColumn/toSlotRuleRows/toRoomTypeRows),
-// donc price_cop/price_tiers/slot_rules arrivent déjà dans la forme EXACTE des colonnes
-// cibles — create_product_from_proposal (SQL) ne fait plus aucun calcul, seulement une transposition.
+// p_corrected_payload de moderate_product_proposal (kind='create') — et, depuis le 2026-09-09, la
+// SEULE source des colonnes de `products` pour la création ADMIN-DIRECTE également : product-form.tsx
+// l'appelle puis retire les trois clés hors-colonnes (photos/tag_ids/slot_rules) avant son insert.
+// Ce fichier n'était jusque-là qu'un « miroir exact » de l'insert écrit à la main en face, et les
+// deux avaient fini par diverger — le bloc « vitrine » plus bas (external_booking_url/price_label
+// sur un non-evento) n'existait que d'un seul côté. Une seule définition, plus de miroir à tenir.
+// Mêmes fonctions de conversion (toPriceTiersColumn/toStayRatesColumn/toSlotRuleRows), donc
+// price_cop/price_tiers/slot_rules arrivent déjà dans la forme EXACTE des colonnes cibles —
+// create_product_from_proposal (SQL) ne fait plus aucun calcul, seulement une transposition.
 // `photos` (spec 15, révisé 2026-08-17) : les fichiers sont déjà uploadés vers Storage au moment
 // de l'appel (StagedProductPhotos, réutilisé tel quel côté socio) — seul le storage_path traverse
 // la proposition, jamais un binaire.
@@ -28,6 +32,15 @@ export function buildProductCreationPayload(
     hasLocationAndTags, hasTags, hasPriceQtyFields, hasCheckInOut, hasDefaultCapacity,
   } = productTypeGating(type);
   const usesTiers = hasPriceQtyFields && fields.priceMode === "tiers";
+  // `Number("")` vaut 0, PAS NaN : un champ prix laissé vide franchissait donc `Number.isFinite`
+  // et partait en base à 0, refusé par `products_price_cop_positive` (`check price_cop > 0`). Cela
+  // fermait le cas « vitrine sans prix chiffré » que la migration 20260908200000 venait justement
+  // d'ouvrir — l'admin ne voyait qu'un toast générique (mesuré le 2026-09-09).
+  // Seul un prix STRICTEMENT POSITIF est un prix ; tout le reste vaut null, et c'est alors
+  // `products_price_cop_required_unless_vitrine` qui dit si la ligne est acceptable — un non-evento
+  // sans prix ET sans URL externe est refusé en base, comme la validation de l'écran l'exige déjà.
+  const prixSaisi = Number(fields.priceCop);
+  const priceCopOuNull = Number.isFinite(prixSaisi) && prixSaisi > 0 ? prixSaisi : null;
 
   return {
     name: buildLocalizedPayload(name) ?? { es: name.es?.trim() ?? "" },
@@ -45,14 +58,14 @@ export function buildProductCreationPayload(
     ...(hasTags ? { tag_ids: fields.selectedTagIds } : {}),
     ...(hasPriceQtyFields
       ? {
-          price_cop: usesTiers ? lowestTierPrice(fields.priceTiers) : Number(fields.priceCop),
+          price_cop: usesTiers ? lowestTierPrice(fields.priceTiers) : priceCopOuNull,
           price_tiers: usesTiers ? toPriceTiersColumn(fields.priceTiers) : null,
           min_qty: fields.minQty.trim() ? Number(fields.minQty) : null,
           max_qty: fields.maxQty.trim() ? Number(fields.maxQty) : null,
         }
       : {}),
     ...(isCamp
-      ? { price_cop: Number(fields.priceCop), duration_days: Number(fields.durationDays) }
+      ? { price_cop: priceCopOuNull, duration_days: Number(fields.durationDays) }
       : {}),
     ...(hasCheckInOut
       ? { check_in_time: fields.checkInTime || null, check_out_time: fields.checkOutTime || null }

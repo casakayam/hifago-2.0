@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { slugify } from "@/lib/utils";
 import { asLocalizedField } from "@hifago/domain";
-import type { Json } from "@hifago/supabase/database.types";
+import type { Json, TablesInsert } from "@hifago/supabase/database.types";
 import { Button, Label, ListBox, Select, toast } from "@hifago/ui";
 import { type TagOption } from "@/components/tags-multiselect";
 import {
@@ -345,11 +345,13 @@ export function ProductForm({
                 lon: fields.lon.trim() ? Number(fields.lon) : null,
               }
             : {}),
-          // `null` plutôt que `NaN` quand le prix est vide : `NaN` traverse JSON en `null` de
-          // toute façon, mais l'écrire explicitement dit que c'est voulu.
+          // `> 0`, et pas seulement `Number.isFinite` : `Number("")` vaut 0, pas NaN. La garde
+          // précédente laissait donc passer un champ prix VIDE, qui partait à 0 et se faisait
+          // refuser par `products_price_cop_positive` — passer un produit existant en vitrine en
+          // effaçant son prix était impossible (même défaut que la création, mesuré le 2026-09-09).
           price_cop: usesTiers
             ? lowestTierPrice(fields.priceTiers)
-            : Number.isFinite(price)
+            : Number.isFinite(price) && price > 0
               ? price
               : null,
           price_tiers: usesTiers ? toPriceTiersColumn(fields.priceTiers) : null,
@@ -431,75 +433,44 @@ export function ProductForm({
       return;
     }
 
+    // Colonnes de `products` construites par buildProductCreationPayload, JAMAIS réécrites à la
+    // main ici : ce chemin admin-direct et le chemin socio/modération doivent produire exactement
+    // les mêmes colonnes, et la duplication précédente avait déjà divergé — le bloc « vitrine »
+    // (external_booking_url/price_label sur un NON-evento, spec 30 §3.1) n'existait que dans le
+    // builder et dans l'édition, jamais dans cette création. Conséquence réelle, silencieuse :
+    // l'URL externe saisie par l'admin sur un non-evento n'entrait pas dans l'insert, le produit
+    // se créait SANS elle et sans la moindre erreur. C'est ce cas-là que ce passage referme.
+    //
+    // ⚠️ CE QU'IL NE REFERME PAS, vérifié le 2026-09-09 : une vitrine dont le prix est laissé VIDE
+    // échoue toujours. `fields.priceCop` vaut "" et le builder écrit Number("") = 0, refusé par
+    // `products_price_cop_positive` (check price_cop > 0) — l'écran ne montre qu'un toast
+    // générique. Le défaut est PRÉ-EXISTANT et vit dans les trois chemins à la fois (ce builder,
+    // donc création admin ET proposition socio, plus l'update d'édition ligne ~350). Le corriger
+    // demande de porter `price_cop: null` quand aucun prix n'est saisi, ce qui change le chemin
+    // socio du même geste : hors du périmètre de ce correctif-ci, ouvert dans docs/backlog.md.
+    //
+    // `photos`/`tag_ids`/`slot_rules` ne sont pas des colonnes de `products` : la RPC de
+    // proposition les transpose côté SQL, ce chemin-ci les rattache lui-même APRÈS l'insert
+    // (Promise.all ci-dessous). Leur retrait est délibéré, jamais un oubli.
+    const productColumns = buildProductCreationPayload(type, name, description, fields);
+    delete productColumns.photos; // rattachées par add_catalog_media, ci-dessous
+    delete productColumns.tag_ids; // rattachés par product_tag_assignments, ci-dessous
+    delete productColumns.slot_rules; // rattachées par product_slot_rules, ci-dessous
+
     const { data: newProduct, error: insertError } = await supabase
       .from("products")
       .insert({
+        // Le spread vient EN PREMIER : les quatre clés d'identité ci-dessous ne sont jamais
+        // écrasables par le payload (elles ne s'y trouvent pas — la RPC SQL les pose de son côté).
+        ...(productColumns as TablesInsert<"products">),
         partner_id: establishment.partner_id,
         establishment_id: establishment.id,
         type,
-        name: nameJson,
-        description: descriptionJson,
         slug: slugify(nombreEs),
         // sellable non précisé, hérite du défaut colonne (true) : un produit créé directement par
         // l'admin est publié tout de suite, même principe que create_establishment/
         // create_product_from_proposal (retour Jérôme, 2026-08-20) — l'ancien geste de publication
         // séparée (feature 4) est abandonné pour toute création déjà initiée par un admin.
-        price_cop: isEvento ? null : price,
-        duration_days: isCamp ? Number(fields.durationDays) : null,
-        ...(isEvento
-          ? {
-              price_label: fields.priceLabel.trim(),
-              occurrence_type: fields.occurrenceType,
-              // Ancre nécessaire pour les deux modes désormais (cf. product-type-fields.tsx) — plus
-              // seulement "once" : sans elle, un evento récurrent ne peut jamais dire sur quel jour
-              // de semaine il tombe.
-              occurrence_date: fields.occurrenceDate,
-              recurrence_frequency_days:
-                fields.occurrenceType === "recurring" ? Number(fields.recurrenceFrequencyDays) : null,
-              recurrence_end_date:
-                fields.occurrenceType === "recurring" && fields.recurrenceEndKind === "date"
-                  ? fields.recurrenceEndDate
-                  : null,
-              recurrence_end_count:
-                fields.occurrenceType === "recurring" && fields.recurrenceEndKind === "count"
-                  ? Number(fields.recurrenceEndCount)
-                  : null,
-              start_time: fields.startTime || null,
-              duration_minutes: fields.durationMinutes ? Number(fields.durationMinutes) : null,
-              external_booking_url: fields.externalBookingUrl.trim() || null,
-            }
-          : {}),
-        ...(hasLocationAndTags
-          ? {
-              address: fields.address.trim() || null,
-              lat: fields.lat.trim() ? Number(fields.lat) : null,
-              lon: fields.lon.trim() ? Number(fields.lon) : null,
-            }
-          : {}),
-        ...(hasPriceQtyFields && fields.priceMode === "tiers"
-          ? { price_cop: lowestTierPrice(fields.priceTiers), price_tiers: toPriceTiersColumn(fields.priceTiers) }
-          : {}),
-        ...(hasPriceQtyFields && fields.minQty.trim() ? { min_qty: Number(fields.minQty) } : {}),
-        ...(hasPriceQtyFields && fields.maxQty.trim() ? { max_qty: Number(fields.maxQty) } : {}),
-        ...(hasCheckInOut
-          ? { check_in_time: fields.checkInTime || null, check_out_time: fields.checkOutTime || null }
-          : {}),
-        ...(isLodging
-          ? {
-              capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
-              unit_count: fields.unitCount.trim() ? Number(fields.unitCount) : null,
-              lodging_kind: fields.lodgingKind || null,
-              unit: fields.unit || null,
-              stay_rates: toStayRatesColumn(fields.stayRates),
-              lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
-            }
-          : {}),
-        ...(isActivity || isTransport
-          ? { lobby_product_id: fields.lobbyProductId.trim() ? Number(fields.lobbyProductId) : null }
-          : {}),
-        ...(hasDefaultCapacity
-          ? { default_capacity: fields.defaultCapacity.trim() ? Number(fields.defaultCapacity) : null }
-          : {}),
       })
       .select("id")
       .single();
