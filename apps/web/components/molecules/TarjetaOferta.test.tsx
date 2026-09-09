@@ -146,6 +146,32 @@ describe("TarjetaOferta", () => {
     expect(carte.textContent).toContain(NOMBRE);
   });
 
+  // ── LE DÉCOMPTE D'UNE CARTE GROUPÉE ──────────────────────────────────────────────────────────
+  // Restauré le 2026-09-09 : `search_catalog` le rendait, `buscar.ts` le mappait, le type le
+  // portait — et RIEN ne l'affichait. Les quatorze fixtures du dépôt le posaient toutes à `null`,
+  // donc aucun test n'exerçait le cas. C'est ce qui a rendu l'oubli invisible pendant un lot
+  // entier, et la raison pour laquelle ces trois cas existent.
+  it("une carte groupée annonce son décompte de couchages, à la place du sous-titre", () => {
+    // Littéralement ce que le front d'août affichait : « Casa Kayam · 6 alojamientos »
+    // (journal du 2026-08-15). Sans lui, une carte unique qui représente six chambres ne dit pas
+    // qu'elle en représente six.
+    const { carte } = rendre({ establecimiento: null, nAlojamientos: 6 });
+    expect(carte.querySelector("p")?.textContent).toBe("6 alojamientos");
+  });
+
+  it("accorde le singulier — le libellé est un motif pluriel, jamais « 1 alojamientos »", () => {
+    const { carte } = rendre({ establecimiento: null, nAlojamientos: 1 });
+    expect(carte.querySelector("p")?.textContent).toBe("1 alojamiento");
+  });
+
+  it("une carte NON groupée garde son établissement et n'annonce aucun décompte", () => {
+    // Les deux ne peuvent pas se disputer la place : `search_catalog` pose `establecimiento = null`
+    // sur la seule branche qui porte `nAlojamientos`. L'assertion vérifie qu'on n'a pas inversé la
+    // priorité en écrivant le rendu.
+    const { carte } = rendre({ nAlojamientos: null });
+    expect(carte.querySelector("p")?.textContent).toBe("Casa Kayam Guatapé");
+  });
+
   it("sans prix : aucun bloc de prix, et AUCUN conteneur de contenu vide", () => {
     // ⚠️ La deuxième moitié compte autant que la première : `Card` n'ouvre son `Card.Content` que
     // si des enfants lui parviennent. Passer un `<span>` vide aurait laissé un écart sous le titre

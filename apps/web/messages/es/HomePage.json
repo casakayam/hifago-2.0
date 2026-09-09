@@ -54,5 +54,6 @@
     }
   },
   "buscando": "Buscando…",
-  "capacidadPersonas": "{count} personas"
+  "capacidadPersonas": "Hasta {count, plural, one {# persona} other {# personas}}",
+  "conteoAlojamientos": "{count, plural, one {# alojamiento} other {# alojamientos}}"
 }

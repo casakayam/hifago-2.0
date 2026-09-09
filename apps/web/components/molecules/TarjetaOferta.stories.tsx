@@ -99,6 +99,10 @@ export const SinPrecio: Story = {
 // Le prix d'une carte GROUPÉE : le minimum des couchages de l'établissement, précédé de son
 // libellé. Les deux vivent dans un seul élément — un lecteur d'écran lit « Desde 180.000 COP »
 // d'une traite, pas deux informations voisines.
+//
+// C'est aussi la seule story qui montre une CARTE GROUPÉE complète : le sous-titre y porte le
+// décompte de couchages (« 6 alojamientos ») au lieu du nom d'un établissement, parce qu'ici la
+// carte EST l'établissement. Littéralement ce que le front d'août affichait.
 export const PrecioDesde: Story = {
   args: {
     oferta: {
@@ -110,7 +114,11 @@ export const PrecioDesde: Story = {
       precio: { tipo: "desde", cop: 180000 },
       fotos: fotos(2, 2),
       capacidad: null,
-      nAlojamientos: null,
+      // ⚠️ 6 et non `null` : c'est l'état que la base produit RÉELLEMENT. Une carte groupée porte
+      // toujours les deux — `search_catalog` calcule `precio_desde` et `n_alojamientos` dans la
+      // même branche. La story les montrait dissociés, donc un état impossible, et c'est ce qui a
+      // permis au décompte de rester non rendu pendant un lot entier sans que rien ne le montre.
+      nAlojamientos: 6,
       testId: "tarjeta-casa-kayam",
     },
   },

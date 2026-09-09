@@ -132,7 +132,21 @@ export function TarjetaOferta({ oferta, variante, prioridad, locale }: TarjetaOf
       href={oferta.href}
       title={oferta.nombre}
       titleAs="h3"
-      subtitle={oferta.establecimiento ?? undefined}
+      // ⚠️ LE DÉCOMPTE PREND LA PLACE DU SOUS-TITRE, et les deux ne peuvent pas se disputer : une
+      // carte GROUPÉE représente l'établissement lui-même, donc `search_catalog` lui pose
+      // `establecimiento = null` (branche `es_establecimiento`), et c'est la seule qui porte
+      // `nAlojamientos`. Toute autre carte a l'inverse. Mutuellement exclusifs par construction,
+      // pas par convention.
+      //
+      // Le rendu reproduit littéralement ce que le front d'août affichait — « Casa Kayam ·
+      // 6 alojamientos » (journal du 2026-08-15) — que la refonte avait perdu : sans lui, une
+      // carte unique qui représente six chambres ne dit pas qu'elle en représente six.
+      subtitle={
+        oferta.establecimiento ??
+        (oferta.nAlojamientos !== null
+          ? t("conteoAlojamientos", { count: oferta.nAlojamientos })
+          : undefined)
+      }
       layout={variante === "lista" ? "row" : "stack"}
       testId={oferta.testId}
       media={
