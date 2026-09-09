@@ -49,6 +49,7 @@
 - [Avant d'écrire une spec — poser les bonnes questions](specs/avant-la-spec.md) — **modele** · maj 2026-08-16
 
 ## Journal — historique chronologique (jamais chargé automatiquement)
-- [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-08
+- [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-09
+- [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-09
 - [Journal hifago — août 2026](journal/2026-08.md) · maj 2026-09-01
-- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-08
+- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-09

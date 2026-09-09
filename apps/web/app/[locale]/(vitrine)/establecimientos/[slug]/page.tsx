@@ -9,6 +9,7 @@ import { buildPageMetadata } from "@/lib/seo/pageMetadata";
 import { getSiteUrl } from "@/lib/seo/siteUrl";
 import { buildEstablishmentJsonLd } from "@/lib/seo/jsonld/establishment";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/jsonld/breadcrumb";
+import { segmentoDeTipo } from "@/lib/catalog/segmentos";
 import { migasParaJsonLd } from "@/lib/seo/migas";
 import type { Locale } from "@/messages";
 import { FichaEstablecimiento } from "./FichaEstablecimiento";
@@ -54,9 +55,13 @@ export default async function EstablecimientoPage({
   // Le fil suit le parcours réel : on arrive sur un établissement depuis le listing des
   // hébergements. Trois niveaux — c'est l'écran qui EST le niveau intermédiaire d'une fiche de
   // chambre (spec 30 §3.10).
+  // ⚠️ `segmentoDeTipo` et pas « /alojamientos » en dur : c'est le MÊME maillon que celui de la
+  // fiche produit (`productos/[slug]/page.tsx:76`), qui lui passe déjà par la table. `segmentos.ts`
+  // se déclare « SEULE source de vérité » du couple type ↔ segment d'URL — un segment renommé là-bas
+  // aurait laissé cette fiche pointer vers un 404, et seule l'autre fiche aurait suivi.
   const migas: MigaItem[] = [
     { nombre: tCommon("breadcrumbHome"), href: "/" },
-    { nombre: tHome("secciones.lodging"), href: "/alojamientos" },
+    { nombre: tHome("secciones.lodging"), href: `/${segmentoDeTipo("lodging")}` },
     { nombre: ficha.nombre },
   ];
 

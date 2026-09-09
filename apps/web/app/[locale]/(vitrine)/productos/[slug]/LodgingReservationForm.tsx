@@ -38,7 +38,7 @@ import {
   pisoLeadDays,
   ultimoDiaReservable,
 } from "@/lib/reservas/calendario";
-import { limitarCantidad } from "@/lib/reservas/cantidad";
+import { limitarCantidad, topeCantidad } from "@/lib/reservas/cantidad";
 import { plazasRestantes } from "@/lib/reservas/disponibilidad";
 import { motivoPms } from "@/lib/reservas/pms";
 
@@ -225,7 +225,7 @@ export function LodgingReservationForm({
     [lines, productId]
   );
 
-  const qtyMax = Math.max(maxQty, 1);
+  const qtyMax = topeCantidad(maxQty);
 
   // Cupos restants par nuit — une seule dérivation, lue par le barré du calendrier ET par le
   // compteur affiché dans la case. Ne dépend PAS de `qty` : c'est un fait de disponibilité, pas un

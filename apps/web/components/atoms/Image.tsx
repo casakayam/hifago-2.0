@@ -3,15 +3,21 @@
 // Créé le 2026-09-01 (vague 1 des atomes, lot « données affichées »). Sa raison d'être tient dans
 // ces mots-clés. `components/README.md` exige déjà les deux premiers, mais tant qu'ils restent
 // optionnels dans `next/image` la règle n'est qu'un vœu : elle ne se vérifie qu'à la relecture, et
-// elle a déjà été manquée — `establishments/[slug]/EstablishmentDetailView.tsx:144` rend un
-// `fill` SANS `sizes`, donc sert l'image la plus grande à un téléphone. Ici le compilateur fait
-// respecter la règle. C'est le seul mécanisme du lot qui transforme une règle écrite en règle
-// vérifiée.
+// elle avait déjà été manquée — l'ancien `establishments/[slug]/EstablishmentDetailView.tsx:144`
+// rendait un `fill` SANS `sizes`, donc servait l'image la plus grande à un téléphone. Ici le
+// compilateur fait respecter la règle. C'est le seul mécanisme du lot qui transforme une règle
+// écrite en règle vérifiée.
 //
-// Deuxième moitié de sa valeur : `src === null`. Les deux appelants actuels
-// (CatalogBrowser.tsx:98, EstablishmentDetailView.tsx:142) écrivent chacun leur
-// `product.imageUrl ? … : null` et laissent donc un TROU à la place du visuel. Le substitut est
+// Deuxième moitié de sa valeur : `src === null`. Les deux appelants D'ALORS
+// (`CatalogBrowser.tsx:98`, `EstablishmentDetailView.tsx:142`) écrivaient chacun leur
+// `product.imageUrl ? … : null` et laissaient donc un TROU à la place du visuel. Le substitut est
 // centralisé ici.
+//
+// ⚠️ CES TROIS FICHIERS N'EXISTENT PLUS : `CatalogBrowser` a été supprimé par la spec 28,
+// `ProductDetailView`/`EstablishmentDetailView` renommés en `FichaProducto`/`FichaEstablecimiento`
+// par la spec 30 (2026-09-08). Les références ci-dessus sont conservées parce qu'elles disent
+// POURQUOI cet atome existe — mais ce sont des faits d'histoire, à lire par `git show`, pas des
+// chemins à ouvrir.
 //
 // ⚠️ Mode `fill` uniquement, dans un conteneur au ratio demandé : c'est le seul mode employé par
 // les deux usages existants. Pas de mode `width`/`height` intrinsèque — personne n'en a besoin

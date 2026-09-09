@@ -9,7 +9,9 @@ import { SiteHeader } from "./SiteHeader";
 // Pas de @testing-library/jest-dom dans ce monorepo — assertions DOM natives uniquement.
 //
 // ⚠️ `@/i18n/navigation` tire next-intl/navigation → next/navigation, dont la résolution casse sous
-// Vitest (même mock que CatalogBrowser.test.tsx et ProductDetailView.test.tsx). `Link` reçoit ici
+// Vitest. Le même mock vit dans les autres tests qui rendent un lien — il vivait dans
+// `CatalogBrowser.test.tsx` et `ProductDetailView.test.tsx`, tous deux disparus le 2026-09-08
+// (specs 28 et 30) ; `FichaProducto.test.tsx` en est l'héritier. `Link` reçoit ici
 // une prop `locale` en plus : le mock la rend en préfixe, exactement comme le vrai — sans quoi le
 // test du sélecteur de langue ne vérifierait rien de ce qui compte.
 vi.mock("@/i18n/navigation", () => ({

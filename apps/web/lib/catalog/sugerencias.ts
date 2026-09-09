@@ -1,6 +1,6 @@
 import { createPublicClient } from "@/lib/supabase/publicClient";
 import { identidadDeFila, type FilaCatalogo } from "./buscar";
-import { esTipoOferta, type SugerenciaCatalogo } from "./tipos";
+import { ORDEN_SECCIONES, esTipoOferta, type SugerenciaCatalogo } from "./tipos";
 
 // Les suggestions de la barre de recherche de l'accueil (2026-09-08, Tranche 2 du lot D —
 // docs/specs/28-vitrine-accueil-et-resultats.md §2). `SearchBar` « ne cherche rien, il reçoit » :
@@ -48,11 +48,17 @@ const MINIMO_CARACTERES = 2;
  * de l'hôtel avait disparu**. Le prédicat texte couvre le nom de l'établissement, donc son nom fait
  * correspondre TOUS ses produits — et sa propre carte, de type `lodging`, est servie en dernier.
  *
- * Cinq sections, donc cinq fois la réserve : c'est le seul facteur qui garantit d'atteindre la
- * dernière section quelle que soit la répartition. L'accueil ne souffre pas du même défaut, elle
- * passe déjà `porSeccion * ORDEN_SECCIONES.length` pour la même raison (`buscar.ts`).
+ * Autant de fois la réserve qu'il y a de sections : c'est le seul facteur qui garantit d'atteindre
+ * la dernière section quelle que soit la répartition. L'accueil applique déjà exactement ce facteur
+ * (`porSeccion * ORDEN_SECCIONES.length`, `buscar.ts`) pour la même raison.
+ *
+ * ⚠️ DÉRIVÉ, jamais écrit en dur : c'était `5`, sous un commentaire qui disait déjà « cinq sections,
+ * donc cinq fois la réserve » — la règle était donc écrite, mais seul `buscar.ts` la suivait. Un
+ * sixième type d'offre aurait élargi la recherche de l'accueil et laissé les suggestions trop
+ * courtes, en silence : aucun test de ce module n'aurait rougi, il aurait fallu que la dernière
+ * section soit justement celle qu'on cherchait.
  */
-const RESERVA_POR_SECCION = 5;
+const RESERVA_POR_SECCION = ORDEN_SECCIONES.length;
 
 /**
  * Les suggestions à proposer pour un texte en cours de frappe, **classées par pertinence**.

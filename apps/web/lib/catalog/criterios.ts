@@ -132,7 +132,14 @@ export function leerPagina(params: ParamsBrutos): number {
   return bruto;
 }
 
-/** Vrai si au moins un filtre est actif — l'accueil s'en sert pour choisir son état vide. */
+/**
+ * Vrai si au moins un filtre est actif — les listings et l'index de catégories s'en servent pour
+ * choisir LEQUEL de leurs deux états vides afficher (« ta recherche ne donne rien » vs « cette
+ * section est encore vide »).
+ *
+ * ⚠️ Pas l'accueil, contrairement à ce que ce commentaire a dit jusqu'au 2026-09-09 : c'est le seul
+ * écran qui ne l'appelle pas. Il n'a qu'un état vide, puisqu'on n'y arrive jamais sans chercher.
+ */
 export function hayCriterios(criterios: Criterios): boolean {
   return Object.keys(criterios).length > 0;
 }

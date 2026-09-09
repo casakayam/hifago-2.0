@@ -3,7 +3,7 @@ import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
 import { createPublicClient } from "@/lib/supabase/publicClient";
 import { hasNativeContent } from "@/lib/seo/nativeContent";
 import { routing } from "@/i18n/routing";
-import { esTipoOferta } from "./tipos";
+import { esTipoOferta, resolverPrecio } from "./tipos";
 import type { FichaEstablecimiento, FotoTarjeta, TarjetaOferta } from "./tipos";
 
 // La fiche d'un LIEU — spec 30 §7b. Ce module retire la DERNIÈRE exemption vitrine de
@@ -92,14 +92,12 @@ export const getEstablecimientoPorSlug = cache(
       // ⚠️ `null` et non le nom du lieu : on EST déjà sur sa fiche. Le répéter sur chacune de ses
       // cartes serait du bruit, et la carte réserve ce sous-titre à l'établissement d'origine.
       establecimiento: null,
-      // Même règle que partout : un libellé libre d'abord, un montant ensuite, sinon RIEN — jamais
-      // « 0 COP ». ⚠️ Le prix était SÉLECTIONNÉ par l'écran d'origine et affiché nulle part, alors
-      // que l'entretien du 2026-09-07 le demande explicitement sur une carte de chambre.
-      precio: producto.price_label
-        ? { tipo: "texto", label: producto.price_label }
-        : producto.price_cop !== null
-          ? { tipo: "monto", cop: producto.price_cop }
-          : null,
+      // Même règle que partout, et depuis le 2026-09-08 c'est le MÊME CODE : `resolverPrecio` vit
+      // dans `tipos.ts`. Ces quatre lignes étaient une copie, et la troisième copie (`buscar.ts`)
+      // avait déjà divergé — voir la note de `resolverPrecio`.
+      // ⚠️ Le prix était SÉLECTIONNÉ par l'écran d'origine et affiché nulle part, alors que
+      // l'entretien du 2026-09-07 le demande explicitement sur une carte de chambre.
+      precio: resolverPrecio(producto.price_label, producto.price_cop),
       fotos: fotosPorProducto.get(producto.id) ?? [],
       tipo: esTipoOferta(producto.type) ? producto.type : "activity",
       nAlojamientos: null,

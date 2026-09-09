@@ -118,3 +118,33 @@ describe("min_stay — la borne BASSE de la fenêtre", () => {
     expect(f.latestCheckInIso).toBeNull(); // 5 nuits avant le 2 sortiraient de la fenêtre
   });
 });
+
+// Elle n'était exercée qu'EN PASSANT, dans une assertion de `reachableRangeWindow` (l. 28) — jamais
+// pour elle-même, et jamais sur le cas où c'est le PANIER qui fait basculer la nuit. C'est
+// précisément la part qu'elle partage avec `plazasRestantes`, dont elle recopiait le calcul.
+describe("hasUnavailableNightInRange", () => {
+  const nuits = ["2026-12-10", "2026-12-11"];
+  const pleine = (fila: { capacity: number; booked: number } | undefined) => () => fila;
+
+  it("une nuit sans aucune ligne de disponibilité est indisponible", () => {
+    expect(hasUnavailableNightInRange(nuits, 1, pleine(undefined), () => 0)).toBe(true);
+  });
+
+  it("compare au reste NET, donc le panier seul peut rendre la nuit indisponible", () => {
+    // 4 places, 2 réservées, 2 déjà dans le panier : il en reste 0, et une seule est demandée.
+    // Sans la soustraction du panier, cette nuit passerait pour libre — c'est le défaut que
+    // `plazasRestantes` existe pour empêcher, et qui vaut ici comme sur les offres à date unique.
+    expect(
+      hasUnavailableNightInRange(nuits, 1, pleine({ capacity: 4, booked: 2 }), () => 2)
+    ).toBe(true);
+    expect(
+      hasUnavailableNightInRange(nuits, 1, pleine({ capacity: 4, booked: 2 }), () => 1)
+    ).toBe(false);
+  });
+
+  it("un reste NÉGATIF reste indisponible plutôt que d'être ramené à zéro", () => {
+    expect(
+      hasUnavailableNightInRange(nuits, 1, pleine({ capacity: 1, booked: 3 }), () => 0)
+    ).toBe(true);
+  });
+});

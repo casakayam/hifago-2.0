@@ -2,6 +2,7 @@ import { addDays, format, parseISO } from "date-fns";
 import { addDaysIso } from "@hifago/domain";
 import type { DateRange } from "react-day-picker";
 import type { CartLine } from "@/lib/cart/CartContext";
+import { plazasRestantes, type FilaCapacidad } from "./disponibilidad";
 
 // Extrait de HotelReservationForm.tsx/LodgingReservationForm.tsx (spec 17 §0 Tranche 2) — les deux
 // composants réservent une plage de nuits (check-in/check-out) sur une "entité" tarifée différente
@@ -37,16 +38,22 @@ export function nightsInRange(range: DateRange | undefined): string[] {
 // si la capacité restante (déjà nette du panier en cours, cf. getInCartQty) tombe sous la quantité
 // demandée. `getAvailability`/`getInCartQty` sont des lookups fournis par l'appelant (clé
 // clé date) — jamais une Map construite ici, pour ne pas imposer une forme de clé.
+//
+// ⚠️ Le calcul du reste passe par `plazasRestantes`, il n'est PAS refait ici : « capacity - booked
+// - panier » est la même décision que celle des offres à date unique, et ce dossier existe pour
+// qu'elle ne soit écrite qu'une fois. Elle l'était deux — la seconde copie était cette ligne, et
+// elle a survécu à l'extraction du 2026-09-08 parce que celle-ci s'est faite fichier par fichier.
+// Le reste peut être NÉGATIF (cf. la note de `plazasRestantes`) : la comparaison `< qty` s'en
+// accommode, un `Math.max(0, …)` masquerait une incohérence de données.
 export function hasUnavailableNightInRange(
   nights: string[],
   qty: number,
-  getAvailability: (night: string) => { capacity: number; booked: number } | undefined,
+  getAvailability: (night: string) => FilaCapacidad | undefined,
   getInCartQty: (night: string) => number
 ): boolean {
   return nights.some((night) => {
     const row = getAvailability(night);
-    const inCart = getInCartQty(night);
-    return !row || row.capacity - row.booked - inCart < qty;
+    return !row || plazasRestantes(row, getInCartQty(night)) < qty;
   });
 }
 

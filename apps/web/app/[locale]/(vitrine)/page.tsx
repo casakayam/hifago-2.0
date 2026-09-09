@@ -13,6 +13,7 @@ import { buildPageMetadata } from "@/lib/seo/pageMetadata";
 import { getSiteUrl } from "@/lib/seo/siteUrl";
 import type { Locale } from "@/messages";
 import { BuscadorInicio } from "./BuscadorInicio";
+import { labelsBuscador } from "./labelsBuscador";
 
 // L'ACCUEIL, QUI EST AUSSI L'ÉCRAN DE RÉSULTATS (spec 28, Tranche 1 — 2026-09-08).
 //
@@ -73,30 +74,7 @@ export default async function HomePage({ params, searchParams }: PageProps<"/[lo
   // client anonyme sans cookies. Les sections vides ne sont pas dans le tableau rendu.
   const secciones = await buscarSecciones(criterios, { porSeccion: POR_SECCION, locale });
 
-  const labels = {
-    search: {
-      label: t("buscar.label"),
-      placeholder: t("buscar.placeholder"),
-      submitLabel: t("buscar.submitLabel"),
-      emptyLabel: t("buscar.emptyLabel"),
-    },
-    dates: {
-      placeholderLabel: t("fechas.placeholderLabel"),
-      calendar: {
-        complet: t("fechas.calendar.complet"),
-        selectionne: t("fechas.calendar.selectionne"),
-        aujourdhui: t("fechas.calendar.aujourdhui"),
-      },
-    },
-    people: {
-      placeholderLabel: t("personas.placeholderLabel"),
-      fieldLabel: t("personas.fieldLabel"),
-      stepLabels: {
-        increment: t("personas.stepLabels.increment"),
-        decrement: t("personas.stepLabels.decrement"),
-      },
-    },
-  };
+  const labels = await labelsBuscador(locale as Locale);
 
   return (
     <PageShell variant="large">

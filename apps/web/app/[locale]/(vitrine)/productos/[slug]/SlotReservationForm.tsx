@@ -16,7 +16,7 @@ import {
 import { startOfTodayInBogota } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
 import { isoDeFecha, mesPorDefecto, ultimoDiaReservable } from "@/lib/reservas/calendario";
-import { limitarCantidad } from "@/lib/reservas/cantidad";
+import { limitarCantidad, topeCantidad } from "@/lib/reservas/cantidad";
 import {
   CLAVE_PLAZAS,
   agregarEnCarrito,
@@ -60,6 +60,21 @@ function addMinutesToHHMM(time: string, minutes: number): string {
 function remainingForSlot(slot: SlotRow, inCartByKey: Map<string, number>): number {
   const key = `${slot.slot_date}|${toHHMM(slot.slot_start_time)}`;
   return plazasRestantes(slot, inCartByKey.get(key) ?? 0);
+}
+
+// « Plus une seule place de la journée entière ». Ce prédicat était écrit DEUX FOIS à l'identique
+// dans ce fichier — une fois pour barrer la date, une fois pour la désactiver — et une troisième
+// formulation du même « complet » vivait plus bas (`estadoDisponibilidad(…) === "completo"`).
+//
+// ⚠️ Les deux appelants doivent trancher PAREIL, sans quoi une date se retrouve barrée mais
+// cliquable, ou cliquable mais barrée. Aucun test ne verrait cet écart : chacun des deux endroits
+// est correct pris isolément. D'où une seule fonction, qui délègue à `estadoDisponibilidad` plutôt
+// que de recomparer à zéro — « ce qu'il faut dire d'un nombre de places » n'a qu'une définition.
+function diaCompleto(daySlots: SlotRow[] | undefined, inCartByKey: Map<string, number>): boolean {
+  if (!daySlots) return false;
+  return daySlots.every(
+    (slot) => estadoDisponibilidad(remainingForSlot(slot, inCartByKey)) === "completo"
+  );
 }
 
 export function SlotReservationForm({
@@ -113,7 +128,7 @@ export function SlotReservationForm({
   const fullDates = useMemo(() => {
     const full: Date[] = [];
     for (const [date, daySlots] of byDate) {
-      if (daySlots.every((slot) => remainingForSlot(slot, inCartByKey) <= 0)) {
+      if (diaCompleto(daySlots, inCartByKey)) {
         full.push(parseISO(date));
       }
     }
@@ -188,10 +203,14 @@ export function SlotReservationForm({
             // Borne HAUTE : au-delà de l'horizon produit, rien n'est vendable. Sans elle, ces
             // dates paraissaient sélectionnables et n'étaient refusées qu'après coup.
             { after: dernierJourReservable },
+            // ⚠️ Une date SANS créneau du tout est désactivée (`true`), alors qu'elle n'est pas
+            // « complète » : rien n'y est vendable, il n'y a simplement rien. `diaCompleto` répond
+            // `false` dans ce cas — c'est la bonne réponse à SA question, et les deux appelants
+            // n'en font pas le même usage. Le distinguer ici plutôt que dans le prédicat.
             (date) => {
               const daySlotsForDate = byDate.get(format(date, "yyyy-MM-dd"));
               if (!daySlotsForDate) return true;
-              return daySlotsForDate.every((slot) => remainingForSlot(slot, inCartByKey) <= 0);
+              return diaCompleto(daySlotsForDate, inCartByKey);
             },
           ]}
           modifiers={{ full: fullDates }}
@@ -260,7 +279,7 @@ export function SlotReservationForm({
         onChange={(value) => setQty(limitarCantidad(Number(value), slotRemaining))}
       >
         <Label>{t("quantityLabel")}</Label>
-        <Input id="qty" type="number" min={1} max={Math.max(slotRemaining, 1)} />
+        <Input id="qty" type="number" min={1} max={topeCantidad(slotRemaining)} />
       </TextField>
 
       {justAdded ? (

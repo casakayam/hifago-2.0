@@ -16,5 +16,18 @@
  */
 export function limitarCantidad(bruto: number, max: number): number {
   if (!Number.isFinite(bruto)) return 1;
-  return Math.min(Math.max(bruto, 1), Math.max(max, 1));
+  return Math.min(Math.max(bruto, 1), topeCantidad(max));
+}
+
+/**
+ * La borne HAUTE d'un champ de quantité — jamais sous 1.
+ *
+ * ⚠️ C'est la même règle que celle du dernier paragraphe de `limitarCantidad`, et c'est pour ça
+ * qu'elle est ici plutôt que réécrite : les trois formulaires posaient `Math.max(reste, 1)` en dur
+ * dans l'attribut `max` de leur `<Input>`, soit une quatrième copie d'une décision que ce module
+ * possède déjà et teste. Le jour où la borne basse cesse d'être 1 (une offre vendue par paire,
+ * par exemple), trois champs HTML continueraient d'annoncer l'ancienne au navigateur.
+ */
+export function topeCantidad(max: number): number {
+  return Math.max(max, 1);
 }

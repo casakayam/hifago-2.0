@@ -20,7 +20,7 @@ import {
 import { startOfTodayInBogota } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
 import { isoDeFecha, mesPorDefecto, ultimoDiaReservable } from "@/lib/reservas/calendario";
-import { limitarCantidad } from "@/lib/reservas/cantidad";
+import { limitarCantidad, topeCantidad } from "@/lib/reservas/cantidad";
 import {
   CLAVE_PLAZAS,
   agregarEnCarrito,
@@ -173,7 +173,7 @@ export function ReservationForm({
         onChange={(value) => setQty(limitarCantidad(Number(value), remaining))}
       >
         <Label>{t("quantityLabel")}</Label>
-        <Input id="qty" type="number" min={1} max={Math.max(remaining, 1)} />
+        <Input id="qty" type="number" min={1} max={topeCantidad(remaining)} />
       </TextField>
 
       {justAdded ? (

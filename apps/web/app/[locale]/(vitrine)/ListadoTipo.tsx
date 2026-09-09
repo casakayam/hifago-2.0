@@ -10,6 +10,7 @@ import { ListadoInfinito } from "@/components/organisms/ListadoInfinito";
 import { buscarTipo } from "@/lib/catalog/buscar";
 import {
   TAMANO_PAGINA,
+  escribirCriterios,
   hayCriterios,
   leerCriterios,
   leerPagina,
@@ -18,10 +19,12 @@ import {
 import { segmentoDeTipo } from "@/lib/catalog/segmentos";
 import type { TipoOferta } from "@/lib/catalog/tipos";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/jsonld/breadcrumb";
+import { migasParaJsonLd } from "@/lib/seo/migas";
 import { buildPageMetadata } from "@/lib/seo/pageMetadata";
 import { getSiteUrl } from "@/lib/seo/siteUrl";
 import type { Locale } from "@/messages";
 import { BuscadorInicio } from "./BuscadorInicio";
+import { labelsBuscador } from "./labelsBuscador";
 
 // LE CORPS DES QUATRE PAGES DE LISTING (2026-09-08, spec 29 §5c/§5d).
 //
@@ -121,7 +124,6 @@ export async function ListadoTipo({
   categoria?: CategoriaDeListado;
 }) {
   const t = await getTranslations({ locale, namespace: "ListadoPage" });
-  const tHome = await getTranslations({ locale, namespace: "HomePage" });
   const { seccion, inicio } = await libelles(tipo, locale);
 
   // ⚠️ `tipo` de l'URL est IGNORÉ (spec 29 §0) : le type vient du segment, qui fait foi. Un
@@ -172,41 +174,22 @@ export async function ListadoTipo({
     : [{ nombre: inicio, href: "/" }, { nombre: titulo }];
   const rutaCanonica = categoria ? `/${segmento}/${categoria.slug}` : `/${segmento}`;
 
-  const labels = {
-    search: {
-      label: tHome("buscar.label"),
-      placeholder: tHome("buscar.placeholder"),
-      submitLabel: tHome("buscar.submitLabel"),
-      emptyLabel: tHome("buscar.emptyLabel"),
-    },
-    dates: {
-      placeholderLabel: tHome("fechas.placeholderLabel"),
-      calendar: {
-        complet: tHome("fechas.calendar.complet"),
-        selectionne: tHome("fechas.calendar.selectionne"),
-        aujourdhui: tHome("fechas.calendar.aujourdhui"),
-      },
-    },
-    people: {
-      placeholderLabel: tHome("personas.placeholderLabel"),
-      fieldLabel: tHome("personas.fieldLabel"),
-      stepLabels: {
-        increment: tHome("personas.stepLabels.increment"),
-        decrement: tHome("personas.stepLabels.decrement"),
-      },
-    },
-  };
+  const labels = await labelsBuscador(locale as Locale);
 
   // L'URL du pont, critères compris et SANS `pagina` : `ListadoInfinito` y ajoute la sienne.
-  const parametros = new URLSearchParams({ tipo, locale });
+  //
+  // ⚠️ Les critères sont sérialisés par `escribirCriterios`, et pas par six `if` écrits ici : c'est
+  // l'ÉCRIVAIN symétrique du `leerCriterios` que le pont utilise pour les relire
+  // (`api/catalogo/listado/route.ts`), et `criterios.ts` s'annonce en tête comme le seul endroit
+  // qui connaît le nom des paramètres, leur format et leur normalisation. La copie qui vivait ici
+  // avait déjà perdu une de ces règles — la garde `personas >= 1` — sans qu'aucun test ne rougisse.
+  //
+  // Les trois paramètres restants ne sont PAS des critères : ils décrivent quelle page appelle le
+  // pont, et n'ont donc rien à faire dans l'URL publique que `escribirCriterios` construit.
+  const parametros = new URLSearchParams(escribirCriterios(criteriosDeConsulta).slice(1));
+  parametros.set("tipo", tipo);
+  parametros.set("locale", locale);
   if (categoria?.esSinTag) parametros.set("sinTag", "1");
-  if (criterios.q) parametros.set("q", criterios.q);
-  if (criteriosDeConsulta.tag) parametros.set("tag", criteriosDeConsulta.tag);
-  if (criterios.personas) parametros.set("personas", String(criterios.personas));
-  if (criterios.desde && criterios.hasta) {
-    parametros.set("desde", criterios.desde);
-    parametros.set("hasta", criterios.hasta);
-  }
 
   return (
     <PageShell variant="large">
@@ -214,17 +197,11 @@ export async function ListadoTipo({
           le composant affiche, la route décrit. Les deux sont construits depuis LA MÊME liste
           `migas`, ce qui est la seule façon de garantir qu'ils ne divergent pas. */}
       <JsonLd
-        data={buildBreadcrumbJsonLd(
-          getSiteUrl(),
-          // ⚠️ Construit depuis LA MÊME liste que le fil visible, en y remettant simplement le
-          // préfixe de langue : c'est la seule façon de garantir qu'ils ne divergent pas. Le
-          // dernier élément n'a pas de `href` (c'est la page courante) — son chemin est la route
-          // canonique, celle-là même que `generateMetadata` déclare.
-          migas.map((miga) => ({
-            name: miga.nombre,
-            path: `/${locale}${miga.href ?? rutaCanonica}`,
-          }))
-        )}
+        // ⚠️ `migasParaJsonLd` et pas un `map` local : ces quatre lignes étaient recopiées ici, et
+        // c'est cette copie même que l'extraction du 2026-09-08 devait supprimer — elle y avait
+        // survécu. Le dernier élément n'a pas de `href` (c'est la page courante) ; le helper lui
+        // donne la route canonique, celle-là même que `generateMetadata` déclare.
+        data={buildBreadcrumbJsonLd(getSiteUrl(), migasParaJsonLd(migas, locale, rutaCanonica))}
       />
 
       <Migas items={migas} etiqueta={t("migasEtiqueta")} locale={locale} testId="migas" />

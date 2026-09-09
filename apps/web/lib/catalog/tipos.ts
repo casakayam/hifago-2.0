@@ -49,6 +49,31 @@ export type PrecioTarjeta =
   | { tipo: "texto"; label: string }
   | null;
 
+/**
+ * Le prix d'une offre, en DONNÉES — le formatage monétaire appartient à l'affichage.
+ *
+ * ⚠️ L'ordre dit la règle, et il compte : un libellé libre d'abord, un montant ensuite, sinon
+ * RIEN. Jamais un zéro, qui prétendrait la gratuité — le défaut mesuré en réel le 2026-09-08,
+ * quand la migration `products_price_cop_required_unless_vitrine` a rendu ce cas atteignable.
+ *
+ * ⚠️ ELLE VIT ICI, dans le module SANS dépendance, parce que les TROIS écrans qui affichent un
+ * prix de carte doivent trancher pareil : la fiche produit (`producto.ts`), les cartes de chambre
+ * d'une fiche établissement (`establecimiento.ts`) et toute carte du catalogue (`buscar.ts`).
+ * Le 2026-09-08 elle était écrite trois fois — et les trois copies avaient DÉJÀ divergé :
+ * `buscar.ts` testait le montant AVANT le libellé, donc un produit portant les deux s'affichait
+ * « 120.000 COP » sur l'accueil et « Consultar » sur sa propre fiche. Latent tant qu'aucune ligne
+ * ne porte les deux (le seed n'en a pas), certain à la première saisie — et invisible : aucun des
+ * tests des trois modules n'exerçait ce cas, chacun ne vérifiant que sa propre copie.
+ *
+ * La contrainte `products_price_cop_required_unless_vitrine` n'interdit PAS de porter les deux :
+ * elle exige un `price_cop` sauf vitrine/evento, jamais l'absence de `price_label`.
+ */
+export function resolverPrecio(priceLabel: string | null, priceCop: number | null): PrecioTarjeta {
+  if (priceLabel) return { tipo: "texto", label: priceLabel };
+  if (priceCop !== null) return { tipo: "monto", cop: priceCop };
+  return null;
+}
+
 export type TarjetaOferta = {
   clave: string;
   href: string;

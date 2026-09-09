@@ -6,8 +6,16 @@
 # redéfinit en silence l'ordre du catalogue, le prédicat de visibilité et la forme des données,
 # et le prochain écran qui a besoin des mêmes offres la réécrit autrement. La vitrine a UNE couche
 # d'accès, `apps/web/lib/catalog/`, et c'est le seul endroit d'où part une requête. C'est aussi
-# elle qui porte `import "server-only"` et le client anonyme sans cookies : contourner la couche,
-# c'est aussi contourner ces deux choix-là.
+# elle qui porte le client anonyme sans cookies : contourner la couche, c'est contourner ce
+# choix-là.
+#
+# ⚠️ CE CONTRÔLE N'EST PAS DOUBLÉ PAR `server-only`, contrairement à ce que cet en-tête a affirmé
+# jusqu'au 2026-09-08. Le paquet n'est ni installé ni déclaré nulle part dans le dépôt — la spec 27
+# le prévoyait, personne ne l'a posé, et trois specs le décrivaient comme acquis. Ce script est donc
+# le SEUL mécanisme, et il ne voit qu'une chose : une requête écrite dans un fichier de ROUTE. Ce
+# qu'il ne verra jamais, c'est un composant CLIENT qui importerait `lib/catalog/` — il embarquerait
+# la clé anonyme et le graphe Supabase dans le bundle, sans erreur et sans vert en moins.
+# Cf. la note de `apps/web/lib/catalog/buscar.ts`. Point ouvert au backlog.
 #
 #   ./scripts/check-data-layer.sh   (depuis hifago/)
 #

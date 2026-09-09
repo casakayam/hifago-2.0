@@ -29,4 +29,3 @@ export function tipoDeSegmento(segmento: string): TipoOferta | undefined {
   return TIPO_POR_SEGMENTO[segmento];
 }
 
-export { SEGMENTO_POR_TIPO };

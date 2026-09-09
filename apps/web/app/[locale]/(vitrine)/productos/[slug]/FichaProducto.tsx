@@ -29,8 +29,10 @@ import { SlotReservationForm } from "./SlotReservationForm";
 // AUCUN titre de niveau 1, et sa hiérarchie mesurée en réel était h3 → h2 → h3. L'invariant 9 de
 // la spec 27 était violé sur cette page depuis le début, et rien ne le vérifiait.
 //
-// ⚠️ Le lien « retour au catalogue » a disparu : le fil d'Ariane le remplace, et il en dit plus
-// (il nomme le type et l'établissement au lieu d'un « ← » générique).
+// ⚠️ Le lien « retour au catalogue » est CONSERVÉ à côté du fil d'Ariane — ce n'est pas un doublon,
+// et cet en-tête a affirmé le contraire jusqu'au 2026-09-09. La raison est écrite UNE SEULE FOIS,
+// juste au-dessus du `BackLink` dans le corps : ne pas la recopier ici, deux énoncés de la même
+// décision finissent par diverger — c'est exactement ce qui s'est passé.
 
 /** Ce que la page a dû composer elle-même, parce que ça se traduit. */
 export type EtiquetasFicha = {

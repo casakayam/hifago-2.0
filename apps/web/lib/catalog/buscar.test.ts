@@ -106,6 +106,16 @@ describe("buscarSecciones", () => {
     expect(alojamiento.precio).toEqual({ tipo: "desde", cop: 60000 });
   });
 
+  it("⚠️ un produit portant À LA FOIS un libellé et un montant affiche le LIBELLÉ", async () => {
+    // Le cas que rien n'exerçait, et par lequel les trois copies de la règle de prix avaient
+    // divergé : `precioDe` testait le montant en premier, `resolverPrecio` (fiche produit, cartes
+    // de chambre) teste le libellé. Le même produit s'affichait donc « 45.000 COP » ici et
+    // « Consultar » sur sa propre fiche. La contrainte de prix n'interdit PAS de porter les deux.
+    state.filas = [fila({ slug: "los-deux", precio_cop: 45000, precio_label: "Consultar" })];
+    const [seccion] = await buscarSecciones({}, { porSeccion: 8, locale: "es" });
+    expect(seccion.tarjetas[0].precio).toEqual({ tipo: "texto", label: "Consultar" });
+  });
+
   it("⚠️ une carte d'établissement SANS aucun prix chiffré n'affiche pas « desde 0 »", async () => {
     // Depuis que la spec 27 a relâché la contrainte de prix, precio_desde peut être null.
     state.filas = [

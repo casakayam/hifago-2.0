@@ -10,7 +10,7 @@ import {
 import { createPublicClient } from "@/lib/supabase/publicClient";
 import { hasNativeContent } from "@/lib/seo/nativeContent";
 import { routing } from "@/i18n/routing";
-import { esTipoOferta } from "./tipos";
+import { esTipoOferta, resolverPrecio } from "./tipos";
 import type {
   FichaProducto,
   FilaDisponibilidad,
@@ -18,7 +18,6 @@ import type {
   FilaTarifa,
   FotoTarjeta,
   ModoReserva,
-  PrecioTarjeta,
 } from "./tipos";
 
 // La fiche d'une offre — spec 30 §7b. Ce module retire `productos/[slug]/page.tsx` de la liste
@@ -248,19 +247,6 @@ export function resolverModoReserva({
   if (esAlojamiento) return "lodging";
   if (tieneFranjas) return "slot";
   return "date";
-}
-
-/**
- * Le prix d'une fiche, en DONNÉES — le formatage monétaire appartient à l'affichage.
- *
- * ⚠️ L'ordre dit la règle, et il compte : un libellé libre d'abord, un montant ensuite, sinon
- * RIEN. Jamais un zéro, qui prétendrait la gratuité — le défaut mesuré en réel le 2026-09-08,
- * quand la migration `products_price_cop_required_unless_vitrine` a rendu ce cas atteignable.
- */
-export function resolverPrecio(priceLabel: string | null, priceCop: number | null): PrecioTarjeta {
-  if (priceLabel) return { tipo: "texto", label: priceLabel };
-  if (priceCop !== null) return { tipo: "monto", cop: priceCop };
-  return null;
 }
 
 function enFotos(

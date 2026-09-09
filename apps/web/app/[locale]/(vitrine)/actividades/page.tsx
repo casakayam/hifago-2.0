@@ -10,10 +10,12 @@ import { IndiceCategorias } from "@/components/organisms/IndiceCategorias";
 import { listarTagsConOferta } from "@/lib/catalog/buscar";
 import { hayCriterios, leerCriterios } from "@/lib/catalog/criterios";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/jsonld/breadcrumb";
-import { buildPageMetadata } from "@/lib/seo/pageMetadata";
+import { migasParaJsonLd } from "@/lib/seo/migas";
 import { getSiteUrl } from "@/lib/seo/siteUrl";
 import type { Locale } from "@/messages";
 import { BuscadorInicio } from "../BuscadorInicio";
+import { metadataListado } from "../ListadoTipo";
+import { labelsBuscador } from "../labelsBuscador";
 
 // `/[locale]/actividades` — L'INDEX DE CATÉGORIES (spec 29 §5a, décisions 3 à 8).
 //
@@ -31,22 +33,17 @@ import { BuscadorInicio } from "../BuscadorInicio";
 // garantit qu'une tuile ne mène JAMAIS à une page vide — la même règle qui fait disparaître un tag
 // sans offre (cahier §2a : « un tag vide produirait une page vide que Google indexerait »).
 
+// ⚠️ `metadataListado` et pas une copie : ces dix-sept lignes reproduisaient exactement son corps
+// pour `activity` (`segmentoDeTipo("activity")` vaut « actividades », et `libelles` lit la même clé
+// `secciones.activity`). La copie avait déjà perdu la note qui compte — celle qui explique que
+// `pathFor` ne reçoit AUCUN paramètre, donc que le canonical ignore `?pagina=`. Un paramètre ajouté
+// demain au canonical des listings n'aurait pas suivi ici, et l'index aurait fabriqué des URL
+// indexables que ses propres pages déclarent canoniques ailleurs.
 export async function generateMetadata(
   props: Omit<PageProps<"/[locale]/actividades">, "searchParams">
 ): Promise<Metadata> {
   const { locale } = await props.params;
-  const tHome = await getTranslations({ locale, namespace: "HomePage" });
-  const t = await getTranslations({ locale, namespace: "ListadoPage" });
-  const seccion = tHome("secciones.activity");
-
-  // Pas de `nativeLocales` : ces textes viennent de next-intl (jeu fermé, complet dans les deux
-  // locales). Et `pathFor` ne reçoit aucun paramètre — le canonical ignore `?q=` et le reste.
-  return buildPageMetadata({
-    locale,
-    pathFor: (candidate) => `/${candidate}/actividades`,
-    title: t("meta.title", { seccion }),
-    description: t("meta.description", { seccion: seccion.toLowerCase() }),
-  });
+  return metadataListado("activity", locale as Locale);
 }
 
 export default async function ActividadesPage({
@@ -75,44 +72,26 @@ export default async function ActividadesPage({
     descripcion: t("sinTag.descripcion"),
   };
 
-  const labels = {
-    search: {
-      label: tHome("buscar.label"),
-      placeholder: tHome("buscar.placeholder"),
-      submitLabel: tHome("buscar.submitLabel"),
-      emptyLabel: tHome("buscar.emptyLabel"),
-    },
-    dates: {
-      placeholderLabel: tHome("fechas.placeholderLabel"),
-      calendar: {
-        complet: tHome("fechas.calendar.complet"),
-        selectionne: tHome("fechas.calendar.selectionne"),
-        aujourdhui: tHome("fechas.calendar.aujourdhui"),
-      },
-    },
-    people: {
-      placeholderLabel: tHome("personas.placeholderLabel"),
-      fieldLabel: tHome("personas.fieldLabel"),
-      stepLabels: {
-        increment: tHome("personas.stepLabels.increment"),
-        decrement: tHome("personas.stepLabels.decrement"),
-      },
-    },
-  };
+  const labels = await labelsBuscador(locale as Locale);
+
+  // ⚠️ UNE liste, lue deux fois. Elle était écrite DEUX fois — un littéral pour le JSON-LD, un
+  // autre pour le fil visible — sous un commentaire qui affirmait déjà « ils sortent de la même
+  // liste ». Ajouter un niveau à l'une seulement passait typecheck, lint et toute la suite.
+  const migas = [{ nombre: tCommon("breadcrumbHome"), href: "/" }, { nombre: seccion }];
 
   return (
     <PageShell variant="large">
       {/* Règle SEO 6 : le JSON-LD est rendu côté serveur par la route, jamais par `Migas`. Les deux
-          décrivent la même chose parce qu'ils sortent de la même liste. */}
+          décrivent la même chose parce qu'ils sortent — vraiment — de la même liste. */}
       <JsonLd
-        data={buildBreadcrumbJsonLd(getSiteUrl(), [
-          { name: tCommon("breadcrumbHome"), path: `/${locale}` },
-          { name: seccion, path: `/${locale}/actividades` },
-        ])}
+        data={buildBreadcrumbJsonLd(
+          getSiteUrl(),
+          migasParaJsonLd(migas, locale, "/actividades")
+        )}
       />
 
       <Migas
-        items={[{ nombre: tCommon("breadcrumbHome"), href: "/" }, { nombre: seccion }]}
+        items={migas}
         etiqueta={t("migasEtiqueta")}
         locale={locale as Locale}
         testId="migas"

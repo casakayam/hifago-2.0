@@ -9,6 +9,7 @@ import { segmentoDeTipo } from "./segmentos";
 import {
   ORDEN_SECCIONES,
   esTipoOferta,
+  resolverPrecio,
   type Criterios,
   type FotoTarjeta,
   type PrecioTarjeta,
@@ -64,13 +65,19 @@ export type FilaCatalogo = {
   n_alojamientos: number | null;
 };
 
+/**
+ * Le prix d'une carte du catalogue. UNE seule chose lui est propre : une carte GROUPÉE affiche le
+ * minimum de ses couchages (`desde`), ce qu'aucun autre écran ne fait.
+ *
+ * ⚠️ Le reste délègue à `resolverPrecio` depuis le 2026-09-08, et ce n'est pas cosmétique : cette
+ * fonction testait le MONTANT avant le LIBELLÉ, l'inverse des deux autres écrans. Un produit
+ * portant les deux se serait affiché « 120.000 COP » ici et « Consultar » sur sa propre fiche.
+ */
 function precioDe(fila: FilaCatalogo): PrecioTarjeta {
   if (fila.es_establecimiento) {
     return fila.precio_desde != null ? { tipo: "desde", cop: fila.precio_desde } : null;
   }
-  if (fila.precio_cop != null) return { tipo: "monto", cop: fila.precio_cop };
-  if (fila.precio_label) return { tipo: "texto", label: fila.precio_label };
-  return null;
+  return resolverPrecio(fila.precio_label, fila.precio_cop);
 }
 
 function nombreEstablecimiento(valor: unknown, locale: string): string | null {
