@@ -305,7 +305,17 @@ export function ProductTypeFields({
       ) : null}
 
       {!isEvento && !hasLocationAndTags ? (
-        <TextField fullWidth name="price" value={state.priceCop} onChange={state.setPriceCop} isRequired>
+        // `isRequired` suit EXACTEMENT la contrainte SQL `products_price_cop_required_unless_vitrine` :
+        // un evento OU une URL externe dispensent du prix chiffré. Sans ça, le champ resterait
+        // obligatoire à l'écran alors que la base l'accepte vide — l'admin ne pourrait pas créer la
+        // vitrine que la migration du 2026-09-08 autorise (spec 30 §6a).
+        <TextField
+          fullWidth
+          name="price"
+          value={state.priceCop}
+          onChange={state.setPriceCop}
+          isRequired={!state.externalBookingUrl.trim()}
+        >
           <Label>Precio (COP)</Label>
           <Input id="price" type="number" min={1} />
         </TextField>
@@ -653,15 +663,43 @@ export function ProductTypeFields({
             <Label>Duración (minutos) — opcional</Label>
             <Input type="number" min={1} />
           </TextField>
+        </>
+      ) : null}
+
+      {/* LA FICHE VITRINE — disponible pour TOUS les types depuis le 2026-09-08 (spec 30 §3.1).
+          Ces deux champs vivaient dans le bloc `isEvento`, ce qui rendait la vitrine impossible
+          ailleurs : le cahier §2e dit pourtant « ce n'est PAS réservé aux eventos ». C'est la
+          PRÉSENCE de l'URL qui fait la vitrine, jamais le type — et jamais `sellable = false`, qui
+          rendrait le produit invisible ET retirerait son établissement du public. */}
+      {!isEvento ? (
+        <>
           <TextField
             fullWidth
             name="external-booking-url"
             value={state.externalBookingUrl}
             onChange={state.setExternalBookingUrl}
           >
-            <Label>Enlace de reserva externo</Label>
+            <Label>Enlace de reserva externo — opcional</Label>
             <Input type="url" placeholder="https://…" data-testid="external-booking-url-input" />
           </TextField>
+
+          {/* Le prix en texte libre n'a de sens qu'AVEC une URL externe : sans elle, le produit est
+              réservable et porte un prix chiffré. Affiché à la demande plutôt que toujours, pour ne
+              pas suggérer deux façons concurrentes de saisir un prix. */}
+          {state.externalBookingUrl.trim() ? (
+            <TextField
+              fullWidth
+              name="price-label"
+              value={state.priceLabel}
+              onChange={state.setPriceLabel}
+            >
+              <Label>Precio (texto libre) — opcional, sustituye al precio en COP</Label>
+              <Input
+                placeholder="Ej. Consultar, Desde $50.000 COP…"
+                data-testid="price-label-vitrina-input"
+              />
+            </TextField>
+          ) : null}
         </>
       ) : null}
 

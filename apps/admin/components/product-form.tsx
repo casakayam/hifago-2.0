@@ -241,10 +241,16 @@ export function ProductForm({
     const nombreEs = name.es?.trim() ?? "";
     const price = Number(fields.priceCop);
     const usesTiers = hasPriceQtyFields && fields.priceMode === "tiers";
-    // L'evento est le seul type exempté de prix obligatoire (son prix est un libellé libre) —
-    // cf. products_price_cop_required_unless_evento. L'hôtel l'était aussi, son prix vivant sur ses
-    // chambres ; T3 (2026-08-27) a supprimé le type, et la contrainte avec.
-    const needsOwnPrice = !isEvento;
+    // MIROIR EXACT de la contrainte `products_price_cop_required_unless_vitrine` (2026-09-08) :
+    // un evento OU une offre en vitrine (URL externe posée) est dispensé de prix chiffré. Avant,
+    // seul l'evento l'était — et la vitrine d'un transport était donc impossible à saisir, alors
+    // que le cahier §2e la prévoit explicitement. L'hôtel était exempté lui aussi, son prix vivant
+    // sur ses chambres ; T3 (2026-08-27) a supprimé le type, et son exemption avec.
+    //
+    // ⚠️ Si cette expression et la contrainte SQL divergent, l'écart est SILENCIEUX dans un sens
+    // (le formulaire refuse ce que la base accepterait) et un 400 illisible dans l'autre.
+    const enVitrina = Boolean(fields.externalBookingUrl.trim());
+    const needsOwnPrice = !isEvento && !enVitrina;
 
     if (!isEditing) {
       // partner_id n'est jamais saisi indépendamment — dérivé de l'établissement choisi.
@@ -339,8 +345,23 @@ export function ProductForm({
                 lon: fields.lon.trim() ? Number(fields.lon) : null,
               }
             : {}),
-          price_cop: usesTiers ? lowestTierPrice(fields.priceTiers) : price,
+          // `null` plutôt que `NaN` quand le prix est vide : `NaN` traverse JSON en `null` de
+          // toute façon, mais l'écrire explicitement dit que c'est voulu.
+          price_cop: usesTiers
+            ? lowestTierPrice(fields.priceTiers)
+            : Number.isFinite(price)
+              ? price
+              : null,
           price_tiers: usesTiers ? toPriceTiersColumn(fields.priceTiers) : null,
+          // La vitrine reste MODIFIABLE après création. Sans ces deux clés, poser une URL puis la
+          // corriger était impossible : l'update ne les portait pas, donc la valeur d'origine
+          // restait figée sans qu'aucun message ne le dise.
+          ...(isEvento
+            ? {}
+            : {
+                external_booking_url: fields.externalBookingUrl.trim() || null,
+                price_label: enVitrina ? fields.priceLabel.trim() || null : null,
+              }),
           ...(hasPriceQtyFields
             ? {
                 min_qty: fields.minQty.trim() ? Number(fields.minQty) : null,

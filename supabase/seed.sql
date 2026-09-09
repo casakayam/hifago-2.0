@@ -711,3 +711,76 @@ insert into product_tag_assignments (product_id, tag_id) values
   -- apparaître dans l'index. C'est le cas limite le plus facile à casser sans s'en apercevoir —
   -- il suffirait d'oublier le prédicat `p.sellable` dans `search_catalog`.
   ('b0000000-0000-4000-8000-000000000005', 'c0000000-0000-4000-8000-000000000003');
+
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- Spec 30 (Tranche 2) — de quoi JUGER les deux fiches, et pas seulement les afficher
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- Constat qui motive ce bloc (mesuré le 2026-09-08) : `check_in_time`, `check_out_time`,
+-- `external_booking_url`, `address`, `lat`, `lon`, `price_label`, `duration_minutes` et
+-- `start_time` étaient NULL sur les sept produits, et les deux établissements n'avaient ni
+-- description, ni horaires, ni `mode`. Autrement dit, aucune des deux fiches n'était observable
+-- dans son état nominal — ni en développement, ni en e2e.
+--
+-- ⚠️ LE PARTAGE DES DEUX ÉTABLISSEMENTS EST DÉLIBÉRÉ, et il tient à un fait vérifié :
+--   • `…-0002` (Casa Kayam) devient l'établissement RICHE. Aucun e2e ne le mute.
+--   • `…-0004` reste PAUVRE, et c'est lui qui exerce l'absence (pas de contact → pas de bouton).
+--     `establishment-page.spec.ts` lui écrit ses horaires puis les remet à `null` : y poser des
+--     valeurs de seed les ferait effacer par la première exécution e2e venue.
+update public.establishments
+   set description = jsonb_build_object(
+         'es', 'Casa de huéspedes frente al embalse, con habitaciones privadas y dormitorio compartido. '
+               'Desayuno incluido y muelle propio para las salidas en lancha.',
+         'en', 'Guest house facing the reservoir, with private rooms and a shared dormitory. '
+               'Breakfast included and a private dock for boat departures.'
+       ),
+       address = 'Vereda La Peña, Guatapé, Antioquia',
+       lat = 6.2333,
+       lon = -75.1667,
+       check_in_time = '15:00',
+       check_out_time = '11:00',
+       mode = 'rooms',
+       -- E.164 obligatoire (contrainte `establishments_contact_phone_e164`) : la fiche construit
+       -- `wa.me/<numéro sans le +>`, et un numéro écrit autrement donnerait un lien mort.
+       -- ⚠️ Numéro SYNTHÉTIQUE (préfixe 300 000 00 00), jamais une ligne réelle : CLAUDE.md §7.3.
+       contact_phone = '+573000000000'
+ where id = 'b0000000-0000-4000-8000-000000000002';
+
+-- L'OFFRE EN VITRINE — la seule ligne qui prouve que la contrainte
+-- `products_price_cop_required_unless_vitrine` sert à quelque chose, et le seul moyen de voir
+-- l'écran vitrine sans le fabriquer à la main.
+--
+-- ⚠️ `type = 'transport'` et non `'camp'` : `listados.spec.ts` vérifie l'état vide sur `/es/camps`
+-- (« une section sans offre rend 200 et un état vide, jamais un 404 »). Remplir les camps
+-- casserait ce test — vérifié avant d'écrire, pas après.
+--
+-- `sellable = true` et `price_cop = null` : c'est bien `external_booking_url` qui fait la vitrine,
+-- JAMAIS `sellable = false`, qui rendrait le produit invisible ET retirerait son établissement du
+-- public (`establishments_select_public` exige un produit vendable). Cahier §2e.
+insert into products (
+  id, partner_id, establishment_id, type, name, description, price_cop, price_label,
+  external_booking_url, unit, schedule, qty_unit, sellable, slug
+)
+values (
+  'b0000000-0000-4000-8000-000000000031',
+  (select partner_id from partner_accounts where id = 'a0000000-0000-4000-8000-000000000003'),
+  'b0000000-0000-4000-8000-000000000002',
+  'transport',
+  jsonb_build_object(
+    'es', 'Traslado privado Medellín – Guatapé',
+    'en', 'Private transfer Medellín – Guatapé'
+  ),
+  jsonb_build_object(
+    'es', 'Vehículo privado hasta cuatro personas. Tarifa según punto de recogida y horario.',
+    'en', 'Private vehicle for up to four people. Fare depends on pickup point and time.'
+  ),
+  null,
+  'Consultar',
+  'https://wa.me/573000000000',
+  -- `unit` n'accepte que per_person / per_two / per_house (`products_unit_check`) — `null` est
+  -- permis, et c'est le bon choix ici : le tarif d'un traslado se négocie, il n'a pas d'unité.
+  null,
+  'none',
+  'qty',
+  true,
+  'traslado-privado-medellin-guatape'
+);

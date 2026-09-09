@@ -85,6 +85,17 @@ export function buildProductCreationPayload(
       ? { default_capacity: fields.defaultCapacity.trim() ? Number(fields.defaultCapacity) : null }
       : {}),
     ...(isActivity ? { slot_rules: toSlotRuleRows(fields.slotRules) } : {}),
+    // LA VITRINE, pour tous les types sauf evento (qui porte déjà ces deux clés dans son bloc).
+    // C'est la PRÉSENCE de l'URL qui fait la vitrine, jamais le type — cahier §2e, ouvert par la
+    // contrainte `products_price_cop_required_unless_vitrine` (spec 30 §3.1).
+    ...(isEvento
+      ? {}
+      : {
+          external_booking_url: fields.externalBookingUrl.trim() || null,
+          price_label: fields.externalBookingUrl.trim()
+            ? fields.priceLabel.trim() || null
+            : null,
+        }),
     ...(isEvento
       ? {
           price_label: fields.priceLabel.trim(),

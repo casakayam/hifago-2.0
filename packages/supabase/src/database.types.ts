@@ -364,6 +364,7 @@ export type Database = {
           address: string | null
           check_in_time: string | null
           check_out_time: string | null
+          contact_phone: string | null
           created_at: string
           description: Json | null
           id: string
@@ -385,6 +386,7 @@ export type Database = {
           address?: string | null
           check_in_time?: string | null
           check_out_time?: string | null
+          contact_phone?: string | null
           created_at?: string
           description?: Json | null
           id?: string
@@ -406,6 +408,7 @@ export type Database = {
           address?: string | null
           check_in_time?: string | null
           check_out_time?: string | null
+          contact_phone?: string | null
           created_at?: string
           description?: Json | null
           id?: string
@@ -2434,6 +2437,7 @@ export type Database = {
           establecimiento: Json
           fotos: Json
           id: string
+          n_alojamientos: number
           nombre: Json
           precio_cop: number
           precio_desde: number
@@ -2596,6 +2600,10 @@ export type Database = {
           p_note?: string
           p_operated_directly?: boolean
         }
+        Returns: Json
+      }
+      update_establishment_contact: {
+        Args: { p_contact_phone?: string; p_establishment_id: string }
         Returns: Json
       }
       update_establishment_stay_details: {

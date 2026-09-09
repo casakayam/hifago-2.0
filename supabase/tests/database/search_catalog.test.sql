@@ -18,7 +18,7 @@
 -- geste que les policies `_select_public` laissent bien passer ce qu'il faut.
 
 begin;
-select plan(21);
+select plan(24);
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────────────────────────
 insert into partners (id, display_name) values
@@ -225,6 +225,40 @@ select is(
   (select count(*)::int from search_catalog(p_limite => 100000, p_sin_tag => true)
    where id = 'aaaa1111-0000-0000-0000-000000000202'),
   1, '…et garde celle qu''aucune catégorie ne classe'
+);
+
+-- ── n_alojamientos : le décompte d'une carte groupée (spec 30 §3.6) ─────────────────────────────
+-- L'établissement A porte TROIS couchages, dont un NON vendable ; le visiteur doit lire 2.
+--
+-- ⚠️ CE QUE CETTE ASSERTION PROUVE, ET CE QU'ELLE NE PROUVE PAS — mesuré par mutation le
+-- 2026-09-08, et écrit ici parce que le contraire se croit facilement. Remplacer le décompte par
+-- un compte BRUT (`select count(*) from products where establishment_id = … and type = 'lodging'`,
+-- sans aucun filtre `sellable`) NE FAIT PAS rougir cette assertion : tout ce fichier tourne en
+-- `anon` (l. 85), et la policy `products_select_public` écarte déjà le non-vendable avant que le
+-- décompte ne compte quoi que ce soit. En `postgres`, la même mutation rend bien 3.
+--
+-- L'assertion vérifie donc la propriété qui compte POUR L'ÉCRAN — « le visiteur lit le nombre de
+-- couchages qu'il peut réellement réserver » —, et cette propriété est tenue DEUX fois : par le
+-- prédicat de `candidatos` et par la RLS. Elle ne verrouille pas le prédicat à elle seule, et
+-- prétendre le contraire ferait croire à un filet qui n'existe pas.
+select is(
+  (select n_alojamientos from search_catalog(p_limite => 100000)
+   where id = 'aaaa1111-0000-0000-0000-00000000000a' and es_establecimiento),
+  2::bigint, 'une carte groupée annonce le nombre de couchages VISIBLES par le visiteur (2 sur 3)'
+);
+
+-- `null`, jamais 0 : « 0 alojamientos » se lirait « cet établissement n'en a aucun », alors que la
+-- carte est justement celle d'une offre isolée.
+select is(
+  (select n_alojamientos from search_catalog(p_limite => 100000)
+   where id = 'aaaa1111-0000-0000-0000-000000000104'),
+  null::bigint, 'une carte NON groupée n''annonce aucun décompte — null, jamais 0'
+);
+
+select is(
+  (select n_alojamientos from search_catalog(p_limite => 100000)
+   where id = 'aaaa1111-0000-0000-0000-000000000201'),
+  null::bigint, '…et une activité non plus'
 );
 
 select * from finish();

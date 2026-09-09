@@ -36,7 +36,15 @@ echo "==> 2/3 comptes auth (API Admin Auth)"
 SUPABASE_URL="$API_URL" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
   node supabase/scripts/seed_auth_users.mjs
 
-echo "==> 3/3 données synthétiques (seed.sql)"
-psql "$DB_URL" -f supabase/seed.sql
+echo "==> 3/4 données synthétiques (seed.sql)"
+# ⚠️ `ON_ERROR_STOP=1` : sans lui, psql CONTINUE après une instruction refusée et sort 0. Constaté
+# le 2026-09-08 — une contrainte violée dans le seed a laissé afficher « base locale prête » sur une
+# base incomplète, et seule une requête à la main l'a révélé. Un script qui ne signale pas son échec
+# est pire qu'un script absent.
+psql -v ON_ERROR_STOP=1 "$DB_URL" -f supabase/seed.sql
+
+echo "==> 4/4 photos de démonstration (Storage)"
+SUPABASE_URL="$API_URL" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+  node supabase/scripts/seed-media.mjs
 
 echo "==> base locale prête"
