@@ -43,5 +43,7 @@
     "recurringWeeklyUntilDate": "Every {weekday}, every {days} days, until {date}.",
     "recurringWeeklyForCount": "Every {weekday}, every {days} days, for {count} occurrences.",
     "recurringWeeklyOngoing": "Every {weekday}, every {days} days, ongoing."
-  }
+  },
+  "fotoAlt": "{nombre}, photo {indice} of {total}",
+  "migasEtiqueta": "Breadcrumb"
 }

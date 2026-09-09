@@ -6,5 +6,8 @@
     "descripcion": "No pudimos cargar esta página. Vuelve a intentarlo en un momento.",
     "reintentar": "Reintentar",
     "volver": "Volver al inicio"
-  }
+  },
+  "carruselAnterior": "Foto anterior",
+  "carruselSiguiente": "Foto siguiente",
+  "carruselIrA": "Ir a la foto {n}"
 }

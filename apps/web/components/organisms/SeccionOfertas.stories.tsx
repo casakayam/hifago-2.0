@@ -54,6 +54,8 @@ function tarjetas(cantidad: number): OfertaTarjeta[] {
       url: VISUELS[(i + j) % VISUELS.length],
     })),
     tipo: "activity" as const,
+    capacidad: null,
+    nAlojamientos: null,
     testId: `tarjeta-${i}`,
   }));
 }

@@ -57,6 +57,21 @@ export type TarjetaOferta = {
   precio: PrecioTarjeta;
   fotos: FotoTarjeta[];
   tipo: TipoOferta;
+  /**
+   * Combien de couchages une carte GROUPÉE représente — `null` sur toute autre carte.
+   *
+   * `null` et jamais 0 : « 0 alojamientos » se lirait « cet établissement n'en a aucun », alors
+   * que la carte est justement celle d'une offre isolée. Restauré par la spec 30 §3.6 — le front
+   * d'août l'affichait, la refonte l'avait perdu.
+   */
+  nAlojamientos: number | null;
+  /**
+   * Combien de personnes une unité accueille. `null` partout sauf sur les cartes de chambre d'une
+   * fiche établissement : c'est le seul écran où le cahier la demande (« photo · nom · capacité ·
+   * prix », entretien du 2026-09-07). `search_catalog` ne la rend pas — l'accueil et les listings
+   * la laissent donc à `null`, et la carte ne l'affiche pas.
+   */
+  capacidad: number | null;
   testId: string;
 };
 
@@ -119,4 +134,113 @@ export type CategoriaConOferta = {
    */
   localesNativas: string[];
   testId: string;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// LES FICHES (spec 30) — ce qu'une page de détail reçoit, et rien d'autre.
+//
+// Même frontière que le reste de cette couche : des DONNÉES déjà résolues (JSONB dans la locale,
+// URL publiques du Storage), jamais un libellé d'interface. Le `alt` des photos, le nom du bouton
+// de contact et les titres de section viennent de la page, via next-intl.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Ce que le calendrier d'un produit à date unique reçoit. */
+export type FilaDisponibilidad = { date: string; capacity: number; booked: number };
+
+/** Override de prix pour une nuit donnée (hébergement). */
+export type FilaTarifa = { date: string; price_cop: number };
+
+/** Un créneau horaire, tel que `get_product_slots` le rend. */
+export type FilaFranja = {
+  slot_date: string;
+  slot_start_time: string;
+  capacity: number;
+  booked: number;
+  slot_duration_minutes: number;
+};
+
+/** Ce qui décide du bloc affiché sous le prix. Voir `FichaProducto.modoReserva`. */
+export type ModoReserva = "evento" | "vitrina" | "lodging" | "slot" | "date";
+
+/** Les données d'occurrence d'un evento — le LIBELLÉ est composé par la page (il se traduit). */
+export type DatosOcurrencia = {
+  tipo: "once" | "recurring" | null;
+  fecha: string | null;
+  frecuenciaDias: number | null;
+  finFecha: string | null;
+  finConteo: number | null;
+  /** `products.start_time` — l'heure de l'occurrence, requise par le JSON-LD `Event`. */
+  hora: string | null;
+};
+
+/** Ce que seul un hébergement porte. `null` sur tout autre type. */
+export type DatosAlojamiento = {
+  lodgingKind: string | null;
+  capacity: number | null;
+  unitCount: number | null;
+  priceTiers: unknown;
+  maxQty: number;
+  /** `type = 'lodging'` ET une catégorie Lobby : la disponibilité vient alors du PMS, pas de la base. */
+  esPmsBacked: boolean;
+};
+
+/** L'établissement, vu depuis une fiche produit. */
+export type ResumenEstablecimiento = {
+  id: string;
+  slug: string | null;
+  nombre: string;
+  descripcion: string | null;
+  direccion: string | null;
+  fotos: FotoTarjeta[];
+};
+
+export type FichaProducto = {
+  id: string;
+  slug: string;
+  tipo: TipoOferta;
+  nombre: string;
+  descripcion: string | null;
+  fotos: FotoTarjeta[];
+  precio: PrecioTarjeta;
+  /**
+   * L'unité de PRIX (`per_person` | `per_two` | `per_house`) — à ne pas confondre avec
+   * `alojamiento.lodgingKind`, qui est une nature de couchage. Elle suffixe le prix affiché.
+   */
+  unidad: string | null;
+  modoReserva: ModoReserva;
+  /** Non nul ⟺ `modoReserva === "vitrina"` — sauf pour un evento, qui l'est par son type. */
+  urlExterna: string | null;
+  /** Renseigné pour un evento, quel que soit son `modoReserva` : la date est une propriété du TYPE. */
+  ocurrencia: DatosOcurrencia | null;
+  alojamiento: DatosAlojamiento | null;
+  disponibilidad: FilaDisponibilidad[];
+  tarifas: FilaTarifa[];
+  franjas: FilaFranja[];
+  establecimiento: ResumenEstablecimiento | null;
+  /**
+   * Les locales où la fiche a un contenu RÉELLEMENT saisi. Calculé ici parce que cette couche est
+   * la seule à tenir le JSONB brut, et que `noindex`/canonical en dépendent — même raison et même
+   * prédicat que `CategoriaConOferta.localesNativas` (spec 29).
+   */
+  localesNativas: string[];
+};
+
+export type FichaEstablecimiento = {
+  id: string;
+  slug: string;
+  nombre: string;
+  descripcion: string | null;
+  direccion: string | null;
+  lat: number | null;
+  lon: number | null;
+  /** Les horaires DU LIEU — `products.check_in_time` n'est plus lu par aucune page (spec 30 §3.4). */
+  horaEntrada: string | null;
+  horaSalida: string | null;
+  modo: "rooms" | "whole_house" | null;
+  /** `establishments.contact_phone`, E.164. `null` → aucun bouton de contact. */
+  contacto: string | null;
+  fotos: FotoTarjeta[];
+  alojamientos: TarjetaOferta[];
+  otrosProductos: TarjetaOferta[];
+  localesNativas: string[];
 };

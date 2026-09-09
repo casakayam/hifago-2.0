@@ -13,8 +13,16 @@ import {
   cn,
   dateTaggedDayButtonComponents,
 } from "@hifago/ui";
-import { isoDateToLocalMidnight, lastBookableDateIso, startOfTodayInBogota } from "@hifago/domain";
+import { startOfTodayInBogota } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
+import { isoDeFecha, mesPorDefecto, ultimoDiaReservable } from "@/lib/reservas/calendario";
+import { limitarCantidad } from "@/lib/reservas/cantidad";
+import {
+  CLAVE_PLAZAS,
+  agregarEnCarrito,
+  estadoDisponibilidad,
+  plazasRestantes,
+} from "@/lib/reservas/disponibilidad";
 
 // Spec 18 §0 Tranche 1 : produit à créneaux horaires (product_slot_rules côté admin, ex. jetski —
 // cf. hifago/docs/journal/2026-08.md entrée 2026-08-18, motivé par un produit réel bloqué faute de
@@ -47,10 +55,11 @@ function addMinutesToHHMM(time: string, minutes: number): string {
 
 // Fonction pure (comme resolveTierPrice dans Lodging/HotelReservationForm) plutôt qu'une closure
 // interne au composant : évite tout piège de dépendances useMemo/useCallback, le seul état externe
-// dont elle a besoin (inCartByKey) est passé explicitement.
+// dont elle a besoin (inCartByKey) est passé explicitement. Ce qui lui reste en propre est la CLÉ
+// composée ; le calcul lui-même vit dans lib/reservas (spec 30 §7a, duplication n°2).
 function remainingForSlot(slot: SlotRow, inCartByKey: Map<string, number>): number {
   const key = `${slot.slot_date}|${toHHMM(slot.slot_start_time)}`;
-  return slot.capacity - slot.booked - (inCartByKey.get(key) ?? 0);
+  return plazasRestantes(slot, inCartByKey.get(key) ?? 0);
 }
 
 export function SlotReservationForm({
@@ -68,9 +77,9 @@ export function SlotReservationForm({
 }) {
   const t = useTranslations("ProductPage");
   const { lines, addLine } = useCart();
-  // Borne HAUTE de l'horizon produit (six mois, décidé le 2026-08-28). Calculée une fois au montage
-  // plutôt qu'à chaque rendu, pour que react-day-picker reçoive la même référence.
-  const dernierJourReservable = useMemo(() => isoDateToLocalMidnight(lastBookableDateIso()), []);
+  // Borne HAUTE de l'horizon produit (six mois, décidé le 2026-08-28). Le `useMemo` reste ici et
+  // n'est pas décoratif : react-day-picker doit recevoir la MÊME référence d'un rendu à l'autre.
+  const dernierJourReservable = useMemo(() => ultimoDiaReservable(), []);
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [selectedSlotStartTime, setSelectedSlotStartTime] = useState<string | undefined>();
@@ -91,15 +100,15 @@ export function SlotReservationForm({
   // base) — même raisonnement que ReservationForm.tsx (avertissement indicatif, jamais la vraie
   // barrière, qui reste create_order au moment du checkout). Clé composée (date + heure) plutôt que
   // date seule : deux créneaux différents la même date sont deux cupos indépendants.
-  const inCartByKey = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const line of lines) {
-      if (line.productId !== productId || !line.slotStartTime) continue;
-      const key = `${line.date}|${line.slotStartTime}`;
-      map.set(key, (map.get(key) ?? 0) + line.qty);
-    }
-    return map;
-  }, [lines, productId]);
+  const inCartByKey = useMemo(
+    () =>
+      agregarEnCarrito(
+        lines,
+        (line) => line.productId === productId && Boolean(line.slotStartTime),
+        (line) => `${line.date}|${line.slotStartTime}`
+      ),
+    [lines, productId]
+  );
 
   const fullDates = useMemo(() => {
     const full: Date[] = [];
@@ -115,9 +124,9 @@ export function SlotReservationForm({
   // même raisonnement que ReservationForm.tsx.
   // Même repli que ReservationForm.tsx : `undefined` renverrait react-day-picker sur le mois du
   // navigateur (cf. le commentaire détaillé là-bas).
-  const defaultMonth = slots[0] ? parseISO(slots[0].slot_date) : startOfTodayInBogota();
+  const defaultMonth = mesPorDefecto(slots[0]?.slot_date);
 
-  const selectedIso = selectedDate ? format(selectedDate, "yyyy-MM-dd") : null;
+  const selectedIso = isoDeFecha(selectedDate);
   const daySlots = selectedIso ? (byDate.get(selectedIso) ?? []) : [];
   const selectedSlot = selectedSlotStartTime
     ? daySlots.find((slot) => toHHMM(slot.slot_start_time) === selectedSlotStartTime)
@@ -196,11 +205,7 @@ export function SlotReservationForm({
 
       {selectedSlot ? (
         <p className="text-sm text-muted" aria-live="polite" data-testid="slot-summary">
-          {slotRemaining <= 0
-            ? t("full")
-            : slotRemaining === 1
-              ? t("lastSpot")
-              : t("spotsLeft", { count: slotRemaining })}
+          {t(CLAVE_PLAZAS[estadoDisponibilidad(slotRemaining)], { count: slotRemaining })}
         </p>
       ) : selectedIso ? (
         <p className="text-sm text-muted">{t("selectSlotTime")}</p>
@@ -214,7 +219,7 @@ export function SlotReservationForm({
             const slotStart = toHHMM(slot.slot_start_time);
             const slotEnd = addMinutesToHHMM(slot.slot_start_time, slot.slot_duration_minutes);
             const slotRemainingCount = remainingForSlot(slot, inCartByKey);
-            const isFull = slotRemainingCount <= 0;
+            const isFull = estadoDisponibilidad(slotRemainingCount) === "completo";
             const isSelected = selectedSlotStartTime === slotStart;
             return (
               <button
@@ -237,11 +242,9 @@ export function SlotReservationForm({
                   {slotStart}–{slotEnd}
                 </span>
                 <span className="text-muted">
-                  {isFull
-                    ? t("full")
-                    : slotRemainingCount === 1
-                      ? t("lastSpot")
-                      : t("spotsLeft", { count: slotRemainingCount })}
+                  {t(CLAVE_PLAZAS[estadoDisponibilidad(slotRemainingCount)], {
+                    count: slotRemainingCount,
+                  })}
                 </span>
               </button>
             );
@@ -254,10 +257,7 @@ export function SlotReservationForm({
         name="qty"
         value={String(qty)}
         isDisabled={!selectedSlot}
-        onChange={(value) => {
-          const next = Number(value);
-          setQty(Math.min(Math.max(next, 1), Math.max(slotRemaining, 1)));
-        }}
+        onChange={(value) => setQty(limitarCantidad(Number(value), slotRemaining))}
       >
         <Label>{t("quantityLabel")}</Label>
         <Input id="qty" type="number" min={1} max={Math.max(slotRemaining, 1)} />

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Carousel, type CarouselSlide } from "@hifago/ui";
 import { Image } from "@/components/atoms/Image";
 
@@ -66,6 +67,12 @@ export type PhotoStripProps = {
 };
 
 export function PhotoStrip({ photos, sizes, loading, testId }: PhotoStripProps) {
+  // ⚠️ Les trois libellés d'accessibilité du carrousel étaient en ESPAGNOL EN DUR dans
+  // `packages/ui` — correct pour `apps/admin`, qui n'est pas localisé, mais une fuite ici : un
+  // visiteur anglophone au lecteur d'écran entendait « Foto siguiente » sur l'élément principal
+  // d'une fiche. La prop `labels` du `Carousel` est optionnelle et garde l'espagnol par défaut,
+  // donc l'admin ne change pas d'un caractère (spec 30 §7d).
+  const t = useTranslations("Common");
   // ⚠️ Cette enveloppe n'est pas décorative : le `Carousel` porte un `data-testid="carousel"` FIXE,
   // qu'il n'expose pas en prop, et la fiche produit affiche DEUX galeries (produit puis
   // établissement). Sans elle, aucun test ne peut désigner l'une plutôt que l'autre — et le
@@ -88,6 +95,11 @@ export function PhotoStrip({ photos, sizes, loading, testId }: PhotoStripProps) 
         <Carousel
           slides={photos}
           variant="gallery"
+          labels={{
+            anterior: t("carruselAnterior"),
+            siguiente: t("carruselSiguiente"),
+            irA: (n) => t("carruselIrA", { n }),
+          }}
           renderSlide={(photo, index) => (
             // Pas de conteneur `relative aspect-[4/3]` autour, contrairement à ProductPhotos :
             // l'atome porte déjà le sien, c'est la moitié de son travail en mode `fill`.

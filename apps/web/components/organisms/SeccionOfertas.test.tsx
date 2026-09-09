@@ -58,6 +58,8 @@ function tarjeta(n: number): OfertaTarjeta {
     precio: { tipo: "monto", cop: 80000 },
     fotos: [{ url: "/globe.svg" }],
     tipo: "activity",
+    capacidad: null,
+    nAlojamientos: null,
     testId: `tarjeta-${n}`,
   };
 }

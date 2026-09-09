@@ -17,8 +17,16 @@ import {
   TextField,
   dateTaggedDayButtonComponents,
 } from "@hifago/ui";
-import { isoDateToLocalMidnight, lastBookableDateIso, startOfTodayInBogota } from "@hifago/domain";
+import { startOfTodayInBogota } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
+import { isoDeFecha, mesPorDefecto, ultimoDiaReservable } from "@/lib/reservas/calendario";
+import { limitarCantidad } from "@/lib/reservas/cantidad";
+import {
+  CLAVE_PLAZAS,
+  agregarEnCarrito,
+  estadoDisponibilidad,
+  plazasRestantes,
+} from "@/lib/reservas/disponibilidad";
 
 type AvailabilityRow = { date: string; capacity: number; booked: number };
 
@@ -37,9 +45,9 @@ export function ReservationForm({
 }) {
   const t = useTranslations("ProductPage");
   const { lines, addLine } = useCart();
-  // Borne HAUTE de l'horizon produit (six mois, décidé le 2026-08-28). Calculée une fois au montage
-  // plutôt qu'à chaque rendu, pour que react-day-picker reçoive la même référence.
-  const dernierJourReservable = useMemo(() => isoDateToLocalMidnight(lastBookableDateIso()), []);
+  // Borne HAUTE de l'horizon produit (six mois, décidé le 2026-08-28). Le `useMemo` reste ici et
+  // n'est pas décoratif : react-day-picker doit recevoir la MÊME référence d'un rendu à l'autre.
+  const dernierJourReservable = useMemo(() => ultimoDiaReservable(), []);
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [qty, setQty] = useState(1);
@@ -54,30 +62,28 @@ export function ReservationForm({
   // le plafond client reste indicatif (jamais la vraie barrière, qui reste exclusivement
   // create_order au moment du checkout), mais ignorer ce qui est déjà dans le panier laisserait
   // ajouter deux fois la même dernière place sans le moindre avertissement visuel.
-  const inCartByDate = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const line of lines) {
-      if (line.productId !== productId) continue;
-      map.set(line.date, (map.get(line.date) ?? 0) + line.qty);
-    }
-    return map;
-  }, [lines, productId]);
+  const inCartByDate = useMemo(
+    () => agregarEnCarrito(lines, (line) => line.productId === productId, (line) => line.date),
+    [lines, productId]
+  );
 
   const { fullDates, lastSpotDates } = useMemo(() => {
     const full: Date[] = [];
     const lastSpot: Date[] = [];
     for (const row of availability) {
-      const remaining = row.capacity - row.booked - (inCartByDate.get(row.date) ?? 0);
-      if (remaining <= 0) full.push(parseISO(row.date));
-      else if (remaining === 1) lastSpot.push(parseISO(row.date));
+      // Le MÊME seuil que le message affiché dessous — écrit une fois, dans `disponibilidad.ts`.
+      // Avant, le calendrier et la phrase portaient chacun leur propre `<= 0` / `=== 1`.
+      const estado = estadoDisponibilidad(plazasRestantes(row, inCartByDate.get(row.date) ?? 0));
+      if (estado === "completo") full.push(parseISO(row.date));
+      else if (estado === "ultima") lastSpot.push(parseISO(row.date));
     }
     return { fullDates: full, lastSpotDates: lastSpot };
   }, [availability, inCartByDate]);
 
-  const selectedIso = selectedDate ? format(selectedDate, "yyyy-MM-dd") : null;
+  const selectedIso = isoDeFecha(selectedDate);
   const selectedRow = selectedIso ? byDate.get(selectedIso) : undefined;
   const remaining = selectedRow
-    ? selectedRow.capacity - selectedRow.booked - (inCartByDate.get(selectedRow.date) ?? 0)
+    ? plazasRestantes(selectedRow, inCartByDate.get(selectedRow.date) ?? 0)
     : 0;
 
   // Ouvre le calendrier sur le mois de la première date configurée plutôt que sur le mois
@@ -88,7 +94,7 @@ export function ReservationForm({
   // européen du 1er du mois à 2 h voyait alors le mois suivant s'ouvrir, avec le dernier jour du
   // mois précédent — pourtant réservable — présenté comme déjà passé. (Angle mort trouvé par la
   // relecture adversariale du lot fuseau, pas par la liste initiale.)
-  const defaultMonth = availability[0] ? parseISO(availability[0].date) : startOfTodayInBogota();
+  const defaultMonth = mesPorDefecto(availability[0]?.date);
 
   function handleSelectDate(date: Date | undefined) {
     setSelectedDate(date);
@@ -153,11 +159,7 @@ export function ReservationForm({
 
       {selectedRow ? (
         <p className="text-sm text-muted" aria-live="polite">
-          {remaining <= 0
-            ? t("full")
-            : remaining === 1
-              ? t("lastSpot")
-              : t("spotsLeft", { count: remaining })}
+          {t(CLAVE_PLAZAS[estadoDisponibilidad(remaining)], { count: remaining })}
         </p>
       ) : (
         <p className="text-sm text-muted">{t("selectDate")}</p>
@@ -168,10 +170,7 @@ export function ReservationForm({
         name="qty"
         value={String(qty)}
         isDisabled={!selectedRow}
-        onChange={(value) => {
-          const next = Number(value);
-          setQty(Math.min(Math.max(next, 1), Math.max(remaining, 1)));
-        }}
+        onChange={(value) => setQty(limitarCantidad(Number(value), remaining))}
       >
         <Label>{t("quantityLabel")}</Label>
         <Input id="qty" type="number" min={1} max={Math.max(remaining, 1)} />

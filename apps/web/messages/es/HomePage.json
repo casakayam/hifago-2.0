@@ -53,5 +53,6 @@
       "decrement": "Quitar una persona"
     }
   },
-  "buscando": "Buscando…"
+  "buscando": "Buscando…",
+  "capacidadPersonas": "{count} personas"
 }

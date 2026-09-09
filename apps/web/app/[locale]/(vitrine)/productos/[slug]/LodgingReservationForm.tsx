@@ -14,7 +14,6 @@ import {
   TextField,
 } from "@hifago/ui";
 import {
-  addDaysIso,
   formatCop,
   isoDateToLocalMidnight,
   lastBookableDateIso,
@@ -32,7 +31,16 @@ import {
   reachableRangeWindow,
   resolveTierPrice,
   type PriceTier,
-} from "@/lib/products/reservationRange";
+} from "@/lib/reservas/reservationRange";
+import {
+  isoDeFecha,
+  nocheDeshabilitada,
+  pisoLeadDays,
+  ultimoDiaReservable,
+} from "@/lib/reservas/calendario";
+import { limitarCantidad } from "@/lib/reservas/cantidad";
+import { plazasRestantes } from "@/lib/reservas/disponibilidad";
+import { motivoPms } from "@/lib/reservas/pms";
 
 // Spec 17 §0 Tranche 2, §10 point 6 — react-day-picker mode="range", tranché sur prototype réel
 // (cf. docs/journal/2026-08.md). Une seule entité tarifée : le produit lui-même, via
@@ -94,9 +102,9 @@ export function LodgingReservationForm({
   const t = useTranslations("ProductPage");
   const { lines, addLine } = useCart();
 
-  // Borne HAUTE de l'horizon produit (six mois, décidé le 2026-08-28). Calculée une fois au montage
-  // plutôt qu'à chaque rendu, pour que react-day-picker reçoive la même référence.
-  const dernierJourReservable = useMemo(() => isoDateToLocalMidnight(lastBookableDateIso()), []);
+  // Borne HAUTE de l'horizon produit (six mois, décidé le 2026-08-28). Le `useMemo` reste ici et
+  // n'est pas décoratif : react-day-picker doit recevoir la MÊME référence d'un rendu à l'autre.
+  const dernierJourReservable = useMemo(() => ultimoDiaReservable(), []);
 
   const [range, setRange] = useState<DateRange | undefined>();
   const [qty, setQty] = useState(1);
@@ -186,9 +194,11 @@ export function LodgingReservationForm({
   }, [isPmsBacked, monthKey, productId, attempt]);
 
   const monthState = pmsMonths.get(monthKey);
-  // `connector_inactive` est un état ANTICIPÉ (connecteur coupé côté admin), pas une panne : rien
-  // ne sert de proposer de réessayer, ça ne changera pas tant qu'un admin n'a rien fait.
-  const canRetry = monthState?.status === "error" && monthState.reason !== "connector_inactive";
+  // CE QU'ON FAIT DE L'ÉCHEC — une seule table, dans `lib/reservas/pms.ts`. La décision vivait en
+  // DEUX morceaux ici (un booléen `reason !== "connector_inactive"`, un ternaire dans le JSX), et
+  // la route émet DIX motifs : les huit autres héritaient de « réessayer » sans que personne ne
+  // l'ait décidé. Spec 30 §7a.
+  const motivo = monthState?.status === "error" ? motivoPms(monthState.reason) : null;
 
   const effectiveAvailability = useMemo(
     () => (isPmsBacked ? [...pmsAvailability.values()] : availability),
@@ -223,7 +233,7 @@ export function LodgingReservationForm({
   const remainingByDate = useMemo(() => {
     const map = new Map<string, number>();
     for (const row of effectiveAvailability) {
-      map.set(row.date, row.capacity - row.booked - (inCartByDate.get(row.date) ?? 0));
+      map.set(row.date, plazasRestantes(row, inCartByDate.get(row.date) ?? 0));
     }
     return map;
   }, [effectiveAvailability, inCartByDate]);
@@ -250,13 +260,7 @@ export function LodgingReservationForm({
   // plus strict est le seul qui ne propose jamais une nuit que Lobby refuserait.
   //
   // ⚠️ `null` est ignoré, pas lu comme 0 — « Lobby n'a rien dit » n'apporte aucune contrainte.
-  const plancherIso = useMemo(() => {
-    let lead = 0;
-    for (const restrictions of pmsRestrictions.values()) {
-      if (restrictions.leadDays !== null && restrictions.leadDays > lead) lead = restrictions.leadDays;
-    }
-    return lead > 0 ? addDaysIso(todayInBogota(), lead) : todayInBogota();
-  }, [pmsRestrictions]);
+  const plancherIso = useMemo(() => pisoLeadDays(pmsRestrictions, todayInBogota()), [pmsRestrictions]);
 
   // Le même plancher, sous la forme qu'attend le matcher `before` de react-day-picker. À
   // `lead_days = 0` il vaut exactement `startOfTodayInBogota()` — d'où l'absence totale d'effet
@@ -268,7 +272,7 @@ export function LodgingReservationForm({
     [plancherIso]
   );
 
-  const ancreIso = useMemo(() => (range?.from ? format(range.from, "yyyy-MM-dd") : null), [range]);
+  const ancreIso = useMemo(() => isoDeFecha(range?.from), [range]);
 
   // LA FENÊTRE ATTEIGNABLE — correctif du 2026-08-29, cf. l'en-tête de reachableRangeWindow.
   //
@@ -380,7 +384,7 @@ export function LodgingReservationForm({
   // dans le même geste, et l'utilisateur repique une sortie dedans.
   function handleQtyChange(value: string) {
     const brut = Number(value);
-    const suivant = Number.isNaN(brut) ? 1 : Math.min(Math.max(brut, 1), qtyMax);
+    const suivant = limitarCantidad(brut, qtyMax);
     setQty(suivant);
     if (!range?.from) return;
 
@@ -433,11 +437,9 @@ export function LodgingReservationForm({
         {monthState?.status === "error" ? (
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <p className="text-sm text-danger" role="alert" data-testid="pms-availability-error">
-              {monthState.reason === "pms_rate_limited"
-                ? t("pmsAvailabilityRateLimited")
-                : t("pmsAvailabilityError")}
+              {t(motivo?.claveI18n ?? "pmsAvailabilityError")}
             </p>
-            {canRetry ? (
+            {motivo?.reintentable ? (
               <Button
                 size="sm"
                 variant="secondary"
@@ -486,36 +488,17 @@ export function LodgingReservationForm({
             // Borne HAUTE : au-delà de l'horizon produit, rien n'est vendable. Sans elle, ces
             // dates paraissaient sélectionnables et n'étaient refusées qu'après coup.
             { after: dernierJourReservable },
-            (date) => {
-              const iso = format(date, "yyyy-MM-dd");
-              // PHASE 2 — une arrivée est posée. Seule la fenêtre atteignable reste cliquable, et
-              // la première nuit bloquante y figure comme date de SORTIE (on dort jusqu'à la
-              // veille). C'est ce qui empêche d'ENJAMBER une nuit pleine, au lieu de le reprocher
-              // après coup : `hasUnavailableNightInRange` n'a plus l'occasion de parler.
-              if (fenetreAtteignable && ancreIso) {
-                if (iso === ancreIso) return false; // recliquer l'ancre reste permis (ré-ancrage)
-                if (iso < fenetreAtteignable.fromIso || iso > fenetreAtteignable.toIso) return true;
-                // `min_stay` — la borne BASSE. Une sortie trop proche de l'arrivée ne fait pas un
-                // séjour assez long : elle n'est pas signalée, elle n'est pas sélectionnable.
-                if (iso > ancreIso) {
-                  const sortie = fenetreAtteignable.earliestCheckOutIso;
-                  return sortie === null || iso < sortie;
-                }
-                const arrivee = fenetreAtteignable.latestCheckInIso;
-                return arrivee === null || iso > arrivee;
-              }
-              // PHASE 1 — pas encore d'arrivée. On demande à la MÊME fonction si un séjour valide
-              // peut partir d'ici, plutôt que de réécrire la règle : ça couvre la nuit SANS DONNÉE
-              // (acquis du 2026-08-28), la nuit PLEINE (2026-08-29), et désormais l'arrivée d'où
-              // aucun séjour d'au moins `min_stay` nuits ne tient dans la fenêtre.
-              // `has`, pas `??` : une fenêtre légitimement calculée peut valoir `null` (l'arrivée
-              // elle-même ne tient pas la quantité), et `??` la reprendrait pour un défaut de cache.
-              // Le repli ne sert que les cases hors du mois chargé, déjà écartées plus haut.
-              const depuisIci = fenetresParArrivee.has(iso)
-                ? fenetresParArrivee.get(iso)!
-                : fenetreDepuis(iso, qty);
-              return depuisIci === null || depuisIci.earliestCheckOutIso === null;
-            },
+            // Le prédicat vit dans `lib/reservas/calendario.ts` — trente lignes qui ne lisaient
+            // AUCUN état React et n'étaient donc testables qu'en montant un calendrier entier.
+            // Même polarité que `disabled` (true = désactivé) : aucune négation à ce site, une
+            // négation ici serait la façon la plus discrète de rouvrir l'enjambement.
+            (date) =>
+              nocheDeshabilitada(format(date, "yyyy-MM-dd"), {
+                ancreIso,
+                fenetreAtteignable,
+                fenetresParArrivee,
+                calculerFenetre: (iso) => fenetreDepuis(iso, qty),
+              }),
           ]}
           modifiers={{ unavailable: unavailableDates }}
           modifiersClassNames={{ unavailable: "line-through opacity-60" }}

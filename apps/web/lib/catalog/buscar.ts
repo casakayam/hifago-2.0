@@ -60,6 +60,8 @@ export type FilaCatalogo = {
   fotos: unknown;
   total_seccion: number;
   rango_seccion: number;
+  /** `null` sur toute carte non groupée — cf. la note dans `enTarjeta`. */
+  n_alojamientos: number | null;
 };
 
 function precioDe(fila: FilaCatalogo): PrecioTarjeta {
@@ -125,6 +127,14 @@ function enTarjeta(
     precio: precioDe(fila),
     fotos: fotosDe(fila.fotos, urlPublica),
     tipo: fila.tipo,
+    // ⚠️ `?? null` n'est PAS décoratif : le type généré annonce `n_alojamientos: number`, alors
+    // que la colonne vaut `null` sur toute carte non groupée. Postgres ne déclare aucune
+    // nullabilité dans un `returns table`, donc `database.types.ts` ne peut pas la connaître —
+    // le typage ment ici, et c'est le seul endroit où on peut le rattraper.
+    nAlojamientos: fila.n_alojamientos ?? null,
+    // `search_catalog` ne rend pas la capacité : elle n'est demandée que sur les cartes de chambre
+    // d'une fiche établissement, qui les construit elle-même (spec 30 §5d).
+    capacidad: null,
     testId: `tarjeta-${fila.slug}`,
   };
 }

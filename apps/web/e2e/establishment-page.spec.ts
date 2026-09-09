@@ -69,10 +69,17 @@ test("la page publique d'un établissement le présente, regroupe ses produits, 
     const lodgings = page.getByTestId("establishment-lodgings");
     await expect(lodgings).toContainText("Habitaciones");
     await expect(lodgings).toContainText(productName);
-    // Les faits de couchage repris de la fiche produit, avec le même vocabulaire prudent : le
-    // nombre d'unités est un TOTAL, jamais ce qui reste libre ce soir.
-    await expect(lodgings).toContainText("Habitación privada");
-    await expect(lodgings).toContainText("3 en total");
+    // ⚠️ CE QUE LA CARTE PORTE A CHANGÉ le 2026-09-08 (spec 30 §5d) : « photo · nom · capacité ·
+    // prix », la forme décidée par Jérôme le 2026-09-07. L'écran d'origine avait sa propre
+    // `ProductRow` maison qui affichait en plus la nature du couchage (« Habitación privada ») et
+    // le nombre d'unités (« 3 en total ») ; les cartes sont désormais des `TarjetaOferta`, comme
+    // partout ailleurs sur le site. La nature du couchage se lit dans le NOM de la chambre, et le
+    // parc total n'aide pas à choisir — il se lit sur la fiche.
+    //
+    // Le PRIX, lui, est un GAIN : l'écran d'origine le sélectionnait en base et ne l'affichait
+    // nulle part, alors que la décision du 2026-09-07 le demande explicitement.
+    await expect(lodgings.getByTestId(/tarjeta-.*-precio/)).toBeVisible();
+    await expect(lodgings).toContainText("personas");
 
     // --- La fiche produit renvoie vers l'établissement ------------------------------------------
     await page.goto(`/es/productos/${productSlug}`);

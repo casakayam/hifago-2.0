@@ -43,5 +43,7 @@
     "recurringWeeklyUntilDate": "Los {weekday}, cada {days} días, hasta el {date}.",
     "recurringWeeklyForCount": "Los {weekday}, cada {days} días, durante {count} repeticiones.",
     "recurringWeeklyOngoing": "Los {weekday}, cada {days} días, de forma indefinida."
-  }
+  },
+  "fotoAlt": "{nombre}, foto {indice} de {total}",
+  "migasEtiqueta": "Ruta de navegación"
 }

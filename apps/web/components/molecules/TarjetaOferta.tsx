@@ -110,6 +110,23 @@ export function TarjetaOferta({ oferta, variante, prioridad, locale }: TarjetaOf
     );
   }
 
+  // La CAPACITÉ, sur les seules cartes qui la portent — les chambres d'une fiche établissement
+  // (« photo · nom · capacité · prix », entretien du 2026-09-07). `search_catalog` ne la rend pas,
+  // donc elle est `null` sur l'accueil et les listings et la ligne n'y apparaît jamais.
+  //
+  // Sous le prix et non à sa place : les deux se lisent ensemble pour choisir une chambre.
+  const contenidoCompleto =
+    oferta.capacidad !== null ? (
+      <span className="flex flex-col gap-0.5">
+        {contenido}
+        <span className="text-sm font-normal text-muted" data-testid={`${oferta.testId}-capacidad`}>
+          {t("capacidadPersonas", { count: oferta.capacidad })}
+        </span>
+      </span>
+    ) : (
+      contenido
+    );
+
   return (
     <Card
       href={oferta.href}
@@ -129,7 +146,7 @@ export function TarjetaOferta({ oferta, variante, prioridad, locale }: TarjetaOf
         />
       }
     >
-      {contenido}
+      {contenidoCompleto}
     </Card>
   );
 }

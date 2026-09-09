@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { render } from "@testing-library/react";
+import { render as renderBrut } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import { loadMessages } from "@/messages";
 import { PhotoStrip, type PhotoStripPhoto } from "./PhotoStrip";
+
+// ⚠️ `PhotoStrip` traduit désormais les trois libellés d'accessibilité du carrousel (spec 30 §7d),
+// donc il lui faut un contexte i18n. Sans lui, l'erreur est « Failed to call useTranslations
+// because the context from NextIntlClientProvider was not found » — un message qui parle de Server
+// Components et envoie chercher le problème au mauvais endroit.
+const messages = loadMessages("es");
+const render = (ui: React.ReactNode) =>
+  renderBrut(
+    <NextIntlClientProvider locale="es" messages={{ Common: messages.Common }}>
+      {ui}
+    </NextIntlClientProvider>
+  );
 
 // Pas de @testing-library/jest-dom dans ce monorepo (cf. CatalogBrowser.test.tsx) — assertions DOM
 // natives uniquement.

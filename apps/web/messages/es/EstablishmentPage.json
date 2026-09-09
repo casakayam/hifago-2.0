@@ -11,5 +11,8 @@
   "lodgingKindPrivate": "Habitación privada",
   "lodgingKindWholeHouse": "Casa entera",
   "lodgingCapacity": "Hasta {count, plural, one {# persona} other {# personas}}",
-  "lodgingUnitCount": "{count} en total"
+  "lodgingUnitCount": "{count} en total",
+  "contactar": "Contactar por WhatsApp",
+  "fotoAlt": "{nombre}, foto {indice} de {total}",
+  "migasEtiqueta": "Ruta de navegación"
 }

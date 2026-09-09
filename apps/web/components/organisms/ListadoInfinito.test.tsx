@@ -63,6 +63,8 @@ function oferta(slug: string): OfertaTarjeta {
     precio: { tipo: "monto", cop: 90000 },
     fotos: [],
     tipo: "activity",
+    capacidad: null,
+    nAlojamientos: null,
     testId: `tarjeta-${slug}`,
   };
 }

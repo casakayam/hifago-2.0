@@ -20,7 +20,14 @@ SANS_COMMENTAIRES="scripts/lib/sans-commentaires.pl"
 fail=0
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────
-# Les cinq écrans hérités, que les specs 28 et suivantes REMPLACENT (lot B3).
+# Les écrans hérités que les specs 28 et suivantes REMPLACENT.
+#
+# ⚠️ Elle a compté CINQ entrées, puis quatre (l'accueil, be90f7e), puis deux : les DEUX fiches en
+# sont sorties le 2026-09-08 (spec 30, `lib/catalog/{producto,establecimiento}.ts`).
+#
+# LES DEUX RESTANTES SONT HORS VITRINE — le compte client et le tunnel de paiement. Le chantier
+# front de la vitrine est donc terminé de ce point de vue, et la prochaine réduction demandera
+# d'ouvrir un autre chantier, pas d'en finir un.
 #
 # ⚠️ Cette liste est de la DETTE VISIBLE, pas une permission : elle n'existe que pour rendre le
 # contrôle bloquant AUJOURD'HUI sur tout écran neuf, au lieu d'attendre que les cinq soient
@@ -29,8 +36,6 @@ fail=0
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 est_ecran_herite() {
   case "$1" in
-    "apps/web/app/[locale]/(vitrine)/establecimientos/[slug]/page.tsx") return 0 ;;
-    "apps/web/app/[locale]/(vitrine)/productos/[slug]/page.tsx") return 0 ;;
     "apps/web/app/[locale]/(cuenta)/cuenta/reservas/page.tsx") return 0 ;;
     "apps/web/app/[locale]/(tunnel)/pago/page.tsx") return 0 ;;
   esac

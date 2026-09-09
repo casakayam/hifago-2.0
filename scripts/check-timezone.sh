@@ -104,6 +104,13 @@ est_exempte() {
   return 1
 }
 
+# Le filtre commun des quatre autres contrôles. Ce script utilisait un `sed 's://.*::'` naïf qui ne
+# retire QUE les `//` : un `new Date()` cité dans un bloc `/** … */` — c'est-à-dire dans le
+# commentaire qui explique précisément pourquoi il ne faut pas l'écrire — le faisait crier à tort.
+# Trouvé le 2026-09-08 par le premier fichier du dépôt à le faire (lib/reservas/calendario.ts).
+# Un contrôle qui crie à tort est un contrôle qu'on désactive (spec 27 §8).
+SANS_COMMENTAIRES="scripts/lib/sans-commentaires.pl"
+
 signale() { # fichier, lignes, explication
   echo "✗ $1"
   echo "$2" | sed 's/^/    /'
@@ -114,7 +121,7 @@ signale() { # fichier, lignes, explication
 echo "== Dates civiles calculées hors du fuseau de Guatapé (TS/JS) =="
 while IFS= read -r f; do
   est_exempte "$f" && continue
-  hits="$(sed 's://.*::' "$f" | grep -nE 'toISOString\(\)\.(slice|substring|substr|split)|new Date\(\)|new Date\(Date\.now\(\)\)|new Date\([^)]*\)\.toLocale|getLocalTimeZone\(' || true)"
+  hits="$(perl -0777 -p "$SANS_COMMENTAIRES" "$f" | grep -nE 'toISOString\(\)\.(slice|substring|substr|split)|new Date\(\)|new Date\(Date\.now\(\)\)|new Date\([^)]*\)\.toLocale|getLocalTimeZone\(' || true)"
   [ -z "$hits" ] && continue
   signale "$f" "$hits" \
     "Utiliser packages/domain/src/time/ : todayInBogota(), startOfTodayInBogota(), addDaysIso(), nowIsoInstant()."

@@ -89,6 +89,8 @@ function oferta(patch: Partial<OfertaTarjeta> = {}): OfertaTarjeta {
     precio: { tipo: "monto", cop: 180000 },
     fotos: fotos("defaut", 1),
     tipo: "lodging",
+    capacidad: null,
+    nAlojamientos: null,
     testId: "tarjeta-cabana-embalse",
     ...patch,
   };

@@ -24,11 +24,37 @@ export type CarouselSlide = {
   alt: string;
 };
 
+/**
+ * Les trois libellés d'accessibilité du carrousel.
+ *
+ * ⚠️ POURQUOI CETTE PROP EXISTE (2026-09-08, spec 30 §7d). Ils étaient en espagnol EN DUR. C'est
+ * correct pour `apps/admin`, qui n'est pas localisé — mais `apps/web` sert es ET en, et un
+ * visiteur anglophone au lecteur d'écran entendait « Foto siguiente » sur l'élément principal
+ * d'une fiche. Aucune règle ni aucun test ne l'attrapait.
+ *
+ * OPTIONNELLE, avec les valeurs espagnoles d'origine en défaut : aucun appelant existant ne
+ * change, et l'admin garde son comportement au caractère près.
+ */
+export type CarouselLabels = {
+  anterior: string;
+  siguiente: string;
+  /** Reçoit le numéro de la photo (1-indexé). */
+  irA: (n: number) => string;
+};
+
+const LABELS_POR_DEFECTO: CarouselLabels = {
+  anterior: "Foto anterior",
+  siguiente: "Foto siguiente",
+  irA: (n) => `Ir a la foto ${n}`,
+};
+
 export type CarouselProps<T extends CarouselSlide> = {
   slides: T[];
   renderSlide: (slide: T, index: number) => React.ReactNode;
   /** "gallery" = dots + flèches (fiche produit/établissement) ; "hero" = flèches seules, plus grand. */
   variant?: "gallery" | "hero";
+  /** Voir `CarouselLabels`. Omise → espagnol, le comportement d'origine. */
+  labels?: CarouselLabels;
   className?: string;
 };
 
@@ -36,6 +62,7 @@ export function Carousel<T extends CarouselSlide>({
   slides,
   renderSlide,
   variant = "gallery",
+  labels = LABELS_POR_DEFECTO,
   className,
 }: CarouselProps<T>) {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false });
@@ -84,7 +111,7 @@ export function Carousel<T extends CarouselSlide>({
             size="sm"
             className="absolute left-2 top-1/2 -translate-y-1/2"
             onPress={() => emblaApi?.scrollPrev()}
-            aria-label="Foto anterior"
+            aria-label={labels.anterior}
             data-testid="carousel-prev"
           >
             ‹
@@ -94,7 +121,7 @@ export function Carousel<T extends CarouselSlide>({
             size="sm"
             className="absolute right-2 top-1/2 -translate-y-1/2"
             onPress={() => emblaApi?.scrollNext()}
-            aria-label="Foto siguiente"
+            aria-label={labels.siguiente}
             data-testid="carousel-next"
           >
             ›
@@ -108,7 +135,7 @@ export function Carousel<T extends CarouselSlide>({
             <button
               key={slide.id}
               type="button"
-              aria-label={`Ir a la foto ${index + 1}`}
+              aria-label={labels.irA(index + 1)}
               onClick={() => emblaApi?.scrollTo(index)}
               className={cn(
                 "h-2 w-2 rounded-full transition-colors",

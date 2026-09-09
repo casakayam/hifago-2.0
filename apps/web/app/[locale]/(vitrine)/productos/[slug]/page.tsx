@@ -1,325 +1,139 @@
 import type { Metadata } from "next";
-import { cache } from "react";
 import { notFound } from "next/navigation";
 import { setRequestLocale, getTranslations } from "next-intl/server";
-import { createClient } from "@hifago/supabase/server";
-import {
-  lastBookableDateIso,
-  asLocalizedField,
-  asLodgingKind,
-  isPmsBacked,
-  resolveLocalizedField,
-  todayInBogota,
-} from "@hifago/domain";
 import { formatOccurrenceLabel } from "@/lib/products/formatOccurrenceLabel";
-import { formatCop } from "@hifago/domain";
-import { ProductDetailView } from "./ProductDetailView";
-import { routing } from "@/i18n/routing";
-import { hasNativeContent } from "@/lib/seo/nativeContent";
+import { getProductoPorSlug } from "@/lib/catalog/producto";
+import { segmentoDeTipo } from "@/lib/catalog/segmentos";
+import { PageShell } from "@/components/atoms/PageShell";
+import { Migas, type MigaItem } from "@/components/molecules/Migas";
+import { JsonLd } from "@/components/seo/JsonLd";
 import { buildPageMetadata } from "@/lib/seo/pageMetadata";
 import { getSiteUrl } from "@/lib/seo/siteUrl";
 import { buildProductJsonLd } from "@/lib/seo/jsonld/product";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/jsonld/breadcrumb";
-import { JsonLd } from "@/components/seo/JsonLd";
+import { migasParaJsonLd } from "@/lib/seo/migas";
+import type { Locale } from "@/messages";
+import { FichaProducto } from "./FichaProducto";
 
-// Template literal sans interpolation (pas une concaténation "a" + "b"), une seule ligne : Supabase-js
-// infère le type de retour de .select() en analysant le TYPE littéral de la chaîne au niveau
-// TypeScript — une concaténation par + l'élargirait en simple `string`, perdant l'info nécessaire
-// au parsing statique (constaté : tombe alors sur le type de repli GenericStringError). Une seule
-// ligne, aussi, pour ne pas envoyer de retours à la ligne dans le paramètre select de PostgREST.
-// establishment(description, address) : feature 32, jamais photo_urls (colonne absente du GRANT
-// SELECT public — supabase/migrations/20260819110000_pms_connector_schema.sql — la sélectionner
-// ferait échouer toute la requête). Photo d'établissement : establishment_media (public, RLS
-// héritée), requêtée séparément ci-dessous comme product_media l'est déjà pour les produits.
-// lobby_category_id : spec 21 §13 (gap comblé) — jamais revoke côté products (contrairement à
-// establishments.lobby_api_token), sert uniquement à dériver isPmsBacked ci-dessous.
-// capacity/quantity ajoutés le 2026-08-26 : ils étaient écrits en base (et, pour un logement lié,
-// importés depuis LobbyPMS) mais ABSENTS de ce select — donc lus par aucun écran public, exactement
-// comme `unit`. Une chambre affichait son prix sans jamais dire pour combien de personnes.
-const PRODUCT_COLUMNS = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, capacity, unit_count, lodging_kind, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, lobby_category_id, establishment:establishments(id, slug, name, description, address)`;
-
-const getProduct = cache(async (slug: string) => {
-  const supabase = await createClient();
-  const { data: product } = await supabase
-    .from("products")
-    .select(PRODUCT_COLUMNS)
-    .eq("slug", slug)
-    .maybeSingle();
-  return product;
-});
+// LA FICHE D'UNE OFFRE (spec 30 §5a).
+//
+// ⚠️ Cette route N'APPELLE PLUS SUPABASE. Ses six requêtes vivent dans `lib/catalog/producto.ts`,
+// et son entrée a été retirée de la liste d'exemptions de `scripts/check-data-layer.sh` — la liste
+// dont l'en-tête dit qu'elle « doit RÉTRÉCIR à chaque lot ». Elle passe de quatre à trois ici, et
+// à deux avec la fiche établissement.
+//
+// ⚠️ Elle n'importe rien de `@hifago/ui` non plus : le barrel tire app-nav-shell/lucide-react et
+// fait planter `next build` depuis un Server Component (CLAUDE.md §11.16). Tout le rendu HeroUI
+// vit dans `FichaProducto.tsx` ("use client").
 
 export async function generateMetadata(
   props: Omit<PageProps<"/[locale]/productos/[slug]">, "searchParams">
 ): Promise<Metadata> {
   const { locale, slug } = await props.params;
-  const product = await getProduct(slug);
-  if (!product) return {};
+  // Même appel que le rendu ci-dessous, mémoïsé par `cache` : une seule lecture par requête.
+  const ficha = await getProductoPorSlug(slug, { locale });
+  if (!ficha) return {};
 
-  const title = resolveLocalizedField(asLocalizedField(product.name), locale) ?? product.slug;
-  const description =
-    resolveLocalizedField(asLocalizedField(product.description), locale) ?? undefined;
-
-  // Une fiche saisie sans traduction pour cette locale (repli JSONB, cf. hifago/CLAUDE.md §5)
-  // reste noindex + canonical vers la langue source, et ne s'annonce pas comme une version
-  // linguistique distincte. Ces trois décisions se prennent ENSEMBLE : elles vivent donc dans
-  // buildPageMetadata, partagé avec l'accueil et la page établissement — et le prédicat
-  // hasNativeContent est le même que celui du sitemap, sans quoi celui-ci listerait des URL que
-  // ces métadonnées déclarent noindex.
-  const nativeLocales = routing.locales.filter((candidate) =>
-    hasNativeContent(product.name, candidate)
-  );
-
+  // Une fiche saisie sans traduction pour cette locale (repli JSONB, CLAUDE.md §5) reste noindex +
+  // canonical vers la langue source, et ne s'annonce pas comme une version linguistique distincte.
+  // Ces trois décisions se prennent ENSEMBLE, d'où `buildPageMetadata`, partagé avec l'accueil et
+  // la fiche établissement.
   return buildPageMetadata({
     locale,
-    pathFor: (candidate) => `/${candidate}/productos/${product.slug}`,
-    title,
-    description,
-    nativeLocales,
+    pathFor: (candidate) => `/${candidate}/productos/${ficha.slug}`,
+    title: ficha.nombre,
+    description: ficha.descripcion ?? undefined,
+    nativeLocales: ficha.localesNativas,
   });
 }
 
-export default async function ProductPage({
-  params,
-}: PageProps<"/[locale]/productos/[slug]">) {
+export default async function ProductoPage({ params }: PageProps<"/[locale]/productos/[slug]">) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
-  // Le rendu JSX vit désormais dans ProductDetailView.tsx ("use client"), qui appelle
-  // useTranslations lui-même — une fonction traducteur next-intl obtenue côté serveur
-  // (getTranslations) n'est pas sérialisable à travers la frontière Server → Client Component.
-  // `tOccurrence` reste nécessaire ICI uniquement pour composer occurrenceLabel, une chaîne déjà
-  // finalisée avant d'être passée en prop. `t` ne l'est plus depuis le retrait de l'étage hôtel
-  // (T3, 2026-08-27) : il ne servait qu'au « Desde {prix le plus bas} » d'un hôtel, dont le prix
-  // vivait sur ses chambres.
+
+  const ficha = await getProductoPorSlug(slug, { locale });
+  if (!ficha) notFound();
+
+  // Ces deux traducteurs restent CÔTÉ SERVEUR parce que leur résultat est une chaîne finie, passée
+  // en prop : une fonction traducteur next-intl n'est pas sérialisable à travers la frontière
+  // Server → Client Component.
   const tOccurrence = await getTranslations("ProductPage.occurrence");
   const tCommon = await getTranslations("Common");
+  const tHome = await getTranslations("HomePage");
+  const t = await getTranslations("ProductPage");
 
-  const supabase = await createClient();
-  const product = await getProduct(slug);
+  const rutaCanonica = `/productos/${ficha.slug}`;
 
-  if (!product) {
-    notFound();
-  }
-
-  // Feature 21 : un evento vitrine n'a ni cupo ni panier — la disponibilité n'a aucun sens pour ce
-  // type, jamais consultée (contrairement aux autres types, réservables via create_order).
-  const isEvento = product.type === "evento";
-  // Spec 17 §0 Tranche 2 : un alojamiento se réserve par plage de nuits (check-in/check-out), pas
-  // par date unique — écran dédié (LodgingReservationForm), jamais le ReservationForm générique.
-  const isLodging = product.type === "lodging";
-  // Spec 21 §13 (gap comblé) : un alojamiento PMS-backed (Casa Kayam) n'a jamais de
-  // product_availability/product_date_rates peuplées (Lobby fait foi, jamais dupliqué en base) —
-  // LodgingReservationForm.tsx bascule sur un fetch client dédié (/api/pms/night-availability)
-  // quand ce flag est vrai, au lieu de la prop `availability` SSR ci-dessous (toujours vide pour ce
-  // cas, conservée telle quelle par cohérence avec le reste du fichier plutôt que retirée).
-  const productIsPmsBacked = isPmsBacked({ type: product.type, lobbyCategoryId: product.lobby_category_id });
-  // Ces 3 flags dérivés de product.type (connu synchronement dès getProduct() ci-dessus) restent
-  // nécessaires en l'état : ils gardent les requêtes ci-dessous, exécutées en parallèle (Promise.all)
-  // AVANT de savoir si le produit est à créneaux (slotRulesCount, résultat du Promise.all) — le
-  // reservationMode qui les unifie tous les deux (cf. plus bas) ne peut donc être résolu qu'après.
-
-  // « Aujourd'hui » = le jour civil à GUATAPÉ, jamais celui d'UTC (lot fuseau, 2026-08-28). Cette
-  // page est un Server Component : elle s'exécutait sur un serveur Vercel réglé en UTC, donc passé
-  // 19 h heure locale `todayIso` désignait déjà DEMAIN — et les trois `gte("date", todayIso)`
-  // ci-dessous retiraient du catalogue les créneaux et les tarifs de la soirée en cours.
+  // ⚠️ LE FIL SUIT LE PARCOURS RÉEL (spec 30 §3.10) : pour une chambre, on passe par le listing du
+  // type PUIS par l'établissement, parce que c'est le chemin qu'on fait prendre au visiteur — et
+  // parce que l'établissement est l'écran qui montre les AUTRES chambres du même lieu.
   //
-  // todayIso est dérivé une seule fois ici et réutilisé aux 4 sites qui en ont besoin ci-dessous
-  // (get_product_slots p_from, et les gte("date", …) sur product_availability/product_date_rates).
-  // La fenêtre +180 j des créneaux (plus bas) part de la même date mais reste un calcul séparé :
-  // ce n'est pas le même cutoff.
-  const todayIso = todayInBogota();
-
-  // availability/slotRulesCount/roomTypesRaw/productDateRates/media ne dépendent QUE de
-  // product.type/product.id (connus synchronement dès getProduct() ci-dessus) — aucune dépendance
-  // entre elles, un seul aller-retour réseau groupé plutôt que 5 attentes séquentielles. Un helper
-  // par requête (plutôt qu'un ternaire direct dans le tableau du Promise.all) : TypeScript infère
-  // ainsi le type de retour exactement comme l'ancien `cond ? { data: [] } : await supabase...`
-  // ligne par ligne, sans annotation manuelle — et l'appel de chaque helper démarre sa requête tout
-  // de suite (même tick), donc en vrai parallèle malgré l'`await` interne à chacun. Les vrais
-  // enchaînements dépendants restent APRÈS ce Promise.all : productSlots (a besoin du résultat de
-  // slotRulesCount/isSlotBased ci-dessous) et roomAvailability/roomRates (déjà groupés eux-mêmes,
-  // slotRulesCount/isSlotBased ci-dessous).
-  const fetchAvailability = async () =>
-    isEvento
-      ? { data: [] }
-      : await supabase
-          .from("product_availability")
-          .select("date, capacity, booked")
-          .eq("product_id", product.id)
-          .order("date");
-
-  // Spec 18 §0 Tranche 1 : un produit à créneaux horaires (jetski, etc.) a au moins une ligne
-  // product_slot_rules côté admin — capacité par (date, heure), jamais par date seule
-  // (product_availability n'a aucun sens pour lui, cf. hifago/CLAUDE.md §11 entrée 2026-08-18).
-  // Requête gardée par un conditionnel VOLONTAIREMENT différent de celui d'availability ci-dessus
-  // (isLodging en plus ici) : un alojamiento a toujours son propre écran dédié quel que soit le
-  // nombre de règles de créneaux qu'il pourrait avoir (reservationMode plus bas le confirme,
-  // "lodging" gagne avant même de regarder "slot") — leur compter des règles de créneaux serait une
-  // requête gaspillée. (Un commentaire précédent affirmait à tort "même conditionnel que
-  // availability" — la divergence documentée ici est le comportement correct, pas un bug.)
-  const fetchSlotRulesCount = async () =>
-    isEvento || isLodging
-      ? { count: 0 }
-      : await supabase
-          .from("product_slot_rules")
-          .select("id", { count: "exact", head: true })
-          .eq("product_id", product.id);
-
-  // Spec 17 §0 Tranche 2 : override de prix par nuit pour un alojamiento, sur product_id.
-  const fetchProductDateRates = async () =>
-    isLodging
-      ? await supabase
-          .from("product_date_rates")
-          .select("date, price_cop")
-          .eq("product_id", product.id)
-          .gte("date", todayIso)
-      : { data: [] };
-
-  const [
-    { data: availability },
-    { count: slotRulesCount },
-    { data: productDateRates },
-    { data: media },
-    { data: establishmentMedia },
-  ] = await Promise.all([
-    fetchAvailability(),
-    fetchSlotRulesCount(),
-    fetchProductDateRates(),
-    supabase
-      .from("product_media")
-      .select("id, storage_path")
-      .eq("product_id", product.id)
-      .order("sort", { ascending: true }),
-    supabase
-      .from("establishment_media")
-      .select("id, storage_path")
-      .eq("establishment_id", product.establishment?.id ?? "")
-      .order("sort", { ascending: true }),
-  ]);
-
-  const isSlotBased = (slotRulesCount ?? 0) > 0;
-  // Résolu une seule fois ici (dépend de product.type ET de isSlotBased, donc pas avant ce point,
-  // cf. commentaire plus haut) — consommé partout ensuite (fetch dépendant de productSlots,
-  // priceDisplay, tout le rendu ci-dessous) au lieu de recomposer isEvento/isHotel/isLodging/
-  // isSlotBased à chaque site. Ordre de priorité identique à l'ancien enchaînement de ternaires du
-  // rendu (evento > lodging > slot > date), préservé à l'identique.
-  const reservationMode: "evento" | "lodging" | "slot" | "date" = isEvento
-    ? "evento"
-    : isLodging
-      ? "lodging"
-      : isSlotBased
-        ? "slot"
-          : "date";
-
-  const { data: productSlots } =
-    reservationMode === "slot"
-      ? await supabase.rpc("get_product_slots", {
-          p_product_id: product.id,
-          p_from: todayIso,
-          p_to: lastBookableDateIso(todayIso),
-        })
-      : { data: [] };
-
-  const name = resolveLocalizedField(asLocalizedField(product.name), locale) ?? product.slug;
-  const description = resolveLocalizedField(asLocalizedField(product.description), locale);
-  const establishmentName =
-    resolveLocalizedField(asLocalizedField(product.establishment?.name), locale) ?? "";
-  const establishmentDescription = resolveLocalizedField(
-    asLocalizedField(product.establishment?.description),
-    locale
-  );
-  const establishmentAddress = product.establishment?.address ?? null;
-
-  // price_label affiché tel quel pour un evento (texte libre, admin §3c) — jamais formaté en COP,
-  // à la différence de price_cop pour tous les autres types.
-  const priceDisplay =
-    reservationMode === "evento"
-      ? product.price_label
-      : formatCop(product.price_cop ?? 0, locale);
-
-  const occurrenceLabel =
-    reservationMode === "evento"
-      ? formatOccurrenceLabel(
+  // ⚠️ Une activité ne porte PAS sa catégorie : un produit peut avoir plusieurs tags, en choisir
+  // un arbitrairement rendrait le fil non déterministe et ferait déclarer aux moteurs un chemin
+  // qui n'existe pas. Le niveau établissement, lui, est unique (§10.4).
+  const migas: MigaItem[] = [
+    { nombre: tCommon("breadcrumbHome"), href: "/" },
+    { nombre: tHome(`secciones.${ficha.tipo}`), href: `/${segmentoDeTipo(ficha.tipo)}` },
+    ...(ficha.tipo === "lodging" && ficha.establecimiento?.slug
+      ? [
           {
-            occurrenceType: product.occurrence_type as "once" | "recurring" | null,
-            occurrenceDate: product.occurrence_date,
-            recurrenceFrequencyDays: product.recurrence_frequency_days,
-            recurrenceEndDate: product.recurrence_end_date,
-            recurrenceEndCount: product.recurrence_end_count,
+            nombre: ficha.establecimiento.nombre,
+            href: `/establecimientos/${ficha.establecimiento.slug}`,
           },
-          locale,
-          // Cast : le Translator scopé au namespace n'accepte que ses clés littérales, plus étroit
-          // que OccurrenceTranslator (key: string) — cf. formatOccurrenceLabel.test.ts pour le même
-          // besoin et sa justification complète.
-          tOccurrence as unknown as (key: string, values?: Record<string, string | number>) => string
-        )
-      : null;
+        ]
+      : []),
+    { nombre: ficha.nombre },
+  ];
 
-  const photoSlides = (media ?? []).map((m) => ({
-    id: m.id,
-    alt: name,
-    url: supabase.storage.from("catalog-media").getPublicUrl(m.storage_path).data.publicUrl,
-  }));
-
-  const establishmentPhotoSlides = (establishmentMedia ?? []).map((m) => ({
-    id: m.id,
-    alt: establishmentName,
-    url: supabase.storage.from("catalog-media").getPublicUrl(m.storage_path).data.publicUrl,
-  }));
-
-  // Données structurées, construites ICI et non dans ProductDetailView : la vue cliente ne reçoit
-  // ni le slug ni le type, et reçoit le prix DÉJÀ FORMATÉ en chaîne (priceDisplay) — inutilisable
-  // pour une offre. Le Server Component a les valeurs brutes (spec 26 §5.4).
-  const siteUrl = getSiteUrl();
-  const productJsonLd = buildProductJsonLd({
-    siteUrl,
-    locale,
-    slug: product.slug,
-    name,
-    description,
-    imageUrls: photoSlides.map((slide) => slide.url),
-    productType: product.type as string,
-    priceCop: product.price_cop,
-    occurrenceDate: product.occurrence_date,
-    startTime: product.start_time,
-    location: establishmentName ? { name: establishmentName, address: establishmentAddress } : null,
-  });
-  const breadcrumbJsonLd = buildBreadcrumbJsonLd(siteUrl, [
-    { name: tCommon("breadcrumbHome"), path: `/${locale}` },
-    { name, path: `/${locale}/productos/${product.slug}` },
-  ]);
+  const ocurrencia = ficha.ocurrencia
+    ? formatOccurrenceLabel(
+        {
+          occurrenceType: ficha.ocurrencia.tipo,
+          occurrenceDate: ficha.ocurrencia.fecha,
+          recurrenceFrequencyDays: ficha.ocurrencia.frecuenciaDias,
+          recurrenceEndDate: ficha.ocurrencia.finFecha,
+          recurrenceEndCount: ficha.ocurrencia.finConteo,
+        },
+        locale,
+        // Cast : le Translator scopé au namespace n'accepte que ses clés littérales, plus étroit
+        // que `OccurrenceTranslator` (key: string) — même besoin et même justification que dans
+        // `formatOccurrenceLabel.test.ts`.
+        tOccurrence as unknown as (key: string, values?: Record<string, string | number>) => string
+      )
+    : null;
 
   return (
-    <>
-      <JsonLd data={productJsonLd} />
-      <JsonLd data={breadcrumbJsonLd} />
-      <ProductDetailView
-        name={name}
-        description={description}
-        photoSlides={photoSlides}
-        priceDisplay={priceDisplay}
-        unit={product.unit}
-        capacity={product.capacity}
-        unitCount={product.unit_count}
-        lodgingKind={asLodgingKind(product.lodging_kind)}
-        reservationMode={reservationMode}
-        occurrenceLabel={occurrenceLabel}
-        externalBookingUrl={product.external_booking_url}
-        productId={product.id}
-        establishmentName={establishmentName}
-        establishmentSlug={product.establishment?.slug ?? null}
-        establishmentDescription={establishmentDescription}
-        establishmentAddress={establishmentAddress}
-        establishmentPhotoSlides={establishmentPhotoSlides}
-        priceCop={product.price_cop ?? 0}
-        lodgingPriceTiers={
-          product.price_tiers as { min_qty: number; max_qty: number; price_cop: number }[] | null
-        }
-        lodgingMaxQty={product.max_qty ?? 20}
-        isPmsBacked={productIsPmsBacked}
-        availability={availability ?? []}
-        productDateRates={productDateRates ?? []}
-        productSlots={productSlots ?? []}
+    <PageShell variant="large">
+      {/* Le JSON-LD est rendu ICI, côté serveur, jamais dans un composant : le composant affiche,
+          la route décrit (règle SEO 6). */}
+      <JsonLd
+        data={buildProductJsonLd({
+          siteUrl: getSiteUrl(),
+          locale,
+          slug: ficha.slug,
+          name: ficha.nombre,
+          description: ficha.descripcion,
+          imageUrls: ficha.fotos.map((foto) => foto.url),
+          productType: ficha.tipo,
+          // ⚠️ Le prix STRUCTURÉ seulement : un `price_label` (« Consultar ») n'est pas un montant,
+          // et l'annoncer comme tel à Google déclarerait une offre chiffrée qui n'existe pas.
+          priceCop: ficha.precio?.tipo === "monto" ? ficha.precio.cop : null,
+          occurrenceDate: ficha.ocurrencia?.fecha ?? null,
+          startTime: ficha.ocurrencia?.hora ?? null,
+          location: ficha.establecimiento
+            ? { name: ficha.establecimiento.nombre, address: ficha.establecimiento.direccion }
+            : null,
+        })}
       />
-    </>
+
+      {/* ⚠️ Construit depuis LA MÊME liste que le fil visible — c'est la seule façon de garantir
+          qu'ils ne divergent pas, et c'est exactement ce que la règle SEO 6 exige. Jusqu'ici cette
+          page déclarait un `BreadcrumbList` de deux entrées SANS afficher le moindre fil. */}
+      <JsonLd data={buildBreadcrumbJsonLd(getSiteUrl(), migasParaJsonLd(migas, locale, rutaCanonica))} />
+
+      <Migas items={migas} etiqueta={t("migasEtiqueta")} locale={locale as Locale} testId="migas" />
+
+      <FichaProducto ficha={ficha} etiquetas={{ ocurrencia }} locale={locale as Locale} />
+    </PageShell>
   );
 }

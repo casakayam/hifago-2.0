@@ -6,5 +6,8 @@
     "descripcion": "We could not load this page. Please try again in a moment.",
     "reintentar": "Try again",
     "volver": "Back to home"
-  }
+  },
+  "carruselAnterior": "Previous photo",
+  "carruselSiguiente": "Next photo",
+  "carruselIrA": "Go to photo {n}"
 }

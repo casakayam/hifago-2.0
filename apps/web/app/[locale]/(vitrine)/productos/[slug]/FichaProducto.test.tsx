@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { LodgingKind } from "@hifago/domain";
-import { ProductDetailView } from "./ProductDetailView";
+import { FichaProducto } from "./FichaProducto";
+import type { FichaProducto as DatosFicha } from "@/lib/catalog/tipos";
 import { loadMessages } from "@/messages";
 
 const messages = loadMessages("es");
@@ -22,10 +23,11 @@ vi.mock("@/i18n/navigation", () => ({
 // LobbyPMS côté client) et ne sont pas le sujet : ce fichier ne teste QUE la ligne de faits
 // capacité/quantité ajoutée le 2026-08-26. Les neutraliser garde le test rapide et non fragile.
 vi.mock("./ReservationForm", () => ({ ReservationForm: () => null }));
-vi.mock("./HotelReservationForm", () => ({ HotelReservationForm: () => null }));
 vi.mock("./LodgingReservationForm", () => ({ LodgingReservationForm: () => null }));
 vi.mock("./SlotReservationForm", () => ({ SlotReservationForm: () => null }));
-vi.mock("./ProductPhotos", () => ({ ProductPhotos: () => null }));
+// `PhotoStrip` monte Embla, qui exige matchMedia/IntersectionObserver/ResizeObserver en jsdom
+// (cf. PhotoStrip.test.tsx) : neutralisé ici, ce fichier ne teste que la ligne de faits.
+vi.mock("@/components/molecules/PhotoStrip", () => ({ PhotoStrip: () => null }));
 
 // Pas de @testing-library/jest-dom dans ce monorepo — assertions DOM natives uniquement.
 function renderView(overrides: {
@@ -34,39 +36,51 @@ function renderView(overrides: {
   lodgingKind?: LodgingKind | null;
   unit?: string | null;
 }) {
+  // Une fiche COMPLÈTE, construite une fois : le composant reçoit désormais un seul objet
+  // `FichaProducto` au lieu de 22 props éparses (spec 30 §7c). Un champ oublié devient une erreur
+  // de type, plus un `undefined` silencieux dans le rendu.
+  const ficha: DatosFicha = {
+    id: "p1",
+    slug: "glamping",
+    tipo: "lodging",
+    nombre: "GLAMPING",
+    descripcion: null,
+    fotos: [],
+    precio: { tipo: "monto", cop: 120000 },
+    unidad: overrides.unit ?? null,
+    modoReserva: "lodging",
+    urlExterna: null,
+    ocurrencia: null,
+    alojamiento: {
+      lodgingKind: overrides.lodgingKind ?? null,
+      capacity: overrides.capacity,
+      unitCount: overrides.unitCount,
+      priceTiers: null,
+      maxQty: 1,
+      esPmsBacked: true,
+    },
+    disponibilidad: [],
+    tarifas: [],
+    franjas: [],
+    establecimiento: {
+      id: "e1",
+      slug: "casa-kayam",
+      nombre: "Casa Kayam",
+      descripcion: null,
+      direccion: null,
+      fotos: [],
+    },
+    localesNativas: ["es"],
+  };
+
   return render(
     <NextIntlClientProvider locale="es" messages={{ ProductPage: messages.ProductPage, Common: messages.Common }}>
-      <ProductDetailView
-        name="GLAMPING"
-        description={null}
-        photoSlides={[]}
-        priceDisplay="$ 120.000"
-        unit={overrides.unit ?? null}
-        capacity={overrides.capacity}
-        unitCount={overrides.unitCount}
-        lodgingKind={overrides.lodgingKind ?? null}
-        reservationMode="lodging"
-        occurrenceLabel={null}
-        externalBookingUrl={null}
-        productId="p1"
-        establishmentName="Casa Kayam"
-        establishmentSlug="casa-kayam"
-        establishmentDescription={null}
-        establishmentAddress={null}
-        establishmentPhotoSlides={[]}
-        priceCop={120000}
-        lodgingPriceTiers={null}
-        lodgingMaxQty={1}
-        isPmsBacked
-        availability={[]}
-        productDateRates={[]}
-        productSlots={[]}
-      />
+      <FichaProducto ficha={ficha} etiquetas={{ ocurrencia: null }} locale="es" />
     </NextIntlClientProvider>
   );
 }
 
-describe("ProductDetailView — capacité et nombre d'unités (2026-08-26)", () => {
+describe("FichaProducto — capacité et nombre d'unités (2026-08-26)", () => {
   it("affiche les deux quand LobbyPMS les a fournis", () => {
     renderView({ capacity: 2, unitCount: 3 });
     const facts = screen.getByTestId("product-lodging-facts").textContent ?? "";
@@ -108,7 +122,7 @@ describe("ProductDetailView — capacité et nombre d'unités (2026-08-26)", () 
 // products.lodging_kind (2026-08-27). C'est l'information la plus structurante d'une fiche
 // d'hébergement — « on y dort seul ou à huit ? » — et elle arrivait jusqu'ici depuis LobbyPMS pour
 // être jetée au moment de lier.
-describe("ProductDetailView — nature du couchage", () => {
+describe("FichaProducto — nature du couchage", () => {
   it("nomme le dortoir avant la capacité", () => {
     renderView({ capacity: 1, unitCount: 8, lodgingKind: "dorm" });
     const facts = screen.getByTestId("product-lodging-facts").textContent ?? "";
@@ -140,7 +154,7 @@ describe("ProductDetailView — nature du couchage", () => {
 // le 2026-08-27 (la v1 l'a depuis toujours) ; rien ne l'écrit encore côté application, mais la
 // fiche doit savoir l'afficher le jour où quelque chose le fera — sinon un prix de maison entière
 // se lirait comme un prix par personne.
-describe("ProductDetailView — unité de prix", () => {
+describe("FichaProducto — unité de prix", () => {
   it("dit « por persona » pour per_person", () => {
     renderView({ capacity: null, unitCount: null, unit: "per_person" });
     expect(screen.getByTestId("product-price").textContent).toContain("por persona");
@@ -152,8 +166,17 @@ describe("ProductDetailView — unité de prix", () => {
   });
 
   // per_two reste délibérément sans suffixe : le prix d'une chambre double n'a rien à préciser.
+  //
+  // ⚠️ L'assertion porte sur l'ABSENCE de suffixe, jamais sur la chaîne exacte du montant :
+  // `formatCop` insère une espace INSÉCABLE (U+00A0) avant « COP », invisible dans un diff comme
+  // dans un message d'échec — « expected '120.000 COP' to be '120.000 COP' ». Coder ce caractère
+  // en dur rendrait le test illisible et fragile à un changement d'`Intl`, pour ne rien vérifier
+  // de plus que ce que la ligne ci-dessous dit clairement.
   it("n'ajoute aucun suffixe pour per_two", () => {
     renderView({ capacity: null, unitCount: null, unit: "per_two" });
-    expect(screen.getByTestId("product-price").textContent).toBe("$ 120.000");
+    const texte = screen.getByTestId("product-price").textContent ?? "";
+    expect(texte).toContain("120.000");
+    expect(texte).not.toContain("por persona");
+    expect(texte).not.toContain("por la casa entera");
   });
 });
