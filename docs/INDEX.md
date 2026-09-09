@@ -43,6 +43,7 @@
 - [Architecture de la vitrine : routes, zones, coquilles et couche d'accès aux données](specs/27-architecture-vitrine-et-routage.md) — **Partiel** (reste : Livrés les 2026-09-07/08 : la couche lib/catalog et search_catalog, les quatre coquilles…) · maj 2026-09-08
 - [Vitrine : l'accueil, qui est aussi l'écran de résultats de recherche](specs/28-vitrine-accueil-et-resultats.md) — **Partiel** (reste : Tranches 1 (l'accueil) et 2 (les suggestions de la barre) livrées le 2026-09-08. Reste…) · maj 2026-09-08
 - [Vitrine : les pages de listing et l'index de catégories](specs/29-vitrine-listings-et-index-de-categories.md) — **Implémenté** · maj 2026-09-08
+- [Vitrine : les fiches produit et établissement](specs/30-vitrine-fiches-produit-et-etablissement.md) — **Implémenté** · maj 2026-09-08
 - [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-08
 - [Gabarit de spec de feature (à copier, ne décrit aucune feature réelle)](specs/_modele.md) — **modele** · maj 2026-08-16
 - [Avant d'écrire une spec — poser les bonnes questions](specs/avant-la-spec.md) — **modele** · maj 2026-08-16
