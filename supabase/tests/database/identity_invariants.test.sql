@@ -6,7 +6,7 @@
 -- Correctif Tranche 1 (granularité par établissement de la capacité operator) : tests des 3
 -- nouveaux index partiels sur partner_capabilities, en fin de fichier.
 begin;
-select plan(11);
+select plan(15);
 
 insert into partners (id, display_name) values
   ('11111111-1111-1111-1111-111111111111', 'Partner A'),
@@ -105,6 +105,52 @@ select throws_ok(
   '23505'::char(5), null,
   'une deuxième ligne referrer pour le même partenaire reste rejetée (index restreint role <> operator toujours actif)'
 );
+
+-- Liste blanche des sessions anonymes (migration 20260909200000) -------------------------------
+-- Décision Jérôme 2026-09-09 : une RPC REFUSE un visiteur anonyme sauf mention explicite. Sans ces
+-- assertions, cette règle serait un souhait (CLAUDE.md §11.20) — et c'est précisément le genre de
+-- garde qui ne se voit pas quand elle disparaît, puisque tous les autres tests utilisent des
+-- comptes normaux et resteraient verts.
+insert into auth.users (id, email, is_anonymous) values
+  ('dddddddd-dddd-dddd-dddd-dddddddddddd', null, true),
+  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'converti@test.local', false);
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"dddddddd-dddd-dddd-dddd-dddddddddddd","role":"authenticated","is_anonymous":true}', true);
+select is(
+  (select public.is_anonymous_session()), true,
+  'is_anonymous_session() reconnaît une session anonyme'
+);
+
+select set_config('request.jwt.claims',
+  '{"sub":"eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee","role":"authenticated"}', true);
+select is(
+  (select public.is_anonymous_session()), false,
+  'is_anonymous_session() est faux pour un compte à email vérifié'
+);
+
+-- ⚠️ Le claim ment volontairement ici : le JWT dit is_anonymous:true alors que la table dit false.
+-- C'est le cas réel d'un invité qui vient de lier son email et dont le jeton n'est pas encore
+-- rafraîchi. La fonction doit suivre la TABLE, sinon elle refuserait quelqu'un qui vient
+-- précisément de cesser d'être anonyme.
+select set_config('request.jwt.claims',
+  '{"sub":"eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee","role":"authenticated","is_anonymous":true}', true);
+select is(
+  (select public.is_anonymous_session()), false,
+  'is_anonymous_session() suit auth.users, pas un claim JWT périmé après conversion'
+);
+
+-- Et l'application qui compte : devenir partenaire.
+select set_config('request.jwt.claims',
+  '{"sub":"dddddddd-dddd-dddd-dddd-dddddddddddd","role":"authenticated","is_anonymous":true}', true);
+select is(
+  (select public.consume_partner_invitation('jeton-inexistant', 'Identite Jetable', 'v1') ->> 'reason'),
+  'anonymous_not_allowed',
+  'une session anonyme ne peut pas consommer d''invitation — et le refus précède la lecture du jeton'
+);
+reset role;
+select set_config('request.jwt.claims', '', true);
 
 select * from finish();
 rollback;

@@ -2197,6 +2197,7 @@ export type Database = {
       invoke_pms_poll_bookings: { Args: never; Returns: undefined }
       invoke_send_notification_emails: { Args: never; Returns: undefined }
       is_admin: { Args: { uid: string }; Returns: boolean }
+      is_anonymous_session: { Args: never; Returns: boolean }
       list_audience_members: {
         Args: { p_audience: string }
         Returns: {

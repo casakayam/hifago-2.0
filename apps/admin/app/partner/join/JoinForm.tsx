@@ -17,6 +17,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   expired: "Cette invitation a expiré.",
   account_already_has_partner: "Ce compte est déjà rattaché à un partenaire.",
   not_authenticated: "La session n'a pas pu être établie. Réessayez.",
+  // Liste blanche des sessions anonymes (migration 20260909200000) : devenir partenaire
+  // exige un compte réel. Un visiteur qui a seulement rempli un panier sur la vitrine et
+  // ouvre un lien d'invitation tombe ici — le message doit lui dire quoi faire, pas juste
+  // que c'est refusé.
+  anonymous_not_allowed:
+    "Créez un compte ou connectez-vous avant d'utiliser ce lien d'invitation.",
   // Feature 31 (docs/specs/07-connexion-inscription-complete.md §7) : raisons renvoyées par
   // POST /api/auth/invitation-signup, jamais par consume_partner_invitation elle-même.
   email_already_used: "Cet email est déjà utilisé par un autre compte.",
