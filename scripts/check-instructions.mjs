@@ -64,23 +64,63 @@ function compterLignes(fichier) {
   return texte.split('\n').length - (texte.endsWith('\n') ? 1 : 0);
 }
 
-/** Découpe CLAUDE.md en sections `## N. ...` → { n: { titre, points: Set<number> } }. */
-function parserSections(texteClaudeMd) {
+/**
+ * Découpe CLAUDE.md en sections `## N. ...` → { n: { titre, points: Set<number> } }.
+ *
+ * INDEX DÉPORTÉ (depuis le 2026-09-09) : une section dont le titre contient « index déporté »
+ * garde sa numérotation dans CLAUDE.md mais range ses points dans un autre fichier, pour ne pas
+ * peser sur le corpus chargé à chaque tour. Ses sous-points sont alors résolus contre le PREMIER
+ * chemin `.md` cité entre backticks dans son corps. C'est ce qui permet aux ~90 citations
+ * `CLAUDE.md §11.N` (code, migrations, specs, journal) de rester vraies et VÉRIFIÉES sans que les
+ * 20 pièges soient rechargés à chaque tour. Une section déportée dont le fichier cible manque ou
+ * ne porte aucun point numéroté est signalée : la délégation ne doit jamais désarmer le contrôle.
+ */
+function parserSections(texteClaudeMd, problemes = []) {
   const sections = new Map();
   const lignes = texteClaudeMd.split('\n');
   let courante = null;
   for (const ligne of lignes) {
     const entete = /^## (\d+)\.\s*(.*)$/.exec(ligne);
     if (entete) {
-      courante = { titre: entete[2], points: new Set() };
+      courante = { titre: entete[2], points: new Set(), corps: [] };
       sections.set(Number(entete[1]), courante);
       continue;
     }
     if (courante) {
+      courante.corps.push(ligne);
       const point = /^(\d+)\.\s/.exec(ligne);
       if (point) courante.points.add(Number(point[1]));
     }
   }
+
+  for (const [n, section] of sections) {
+    if (!/index déporté/i.test(section.titre)) continue;
+    const cible = extraireCheminsMd(section.corps.join('\n'))[0];
+    if (!cible) {
+      problemes.push(
+        `CLAUDE.md §${n} est marquée « index déporté » mais ne cite aucun fichier \`.md\` : ` +
+        `les citations §${n}.N ne sont plus vérifiables.`
+      );
+      continue;
+    }
+    const chemin = path.join(ROOT, cible);
+    if (!fs.existsSync(chemin)) {
+      problemes.push(`CLAUDE.md §${n} déporte ses points vers \`${cible}\` — ce fichier n'existe pas.`);
+      continue;
+    }
+    let n_ajoutes = 0;
+    for (const ligne of fs.readFileSync(chemin, 'utf8').split('\n')) {
+      const point = /^(\d+)\.\s/.exec(ligne);
+      if (point) { section.points.add(Number(point[1])); n_ajoutes++; }
+    }
+    if (n_ajoutes === 0) {
+      problemes.push(
+        `CLAUDE.md §${n} déporte ses points vers \`${cible}\`, qui ne porte aucun point numéroté ` +
+        `en début de ligne — les citations §${n}.N passeraient sans être vérifiées.`
+      );
+    }
+  }
+
   return sections;
 }
 
@@ -145,7 +185,7 @@ function verifier() {
 
   // 3. Renvois `CLAUDE.md §N[.M]` — chaque section et sous-point cités doivent exister.
   const texteClaudeMd = fs.readFileSync(claudeMdPath, 'utf8');
-  const sections = parserSections(texteClaudeMd);
+  const sections = parserSections(texteClaudeMd, problemes);
   const fichiers = marcher(ROOT);
   const vusManquants = new Set();
   for (const fichier of fichiers) {

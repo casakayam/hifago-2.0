@@ -13,9 +13,9 @@ répertoire, ils passent au vert en ayant testé autre chose.
 ## Argument `$ARGUMENTS`
 | Valeur | Effet |
 |---|---|
-| *(vide)* | pgTAP + Unitaire (en parallèle, aucune dépendance entre les deux) puis E2E, puis concurrence — réservé à la fin d'une feature/session |
+| *(vide)* | pgTAP + Unitaire (en parallèle, aucune dépendance entre les deux), puis concurrence — réservé à la fin d'une feature/session. **N'inclut PLUS l'E2E** (en pause, cf. § ci-dessous) |
 | `unit` | Vitest seul |
-| `e2e` | Playwright seul (contre un serveur Next.js local déjà démarré, cf. `/hifago-dev`) |
+| `e2e` | Playwright seul — **uniquement sur demande explicite de Jérôme** (suite en pause). Contre un serveur Next.js local déjà démarré, cf. `/hifago-dev` |
 | `concurrence` | Suite de tests de concurrence sur toutes les RPC critiques existantes |
 | `<fichier ou motif>` | Lance uniquement ce(s) fichier(s) — `vitest run <motif>` si `.test.ts(x)`, `playwright test <motif>` sinon (les deux outils supportent nativement un filtre par chemin/nom). **Pendant le développement d'une feature, préférer ce mode** à la suite complète (cf. `.claude/rules/tests.md`, proportionnalité du test) |
 
@@ -34,8 +34,12 @@ LobbyPMS).
 
 Étapes 0 et 1 n'ont aucune dépendance entre elles (Vitest ne touche aucune base, pgTAP annule
 toujours ses transactions) — les lancer **en parallèle**, comme le fait déjà `hifago-init` pour
-son lint/typecheck/unitaire de CI. Étapes 2 et 3, elles, écrivent de vraies lignes dans la même
-base locale et doivent rester séquentielles après les deux premières.
+son lint/typecheck/unitaire de CI. L'étape 3 écrit de vraies lignes dans la base locale et reste
+séquentielle après les deux premières. L'étape 2 (E2E) est en pause et n'est plus lancée.
+
+⚠️ **Ordre imposé quand l'E2E reviendra** : tout e2e admin écrit dans `audit_log`, or six fichiers
+pgTAP le comptent en absolu — une mesure pgTAP prise après des e2e ne veut rien dire
+(`docs/backlog.md`). `npm run db:setup` referme l'écart.
 
 0. **Base de données (pgTAP)** : `npm run test:db` (`supabase test db`) — policies RLS,
    contraintes, logique séquentielle (48 fichiers dans `supabase/tests/database/`, cf.
@@ -48,9 +52,15 @@ base locale et doivent rester séquentielles après les deux premières.
    dense doit être testé en fonction pure, sans mock Supabase — si un test unitaire dépend d'un
    mock du client `supabase-js`, c'est probablement un test d'intégration mal classé.
 
-2. **E2E (Playwright)** : `npm run test:e2e`. Auth en test : jamais le vrai écran Google OAuth —
-   login programmatique via l'API REST Supabase, session réutilisée en `storageState.json` par
-   rôle (client/socio/admin). MFA/TOTP admin généré via `otplib`, jamais un vrai téléphone.
+2. **E2E (Playwright) — EN PAUSE depuis le 2026-09-09, ne pas lancer sans demande explicite.**
+   ⚠️ Décision de Jérôme : la suite e2e sort du chemin par défaut le temps que la dette soit
+   traitée (19 rouges sur 120 mesurées le 2026-09-09 : 17/82 en admin, 2/38 en web). **Il faudra
+   les remettre** — le point de réactivation vit dans `docs/backlog.md`. En attendant, aucune
+   étape de ce skill ne les lance, et la CI n'en a jamais eu de job.
+   Pour mémoire quand elles reviendront : `npm run test:e2e` ; auth jamais par le vrai écran
+   Google OAuth — login programmatique via l'API REST Supabase, session réutilisée en
+   `storageState.json` par rôle (client/socio/admin) ; MFA/TOTP admin via `otplib`, jamais un
+   vrai téléphone.
 
 3. **Concurrence** : pour chaque RPC critique existante (celles créées via
    `/hifago-rpc-critique`), relancer son test de barrière de synchronisation. Même raison qu'au

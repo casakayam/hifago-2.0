@@ -161,36 +161,15 @@ Niveaux d'accès différenciés entre utilisateurs d'une même organisation part
 de la file de réconciliation/campagnes · fréquence du cron PMS et taille de lot · format de
 l'export comptable/fiscal · tout point listé dans `docs/backlog.md` § « Arbitrage Jérôme requis ».
 
-## 11. Pièges empiriques — index
-Chaque piège vit désormais, en prescription, dans la règle chargée quand on touche les fichiers
-concernés (`.claude/rules/`) ; le récit complet est dans `docs/journal/`. La numérotation est
-conservée parce que le code, les migrations et les scripts la citent. Texte d'origine intégral :
-`git show f598a2d:CLAUDE.md` (l. 242-478).
+## 11. Pièges empiriques — index déporté
+Les 20 pièges numérotés vivent dans `docs/pieges-empiriques.md` : la numérotation y fait foi et ne
+bouge JAMAIS, parce que le code, les migrations, `docs/specs/` et `docs/journal/` citent
+`CLAUDE.md §11.N`. Chacun est déjà prescrit dans la règle `.claude/rules/*` chargée quand on touche
+les fichiers concernés — cet index dit seulement où. Le seul qui gouverne tout le projet, et qui
+reste donc ici :
 
-1. Grants par défaut restrictifs (rôle `postgres`) → `.claude/rules/supabase.md`
-2. `Select` HeroUI = `role="button"`, jamais `combobox` → `.claude/rules/tests.md`
-3. `<select>` natif caché contient toutes les options → `.claude/rules/tests.md`
-4. `Switch` : cibler l'`input`, `{ force: true }` → `.claude/rules/tests.md`
-5. `Checkbox` : seul `.locator("input")` change l'état → `.claude/rules/tests.md`
-6. Recharts : `"use client"` dans le fichier qui construit le graphique → `.claude/rules/apps.md`
-7. `ComboBox` e2e : taper la requête avant de cliquer → `.claude/rules/tests.md`
-8. `waitForLoadState("networkidle")` après navigation vers un écran client-heavy → `.claude/rules/tests.md`
-9. `Toast.Provider` en sibling, jamais en wrapper → `.claude/rules/apps.md`
-10. Dev server partagé instable ≠ régression : isoler via `next build` + `next start` → `.claude/rules/tests.md`
-11. `noValidate` sur tout `<form>` avec champ requis → `.claude/rules/apps.md`
-12. `db reset` ne recharge pas `[auth]` de `config.toml` : `stop` + `start` → `.claude/rules/supabase.md`
-13. `[auth.email].enable_signup` désactive le provider entier → `.claude/rules/supabase.md`
-14. Un flag GoTrue global ne voit pas un jeton d'invitation ; garde écran par écran → `.claude/rules/supabase.md`
-15. `SimpleTable`/composant client construit dans un Server Component → `.claude/rules/apps.md`
-16. Importer `@hifago/ui` depuis `page.tsx`/`layout.tsx` casse `next build` → `.claude/rules/apps.md`
-17. `supabase db push --include-seed` n'a pas les droits de `postgres` → `/hifago-seed`
-18. `projects api-keys` affiche `service_role` en clair → §8.4
-19. Signature HMAC Mercado Pago valide au simulateur, pas en livraison réelle → récit
-    `docs/journal/2026-08.md` (2026-08-24), suivi dans `docs/backlog.md`
-20. **Une règle documentée que rien ne vérifie n'est pas une règle : c'est un souhait** (2026-08-28,
-    fuseau — `"America/Bogota"` n'existait dans aucun code, dix sites calculaient « aujourd'hui »
-    en UTC, et les tests portaient la même faute). Toute règle de ce projet qui peut être vérifiée
-    mécaniquement l'est (`eslint.rules.mjs`, `scripts/check-*.sh`, CI) — détail : `.claude/rules/tests.md`.
+20. **Une règle documentée que rien ne vérifie n'est pas une règle : c'est un souhait** — toute
+    règle vérifiable mécaniquement l'est (`eslint.rules.mjs`, `scripts/check-*.sh`, CI).
 
 ## 12. État courant
 État courant → dernière entrée de `docs/journal/<mois-en-cours>.md` (nouveau mois = nouveau
