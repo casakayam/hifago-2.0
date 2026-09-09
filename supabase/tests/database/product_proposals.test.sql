@@ -2,7 +2,7 @@
 -- garde-fous : identité+propriété, capacité, plafond, puis filtrage du payload),
 -- withdraw_product_proposal, RLS sur product_proposals et products_select_own.
 begin;
-select plan(18);
+select plan(20);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -175,7 +175,14 @@ select is(
     'description', jsonb_build_object('es', 'Descripción editada'),
     'address', null, 'lat', null, 'lon', null,
     'price_cop', 95000, 'price_tiers', null, 'min_qty', null, 'max_qty', null,
-    'default_capacity', 7
+    'default_capacity', 7,
+    -- Ajoutées le 2026-09-09 (migration 20260909180000) : la vitrine n'est plus réservée aux
+    -- eventos, donc submit_product_proposal whitelist ces deux clés pour TOUS les types. Elles
+    -- valent null ici parce que le payload soumis plus haut ne les porte pas — et c'est
+    -- volontaire : la clé PRÉSENTE à null dit « le socio a soumis sans URL, retire-la », que
+    -- moderate_product_proposal distingue d'une clé ABSENTE (proposition d'avant la migration,
+    -- dont l'approbation doit préserver l'URL déjà posée).
+    'external_booking_url', null, 'price_label', null
   ),
   'whitelist par type (activity) dans payload — jamais category/sellable/acompte_pct/champo_arbitrario'
 );
@@ -266,6 +273,52 @@ select is(
   (select count(*) from products where id = '66660000-0000-4000-8000-000000000031')::int,
   0,
   'other_account ne voit pas le produit non vendable d''own (ni products_select_public ni products_select_own)'
+);
+
+-- Vitrine à la modération (migration 20260909180000) : clé ABSENTE vs clé PRÉSENTE à null -------
+-- Ces deux cas ne se distinguent pas par `->>`, qui rend NULL dans les deux. C'est exactement ce
+-- que le `case when v_final_payload ? '...'` de moderate_product_proposal tranche, et sans ces
+-- deux assertions rien ne le vérifierait (CLAUDE.md §11.20).
+reset role;
+update products set external_booking_url = 'https://vitrine-a-preserver.example'
+ where id = '66660000-0000-4000-8000-000000000031';
+
+-- Cas 1 — proposition d'AVANT la migration : la clé n'est pas dans le payload, l'URL doit survivre.
+insert into product_proposals (id, product_id, partner_id, submitted_by, payload, status, kind, version)
+values ('66660000-0000-4000-8000-000000000041', '66660000-0000-4000-8000-000000000031',
+        '66660000-0000-4000-8000-000000000001', '66660000-0000-4000-8000-000000000021',
+        jsonb_build_object('name', jsonb_build_object('es', 'Nombre sin clave'),
+                           'price_cop', 50000), 'pending', 'content', 0);
+
+set local role authenticated;
+select test_login('66660000-0000-4000-8000-000000000024');
+select public.moderate_product_proposal('66660000-0000-4000-8000-000000000041', 'approve', 0);
+
+reset role;
+select is(
+  (select external_booking_url from products where id = '66660000-0000-4000-8000-000000000031'),
+  'https://vitrine-a-preserver.example',
+  'approuver une proposition SANS la clé external_booking_url préserve l''URL déjà posée'
+);
+
+-- Cas 2 — proposition d'APRÈS la migration : la clé est là, à null. Le socio a soumis sans URL,
+-- donc il la retire : l'effacement est voulu, pas un effet de bord.
+insert into product_proposals (id, product_id, partner_id, submitted_by, payload, status, kind, version)
+values ('66660000-0000-4000-8000-000000000042', '66660000-0000-4000-8000-000000000031',
+        '66660000-0000-4000-8000-000000000001', '66660000-0000-4000-8000-000000000021',
+        jsonb_build_object('name', jsonb_build_object('es', 'Nombre con clave nula'),
+                           'price_cop', 50000,
+                           'external_booking_url', null), 'pending', 'content', 0);
+
+set local role authenticated;
+select test_login('66660000-0000-4000-8000-000000000024');
+select public.moderate_product_proposal('66660000-0000-4000-8000-000000000042', 'approve', 0);
+
+reset role;
+select is(
+  (select external_booking_url from products where id = '66660000-0000-4000-8000-000000000031'),
+  null,
+  'approuver une proposition dont la clé est PRÉSENTE à null efface bien l''URL (retrait voulu)'
 );
 
 select * from finish();
