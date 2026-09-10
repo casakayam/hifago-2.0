@@ -13,9 +13,26 @@
 -- ⚠️ Ajouter un nom à la liste ci-dessous n'est PAS une formalité : c'est déclarer qu'une fonction
 -- exécutable par n'importe quel visiteur, avec les droits du propriétaire, est sans danger. Le
 -- faire seulement après avoir lu son corps.
+--
+-- Cas 2 (spec 31, ajouté 2026-09-10) : le cas 1 ci-dessus reconnaît `auth.uid(` comme un garde
+-- SUFFISANT — mais depuis les sessions anonymes Supabase, `auth.uid() is not null` ne signifie
+-- plus « personne réelle » : il vaut aussi pour un visiteur de passage. Une RPC dont le SEUL garde
+-- est ce test-là laisserait donc n'importe quel visiteur l'appeler, exactement le trou trouvé sur
+-- consume_partner_invitation (20260909200000) puis sur set_my_payout_account/
+-- update_my_account_profile (20260910120000). Le cas 2 durcit : parmi les fonctions qui passent le
+-- cas 1 via `auth.uid(` SEUL (ni is_admin/has_capability, qui excluent déjà structurellement un
+-- anonyme — aucune identité anonyme n'a jamais de capacité), exige AUSSI l'un des deux :
+--   - `is_anonymous_session(` — la fonction refuse explicitement un visiteur anonyme (invariant 4) ;
+--   - `partner_id_for_account(` — un anonyme n'a structurellement jamais de partner_id (décision ④ :
+--     sa ligne partner_accounts existe, mais sans partenaire), donc ce garde l'exclut tout autant,
+--     à condition d'appeler le helper NOMMÉ — jamais une requête équivalente recopiée en ligne, que
+--     ce test ne peut pas reconnaître de façon fiable (cf. le refactor de set_my_payout_account).
+-- Sinon, la fonction doit figurer NOMMÉMENT dans la liste blanche ci-dessous (invariant 5, spec 31)
+-- — jamais par commodité pour faire passer ce test, seulement après avoir vérifié qu'accepter un
+-- visiteur anonyme est le comportement VOULU.
 
 begin;
-select plan(1);
+select plan(2);
 
 select is(
   (
@@ -48,6 +65,43 @@ select is(
   ),
   '',
   'toute RPC SECURITY DEFINER exposée à anon/authenticated a un garde interne, ou figure dans la liste des exceptions justifiées'
+);
+
+select is(
+  (
+    select coalesce(string_agg(p.oid::regprocedure::text, ', ' order by p.proname), '')
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.prosecdef
+      and pg_get_function_result(p.oid) <> 'trigger'
+      and (
+        has_function_privilege('anon', p.oid, 'EXECUTE')
+        or has_function_privilege('authenticated', p.oid, 'EXECUTE')
+      )
+      and p.prosrc ~* 'auth\.uid\s*\('
+      and p.prosrc !~* 'is_admin\s*\('
+      and p.prosrc !~* 'has_capability\s*\('
+      and p.prosrc !~* 'is_anonymous_session\s*\('
+      and p.prosrc !~* 'partner_id_for_account\s*\('
+      and p.proname not in (
+        -- is_anonymous_session() elle-même : lit auth.uid() pour résoudre la nature de LA session
+        -- appelante, ce n'est pas un garde d'AUTORISATION — même rôle que is_admin/has_capability
+        -- ci-dessus pour le cas 1, prédicat lu par les policies/RPC, pas soumis à ce contrôle.
+        'is_anonymous_session',
+        -- LISTE BLANCHE (invariant 5, spec 31) : ces RPC acceptent DÉLIBÉRÉMENT un visiteur
+        -- anonyme — c'est le parcours client lui-même (panier, paiement, annulation). Ne pas
+        -- ajouter search_catalog/search_catalog_tags/get_product_slots/expand_product_slots/
+        -- client_key_for_order ici : elles ne contiennent aucun auth.uid( (lecture publique par
+        -- construction), donc jamais captées par ce filtre — les y ajouter serait sans effet et
+        -- laisserait croire, à tort, qu'elles ont un garde à surveiller.
+        'create_order',
+        'create_payment_intent',
+        'cancel_order'
+      )
+  ),
+  '',
+  'toute RPC dont le SEUL garde est auth.uid() exclut explicitement une session anonyme (is_anonymous_session/partner_id_for_account), ou figure nommément dans la liste blanche (spec 31 invariant 5)'
 );
 
 select * from finish();
