@@ -120,6 +120,83 @@ export type Database = {
           },
         ]
       }
+      cart_items: {
+        Row: {
+          account_id: string
+          created_at: string
+          date: string
+          end_date: string | null
+          id: string
+          product_id: string
+          qty: number
+          slot_start_time: string | null
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          date: string
+          end_date?: string | null
+          id?: string
+          product_id: string
+          qty: number
+          slot_start_time?: string | null
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          date?: string
+          end_date?: string | null
+          id?: string
+          product_id?: string
+          qty?: number
+          slot_start_time?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cart_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "partner_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cart_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      carts: {
+        Row: {
+          account_id: string
+          attribution_code: string | null
+          attribution_source: string | null
+          created_at: string
+        }
+        Insert: {
+          account_id: string
+          attribution_code?: string | null
+          attribution_source?: string | null
+          created_at?: string
+        }
+        Update: {
+          account_id?: string
+          attribution_code?: string | null
+          attribution_source?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "carts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "partner_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_tags: {
         Row: {
           created_at: string
@@ -2086,12 +2163,9 @@ export type Database = {
       }
       create_order: {
         Args: {
-          p_attribution_code?: string
-          p_attribution_source?: string
           p_holder_email?: string
           p_holder_name: string
           p_holder_phone?: string
-          p_lines: Json
           p_marketing_consent?: boolean
         }
         Returns: Json

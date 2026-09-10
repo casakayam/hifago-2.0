@@ -14,6 +14,15 @@
 //      les deux mêmes ressources A/B en ordre inverse (panier [A,B] vs [B,A]), lancées en masse et
 //      en concurrence — capacité large pour isoler la question du deadlock de celle du plafond.
 //
+// ⚠️ Réécrit le 2026-09-10 (spec 32, panier en base) : create_order ne reçoit plus les lignes en
+// paramètre, il les lit dans cart_items pour SON PROPRE account_id. Le modèle « 20 connexions
+// concurrentes sous le MÊME account_id, chacune avec son propre p_lines » ne représente plus rien
+// de réel : les 20 écriraient/videraient la même ligne cart_items. Remplacé par N BUYERS DISTINCTS
+// (un account_id par connexion), chacun avec son propre panier déjà posé en base avant l'appel —
+// plus fidèle à la réalité (N vrais visiteurs distincts qui tentent tous la même ressource rare),
+// et c'est justement ce que l'invariant anti-survente doit tenir face à N identités réelles, pas
+// une seule qui répéterait l'appel.
+//
 // Contre la stack Supabase locale uniquement (127.0.0.1:54322) — jamais un projet cloud partagé.
 // Environnement partagé avec d'autres agents : une erreur transitoire isolée (connexion, relation
 // manquante) doit être re-testée après un `supabase db reset` frais avant de conclure à un bug.
@@ -32,19 +41,34 @@ const RUNS = 5; // barre d'acceptation : ≥5 runs consécutifs propres, par sc�
 // b0000000-…), ni avec les autres tests de concurrence (10000000-…/20000000-…/99990000-…).
 const PARTNER_ID = "60000000-0000-4000-8000-000000000001";
 const ESTABLISHMENT_ID = "60000000-0000-4000-8000-000000000002";
-const ACCOUNT_ID = "60000000-0000-4000-8000-000000000003";
+// Segment dédié aux comptes ACHETEURS (distinct du vendeur ci-dessus) : un par connexion
+// concurrente, jamais partagé — cf. note de réécriture en tête de fichier.
+const BUYER_ID_SEGMENT = "8100";
+function buyerAccountId(i) {
+  return `60000000-0000-4000-${BUYER_ID_SEGMENT}-${String(i).padStart(12, "0")}`;
+}
 
-async function connectAuthenticated(count) {
-  return Promise.all(
-    Array.from({ length: count }, async () => {
-      const client = new Client({ connectionString: CONNECTION_STRING });
-      await client.connect();
-      await client.query("select set_config('request.jwt.claims', $1, false)", [
-        JSON.stringify({ sub: ACCOUNT_ID, role: "authenticated" }),
-      ]);
-      return client;
-    })
-  );
+// Connecte UN acheteur : identité propre (auth.users, donc partner_accounts via le trigger de
+// provisioning), son panier déjà posé en base (cart_items — create_order ne reçoit plus les
+// lignes en paramètre), puis le JWT qui le fait reconnaître comme lui-même par auth.uid().
+async function connectBuyer(i, cartLines) {
+  const accountId = buyerAccountId(i);
+  const client = new Client({ connectionString: CONNECTION_STRING });
+  await client.connect();
+  await client.query("insert into auth.users (id, email) values ($1, $2)", [
+    accountId,
+    `concurrency-buyer-${i}@hifago.test`,
+  ]);
+  for (const line of cartLines) {
+    await client.query(
+      "insert into cart_items (account_id, product_id, date, qty) values ($1, $2, $3, $4)",
+      [accountId, line.product_id, line.date, line.qty]
+    );
+  }
+  await client.query("select set_config('request.jwt.claims', $1, false)", [
+    JSON.stringify({ sub: accountId, role: "authenticated" }),
+  ]);
+  return client;
 }
 
 // Barrière : chaque worker signale qu'il est prêt, puis attend un signal commun. Le signal ne se
@@ -77,7 +101,23 @@ async function resetAll(seedClient) {
       where product_id in (select id from products where establishment_id = $1)`,
     [ESTABLISHMENT_ID]
   );
-  await seedClient.query("delete from orders where account_id = $1", [ACCOUNT_ID]);
+  // Acheteurs : identifiés par le segment dédié (BUYER_ID_SEGMENT), jamais par une seule ID fixe
+  // depuis que chaque connexion concurrente porte sa propre identité (cf. tête de fichier).
+  await seedClient.query(
+    `delete from orders where account_id::text like '60000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
+  await seedClient.query(
+    `delete from cart_items where account_id::text like '60000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
+  await seedClient.query(
+    `delete from carts where account_id::text like '60000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
+  await seedClient.query(
+    `delete from partner_accounts where id::text like '60000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
+  await seedClient.query(
+    `delete from auth.users where id::text like '60000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
   await seedClient.query(
     `delete from product_availability
       where product_id in (select id from products where establishment_id = $1)`,
@@ -85,14 +125,8 @@ async function resetAll(seedClient) {
   );
   await seedClient.query("delete from products where establishment_id = $1", [ESTABLISHMENT_ID]);
   await seedClient.query("delete from establishments where id = $1", [ESTABLISHMENT_ID]);
-  await seedClient.query("delete from partner_accounts where id = $1", [ACCOUNT_ID]);
   await seedClient.query("delete from partners where id = $1", [PARTNER_ID]);
-  await seedClient.query("delete from auth.users where id = $1", [ACCOUNT_ID]);
 
-  await seedClient.query("insert into auth.users (id, email) values ($1, $2)", [
-    ACCOUNT_ID,
-    "create-order-concurrency@test.local",
-  ]);
   await seedClient.query("insert into partners (id, display_name) values ($1, $2)", [
     PARTNER_ID,
     "Create Order Concurrency Partner",
@@ -129,18 +163,19 @@ async function runScenario1Once(run) {
   await resetAll(seedClient);
   await seedScenario1(seedClient);
 
-  const clients = await connectAuthenticated(SCENARIO_1_N);
+  const cart = [{ product_id: SCENARIO_1_PRODUCT_ID, date: SCENARIO_1_DATE, qty: 1 }];
+  const clients = await Promise.all(
+    Array.from({ length: SCENARIO_1_N }, (_, i) => connectBuyer(i, cart))
+  );
   const { go, markReady } = makeBarrier(SCENARIO_1_N);
-
-  const lines = JSON.stringify([{ product_id: SCENARIO_1_PRODUCT_ID, date: SCENARIO_1_DATE, qty: 1 }]);
 
   const settled = await Promise.allSettled(
     clients.map(async (client) => {
       markReady();
       await go;
       const res = await client.query(
-        "select create_order($1::jsonb, $2, $3, $4, $5) as result",
-        [lines, "Concurrency Buyer", "concurrency-buyer@hifago.test", null, false]
+        "select create_order($1, $2, $3, $4) as result",
+        ["Concurrency Buyer", "concurrency-buyer@hifago.test", null, false]
       );
       return res.rows[0].result;
     })
@@ -190,7 +225,10 @@ async function runScenario1Once(run) {
 // une raison de capacité — le but est de prouver l'ABSENCE de deadlock, pas de tester les
 // plafonds). Chaque paire lance simultanément une commande X = panier [A, B] et une commande
 // Y = panier [B, A] ; plusieurs paires concurrentes ciblent les 2 MÊMES ressources A/B pour
-// maximiser la contention réelle sur le verrouillage.
+// maximiser la contention réelle sur le verrouillage. L'ordre [A,B] vs [B,A] est désormais celui
+// de l'INSERTION dans cart_items (create_order trie ses lignes par created_at) — X insère A puis
+// B, Y insère B puis A, chaque insertion étant son propre aller-retour réseau donc son propre
+// timestamp, dans l'ordre voulu.
 const SCENARIO_2_PAIRS = 10; // 10 paires => 20 commandes concurrentes, comme le scénario 1
 const SCENARIO_2_PRODUCT_A_ID = "60000000-0000-4000-8000-000000000020";
 const SCENARIO_2_PRODUCT_B_ID = "60000000-0000-4000-8000-000000000021";
@@ -236,17 +274,23 @@ async function runScenario2Once(run) {
   await seedScenario2(seedClient);
 
   const totalOrders = SCENARIO_2_PAIRS * 2;
-  const clients = await connectAuthenticated(totalOrders);
-  const { go, markReady } = makeBarrier(totalOrders);
+  const cartXAB = [
+    { product_id: SCENARIO_2_PRODUCT_A_ID, date: SCENARIO_2_DATE_A, qty: 1 },
+    { product_id: SCENARIO_2_PRODUCT_B_ID, date: SCENARIO_2_DATE_B, qty: 1 },
+  ];
+  const cartYBA = [
+    { product_id: SCENARIO_2_PRODUCT_B_ID, date: SCENARIO_2_DATE_B, qty: 1 },
+    { product_id: SCENARIO_2_PRODUCT_A_ID, date: SCENARIO_2_DATE_A, qty: 1 },
+  ];
 
-  const cartXAB = JSON.stringify([
-    { product_id: SCENARIO_2_PRODUCT_A_ID, date: SCENARIO_2_DATE_A, qty: 1 },
-    { product_id: SCENARIO_2_PRODUCT_B_ID, date: SCENARIO_2_DATE_B, qty: 1 },
-  ]);
-  const cartYBA = JSON.stringify([
-    { product_id: SCENARIO_2_PRODUCT_B_ID, date: SCENARIO_2_DATE_B, qty: 1 },
-    { product_id: SCENARIO_2_PRODUCT_A_ID, date: SCENARIO_2_DATE_A, qty: 1 },
-  ]);
+  // Alterne strictement X/Y : la moitié des acheteurs verrouille dans l'ordre soumis [A, B],
+  // l'autre dans l'ordre inverse [B, A] — c'est le tri stable (product_id, date) interne à la RPC
+  // qui doit ramener les deux à un seul ordre réel de verrouillage.
+  const clients = await Promise.all(
+    Array.from({ length: totalOrders }, (_, i) => connectBuyer(i, i % 2 === 0 ? cartXAB : cartYBA))
+  );
+  const labels = Array.from({ length: totalOrders }, (_, i) => (i % 2 === 0 ? "X[A,B]" : "Y[B,A]"));
+  const { go, markReady } = makeBarrier(totalOrders);
 
   // Timeout de garde : un vrai interblocage non résolu par le tri stable ferait pendre les
   // requêtes bien au-delà du deadlock_timeout de Postgres (1s par défaut, qui lève normalement une
@@ -263,24 +307,14 @@ async function runScenario2Once(run) {
       ),
     ]);
 
-  const orders = clients.map((client, i) => ({
-    client,
-    // Alterne strictement X/Y au sein de chaque paire, pour que la moitié des commandes verrouille
-    // dans l'ordre soumis [A, B] et l'autre moitié dans l'ordre inverse [B, A] — c'est le tri
-    // stable (product_id, date) interne à la RPC qui doit ramener les deux à un seul ordre réel de
-    // verrouillage.
-    cart: i % 2 === 0 ? cartXAB : cartYBA,
-    label: i % 2 === 0 ? "X[A,B]" : "Y[B,A]",
-  }));
-
   const settled = await withTimeout(
     Promise.allSettled(
-      orders.map(async ({ client, cart }) => {
+      clients.map(async (client) => {
         markReady();
         await go;
         const res = await client.query(
-          "select create_order($1::jsonb, $2, $3, $4, $5) as result",
-          [cart, "Concurrency Buyer", "concurrency-buyer@hifago.test", null, false]
+          "select create_order($1, $2, $3, $4) as result",
+          ["Concurrency Buyer", "concurrency-buyer@hifago.test", null, false]
         );
         return res.rows[0].result;
       })
@@ -289,7 +323,7 @@ async function runScenario2Once(run) {
   );
 
   const rejected = settled
-    .map((s, i) => ({ ...s, label: orders[i].label }))
+    .map((s, i) => ({ ...s, label: labels[i] }))
     .filter((s) => s.status === "rejected");
   const results = settled.filter((s) => s.status === "fulfilled").map((s) => s.value);
   const successes = results.filter((r) => r.ok === true);

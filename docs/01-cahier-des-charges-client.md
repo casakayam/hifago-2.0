@@ -3,7 +3,7 @@ id: refonte-cdc-client
 titre: "Cahier des charges — portail client (marketplace global, Guatapé = première localisation)"
 theme: cadrage
 statut: brouillon
-maj: 2026-09-07
+maj: 2026-09-10
 resume: >
   Comportement métier cible du portail de réservation client, dérivé du comportement réel actuel
   et challengé section par section avec Jérôme avant reprise dans la refonte.
@@ -419,8 +419,10 @@ jamais découvrir ça après coup, en cas de litige.
   du §1 continue de s'y adosser, donc la fonction de recherche doit être conçue pour **accueillir le
   filtre géographique sans être réécrite** — les coordonnées existent déjà sur les produits comme
   sur les établissements.
-- **Plafonds du panier** (§3e) : plafond global sur toute la commande, ou plafond répété par
-  établissement ? La question devient plus visible depuis que le panier survit plusieurs jours.
+- ~~Plafonds du panier (§3e)~~ — **retiré le 2026-09-10, trouvé périmé** : §3e (juste en dessous)
+  avait déjà tranché ce point le 2026-09-07 même, en même temps que cette section était écrite —
+  plafond **global**, valeurs relevées à 12/36/40/20. Le vrai point ouvert n'est pas la forme mais
+  la valeur : jamais codée dans `create_order`, qui porte toujours 4/12/20 (`docs/specs/32-panier-en-base.md` §10).
 - **Voucher/e-ticket** : forme du justificatif (QR, PDF, autre).
 - **Disponibilité d'un hébergement adossé à un PMS dans une recherche datée** : décision différée
   le 2026-09-07 — il apparaît, sans garantie de disponibilité.
