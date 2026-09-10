@@ -7,12 +7,14 @@ langue: fr
 statut: partiel
 reste: >
   Livrées le 2026-09-10 : Tranches 1 (tables carts/cart_items + RLS) et 2 (create_order lit son
-  panier et son attribution côté serveur, plafonds 12/36/40 corrigés), concurrence réelle prouvée
-  (create_order.concurrency.mjs). Reste à restructurer 4 autres scripts de concurrence
-  (create_order_camp/_date_range/_default_capacity/_slot, même défaut qu'un seul account_id
-  partagé) et 7 fichiers pgTAP dont create_order.test.sql (94 assertions) à adapter à la nouvelle
-  signature. Tranches 3-4 (écran /carrito, CartSummary, CartContext.tsx, CheckoutForm.tsx) non
-  commencées.
+  panier et son attribution côté serveur, plafonds 12/36/40 corrigés). Les 6 scripts de concurrence
+  et create_order.test.sql (94→93 assertions) sont réécrits et verts ; un cas (product_not_found)
+  est devenu structurellement intestable — cart_items.product_id porte une FK vers products, un id
+  inexistant ne peut plus atteindre create_order — retiré, signalé en §10, pas contourné. Reste 6
+  fichiers pgTAP (create_order_pms_backed, date_range_booking, notification_payment_events,
+  order_lines_holder_contact_operator, order_lines_referrer_rls,
+  release_order_after_pms_refusal) à adapter à la nouvelle signature. Tranches 3-4 (écran /carrito,
+  CartSummary, CartContext.tsx, CheckoutForm.tsx) non commencées.
 maj: 2026-09-10
 resume: >
   Fait passer le panier de la mémoire du navigateur (CartContext) à deux tables Postgres (carts,
@@ -250,6 +252,14 @@ seul formulaire de paiement (nom, WhatsApp, email, consentement, cahier §3e).
 
 ## 10. Décisions tranchées / points ouverts
 
+- **Conséquence trouvée en adaptant les tests, pas une régression** : `create_order` garde son
+  garde-fou `product_not_found` (product introuvable) dans son code, mais il n'est plus
+  atteignable — `cart_items.product_id` porte une FK vers `products` (aucun `ON DELETE CASCADE`),
+  donc un id de produit inexistant échoue à l'`INSERT` dans `cart_items`, avant même que
+  `create_order` ne s'exécute. Aucun autre chemin connu ne l'atteint non plus (supprimer un
+  produit encore référencé par un panier échouerait sur la même FK). Le garde-fou reste en place
+  comme défense en profondeur ; son test correspondant (`create_order.test.sql` cas 3) a été
+  retiré plutôt que contourné (`supabase/tests/database/create_order.test.sql`, plan 94→93).
 - **Écart trouvé, pas de cette spec** : `create_order` a aujourd'hui `v_lodging_lines > 4 or
   v_lodging_units > 12` et `v_prestation_lines > 20`
   (`supabase/migrations/20260910140000_simplification_spec31.sql:158,161`) — les valeurs **d'avant**

@@ -52,7 +52,7 @@
 -- pour self_referral/direct (referrer_pct=0). 3 assertions ajoutées juste après le cas 16b/16c
 -- ci-dessous, mêmes fixtures, aucune nouvelle commande.
 begin;
-select plan(94);
+select plan(93);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -82,6 +82,31 @@ create function test_login_anonymous(uid uuid) returns void language sql as $$
   );
 $$;
 
+-- Ajoutés 2026-09-10 (spec 32, panier en base) : create_order lit désormais cart_items/carts pour
+-- auth.uid(), plus un paramètre — ces deux helpers reposent le panier/l'attribution SOUS
+-- L'IDENTITÉ ACTIVE (après test_login/test_login_anonymous) juste avant chaque appel, avec
+-- exactement le même jeu de données jsonb qu'avant, simplement relocalisé. Non SECURITY DEFINER
+-- exprès : passent par la même RLS directe (cart_items_insert/carts_insert) qu'un vrai client,
+-- preuve en passant que ce chemin fonctionne, pas seulement une commodité de test.
+create function test_set_cart(p_lines jsonb) returns void language plpgsql as $$
+begin
+  delete from public.cart_items where account_id = auth.uid();
+  insert into public.cart_items (account_id, product_id, date, end_date, slot_start_time, qty)
+  select auth.uid(), (l->>'product_id')::uuid, (l->>'date')::date,
+         (l->>'end_date')::date, (l->>'slot_start_time')::time, (l->>'qty')::int
+  from jsonb_array_elements(p_lines) as l;
+end;
+$$;
+
+create function test_set_attribution(p_code text, p_source text default 'link') returns void language plpgsql as $$
+begin
+  insert into public.carts (account_id, attribution_code, attribution_source)
+  values (auth.uid(), p_code, p_source)
+  on conflict (account_id) do update
+    set attribution_code = excluded.attribution_code, attribution_source = excluded.attribution_source;
+end;
+$$;
+
 -- Cas 1 : AUCUNE identité du tout, EN PREMIER, avant toute fixture (aucun claim JWT actif). Rôle
 -- anon pur — le seul cas de ce fichier qui reste ainsi : c'est exactement le chemin qu'aucune
 -- interface réelle ne peut plus emprunter depuis que CartContext crée une identité anonyme au
@@ -90,7 +115,7 @@ $$;
 -- qu'elle est évaluée AVANT empty_cart (l'identité manque, même un panier vide n'est pas atteint).
 set local role anon;
 select is(
-  (select create_order('[]'::jsonb, 'Nobody',
+  (select create_order('Nobody',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
   'not_authenticated',
@@ -302,32 +327,28 @@ select test_login('88880000-0000-4000-8000-000000000021');
 
 -- Cas 2 : panier vide -----------------------------------------------------------------------------
 select is(
-  (select create_order('[]'::jsonb, 'Holder Empty',
+  (select create_order('Holder Empty',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
   'empty_cart',
-  'p_lines vide → empty_cart'
+  'aucune ligne cart_items pour ce compte → empty_cart'
 );
 
--- Cas 3 : produit inexistant ------------------------------------------------------------------------
-select is(
-  (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '00000000-0000-4000-8000-000000000099', 'date', '2028-01-01', 'qty', 1
-     )),
-     'Holder NotFound',
-     p_holder_email => 'buyer-fixture@hifago.test'
-   )->>'reason'),
-  'product_not_found',
-  'uuid aléatoire absent de products → product_not_found'
-);
+-- ⚠️ Cas 3 (produit inexistant) RETIRÉ le 2026-09-10 (spec 32) : cart_items.product_id porte une
+-- FK vers products (aucun ON DELETE CASCADE) — un product_id inexistant ne peut structurellement
+-- plus jamais atteindre create_order, il échoue à l'INSERT dans cart_items avant même l'appel.
+-- Le garde-fou product_not_found reste dans create_order (défense en profondeur, inoffensif) mais
+-- n'est plus atteignable par ce chemin ; aucun autre chemin connu ne l'atteint non plus (supprimer
+-- un produit encore référencé par un panier échouerait lui-même sur la même FK). Pas remplacé par
+-- un contournement de la contrainte (rendre la FK deferrable uniquement pour ce test durcirait la
+-- suite pour un cas qui ne peut plus se produire) — signalé, pas retesté artificiellement.
 
 -- Cas 4 : produit non vendable (sellable=false) ------------------------------------------------------
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000033', 'date', '2028-01-01', 'qty', 1
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000033', 'date', '2028-01-01', 'qty', 1
-     )),
      'Holder NotSellable',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -335,60 +356,59 @@ select is(
   'produit sellable=false → not_sellable'
 );
 
--- Cas 5 : plafond lodging, dimension NOMBRE DE LIGNES (5 lignes > 4, unités=5 <= 12, dates fictives
--- puisque la phase 1 ne touche jamais product_availability) --------------------------------------
+-- Cas 5 : plafond lodging, dimension NOMBRE DE LIGNES (13 lignes > 12, unités=13 <= 36, dates
+-- fictives puisque la phase 1 ne touche jamais product_availability) — valeurs relevées le
+-- 2026-09-07 (cahier §3e), corrigées dans create_order en préparant la spec 32 (§10) -------------
+select test_set_cart((select jsonb_agg(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000031',
+  'date', (date '2028-01-01' + (gs || ' days')::interval)::date,
+  'qty', 1
+)) from generate_series(0, 12) as gs));
 select is(
   (select create_order(
-     jsonb_build_array(
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000031', 'date', '2028-01-01', 'qty', 1),
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000031', 'date', '2028-01-02', 'qty', 1),
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000031', 'date', '2028-01-03', 'qty', 1),
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000031', 'date', '2028-01-04', 'qty', 1),
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000031', 'date', '2028-01-05', 'qty', 1)
-     ),
      'Holder LodgingLines',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
   'lodging_cap_exceeded',
-  '5 lignes lodging (>4) mais 5 unités (<=12) → lodging_cap_exceeded par le nombre de lignes'
+  '13 lignes lodging (>12) mais 13 unités (<=36) → lodging_cap_exceeded par le nombre de lignes'
 );
 
--- Cas 6 : plafond lodging, dimension SOMME DES UNITÉS (2 lignes <= 4, mais 7+7=14 unités > 12) ----
+-- Cas 6 : plafond lodging, dimension SOMME DES UNITÉS (2 lignes <= 12, mais 19+19=38 unités > 36) --
+select test_set_cart(jsonb_build_array(
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000031', 'date', '2028-02-01', 'qty', 19),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000031', 'date', '2028-02-02', 'qty', 19)
+));
 select is(
   (select create_order(
-     jsonb_build_array(
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000031', 'date', '2028-02-01', 'qty', 7),
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000031', 'date', '2028-02-02', 'qty', 7)
-     ),
      'Holder LodgingUnits',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
   'lodging_cap_exceeded',
-  '2 lignes lodging (<=4) mais 14 unités (>12) → lodging_cap_exceeded par la somme des unités'
+  '2 lignes lodging (<=12) mais 38 unités (>36) → lodging_cap_exceeded par la somme des unités'
 );
 
--- Cas 7 : plafond prestation, NOMBRE DE LIGNES (21 lignes > 20, qty=1 chacune pour ne pas
+-- Cas 7 : plafond prestation, NOMBRE DE LIGNES (41 lignes > 40, qty=1 chacune pour ne pas
 -- déclencher le plafond individuel), tableau construit dynamiquement -------------------------------
+select test_set_cart((select jsonb_agg(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000032',
+  'date', (date '2028-03-01' + (gs || ' days')::interval)::date,
+  'qty', 1
+)) from generate_series(1, 41) as gs));
 select is(
   (select create_order(
-     (select jsonb_agg(jsonb_build_object(
-        'product_id', '88880000-0000-4000-8000-000000000032',
-        'date', (date '2028-03-01' + (gs || ' days')::interval)::date,
-        'qty', 1
-      )) from generate_series(1, 21) as gs),
      'Holder PrestationLines',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
   'prestation_cap_exceeded',
-  '21 lignes non-lodging (>20), qty=1 chacune → prestation_cap_exceeded'
+  '41 lignes non-lodging (>40), qty=1 chacune → prestation_cap_exceeded'
 );
 
 -- Cas 8 : plafond individuel par ligne (qty=21 > 20 sur une seule ligne non-lodging) ---------------
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000032', 'date', '2028-03-01', 'qty', 21
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000032', 'date', '2028-03-01', 'qty', 21
-     )),
      'Holder QtyCap',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -399,12 +419,12 @@ select is(
 -- Cas 9 : tout-ou-rien. Ligne 1 (2028-04-01, capacity=10, booked=0) valide isolément ; ligne 2
 -- (2028-04-02, capacity=5, booked=5) déjà complète → échec sur la ligne 2, ET aucune écriture,
 -- y compris pour la ligne 1 qui aurait pourtant réussi seule ---------------------------------------
+select test_set_cart(jsonb_build_array(
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000034', 'date', '2028-04-01', 'qty', 3),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000034', 'date', '2028-04-02', 'qty', 1)
+));
 select is(
   (select create_order(
-     jsonb_build_array(
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000034', 'date', '2028-04-01', 'qty', 3),
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000034', 'date', '2028-04-02', 'qty', 1)
-     ),
      'Holder Atomicity',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -436,12 +456,12 @@ select is(
 
 -- Cas 10 : somme inter-lignes sur le même produit+date. capacity=10, booked=8 (remaining=2) ;
 -- qty=1 puis qty=2 individuellement acceptables, mais la somme demandée=3 > remaining=2 -----------
+select test_set_cart(jsonb_build_array(
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000035', 'date', '2028-05-01', 'qty', 1),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000035', 'date', '2028-05-01', 'qty', 2)
+));
 select is(
   (select create_order(
-     jsonb_build_array(
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000035', 'date', '2028-05-01', 'qty', 1),
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000035', 'date', '2028-05-01', 'qty', 2)
-     ),
      'Holder Sum',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -470,13 +490,12 @@ select is(
 -- obligatoire ici : une sous-requête corrélée ne verrait pas l'order_id que create_order vient
 -- d'écrire dans la MÊME transaction si on rappelait la fonction une seconde fois dans la sous-
 -- requête — on capture donc le résultat une seule fois par appel. -----------------------------------
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000036', 'date', '2028-06-01', 'qty', 1
+)));
 create temp table tmp_mc_true as
   select create_order(
-    jsonb_build_array(jsonb_build_object(
-      'product_id', '88880000-0000-4000-8000-000000000036', 'date', '2028-06-01', 'qty', 1
-    )),
     'Holder MC True', 'buyer-fixture@hifago.test', null, true
-  
    ) as result;
 
 select is(
@@ -491,11 +510,11 @@ select is(
 );
 drop table tmp_mc_true;
 
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000036', 'date', '2028-06-02', 'qty', 1
+)));
 create temp table tmp_mc_default as
   select create_order(
-    jsonb_build_array(jsonb_build_object(
-      'product_id', '88880000-0000-4000-8000-000000000036', 'date', '2028-06-02', 'qty', 1
-    )),
     'Holder MC Default',
      p_holder_email => 'buyer-fixture@hifago.test'
    ) as result;
@@ -515,14 +534,13 @@ drop table tmp_mc_default;
 -- Cas 12 : succès de référence, 2 lignes valides sur 2 produits de 2 établissements/partenaires
 -- différents → une seule commande, exactement 2 order_lines, les 2 compteurs booked incrémentés du
 -- bon montant. Même pattern table temporaire : on capture le résultat une seule fois. --------------
+select test_set_cart(jsonb_build_array(
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000037', 'date', '2028-07-01', 'qty', 2),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000038', 'date', '2028-07-01', 'qty', 3)
+));
 create temp table tmp_multi as
   select create_order(
-    jsonb_build_array(
-      jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000037', 'date', '2028-07-01', 'qty', 2),
-      jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000038', 'date', '2028-07-01', 'qty', 3)
-    ),
     'Holder Multi', 'buyer-fixture@hifago.test', null, true
-  
    ) as result;
 
 select is(
@@ -563,11 +581,11 @@ drop table tmp_multi;
 -- haut, avant le switch de rôle authenticated (mêmes contraintes RLS que les produits 031-038). --
 
 -- Cas 13a : date fermée explicitement (product_calendar.open=false) → date_closed, rien écrit.
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000039', 'date', '2028-08-01', 'qty', 1
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000039', 'date', '2028-08-01', 'qty', 1
-     )),
      'Holder CalendarClosedExplicit',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -582,11 +600,11 @@ select is(
 );
 
 -- Cas 13b : pas de ligne product_calendar, calendar_default_open=true (défaut) → succès normal.
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000039', 'date', '2028-08-02', 'qty', 1
+)));
 select is(
   (select (create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000039', 'date', '2028-08-02', 'qty', 1
-     )),
      'Holder CalendarOpenDefault',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'ok')::boolean),
@@ -601,11 +619,11 @@ select is(
 );
 
 -- Cas 13c : pas de ligne product_calendar, calendar_default_open=false (défaut produit) → date_closed.
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000040', 'date', '2028-08-03', 'qty', 1
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000040', 'date', '2028-08-03', 'qty', 1
-     )),
      'Holder CalendarClosedDefault',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -631,10 +649,10 @@ select is(
 -- anonyme des deux côtés (RÉVISÉ 2026-09-10 : plus null, cf. entête), booked incrémenté.
 set local role authenticated;
 select test_login_anonymous('88880000-0000-4000-8000-000000000099');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000041', 'date', '2028-09-01', 'qty', 2
+)));
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', '88880000-0000-4000-8000-000000000041', 'date', '2028-09-01', 'qty', 2
-  )),
   'Holder Guest Success',
      p_holder_email => 'buyer-fixture@hifago.test'
    );
@@ -660,11 +678,11 @@ select is(
 -- Cas 14b : invité, produit non vendable → not_sellable (même garde-fou que le cas 4).
 set local role authenticated;
 select test_login_anonymous('88880000-0000-4000-8000-000000000099');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000033', 'date', '2028-09-05', 'qty', 1
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000033', 'date', '2028-09-05', 'qty', 1
-     )),
      'Holder Guest NotSellable',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -676,31 +694,29 @@ reset role;
 -- Cas 14c : invité, plafond lodging → lodging_cap_exceeded (même garde-fou que le cas 5).
 set local role authenticated;
 select test_login_anonymous('88880000-0000-4000-8000-000000000099');
+select test_set_cart((select jsonb_agg(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000031',
+  'date', (date '2028-09-10' + (gs || ' days')::interval)::date,
+  'qty', 1
+)) from generate_series(0, 12) as gs));
 select is(
   (select create_order(
-     jsonb_build_array(
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000031', 'date', '2028-09-10', 'qty', 1),
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000031', 'date', '2028-09-11', 'qty', 1),
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000031', 'date', '2028-09-12', 'qty', 1),
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000031', 'date', '2028-09-13', 'qty', 1),
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000031', 'date', '2028-09-14', 'qty', 1)
-     ),
      'Holder Guest LodgingCap',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
   'lodging_cap_exceeded',
-  'cas 14c : invité, 5 lignes lodging → lodging_cap_exceeded (aucune régression du garde-fou)'
+  'cas 14c : invité, 13 lignes lodging (>12) → lodging_cap_exceeded (aucune régression du garde-fou)'
 );
 reset role;
 
 -- Cas 14d : invité, date fermée par défaut produit → date_closed (même garde-fou que le cas 13c).
 set local role authenticated;
 select test_login_anonymous('88880000-0000-4000-8000-000000000099');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000040', 'date', '2028-09-15', 'qty', 1
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000040', 'date', '2028-09-15', 'qty', 1
-     )),
      'Holder Guest CalendarClosed',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -712,11 +728,11 @@ reset role;
 -- Cas 14e : invité, ressource déjà pleine → full, rien écrit (même garde-fou que le cas 9).
 set local role authenticated;
 select test_login_anonymous('88880000-0000-4000-8000-000000000099');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000041', 'date', '2028-09-02', 'qty', 1
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000041', 'date', '2028-09-02', 'qty', 1
-     )),
      'Holder Guest Full',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -738,10 +754,10 @@ select is(
 -- Cas 15a : invité sans code → commande directe, les 3 colonnes null.
 set local role authenticated;
 select test_login_anonymous('88880000-0000-4000-8000-000000000099');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-01', 'qty', 1
+)));
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-01', 'qty', 1
-  )),
   'Holder Attrib Guest NoCode',
      p_holder_email => 'buyer-fixture@hifago.test'
    );
@@ -759,12 +775,12 @@ select is(
 -- Cas 15b : invité, ?ref= valide → referrer_partner_id résolu, attribution_source='link'.
 set local role authenticated;
 select test_login_anonymous('88880000-0000-4000-8000-000000000099');
+select test_set_attribution('ORDER-TEST-ACTIVE', 'link');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-02', 'qty', 1
+)));
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-02', 'qty', 1
-  )),
-  'Holder Attrib Guest Link', 'buyer-fixture@hifago.test', null, false, 'ORDER-TEST-ACTIVE', 'link'
-
+  'Holder Attrib Guest Link', 'buyer-fixture@hifago.test', null, false
    );
 reset role;
 select is(
@@ -799,12 +815,12 @@ select is(
 -- un blocage).
 set local role authenticated;
 select test_login_anonymous('88880000-0000-4000-8000-000000000099');
+select test_set_attribution('ORDER-TEST-INACTIVE', 'link');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-03', 'qty', 1
+)));
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-03', 'qty', 1
-  )),
-  'Holder Attrib Guest Invalid', 'buyer-fixture@hifago.test', null, false, 'ORDER-TEST-INACTIVE', 'link'
-
+  'Holder Attrib Guest Invalid', 'buyer-fixture@hifago.test', null, false
    );
 reset role;
 select is(
@@ -825,12 +841,12 @@ select test_login('88880000-0000-4000-8000-000000000021');
 
 -- Cas 15d : compte enregistré, code frais valide → attribution résolue ET saved_attribution_code
 -- mis à jour (aucune valeur sauvegardée avant ce test pour ce compte).
+select test_set_attribution('ORDER-TEST-ACTIVE', 'link');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-04', 'qty', 1
+)));
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-04', 'qty', 1
-  )),
-  'Holder Attrib Account Fresh', 'buyer-fixture@hifago.test', null, false, 'ORDER-TEST-ACTIVE', 'link'
-
+  'Holder Attrib Account Fresh', 'buyer-fixture@hifago.test', null, false
    );
 select is(
   (select jsonb_build_object(
@@ -854,10 +870,10 @@ select is(
 
 -- Cas 15e : même compte, AUCUN code présenté cette session → résolution depuis
 -- saved_attribution_code (posé par 15d), attribution_source='account'.
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-05', 'qty', 1
+)));
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-05', 'qty', 1
-  )),
   'Holder Attrib Account Saved',
      p_holder_email => 'buyer-fixture@hifago.test'
    );
@@ -883,12 +899,12 @@ select is(
 
 -- Cas 15f : même compte, présente un NOUVEAU code différent du sauvegardé → le nouveau prime,
 -- saved_attribution_code remplacé (pas cumulé, pas ignoré).
+select test_set_attribution('ORDER-TEST-NEW', 'link');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-06', 'qty', 1
+)));
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-06', 'qty', 1
-  )),
-  'Holder Attrib Account Replace', 'buyer-fixture@hifago.test', null, false, 'ORDER-TEST-NEW', 'link'
-
+  'Holder Attrib Account Replace', 'buyer-fixture@hifago.test', null, false
    );
 select is(
   (select jsonb_build_object(
@@ -936,40 +952,40 @@ set local role authenticated;
 select test_login_anonymous('88880000-0000-4000-8000-000000000099');
 
 -- Cas 16a : direct (aucun code) → commission_case='direct', 17/0/17, price_cop=33333 (non rond).
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000043', 'date', '2028-11-01', 'qty', 1
+)));
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', '88880000-0000-4000-8000-000000000043', 'date', '2028-11-01', 'qty', 1
-  )),
   'Holder Commission Direct',
      p_holder_email => 'buyer-fixture@hifago.test'
    );
 
 -- Cas 16b : référent externe (ORDER-TEST-ACTIVE → partenaire 005, ≠ propriétaire 001 du produit
 -- 043) → external_referrer, 17/10/7.
+select test_set_attribution('ORDER-TEST-ACTIVE', 'link');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000043', 'date', '2028-11-02', 'qty', 1
+)));
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', '88880000-0000-4000-8000-000000000043', 'date', '2028-11-02', 'qty', 1
-  )),
-  'Holder Commission External', 'buyer-fixture@hifago.test', null, false, 'ORDER-TEST-ACTIVE', 'link'
-
+  'Holder Commission External', 'buyer-fixture@hifago.test', null, false
    );
 
 -- Cas 16c : auto-référence (ORDER-TEST-SELF → partenaire 001, PROPRIÉTAIRE du produit 043) →
 -- self_referral, 7/0/7.
+select test_set_attribution('ORDER-TEST-SELF', 'link');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000043', 'date', '2028-11-03', 'qty', 1
+)));
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', '88880000-0000-4000-8000-000000000043', 'date', '2028-11-03', 'qty', 1
-  )),
-  'Holder Commission Self', 'buyer-fixture@hifago.test', null, false, 'ORDER-TEST-SELF', 'link'
-
+  'Holder Commission Self', 'buyer-fixture@hifago.test', null, false
    );
 
 -- Cas 16d : total non rond via qty=3 (33333*3=99999) → prouve total_cop=price_cop*qty ET l'arrondi
 -- sur un montant plus grand (16999.83 → 17000), pas seulement les pourcentages du cas 16a.
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000043', 'date', '2028-11-04', 'qty', 3
+)));
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', '88880000-0000-4000-8000-000000000043', 'date', '2028-11-04', 'qty', 3
-  )),
   'Holder Commission NonRound',
      p_holder_email => 'buyer-fixture@hifago.test'
    );
@@ -980,14 +996,14 @@ select create_order(
 -- 002 ≠ référent 001) → external_referrer. Même commande, même référent, deux cas différents.
 -- Table temporaire créée MAINTENANT (encore sous l'identité anonyme) pour capturer l'order_id retourné, mais lue plus
 -- bas seulement, après reset role.
+select test_set_attribution('ORDER-TEST-SELF', 'link');
+select test_set_cart(jsonb_build_array(
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000043', 'date', '2028-11-05', 'qty', 1),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000038', 'date', '2028-11-05', 'qty', 1)
+));
 create temp table tmp_commission_multi as
   select create_order(
-    jsonb_build_array(
-      jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000043', 'date', '2028-11-05', 'qty', 1),
-      jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000038', 'date', '2028-11-05', 'qty', 1)
-    ),
-    'Holder Commission Multi', 'buyer-fixture@hifago.test', null, false, 'ORDER-TEST-SELF', 'link'
-  
+    'Holder Commission Multi', 'buyer-fixture@hifago.test', null, false
    ) as result;
 
 reset role;
@@ -1116,11 +1132,11 @@ select test_login('88880000-0000-4000-8000-000000000021');
 
 -- Cas 17a : plage entièrement disponible → succès, booked incrémenté sur CHAQUE jour de la plage
 -- (pas seulement la date de départ), un availability_blocks créé avec la bonne plage.
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000044', 'date', '2028-12-10', 'qty', 2
+)));
 create temp table tmp_camp_success as
   select create_order(
-    jsonb_build_array(jsonb_build_object(
-      'product_id', '88880000-0000-4000-8000-000000000044', 'date', '2028-12-10', 'qty', 2
-    )),
     'Holder Camp Success',
      p_holder_email => 'buyer-fixture@hifago.test'
    ) as result;
@@ -1163,11 +1179,11 @@ drop table tmp_camp_success;
 -- resource_unavailable, AUCUNE écriture — y compris sur les jours par ailleurs disponibles de la
 -- même plage et sur la capacité PROPRE du camp (product_availability), qui elle est entièrement
 -- disponible isolément.
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000045', 'date', '2028-12-20', 'qty', 1
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000045', 'date', '2028-12-20', 'qty', 1
-     )),
      'Holder Camp Unavailable',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -1197,12 +1213,12 @@ select is(
 -- sellable=false) dans le MÊME panier → aucune écriture, y compris sur la ressource partagée du
 -- camp qui aurait pourtant réussi seule (même invariant tout-ou-rien que la feature 6, étendu à
 -- deux types de ressources dans le même panier).
+select test_set_cart(jsonb_build_array(
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000044', 'date', '2028-12-15', 'qty', 1),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000033', 'date', '2028-12-15', 'qty', 1)
+));
 select is(
   (select create_order(
-     jsonb_build_array(
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000044', 'date', '2028-12-15', 'qty', 1),
-       jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000033', 'date', '2028-12-15', 'qty', 1)
-     ),
      'Holder Camp Combo',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -1246,11 +1262,11 @@ insert into product_availability (product_id, date, capacity, booked) values
   ('88880000-0000-4000-8000-000000000046', '2028-12-25', 5, 0);
 set local role authenticated;
 
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000046', 'date', '2028-12-25', 'qty', 1
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000046', 'date', '2028-12-25', 'qty', 1
-     )),
      'Holder Price Missing',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -1284,11 +1300,11 @@ set local role authenticated;
 
 -- Cas 20a : aucune ligne product_availability pour 2029-01-10 avant l'appel → succès (qty=2 ≤
 -- default_capacity=3), et la ligne est désormais matérialisée avec capacity=3/booked=2.
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000048', 'date', '2029-01-10', 'qty', 2
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000048', 'date', '2029-01-10', 'qty', 2
-     )),
      'Holder Default Capacity A',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'ok'),
@@ -1306,11 +1322,11 @@ select is(
 -- Cas 20b : nouvelle tentative qty=2 sur la MÊME date déjà matérialisée (booked=2, capacity=3) →
 -- 2+2=4 > 3 → full, aucune écriture supplémentaire (la matérialisation Phase 2 est un ON CONFLICT
 -- DO NOTHING, jamais un écrasement de la ligne déjà posée par le cas 20a).
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000048', 'date', '2029-01-10', 'qty', 2
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000048', 'date', '2029-01-10', 'qty', 2
-     )),
      'Holder Default Capacity B',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -1325,11 +1341,11 @@ select is(
 );
 
 -- Cas 20c : qty=1 sur la même date (2+1=3, exactement à capacité) → succès, comble le dernier cupo.
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000048', 'date', '2029-01-10', 'qty', 1
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000048', 'date', '2029-01-10', 'qty', 1
-     )),
      'Holder Default Capacity C',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'ok'),
@@ -1350,11 +1366,11 @@ reset role;
 insert into product_availability (product_id, date, capacity, booked) values
   ('88880000-0000-4000-8000-000000000048', '2029-01-11', 1, 0);
 set local role authenticated;
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000048', 'date', '2029-01-11', 'qty', 2
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000048', 'date', '2029-01-11', 'qty', 2
-     )),
      'Holder Default Capacity D',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -1387,12 +1403,12 @@ set local role authenticated;
 
 -- Cas 21a : aucune ligne product_slot_availability avant l'appel → succès (qty=1 ≤ capacité=2),
 -- matérialise capacity=2/booked=1 depuis la règle.
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000049', 'date', '2029-03-05',
+  'slot_start_time', '09:00', 'qty', 1
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000049', 'date', '2029-03-05',
-       'slot_start_time', '09:00', 'qty', 1
-     )),
      'Holder Slot A',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'ok'),
@@ -1410,12 +1426,12 @@ select is(
 
 -- Cas 21b : qty=2 sur le même créneau déjà à booked=1/capacity=2 → 1+2=3 > 2 → full, aucune
 -- écriture supplémentaire.
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000049', 'date', '2029-03-05',
+  'slot_start_time', '09:00', 'qty', 2
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000049', 'date', '2029-03-05',
-       'slot_start_time', '09:00', 'qty', 2
-     )),
      'Holder Slot B',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -1432,12 +1448,12 @@ select is(
 
 -- Cas 21c : qty=1 sur le même créneau (1+1=2, exactement à capacité) → succès, comble le dernier
 -- cupo.
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000049', 'date', '2029-03-05',
+  'slot_start_time', '09:00', 'qty', 1
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000049', 'date', '2029-03-05',
-       'slot_start_time', '09:00', 'qty', 1
-     )),
      'Holder Slot C',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'ok'),
@@ -1459,12 +1475,12 @@ reset role;
 insert into product_slot_availability (product_id, slot_date, slot_start_time, slot_duration_minutes, capacity, booked)
 values ('88880000-0000-4000-8000-000000000049', '2029-03-05', '10:00', 60, 1, 0);
 set local role authenticated;
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000049', 'date', '2029-03-05',
+  'slot_start_time', '10:00', 'qty', 2
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000049', 'date', '2029-03-05',
-       'slot_start_time', '10:00', 'qty', 2
-     )),
      'Holder Slot D',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -1481,11 +1497,11 @@ select is(
 
 -- Cas 21e : ligne date unique (sans slot_start_time) sur un produit qui porte au moins une règle
 -- product_slot_rules → non-coexistence stricte, slot_required (§10 point 4 de la spec 18).
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000049', 'date', '2029-03-06', 'qty', 1
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000049', 'date', '2029-03-06', 'qty', 1
-     )),
      'Holder Slot E',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -1496,12 +1512,12 @@ select is(
 -- Cas 21f : slot_start_time combiné à end_date (ligne alojamiento — produit 031, sans rapport avec
 -- product_slot_rules) → unsupported_slot_combination, refus explicite plutôt qu'une ligne
 -- corrompue silencieusement.
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000031', 'date', '2029-03-05',
+  'end_date', '2029-03-07', 'slot_start_time', '09:00', 'qty', 1
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000031', 'date', '2029-03-05',
-       'end_date', '2029-03-07', 'slot_start_time', '09:00', 'qty', 1
-     )),
      'Holder Slot F',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
@@ -1512,12 +1528,12 @@ select is(
 -- Cas 21g : slot_start_time qui ne correspond à AUCUN créneau réellement généré par la règle
 -- courante (14:00, hors plage 09:00-11:00) → rien matérialisé en Phase 2, slot_not_found en Phase 3
 -- (jamais une confiance aveugle dans une valeur cliente).
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000049', 'date', '2029-03-05',
+  'slot_start_time', '14:00', 'qty', 1
+)));
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88880000-0000-4000-8000-000000000049', 'date', '2029-03-05',
-       'slot_start_time', '14:00', 'qty', 1
-     )),
      'Holder Slot G',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
