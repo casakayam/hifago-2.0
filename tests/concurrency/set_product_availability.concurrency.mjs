@@ -8,6 +8,11 @@
 // l'interposition réelle des deux opérations (les deux se sérialisent sur le même verrou FOR
 // UPDATE de product_availability).
 //
+// ⚠️ Réécrit le 2026-09-10 (spec 32, panier en base) : create_order ne reçoit plus les lignes en
+// paramètre, il les lit dans cart_items pour SON PROPRE account_id. Ce fichier avait déjà N
+// identités acheteuses distinctes (contrairement aux autres fichiers de ce dossier), donc pas de
+// restructuration de fond — juste le panier posé en base avant l'appel, et la nouvelle signature.
+//
 // Contre la stack Supabase locale uniquement (127.0.0.1:54322) — jamais un projet cloud partagé.
 import pg from "pg";
 
@@ -43,6 +48,8 @@ async function resetFixtures(seedClient) {
        and id not in (select order_id from order_lines)`,
     [BUYER_IDS]
   );
+  await seedClient.query("delete from cart_items where account_id = any($1::uuid[])", [BUYER_IDS]);
+  await seedClient.query("delete from carts where account_id = any($1::uuid[])", [BUYER_IDS]);
   await seedClient.query("delete from product_availability where product_id = $1", [PRODUCT_ID]);
   await seedClient.query("delete from product_calendar where product_id = $1", [PRODUCT_ID]);
   await seedClient.query("delete from products where id = $1", [PRODUCT_ID]);
@@ -121,6 +128,15 @@ async function runOnce(run) {
   await seedClient.connect();
   await resetFixtures(seedClient);
 
+  // Panier d'un seul acheteur, posé en base pour chaque identité AVANT l'appel — create_order lit
+  // désormais cart_items pour son propre account_id, plus un paramètre (spec 32).
+  for (const buyerId of BUYER_IDS) {
+    await seedClient.query(
+      "insert into cart_items (account_id, product_id, date, qty) values ($1, $2, $3, $4)",
+      [buyerId, PRODUCT_ID, SLOT_DATE, 1]
+    );
+  }
+
   const buyerClients = await Promise.all(BUYER_IDS.map((id) => authenticatedClient(id)));
   const adminClient = await authenticatedClient(ADMIN_ID);
   const allClients = [...buyerClients, adminClient];
@@ -149,8 +165,7 @@ async function runOnce(run) {
       await go;
 
       if (worker.type === "buyer") {
-        const res = await worker.client.query("select create_order($1, $2, $3) as result", [
-          JSON.stringify([{ product_id: PRODUCT_ID, date: SLOT_DATE, qty: 1 }]),
+        const res = await worker.client.query("select create_order($1, $2) as result", [
           "Concurrency Buyer",
           "concurrency-buyer@hifago.test",
         ]);

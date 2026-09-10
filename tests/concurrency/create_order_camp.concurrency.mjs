@@ -17,6 +17,11 @@
 //      partiellement, via create_order réel des deux côtés → exactement 1 succès si la capacité ne
 //      suffit pas aux deux, aucun interblocage ni timeout.
 //
+// ⚠️ Réécrit le 2026-09-10 (spec 32, panier en base) : create_order ne reçoit plus les lignes en
+// paramètre, il les lit dans cart_items pour SON PROPRE account_id — N connexions sous le même
+// compte partagerait la même ligne. Remplacé par N BUYERS DISTINCTS, chacun avec son panier déjà
+// posé en base (cf. create_order.concurrency.mjs, même correction).
+//
 // Contre la stack Supabase locale uniquement (127.0.0.1:54322) — jamais un projet cloud partagé.
 // Environnement partagé avec d'autres agents : une erreur transitoire isolée (connexion, relation
 // manquante) doit être re-testée après un `supabase db reset` frais avant de conclure à un bug.
@@ -35,19 +40,34 @@ const RUNS = 5; // barre d'acceptation : ≥5 runs consécutifs propres, par sc�
 // concurrence (00000000-…/20000000-…/60000000-…/99990000-…) ni avec seed.sql (a0000000-…/b0000000-…).
 const PARTNER_ID = "70000000-0000-4000-8000-000000000001";
 const ESTABLISHMENT_ID = "70000000-0000-4000-8000-000000000002";
-const ACCOUNT_ID = "70000000-0000-4000-8000-000000000003";
+// Segment dédié aux comptes ACHETEURS (distinct du vendeur) : un par connexion concurrente,
+// jamais partagé — cf. note de réécriture en tête de fichier.
+const BUYER_ID_SEGMENT = "8100";
+function buyerAccountId(i) {
+  return `70000000-0000-4000-${BUYER_ID_SEGMENT}-${String(i).padStart(12, "0")}`;
+}
 
-async function connectAuthenticated(count) {
-  return Promise.all(
-    Array.from({ length: count }, async () => {
-      const client = new Client({ connectionString: CONNECTION_STRING });
-      await client.connect();
-      await client.query("select set_config('request.jwt.claims', $1, false)", [
-        JSON.stringify({ sub: ACCOUNT_ID, role: "authenticated" }),
-      ]);
-      return client;
-    })
-  );
+// Connecte UN acheteur : identité propre (auth.users, donc partner_accounts via le trigger de
+// provisioning), son panier déjà posé en base (cart_items), puis le JWT qui le fait reconnaître
+// comme lui-même par auth.uid().
+async function connectBuyer(i, cartLines) {
+  const accountId = buyerAccountId(i);
+  const client = new Client({ connectionString: CONNECTION_STRING });
+  await client.connect();
+  await client.query("insert into auth.users (id, email) values ($1, $2)", [
+    accountId,
+    `concurrency-camp-buyer-${i}@hifago.test`,
+  ]);
+  for (const line of cartLines) {
+    await client.query(
+      "insert into cart_items (account_id, product_id, date, qty) values ($1, $2, $3, $4)",
+      [accountId, line.product_id, line.date, line.qty]
+    );
+  }
+  await client.query("select set_config('request.jwt.claims', $1, false)", [
+    JSON.stringify({ sub: accountId, role: "authenticated" }),
+  ]);
+  return client;
 }
 
 // Barrière : chaque worker signale qu'il est prêt, puis attend un signal commun — maximise le
@@ -80,7 +100,23 @@ async function resetAll(seedClient) {
       where product_id in (select id from products where establishment_id = $1)`,
     [ESTABLISHMENT_ID]
   );
-  await seedClient.query("delete from orders where account_id = $1", [ACCOUNT_ID]);
+  // Acheteurs : identifiés par le segment dédié (BUYER_ID_SEGMENT), jamais par une seule ID fixe
+  // depuis que chaque connexion concurrente porte sa propre identité (cf. tête de fichier).
+  await seedClient.query(
+    `delete from orders where account_id::text like '70000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
+  await seedClient.query(
+    `delete from cart_items where account_id::text like '70000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
+  await seedClient.query(
+    `delete from carts where account_id::text like '70000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
+  await seedClient.query(
+    `delete from partner_accounts where id::text like '70000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
+  await seedClient.query(
+    `delete from auth.users where id::text like '70000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
   await seedClient.query(
     `delete from product_availability
       where product_id in (select id from products where establishment_id = $1)`,
@@ -91,14 +127,8 @@ async function resetAll(seedClient) {
   ]);
   await seedClient.query("delete from products where establishment_id = $1", [ESTABLISHMENT_ID]);
   await seedClient.query("delete from establishments where id = $1", [ESTABLISHMENT_ID]);
-  await seedClient.query("delete from partner_accounts where id = $1", [ACCOUNT_ID]);
   await seedClient.query("delete from partners where id = $1", [PARTNER_ID]);
-  await seedClient.query("delete from auth.users where id = $1", [ACCOUNT_ID]);
 
-  await seedClient.query("insert into auth.users (id, email) values ($1, $2)", [
-    ACCOUNT_ID,
-    "create-order-camp-concurrency@test.local",
-  ]);
   await seedClient.query("insert into partners (id, display_name) values ($1, $2)", [
     PARTNER_ID,
     "Create Order Camp Concurrency Partner",
@@ -141,18 +171,19 @@ async function runScenario1Once(run) {
   await resetAll(seedClient);
   await seedScenario1(seedClient);
 
-  const clients = await connectAuthenticated(SCENARIO_1_N);
+  const cart = [{ product_id: SCENARIO_1_CAMP_ID, date: SCENARIO_1_START, qty: 1 }];
+  const clients = await Promise.all(
+    Array.from({ length: SCENARIO_1_N }, (_, i) => connectBuyer(i, cart))
+  );
   const { go, markReady } = makeBarrier(SCENARIO_1_N);
-
-  const lines = JSON.stringify([{ product_id: SCENARIO_1_CAMP_ID, date: SCENARIO_1_START, qty: 1 }]);
 
   const settled = await Promise.allSettled(
     clients.map(async (client) => {
       markReady();
       await go;
       const res = await client.query(
-        "select create_order($1::jsonb, $2, $3, $4, $5) as result",
-        [lines, "Concurrency Camp Buyer", "concurrency-camp-buyer@hifago.test", null, false]
+        "select create_order($1, $2, $3, $4) as result",
+        ["Concurrency Camp Buyer", "concurrency-camp-buyer@hifago.test", null, false]
       );
       return res.rows[0].result;
     })
@@ -253,17 +284,18 @@ async function runScenario2Once(run) {
   await resetAll(seedClient);
   await seedScenario2(seedClient);
 
-  const campAClients = await connectAuthenticated(SCENARIO_2_PAIRS);
-  const campBClients = await connectAuthenticated(SCENARIO_2_PAIRS);
+  const cartA = [{ product_id: SCENARIO_2_CAMP_A_ID, date: SCENARIO_2_CAMP_A_START, qty: 1 }];
+  const cartB = [{ product_id: SCENARIO_2_CAMP_B_ID, date: SCENARIO_2_CAMP_B_START, qty: 1 }];
+  // Indices 0..PAIRS-1 = groupe camp A, PAIRS..2*PAIRS-1 = groupe camp B — deux plages d'indices
+  // disjointes du même segment BUYER_ID_SEGMENT, aucun conflit d'identité entre les deux groupes.
+  const campAClients = await Promise.all(
+    Array.from({ length: SCENARIO_2_PAIRS }, (_, i) => connectBuyer(i, cartA))
+  );
+  const campBClients = await Promise.all(
+    Array.from({ length: SCENARIO_2_PAIRS }, (_, i) => connectBuyer(SCENARIO_2_PAIRS + i, cartB))
+  );
   const totalOrders = SCENARIO_2_PAIRS * 2;
   const { go, markReady } = makeBarrier(totalOrders);
-
-  const cartA = JSON.stringify([
-    { product_id: SCENARIO_2_CAMP_A_ID, date: SCENARIO_2_CAMP_A_START, qty: 1 },
-  ]);
-  const cartB = JSON.stringify([
-    { product_id: SCENARIO_2_CAMP_B_ID, date: SCENARIO_2_CAMP_B_START, qty: 1 },
-  ]);
 
   // Timeout de garde : un vrai interblocage non résolu par le tri stable (establishment_id,
   // slot_date) ferait pendre les requêtes bien au-delà du deadlock_timeout de Postgres (1s par
@@ -287,8 +319,8 @@ async function runScenario2Once(run) {
           markReady();
           await go;
           const res = await client.query(
-            "select create_order($1::jsonb, $2, $3, $4, $5) as result",
-            [cartA, "Concurrency Camp A Buyer", "concurrency-camp-a-buyer@hifago.test", null, false]
+            "select create_order($1, $2, $3, $4) as result",
+            ["Concurrency Camp A Buyer", "concurrency-camp-a-buyer@hifago.test", null, false]
           );
           return res.rows[0].result;
         })
@@ -298,8 +330,8 @@ async function runScenario2Once(run) {
           markReady();
           await go;
           const res = await client.query(
-            "select create_order($1::jsonb, $2, $3, $4, $5) as result",
-            [cartB, "Concurrency Camp B Buyer", "concurrency-camp-b-buyer@hifago.test", null, false]
+            "select create_order($1, $2, $3, $4) as result",
+            ["Concurrency Camp B Buyer", "concurrency-camp-b-buyer@hifago.test", null, false]
           );
           return res.rows[0].result;
         })

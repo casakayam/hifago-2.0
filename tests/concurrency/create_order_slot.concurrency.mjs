@@ -11,6 +11,11 @@
 // synchronisation, jamais pgTAP ni Promise.all naïf, jamais de sleep pour synchroniser (cf.
 // hifago/CLAUDE.md §6). Contre la stack Supabase locale uniquement (127.0.0.1:54322) — jamais un
 // projet cloud partagé.
+//
+// ⚠️ Réécrit le 2026-09-10 (spec 32, panier en base) : create_order ne reçoit plus les lignes en
+// paramètre, il les lit dans cart_items pour SON PROPRE account_id — N connexions sous le même
+// compte partagerait la même ligne. Remplacé par N BUYERS DISTINCTS, chacun avec son panier déjà
+// posé en base (cf. create_order.concurrency.mjs, même correction).
 import pg from "pg";
 
 const { Client } = pg;
@@ -27,24 +32,39 @@ const RUNS = 5; // barre d'acceptation : ≥5 runs consécutifs propres
 // 60000000-…/70000000-…/80000000-…/90000000-…/99990000-…).
 const PARTNER_ID = "91000000-0000-4000-8000-000000000001";
 const ESTABLISHMENT_ID = "91000000-0000-4000-8000-000000000002";
-const ACCOUNT_ID = "91000000-0000-4000-8000-000000000003";
 const PRODUCT_ID = "91000000-0000-4000-8000-000000000010";
 const DATE = "2029-05-01";
 const SLOT_START_TIME = "09:00";
 const CAPACITY = 5;
 const N = 20; // tentatives concurrentes visant le même créneau jamais configuré
+// Segment dédié aux comptes ACHETEURS (distinct du vendeur) : un par connexion concurrente,
+// jamais partagé — cf. note de réécriture en tête de fichier.
+const BUYER_ID_SEGMENT = "8100";
+function buyerAccountId(i) {
+  return `91000000-0000-4000-${BUYER_ID_SEGMENT}-${String(i).padStart(12, "0")}`;
+}
 
-async function connectAuthenticated(count) {
-  return Promise.all(
-    Array.from({ length: count }, async () => {
-      const client = new Client({ connectionString: CONNECTION_STRING });
-      await client.connect();
-      await client.query("select set_config('request.jwt.claims', $1, false)", [
-        JSON.stringify({ sub: ACCOUNT_ID, role: "authenticated" }),
-      ]);
-      return client;
-    })
-  );
+// Connecte UN acheteur : identité propre (auth.users, donc partner_accounts via le trigger de
+// provisioning), son panier déjà posé en base (cart_items — slot_start_time compris), puis le JWT
+// qui le fait reconnaître comme lui-même par auth.uid().
+async function connectBuyer(i, cartLines) {
+  const accountId = buyerAccountId(i);
+  const client = new Client({ connectionString: CONNECTION_STRING });
+  await client.connect();
+  await client.query("insert into auth.users (id, email) values ($1, $2)", [
+    accountId,
+    `concurrency-slot-buyer-${i}@hifago.test`,
+  ]);
+  for (const line of cartLines) {
+    await client.query(
+      "insert into cart_items (account_id, product_id, date, slot_start_time, qty) values ($1, $2, $3, $4, $5)",
+      [accountId, line.product_id, line.date, line.slot_start_time ?? null, line.qty]
+    );
+  }
+  await client.query("select set_config('request.jwt.claims', $1, false)", [
+    JSON.stringify({ sub: accountId, role: "authenticated" }),
+  ]);
+  return client;
 }
 
 function makeBarrier(count) {
@@ -69,7 +89,23 @@ async function resetAndSeed(seedClient) {
       where product_id in (select id from products where establishment_id = $1)`,
     [ESTABLISHMENT_ID]
   );
-  await seedClient.query("delete from orders where account_id = $1", [ACCOUNT_ID]);
+  // Acheteurs : identifiés par le segment dédié (BUYER_ID_SEGMENT), jamais par une seule ID fixe
+  // depuis que chaque connexion concurrente porte sa propre identité (cf. tête de fichier).
+  await seedClient.query(
+    `delete from orders where account_id::text like '91000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
+  await seedClient.query(
+    `delete from cart_items where account_id::text like '91000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
+  await seedClient.query(
+    `delete from carts where account_id::text like '91000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
+  await seedClient.query(
+    `delete from partner_accounts where id::text like '91000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
+  await seedClient.query(
+    `delete from auth.users where id::text like '91000000-0000-4000-${BUYER_ID_SEGMENT}-%'`
+  );
   await seedClient.query(
     `delete from product_slot_availability
       where product_id in (select id from products where establishment_id = $1)`,
@@ -82,14 +118,8 @@ async function resetAndSeed(seedClient) {
   );
   await seedClient.query("delete from products where establishment_id = $1", [ESTABLISHMENT_ID]);
   await seedClient.query("delete from establishments where id = $1", [ESTABLISHMENT_ID]);
-  await seedClient.query("delete from partner_accounts where id = $1", [ACCOUNT_ID]);
   await seedClient.query("delete from partners where id = $1", [PARTNER_ID]);
-  await seedClient.query("delete from auth.users where id = $1", [ACCOUNT_ID]);
 
-  await seedClient.query("insert into auth.users (id, email) values ($1, $2)", [
-    ACCOUNT_ID,
-    "create-order-slot-concurrency@test.local",
-  ]);
   await seedClient.query("insert into partners (id, display_name) values ($1, $2)", [
     PARTNER_ID,
     "Create Order Slot Concurrency Partner",
@@ -121,20 +151,17 @@ async function runOnce(run) {
   await seedClient.connect();
   await resetAndSeed(seedClient);
 
-  const clients = await connectAuthenticated(N);
+  const cart = [{ product_id: PRODUCT_ID, date: DATE, slot_start_time: SLOT_START_TIME, qty: 1 }];
+  const clients = await Promise.all(Array.from({ length: N }, (_, i) => connectBuyer(i, cart)));
   const { go, markReady } = makeBarrier(N);
-
-  const lines = JSON.stringify([
-    { product_id: PRODUCT_ID, date: DATE, slot_start_time: SLOT_START_TIME, qty: 1 },
-  ]);
 
   const settled = await Promise.allSettled(
     clients.map(async (client) => {
       markReady();
       await go;
       const res = await client.query(
-        "select create_order($1::jsonb, $2, $3, $4, $5) as result",
-        [lines, "Concurrency Buyer", "concurrency-buyer@hifago.test", null, false]
+        "select create_order($1, $2, $3, $4) as result",
+        ["Concurrency Buyer", "concurrency-buyer@hifago.test", null, false]
       );
       return res.rows[0].result;
     })
