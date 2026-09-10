@@ -34,13 +34,13 @@ set local role authenticated;
 select set_config('request.jwt.claims', json_build_object('sub', '88930000-0000-4000-8000-000000000021', 'role', 'authenticated')::text, true);
 
 -- Cas 1 : ligne PMS-backed, AUCUNE ligne product_availability pour ces dates → succès quand même
--- (Lobby est seul juge, jamais consulté par create_order).
+-- (Lobby est seul juge, jamais consulté par create_order). Panier posé en cart_items (spec 32) :
+-- create_order lit désormais ses propres lignes pour auth.uid(), plus un paramètre.
+insert into cart_items (account_id, product_id, date, end_date, qty) values
+  ('88930000-0000-4000-8000-000000000021', '88930000-0000-4000-8000-000000000031',
+   '2028-09-01', '2028-09-03', 2);
 select is(
   (select (create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88930000-0000-4000-8000-000000000031',
-       'date', '2028-09-01', 'end_date', '2028-09-03', 'qty', 2
-     )),
      'Holder PMS Backed', 'pms-backed@test.local'
    ))->>'ok')::boolean,
   true,
@@ -49,17 +49,16 @@ select is(
 
 -- Cas 2 : témoin — même scénario mais produit NON PMS-backed, mêmes conditions (aucune
 -- product_availability) → doit échouer en slot_not_found, comportement inchangé.
+insert into cart_items (account_id, product_id, date, end_date, qty) values
+  ('88930000-0000-4000-8000-000000000021', '88930000-0000-4000-8000-000000000032',
+   '2028-09-01', '2028-09-03', 2);
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88930000-0000-4000-8000-000000000032',
-       'date', '2028-09-01', 'end_date', '2028-09-03', 'qty', 2
-     )),
      'Holder Non PMS', 'non-pms@test.local'
    )),
   jsonb_build_object('ok', false, 'reason', 'slot_not_found',
     'line', jsonb_build_object('product_id', '88930000-0000-4000-8000-000000000032',
-      'date', '2028-09-01', 'end_date', '2028-09-03', 'qty', 2),
+      'date', '2028-09-01', 'end_date', '2028-09-03', 'qty', 2, 'slot_start_time', null),
     'date', '2028-09-01'),
   'cas 2 (témoin) : ligne lodging NON PMS-backed échoue toujours en slot_not_found sans product_availability'
 );
@@ -93,12 +92,16 @@ insert into product_availability (product_id, date, capacity, booked) values
   ('88930000-0000-4000-8000-000000000031', '2028-10-02', 5, 2);
 set local role authenticated;
 select set_config('request.jwt.claims', json_build_object('sub', '88930000-0000-4000-8000-000000000021', 'role', 'authenticated')::text, true);
+-- Cas 2 (témoin) a échoué juste au-dessus : sa ligne cart_items reste (create_order ne vide le
+-- panier qu'en cas de succès, spec 32 §0) — purgée ici avant de poser celle du cas 5, sans quoi le
+-- panier porterait deux lignes et la seconde (produit 032, dates du cas 2) ferait échouer tout le
+-- panier en tout-ou-rien.
+delete from cart_items where account_id = '88930000-0000-4000-8000-000000000021';
+insert into cart_items (account_id, product_id, date, end_date, qty) values
+  ('88930000-0000-4000-8000-000000000021', '88930000-0000-4000-8000-000000000031',
+   '2028-10-01', '2028-10-03', 1);
 select is(
   (select (create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88930000-0000-4000-8000-000000000031',
-       'date', '2028-10-01', 'end_date', '2028-10-03', 'qty', 1
-     )),
      'Holder PMS Backed Residual', 'pms-backed-residual@test.local'
    ))->>'ok')::boolean,
   true,

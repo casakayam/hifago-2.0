@@ -6,15 +6,14 @@ public: [ia, dev, jerome]
 langue: fr
 statut: partiel
 reste: >
-  Livrées le 2026-09-10 : Tranches 1 (tables carts/cart_items + RLS) et 2 (create_order lit son
-  panier et son attribution côté serveur, plafonds 12/36/40 corrigés). Les 6 scripts de concurrence
-  et create_order.test.sql (94→93 assertions) sont réécrits et verts ; un cas (product_not_found)
-  est devenu structurellement intestable — cart_items.product_id porte une FK vers products, un id
-  inexistant ne peut plus atteindre create_order — retiré, signalé en §10, pas contourné. Reste 6
-  fichiers pgTAP (create_order_pms_backed, date_range_booking, notification_payment_events,
-  order_lines_holder_contact_operator, order_lines_referrer_rls,
-  release_order_after_pms_refusal) à adapter à la nouvelle signature. Tranches 3-4 (écran /carrito,
-  CartSummary, CartContext.tsx, CheckoutForm.tsx) non commencées.
+  Tranches 1+2 ENTIÈREMENT TERMINÉES le 2026-09-10 : tables carts/cart_items + RLS, create_order
+  lit son panier et son attribution côté serveur (plafonds 12/36/40 corrigés). Concurrence réelle
+  (npm run test:concurrency, 8 fichiers) et suite pgTAP complète (npm run test:db, 54
+  fichiers/898 tests) toutes deux vertes. Un cas de test (product_not_found) devenu
+  structurellement intestable — cart_items.product_id porte une FK vers products, un id
+  inexistant ne peut plus atteindre create_order — retiré, signalé en §10, pas contourné. Reste
+  les Tranches 3-4 : écran /carrito, CartSummary, CartContext.tsx (appels supabase-js directs),
+  CheckoutForm.tsx simplifié — aucune ligne de code encore.
 maj: 2026-09-10
 resume: >
   Fait passer le panier de la mémoire du navigateur (CartContext) à deux tables Postgres (carts,

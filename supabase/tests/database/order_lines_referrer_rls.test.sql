@@ -52,22 +52,26 @@ update partner_accounts set partner_id = 'aa110000-0000-4000-8000-000000000002'
 
 set local role authenticated;
 
--- Commande 1 : achetée par le simple acheteur, référée par A (code RLS-TEST-A).
+-- Commande 1 : achetée par le simple acheteur, référée par A (code RLS-TEST-A). Panier et
+-- attribution posés en base (spec 32) : create_order lit désormais ses propres cart_items/carts
+-- pour auth.uid(), plus des paramètres.
 select test_login('aa110000-0000-4000-8000-000000000033');
+insert into carts (account_id, attribution_code, attribution_source) values
+  ('aa110000-0000-4000-8000-000000000033', 'RLS-TEST-A', 'link');
+insert into cart_items (account_id, product_id, date, qty) values
+  ('aa110000-0000-4000-8000-000000000033', 'aa110000-0000-4000-8000-000000000021', '2028-12-01', 1);
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', 'aa110000-0000-4000-8000-000000000021', 'date', '2028-12-01', 'qty', 1
-  )),
-  'Holder Referrer RLS 1', 'buyer-fixture@hifago.test', null, false, 'RLS-TEST-A', 'link'
+  'Holder Referrer RLS 1', 'buyer-fixture@hifago.test', null, false
 );
 
 -- Commande 2 : achetée par un AUTRE acheteur (jamais '...033'), référée par B (code RLS-TEST-B).
 select test_login('aa110000-0000-4000-8000-000000000034');
+insert into carts (account_id, attribution_code, attribution_source) values
+  ('aa110000-0000-4000-8000-000000000034', 'RLS-TEST-B', 'link');
+insert into cart_items (account_id, product_id, date, qty) values
+  ('aa110000-0000-4000-8000-000000000034', 'aa110000-0000-4000-8000-000000000021', '2028-12-02', 1);
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', 'aa110000-0000-4000-8000-000000000021', 'date', '2028-12-02', 'qty', 1
-  )),
-  'Holder Referrer RLS 2', 'buyer-fixture@hifago.test', null, false, 'RLS-TEST-B', 'link'
+  'Holder Referrer RLS 2', 'buyer-fixture@hifago.test', null, false
 );
 
 reset role;

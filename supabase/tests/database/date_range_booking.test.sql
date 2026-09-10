@@ -104,12 +104,14 @@ select is(
 );
 
 -- === create_order — alojamiento par plage : succès ===============================================
+-- Panier posé en cart_items (spec 32) : create_order lit désormais ses propres lignes pour
+-- auth.uid(), plus un paramètre. test_login('...034') encore actif depuis les appels
+-- resolve_date_price ci-dessus.
+insert into cart_items (account_id, product_id, date, end_date, qty) values
+  ('88930000-0000-4000-8000-000000000034', '88930000-0000-4000-8000-000000000022',
+   '2028-12-01', '2028-12-03', 1);
 create temp table tmp_lodging_success as
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', '88930000-0000-4000-8000-000000000022',
-    'date', '2028-12-01', 'end_date', '2028-12-03', 'qty', 1
-  )),
   'Holder Lodging Range Success', p_holder_email => 'lodging-range-success@test.local'
 ) as result;
 
@@ -137,12 +139,11 @@ select is(
 -- PAS être consommée puisque la nuit 04 (dans la même plage) échoue ensuite — preuve que Phase 3
 -- valide TOUTES les nuits avant que Phase 4 n'en écrive une seule, pas un simple court-circuit sur
 -- la première nuit testée.
+insert into cart_items (account_id, product_id, date, end_date, qty) values
+  ('88930000-0000-4000-8000-000000000034', '88930000-0000-4000-8000-000000000022',
+   '2028-12-03', '2028-12-05', 1);
 select is(
   (select create_order(
-     jsonb_build_array(jsonb_build_object(
-       'product_id', '88930000-0000-4000-8000-000000000022',
-       'date', '2028-12-03', 'end_date', '2028-12-05', 'qty', 1
-     )),
      'Holder Lodging Closed', p_holder_email => 'lodging-range-closed@test.local'
    )->>'reason'),
   'date_closed',

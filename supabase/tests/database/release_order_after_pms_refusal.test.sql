@@ -48,16 +48,17 @@ select set_config('request.jwt.claims', json_build_object('sub', '9a930000-0000-
 
 -- Une commande MIXTE : deux nuits non-PMS, deux nuits PMS-backed, une activité à date unique.
 -- C'est le cas que le piège 2 du dossier vise (logement + activités dans la même commande).
+-- Panier posé en cart_items (spec 32) : create_order lit désormais ses propres lignes pour
+-- auth.uid(), plus un paramètre.
+insert into cart_items (account_id, product_id, date, end_date, qty) values
+  ('9a930000-0000-4000-8000-000000000021', '9a930000-0000-4000-8000-000000000031',
+   '2028-09-01', '2028-09-03', 2),
+  ('9a930000-0000-4000-8000-000000000021', '9a930000-0000-4000-8000-000000000032',
+   '2028-09-01', '2028-09-03', 1),
+  ('9a930000-0000-4000-8000-000000000021', '9a930000-0000-4000-8000-000000000033',
+   '2028-09-01', null, 3);
 select is(
   (select (create_order(
-     jsonb_build_array(
-       jsonb_build_object('product_id', '9a930000-0000-4000-8000-000000000031',
-                          'date', '2028-09-01', 'end_date', '2028-09-03', 'qty', 2),
-       jsonb_build_object('product_id', '9a930000-0000-4000-8000-000000000032',
-                          'date', '2028-09-01', 'end_date', '2028-09-03', 'qty', 1),
-       jsonb_build_object('product_id', '9a930000-0000-4000-8000-000000000033',
-                          'date', '2028-09-01', 'qty', 3)
-     ),
      'Holder Release', 'release@test.local'
    ))->>'ok')::boolean,
   true,

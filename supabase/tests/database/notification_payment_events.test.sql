@@ -210,8 +210,11 @@ $$;
 
 set local role authenticated;
 select test_login('99992000-0000-4000-8000-000000000023');
+-- Panier posé en cart_items (spec 32) : create_order lit désormais ses propres lignes pour
+-- auth.uid(), plus un paramètre.
+insert into cart_items (account_id, product_id, date, qty) values
+  ('99992000-0000-4000-8000-000000000023', '99992000-0000-4000-8000-000000000014', '2028-12-20', 1);
 select create_order(
-  jsonb_build_array(jsonb_build_object('product_id', '99992000-0000-4000-8000-000000000014', 'date', '2028-12-20', 'qty', 1)),
   'Notif Camp Holder', 'notif-camp-holder@test.local'
 ) as v_create_order_result \gset
 reset role;

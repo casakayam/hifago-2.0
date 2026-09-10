@@ -91,10 +91,11 @@ insert into order_lines (
 -- table créée sous un rôle ne peut être ni relue ni droppée sous un autre rôle : "must be owner").
 set local role authenticated;
 select test_login_anonymous('88960000-0000-4000-8000-000000000099');
+-- Panier posé en cart_items (spec 32) : create_order lit désormais ses propres lignes pour
+-- auth.uid(), plus un paramètre.
+insert into cart_items (account_id, product_id, date, qty) values
+  ('88960000-0000-4000-8000-000000000099', '88960000-0000-4000-8000-000000000031', '2029-06-01', 1);
 select create_order(
-  jsonb_build_array(jsonb_build_object(
-    'product_id', '88960000-0000-4000-8000-000000000031', 'date', '2029-06-01', 'qty', 1
-  )),
   'Holder Contact Buyer', 'holder-contact-buyer@hifago.test', '+57 300 111 2222'
 );
 reset role;
