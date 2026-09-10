@@ -51,8 +51,6 @@ function renderForm() {
     <NextIntlClientProvider locale="es" messages={{ ProductPage: messages.ProductPage, Common: messages.Common }}>
       <LodgingReservationForm
         productId="p1"
-        productName="GUSTO"
-        establishmentName="Casa Kayam"
         priceCop={20000}
         priceTiers={null}
         maxQty={6}
@@ -143,8 +141,6 @@ function renderPmsForm() {
     <NextIntlClientProvider locale="es" messages={{ ProductPage: messages.ProductPage, Common: messages.Common }}>
       <LodgingReservationForm
         productId="p-pms"
-        productName="GUSTO"
-        establishmentName="Casa Kayam"
         priceCop={20000}
         priceTiers={null}
         maxQty={6}

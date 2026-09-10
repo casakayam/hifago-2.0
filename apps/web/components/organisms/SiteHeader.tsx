@@ -43,15 +43,11 @@ import { SiteMenu } from "./SiteMenu";
 // DEUX DESTINATIONS, ISOLÉES EXPRÈS
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 //
-// L'architecture des pages de panier sera revue (décision de Jérôme, 2026-09-02) : une seule
-// constante à changer ce jour-là. Les routes de compte vivent dans `SiteMenu`, où sont leurs liens.
+// Les routes de compte vivent dans `SiteMenu`, où sont leurs liens.
 //
-// ⚠️ Ce jour-là n'est PAS le renommage en espagnol (2026-09-07). La spec 27 sépare `/carrito`
-// (le panier) de `/pago` (le tunnel de paiement), mais `/carrito` n'existe pas encore : l'écran
-// pointé ici est celui qui, aujourd'hui, porte À LA FOIS la liste du panier et le formulaire de
-// paiement. Le faire pointer sur `/carrito` maintenant donnerait un 404 depuis chaque page du
-// site. La constante bascule le jour où `/carrito` naît, et ce commentaire disparaît avec elle.
-const ROUTE_PANIER = "/pago";
+// `/carrito` (spec 27) — le panier — est né le 2026-09-10 avec la spec 32 (panier en base) :
+// bascule de `/pago` (le tunnel de paiement, qui ne porte plus la liste du panier) vers `/carrito`.
+const ROUTE_PANIER = "/carrito";
 
 export type SiteHeaderProps = {
   /**

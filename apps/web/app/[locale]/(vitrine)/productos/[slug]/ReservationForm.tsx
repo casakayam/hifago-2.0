@@ -33,15 +33,9 @@ type AvailabilityRow = { date: string; capacity: number; booked: number };
 
 export function ReservationForm({
   productId,
-  productName,
-  establishmentName,
-  priceCop,
   availability,
 }: {
   productId: string;
-  productName: string;
-  establishmentName: string;
-  priceCop: number;
   availability: AvailabilityRow[];
 }) {
   const t = useTranslations("ProductPage");
@@ -109,11 +103,8 @@ export function ReservationForm({
 
     const ok = await addToCart({
       productId,
-      productName,
-      establishmentName,
       date: selectedIso,
       qty,
-      priceCop,
     });
     if (!ok) return;
     setJustAdded(true);

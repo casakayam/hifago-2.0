@@ -1,0 +1,9 @@
+{
+  "title": "Your cart",
+  "emptyCart": "Your cart is empty.",
+  "lineQty": "Quantity: {count}",
+  "lineUnavailable": "This product is no longer available. You can remove it from your cart.",
+  "total": "Total",
+  "removeLine": "Remove",
+  "goToCheckout": "Go to checkout"
+}

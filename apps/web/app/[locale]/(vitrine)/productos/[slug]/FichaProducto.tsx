@@ -173,8 +173,6 @@ export function FichaProducto({
           ) : ficha.modoReserva === "lodging" && alojamiento ? (
             <LodgingReservationForm
               productId={ficha.id}
-              productName={ficha.nombre}
-              establishmentName={ficha.establecimiento?.nombre ?? ""}
               priceCop={ficha.precio?.tipo === "monto" ? ficha.precio.cop : 0}
               priceTiers={alojamiento.priceTiers as never}
               maxQty={alojamiento.maxQty}
@@ -184,21 +182,9 @@ export function FichaProducto({
               rates={ficha.tarifas}
             />
           ) : ficha.modoReserva === "slot" ? (
-            <SlotReservationForm
-              productId={ficha.id}
-              productName={ficha.nombre}
-              establishmentName={ficha.establecimiento?.nombre ?? ""}
-              priceCop={ficha.precio?.tipo === "monto" ? ficha.precio.cop : 0}
-              slots={ficha.franjas}
-            />
+            <SlotReservationForm productId={ficha.id} slots={ficha.franjas} />
           ) : (
-            <ReservationForm
-              productId={ficha.id}
-              productName={ficha.nombre}
-              establishmentName={ficha.establecimiento?.nombre ?? ""}
-              priceCop={ficha.precio?.tipo === "monto" ? ficha.precio.cop : 0}
-              availability={ficha.disponibilidad}
-            />
+            <ReservationForm productId={ficha.id} availability={ficha.disponibilidad} />
           )}
 
           <p className="text-xs text-muted">{tCommon("cancellationPolicy")}</p>

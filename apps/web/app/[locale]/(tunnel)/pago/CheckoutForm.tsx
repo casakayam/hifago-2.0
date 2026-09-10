@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations, useLocale } from "next-intl";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { useCart } from "@/lib/cart/CartContext";
-import { Button, Checkbox, Input, Label, TextField, cn } from "@hifago/ui";
-import { formatCop } from "@hifago/domain";
+import { Button, Checkbox, Input, Label, TextField } from "@hifago/ui";
 
 // Raisons qui renvoient `line` (product_id/date de LA ligne fautive) — toujours un sous-ensemble
 // de KNOWN_REASONS ci-dessous (composé à partir de celui-ci, jamais recopié à la main : chaque
@@ -94,13 +93,11 @@ type PaymentIntentResult = {
 
 export function CheckoutForm({
   isAuthenticated,
-  attributionCode,
   initialHolderName = "",
   initialHolderPhone = "",
   initialHolderEmail = "",
 }: {
   isAuthenticated: boolean;
-  attributionCode?: string;
   // Feature 32 — pré-remplissage pour un client connecté (page.tsx, depuis auth.users.email et sa
   // commande la plus récente). Défaut "" : comportement invité inchangé. Les champs restent
   // éditables — un pré-remplissage, jamais un verrou.
@@ -110,8 +107,11 @@ export function CheckoutForm({
 }) {
   const t = useTranslations("CheckoutPage");
   const tCommon = useTranslations("Common");
-  const locale = useLocale();
-  const { lines, removeLine, clear } = useCart();
+  // Spec 32 (panier en base) : ce formulaire ne porte plus la liste du panier (CartSummary,
+  // rendu en lecture seule par pago/page.tsx, juste au-dessus) — `refresh()` sert uniquement à
+  // resynchroniser la pastille du header une fois la commande créée (cart_items déjà vidée côté
+  // serveur par create_order à ce moment-là, cf. son contrat).
+  const { refresh } = useCart();
 
   const [holderName, setHolderName] = useState(initialHolderName);
   const [holderPhone, setHolderPhone] = useState(initialHolderPhone);
@@ -119,17 +119,12 @@ export function CheckoutForm({
   const [marketingConsent, setMarketingConsent] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
-  const [failedLineKey, setFailedLineKey] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // La commande a réussi dès que pendingOrderId est posé (jamais remis à null ensuite) — le
   // paiement qui suit peut échouer/être retenté sans jamais revenir à l'écran panier.
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [isPaying, setIsPaying] = useState(false);
-
-  const formatCurrency = (value: number) => formatCop(value, locale);
-
-  const total = lines.reduce((sum, line) => sum + line.priceCop * line.qty, 0);
 
   async function startPayment(orderId: string) {
     setPaymentError(null);
@@ -176,38 +171,20 @@ export function CheckoutForm({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
-    setFailedLineKey(null);
-
-    // Pas de blocage invité (correctif réservation invité, 2026-08-13) : le mot de passe n'a
-    // jamais été une obligation. RÉVISÉ 2026-09-10 (spec 31) : ce n'est PLUS parce que
-    // create_order accepte account_id null — il ne l'accepte plus, auth.uid() est désormais
-    // obligatoire et orders.account_id est NOT NULL — mais parce que CartContext a déjà établi
-    // une identité anonyme dès le premier ajout au panier, invisible pour ce formulaire.
-    if (lines.length === 0) return;
 
     setIsSubmitting(true);
 
+    // Spec 32 (panier en base) : create_order lit désormais ses propres lignes (cart_items) et son
+    // attribution (carts) pour auth.uid() côté serveur — plus de p_lines/p_attribution_code/
+    // p_attribution_source, un client ne peut plus les falsifier. `pago/page.tsx` ne rend ce
+    // formulaire que si le panier n'est pas vide (getCartLines) : empty_cart reste le filet côté
+    // serveur si le panier s'est vidé entre le chargement de la page et la soumission.
     const supabase = createClient();
     const { data, error: rpcError } = await supabase.rpc("create_order", {
-      p_lines: lines.map((line) => ({
-        product_id: line.productId,
-        date: line.date,
-        qty: line.qty,
-        // Absents pour toute ligne à date unique (comportement inchangé) — présents uniquement
-        // pour une ligne par plage (chambre d'hôtel/alojamiento, spec 17 §0 Tranche 2).
-        ...(line.endDate ? { end_date: line.endDate } : {}),
-        ...(line.slotStartTime ? { slot_start_time: line.slotStartTime } : {}),
-      })),
       p_holder_name: holderName.trim(),
       p_holder_email: holderEmail.trim(),
       p_holder_phone: holderPhone.trim(),
       p_marketing_consent: marketingConsent,
-      // Aucun champ de saisie de code nulle part dans l'interface (cahier des charges client
-      // §3c/§3h) : attributionCode vient uniquement du cookie ?ref= posé par proxy.ts, jamais
-      // d'une entrée utilisateur. Source figée à "link" pour cette feature (la distinction "qr"
-      // reviendra avec la feature 18, cf. plan).
-      p_attribution_code: attributionCode || undefined,
-      p_attribution_source: attributionCode ? "link" : undefined,
     });
 
     setIsSubmitting(false);
@@ -215,9 +192,6 @@ export function CheckoutForm({
     const result = data as CreateOrderResult | null;
     if (rpcError || !result?.ok) {
       const reason = resolveKnownReason(KNOWN_REASONS, result?.reason);
-      if (result?.line && (LINE_SCOPED_REASONS as readonly string[]).includes(reason)) {
-        setFailedLineKey(`${result.line.product_id}-${result.line.date}`);
-      }
       setError(t(`errors.${reason}`));
       return;
     }
@@ -260,15 +234,20 @@ export function CheckoutForm({
       const pmsResult = (await pmsResponse.json().catch(() => null)) as
         | { reason?: string; released?: boolean }
         | null;
-      // La commande a été défaite côté serveur (places rendues, lignes annulées, bookings frères mis
-      // en file d'annulation). Le panier est VOLONTAIREMENT conservé — `clear()` n'a pas encore été
-      // appelé : le client peut changer de dates sans tout ressaisir, ce qui est le seul geste utile
-      // face à une catégorie que Lobby refuse.
+      // ⚠️ RÉGRESSION CONNUE depuis spec 32 (panier en base), signalée pas corrigée ici — hors
+      // périmètre de cette tranche. Avant : le panier restait en mémoire React tout du long, donc
+      // intact ici même après un refus PMS (« le client peut changer de dates sans tout
+      // ressaisir »). Depuis que create_order vide cart_items DANS SA PROPRE transaction dès qu'il
+      // réussit (spec 32 §0, atomique avec la création de la commande), le panier est déjà VIDE à
+      // cet instant — release_order_after_pms_refusal défait la commande mais ne recrée aucune
+      // ligne cart_items, ce n'est pas son rôle. Le client devra ressaisir sa sélection.
       setError(t(pmsResult?.released === false ? "errors.pms_refused_pending" : "errors.pms_refused"));
       return;
     }
 
-    clear();
+    // create_order a déjà vidé cart_items côté serveur (contrat spec 32 §0) — refresh() ne fait
+    // que resynchroniser la pastille du header avec cet état déjà réel, jamais une suppression.
+    void refresh();
     setPendingOrderId(orderId);
     void startPayment(orderId);
   }
@@ -314,66 +293,10 @@ export function CheckoutForm({
     );
   }
 
-  if (lines.length === 0) {
-    return (
-      <p data-testid="empty-cart" className="text-sm text-muted">
-        {t("emptyCart")}
-      </p>
-    );
-  }
-
+  // Le panier (liste + total) est affiché juste au-dessus par `CartSummary` en lecture seule
+  // (`pago/page.tsx`) — ce formulaire ne porte plus que les coordonnées et le paiement (spec 32).
   return (
     <div className="flex flex-col gap-6">
-      <ul className="flex flex-col gap-3">
-        {lines.map((line) => {
-          const lineKey = `${line.productId}-${line.date}`;
-          const isFailed = failedLineKey === lineKey;
-          return (
-            <li
-              key={line.id}
-              data-testid={`cart-line-${line.id}`}
-              data-failed={isFailed}
-              className={cn(
-                "flex items-center justify-between gap-4 rounded-lg border p-3 text-sm",
-                isFailed ? "border-danger bg-danger/10" : "border",
-              )}
-            >
-              <div className="flex flex-col">
-                <span className="font-medium">
-                  {line.productName}
-                </span>
-                <span className="text-muted">
-                  {line.establishmentName} ·{" "}
-                  {line.endDate
-                    ? `${line.date} → ${line.endDate}`
-                    : line.slotStartTime
-                      ? `${line.date} · ${line.slotStartTime}`
-                      : line.date}{" "}
-                  ·{" "}
-                  {t("lineQty", { count: line.qty })}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="font-medium">{formatCurrency(line.priceCop * line.qty)}</span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onPress={() => removeLine(line.id)}
-                  data-testid={`remove-line-${line.id}`}
-                >
-                  {t("removeLine")}
-                </Button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-
-      <p className="text-lg font-medium" data-testid="cart-total">
-        {t("total")}: {formatCurrency(total)}
-      </p>
-
       <form onSubmit={handleSubmit} className="flex max-w-md flex-col gap-4">
         <TextField name="holder-name" value={holderName} onChange={setHolderName} isRequired>
           <Label>{t("holderName")}</Label>

@@ -45,7 +45,7 @@ async function renderPms(restrictedNights: { date: string; restrictions: Restric
   render(
     <NextIntlClientProvider locale="es" messages={{ ProductPage: messages.ProductPage, Common: messages.Common }}>
       <LodgingReservationForm
-        productId="p" productName="GUSTO" establishmentName="Casa Kayam"
+        productId="p"
         priceCop={20000} priceTiers={null} maxQty={6} lodgingKind="dorm"
         isPmsBacked availability={[]} rates={[]}
       />

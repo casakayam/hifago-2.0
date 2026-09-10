@@ -45,7 +45,7 @@
 - [Vitrine : les pages de listing et l'index de catégories](specs/29-vitrine-listings-et-index-de-categories.md) — **Implémenté** · maj 2026-09-08
 - [Vitrine : les fiches produit et établissement](specs/30-vitrine-fiches-produit-et-etablissement.md) — **Implémenté** · maj 2026-09-08
 - [Identité anonyme de l'invité](specs/31-identite-anonyme.md) — **Brouillon** · maj 2026-09-10
-- [Panier en base](specs/32-panier-en-base.md) — **Partiel** (reste : Tranches 1+2 ENTIÈREMENT TERMINÉES le 2026-09-10 : tables carts/cart_items + RLS,…) · maj 2026-09-10
+- [Panier en base](specs/32-panier-en-base.md) — **Implémenté** · maj 2026-09-10
 - [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-10
 - [Gabarit de spec de feature (à copier, ne décrit aucune feature réelle)](specs/_modele.md) — **modele** · maj 2026-08-16
 - [Avant d'écrire une spec — poser les bonnes questions](specs/avant-la-spec.md) — **modele** · maj 2026-08-16

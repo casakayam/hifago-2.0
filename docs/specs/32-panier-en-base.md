@@ -4,24 +4,17 @@ titre: "Panier en base"
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: partiel
-reste: >
-  Tranches 1+2 ENTIÈREMENT TERMINÉES le 2026-09-10 : tables carts/cart_items + RLS, create_order
-  lit son panier et son attribution côté serveur (plafonds 12/36/40 corrigés). Concurrence réelle
-  (npm run test:concurrency, 8 fichiers) et suite pgTAP complète (npm run test:db, 54
-  fichiers/898 tests) toutes deux vertes. Un cas de test (product_not_found) devenu
-  structurellement intestable — cart_items.product_id porte une FK vers products, un id
-  inexistant ne peut plus atteindre create_order — retiré, signalé en §10, pas contourné. Reste
-  les Tranches 3-4 : écran /carrito, CartSummary, CartContext.tsx (appels supabase-js directs),
-  CheckoutForm.tsx simplifié — aucune ligne de code encore.
+statut: implemente
 maj: 2026-09-10
 resume: >
   Fait passer le panier de la mémoire du navigateur (CartContext) à deux tables Postgres (carts,
   cart_items) rattachées à l'identité posée par la spec 31 — condition validée le 2026-09-07 pour
   que le panier survive plusieurs jours, que le serveur puisse le lire (réordonnancement de
   l'accueil, spec 28 T3), et que l'attribution d'un invité ne se perde plus à la fermeture de
-  l'onglet. Construit aussi l'écran `/carrito` que la spec 27 avait déjà prévu sans jamais le bâtir
-  (intégré au périmètre le 2026-09-10, à la demande de Jérôme).
+  l'onglet. Construit aussi l'écran /carrito que la spec 27 avait déjà prévu sans jamais le bâtir
+  (intégré au périmètre le 2026-09-10, à la demande de Jérôme). Les 4 tranches sont livrées et
+  vérifiées en navigateur (produit réel du seed → panier → paiement → commande confirmée) ; 2
+  points ouverts (§10) et 2 régressions mineures signalées restent au journal du 2026-09-10.
 mots_cles: [panier, cart_items, carts, attribution_code, CartContext, create_order, plafonds, carrito, CartSummary]
 repond_a:
   - "Où vit une ligne de panier, et quels champs porte-t-elle ?"

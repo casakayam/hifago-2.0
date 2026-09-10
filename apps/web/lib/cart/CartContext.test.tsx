@@ -1,27 +1,55 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { CartProvider, useCart, type CartLine } from "./CartContext";
+import { CartProvider, useCart, type AddToCartInput } from "./CartContext";
 
 // Invariants 1/2 de la spec 31 (docs/specs/31-identite-anonyme.md) — le point précis qui a motivé
 // ce test : signInAnonymously() n'est PAS idempotent (POST /signup inconditionnel), donc l'appeler
 // sans vérifier d'abord qu'une session existe déjà déconnecterait un client réellement connecté au
 // premier clic sur « Ajouter au panier ». Rien d'autre dans ce fichier ne le protégeait.
-const getSession = vi.fn();
+//
+// Depuis spec 32 (panier en base) : `addLine` écrit réellement dans `cart_items` (RLS directe),
+// plus un simple `setLines` local — le mock ci-dessous simule cette table en mémoire, dans l'ordre
+// d'insertion (`refresh()` la relit après chaque ajout). `refresh()` rappelle lui-même
+// `getSession()` (pour tout appelant qui n'a pas de session déjà en main) — `getSession` doit donc
+// refléter la session posée par `signInAnonymously()`, comme le fait le vrai client Supabase (son
+// cache de session interne), sans quoi le second appel verrait encore « aucune session » et
+// `refresh()` viderait `lines` juste après que `addLine` les ait remplies.
+let currentSession: { user: { id: string } } | null = null;
+const getSession = vi.fn(() => Promise.resolve({ data: { session: currentSession } }));
 const signInAnonymously = vi.fn();
+
+type Row = {
+  id: string;
+  product_id: string;
+  date: string;
+  end_date: string | null;
+  slot_start_time: string | null;
+  qty: number;
+};
+let rows: Row[] = [];
 
 vi.mock("@hifago/supabase/client", () => ({
   createClient: () => ({
     auth: { getSession, signInAnonymously },
+    from: (table: string) => {
+      if (table !== "cart_items") throw new Error(`table inattendue dans ce mock : ${table}`);
+      return {
+        insert: (row: { product_id: string; date: string; end_date: string | null; slot_start_time: string | null; qty: number }) => {
+          rows.push({ id: `row-${rows.length + 1}`, ...row });
+          return Promise.resolve({ error: null });
+        },
+        select: () => ({
+          order: () => Promise.resolve({ data: rows, error: null }),
+        }),
+      };
+    },
   }),
 }));
 
-const LIGNE: Omit<CartLine, "id"> = {
+const LIGNE: AddToCartInput = {
   productId: "p1",
-  productName: "Paseo en lancha",
-  establishmentName: "Casa Kayam",
   date: "2028-01-01",
   qty: 1,
-  priceCop: 80000,
 };
 
 function Sonde() {
@@ -36,12 +64,15 @@ function Sonde() {
 
 describe("CartContext — invariants 1/2 (session anonyme au premier ajout)", () => {
   beforeEach(() => {
-    getSession.mockReset();
+    getSession.mockClear();
     signInAnonymously.mockReset();
+    currentSession = null;
+    rows = [];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
   });
 
   it("invariant 2 : une session déjà active (connectée ou déjà anonyme) → signInAnonymously JAMAIS appelé", async () => {
-    getSession.mockResolvedValue({ data: { session: { user: { id: "u1" } } } });
+    currentSession = { user: { id: "u1" } };
     render(
       <CartProvider>
         <Sonde />
@@ -53,8 +84,10 @@ describe("CartContext — invariants 1/2 (session anonyme au premier ajout)", ()
   });
 
   it("invariant 1 : aucune session → signInAnonymously appelé une seule fois, la ligne rejoint le panier", async () => {
-    getSession.mockResolvedValue({ data: { session: null } });
-    signInAnonymously.mockResolvedValue({ data: {}, error: null });
+    signInAnonymously.mockImplementation(() => {
+      currentSession = { user: { id: "u1" } };
+      return Promise.resolve({ data: { session: currentSession }, error: null });
+    });
     render(
       <CartProvider>
         <Sonde />
@@ -66,8 +99,7 @@ describe("CartContext — invariants 1/2 (session anonyme au premier ajout)", ()
   });
 
   it("échec fermé : signInAnonymously échoue → la ligne n'entre JAMAIS dans le panier (jamais de commande orpheline)", async () => {
-    getSession.mockResolvedValue({ data: { session: null } });
-    signInAnonymously.mockResolvedValue({ data: {}, error: new Error("réseau indisponible") });
+    signInAnonymously.mockResolvedValue({ data: { session: null }, error: new Error("réseau indisponible") });
     render(
       <CartProvider>
         <Sonde />

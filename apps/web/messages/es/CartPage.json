@@ -1,0 +1,9 @@
+{
+  "title": "Tu carrito",
+  "emptyCart": "Tu carrito está vacío.",
+  "lineQty": "Cantidad: {count}",
+  "lineUnavailable": "Este producto ya no está disponible. Puedes quitarlo del carrito.",
+  "total": "Total",
+  "removeLine": "Quitar",
+  "goToCheckout": "Ir a pagar"
+}

@@ -24,6 +24,7 @@ import esProductPage from "./es/ProductPage.json";
 import esEstablishmentPage from "./es/EstablishmentPage.json";
 import esCheckoutPage from "./es/CheckoutPage.json";
 import esAccountOrdersPage from "./es/AccountOrdersPage.json";
+import esCartPage from "./es/CartPage.json";
 import enChrome from "./en/Chrome.json";
 import enLocaleLayout from "./en/LocaleLayout.json";
 import enHomePage from "./en/HomePage.json";
@@ -37,6 +38,7 @@ import enProductPage from "./en/ProductPage.json";
 import enEstablishmentPage from "./en/EstablishmentPage.json";
 import enCheckoutPage from "./en/CheckoutPage.json";
 import enAccountOrdersPage from "./en/AccountOrdersPage.json";
+import enCartPage from "./en/CartPage.json";
 
 import type { routing } from "@/i18n/routing";
 
@@ -59,6 +61,7 @@ const MESSAGES = {
     EstablishmentPage: esEstablishmentPage,
     CheckoutPage: esCheckoutPage,
     AccountOrdersPage: esAccountOrdersPage,
+    CartPage: esCartPage,
   },
   en: {
     Chrome: enChrome,
@@ -74,6 +77,7 @@ const MESSAGES = {
     EstablishmentPage: enEstablishmentPage,
     CheckoutPage: enCheckoutPage,
     AccountOrdersPage: enAccountOrdersPage,
+    CartPage: enCartPage,
   },
 } as const;
 

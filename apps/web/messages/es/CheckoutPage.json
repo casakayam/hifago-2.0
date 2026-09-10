@@ -1,9 +1,5 @@
 {
   "title": "Finalizar compra",
-  "emptyCart": "Tu carrito está vacío.",
-  "lineQty": "Cantidad: {count}",
-  "total": "Total",
-  "removeLine": "Quitar",
   "holderName": "Nombre completo",
   "holderPhone": "WhatsApp",
   "holderEmail": "Correo electrónico",

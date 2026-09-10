@@ -79,8 +79,6 @@ function nuitReservable(restants: Map<string, number>, iso: string, pourQty: num
 
 export function LodgingReservationForm({
   productId,
-  productName,
-  establishmentName,
   priceCop,
   priceTiers,
   maxQty,
@@ -90,8 +88,6 @@ export function LodgingReservationForm({
   rates,
 }: {
   productId: string;
-  productName: string;
-  establishmentName: string;
   priceCop: number;
   priceTiers: PriceTier[] | null;
   maxQty: number;
@@ -407,12 +403,9 @@ export function LodgingReservationForm({
     if (!range?.from || !range?.to || !canAdd) return;
     const ok = await addToCart({
       productId,
-      productName,
-      establishmentName,
       date: format(range.from, "yyyy-MM-dd"),
       endDate: format(range.to, "yyyy-MM-dd"),
       qty,
-      priceCop: estimatedUnitPriceCop,
     });
     if (!ok) return;
     setJustAdded(true);

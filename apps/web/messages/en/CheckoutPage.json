@@ -1,9 +1,5 @@
 {
   "title": "Checkout",
-  "emptyCart": "Your cart is empty.",
-  "lineQty": "Quantity: {count}",
-  "total": "Total",
-  "removeLine": "Remove",
   "holderName": "Full name",
   "holderPhone": "WhatsApp",
   "holderEmail": "Email",

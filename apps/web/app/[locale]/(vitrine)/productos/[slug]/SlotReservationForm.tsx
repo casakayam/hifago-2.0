@@ -80,15 +80,9 @@ function diaCompleto(daySlots: SlotRow[] | undefined, inCartByKey: Map<string, n
 
 export function SlotReservationForm({
   productId,
-  productName,
-  establishmentName,
-  priceCop,
   slots,
 }: {
   productId: string;
-  productName: string;
-  establishmentName: string;
-  priceCop: number;
   slots: SlotRow[];
 }) {
   const t = useTranslations("ProductPage");
@@ -168,12 +162,9 @@ export function SlotReservationForm({
 
     const ok = await addToCart({
       productId,
-      productName,
-      establishmentName,
       date: selectedIso,
       slotStartTime: toHHMM(selectedSlot.slot_start_time),
       qty,
-      priceCop,
     });
     if (!ok) return;
     setJustAdded(true);

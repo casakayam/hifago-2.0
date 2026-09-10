@@ -1,89 +1,138 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createClient } from "@hifago/supabase/client";
 
-// Les LIGNES du panier restent en mémoire React uniquement — pas de localStorage/sessionStorage,
-// aucune sérialisation, réinitialisées sur un rechargement complet de page (comportement voulu,
-// pas un bug). ⚠️ Le commentaire d'origine citait ici le cahier §3e (« perdu si l'onglet est
-// fermé ») comme justification durable : ce n'est plus le cas depuis sa réécriture, VALIDÉE par
-// Jérôme le 2026-09-07 (cf. docs/journal/2026-09.md) — le panier persistant est désormais la
-// cible, portée par une spec séparée («panier en base», à écrire). Ce fichier n'anticipe QUE ce
-// que spec 31 exige : depuis ce lot, addLine établit une IDENTITÉ durable (session anonyme
-// Supabase, cf. plus bas) même si les LIGNES elles-mêmes restent encore volatiles en attendant
-// cette spec suivante — l'identité est donc, dès maintenant, plus durable que le panier qu'elle
-// porte, pas l'inverse.
+// Spec 32 (panier en base) — réécrit le 2026-09-10 : les lignes ne vivent plus dans `useState`
+// (perdues à tout rechargement, cf. l'ancien commentaire de tête) mais dans `cart_items`,
+// rattachées à l'identité posée par la spec 31. `CartLine` perd `productName`/`establishmentName`/
+// `priceCop` (décision ② — `cart_items` ne stocke que `product_id`, jamais dénormalisé) : ce
+// contexte ne porte plus que la forme BRUTE de la ligne, celle dont `lib/reservas/disponibilidad.ts`
+// et `reservationRange.ts` ont besoin pour marquer une date/un créneau déjà présent dans le panier
+// en cours (jamais la vraie barrière, qui reste `create_order`). L'affichage RICHE d'une ligne
+// (nom, établissement, prix) est désormais une jointure côté serveur (`lib/cart/getCartLines.ts`),
+// consommée par `/carrito` et `/pago` — jamais recalculée ici.
 export type CartLine = {
-  // Identifiant LOCAL à cette ligne, jamais product_id+date : deux lignes visant le même produit
-  // et la même date sont explicitement autorisées (cahier des charges client A14) et doivent
-  // rester deux entrées distinctes dans le panier, retirables indépendamment.
   id: string;
   productId: string;
-  productName: string;
-  establishmentName: string;
-  date: string; // ISO yyyy-MM-dd — check-in si endDate est posé (chambre/alojamiento par plage)
+  date: string;
+  endDate?: string;
+  slotStartTime?: string;
   qty: number;
-  // Spec 17 §0 Tranche 2 : pour une ligne par plage, priceCop est déjà le total de LA PLAGE ENTIÈRE
-  // POUR UNE SEULE unité (nuits × prix nightly estimé) — jamais multiplié par les nuits une
-  // deuxième fois. `qty` s'applique par-dessus exactement comme pour une ligne normale
-  // (`priceCop * qty`, cf. total du panier/CheckoutForm) : aucune formule spéciale à ajouter pour
-  // ce cas, le total réellement facturé reste de toute façon résolu par create_order.
-  priceCop: number;
-  endDate?: string; // ISO — présent seulement pour une ligne par plage (alojamiento).
-  slotStartTime?: string; // "HH:MM" — présent seulement pour une ligne à créneau horaire (spec 18 Tranche 1), toujours une chaîne opaque, jamais combinée à une Date JS.
 };
+
+export type AddToCartInput = Omit<CartLine, "id">;
 
 type CartContextValue = {
   lines: CartLine[];
   // Async depuis spec 31 (invariant 1/2) : le premier ajout crée une session anonyme Supabase
-  // avant que la ligne rejoigne l'état. `{ ok: false }` si la session n'a pas pu être établie —
-  // JAMAIS une ligne ajoutée sans identité derrière, qui produirait plus tard une commande
-  // orpheline (create_order refuse désormais tout appel sans auth.uid(), spec 31 Tranche 1).
-  addLine: (line: Omit<CartLine, "id">) => Promise<{ ok: boolean }>;
-  removeLine: (id: string) => void;
-  clear: () => void;
+  // avant que la ligne rejoigne le panier. `{ ok: false }` si la session n'a pas pu être établie —
+  // JAMAIS une ligne ajoutée sans identité derrière (create_order refuse tout appel sans
+  // auth.uid(), spec 31 Tranche 1) — ou si l'insertion elle-même échoue.
+  addLine: (input: AddToCartInput) => Promise<{ ok: boolean }>;
+  // Resynchronise `lines` depuis la base — après un retrait (CartSummary) ou une commande créée
+  // (CheckoutForm, cart_items déjà vidée côté serveur par create_order à ce moment-là).
+  refresh: () => Promise<void>;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
 
+function toCartLine(row: {
+  id: string;
+  product_id: string;
+  date: string;
+  end_date: string | null;
+  slot_start_time: string | null;
+  qty: number;
+}): CartLine {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    date: row.date,
+    endDate: row.end_date ?? undefined,
+    slotStartTime: row.slot_start_time ?? undefined,
+    qty: row.qty,
+  };
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
   const [lines, setLines] = useState<CartLine[]>([]);
-  // Un seul client pour toute la durée de vie du provider (jamais un par appel à addLine) : chaque
+  // Un seul client pour toute la durée de vie du provider (jamais un par appel) : chaque
   // createClient() ouvre son propre GoTrueClient (BroadcastChannel + listener), jamais fermé —
   // un par clic sur "Ajouter au panier" fuirait un client à chaque ajout.
   const supabase = useMemo(() => createClient(), []);
 
+  // Volontairement séparée de `refresh` ci-dessous : `fetchLines` ne pose aucun état elle-même,
+  // seulement `refresh` (exposée aux appelants externes) le fait. Un `useEffect` qui appellerait
+  // directement une fonction posant l'état déclenche `react-hooks/set-state-in-effect` — cette
+  // séparation est ce qui permet au montage de peupler `lines` sans jamais y référencer `refresh`.
+  const fetchLines = useCallback(async (): Promise<CartLine[]> => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return [];
+    // RLS directe (cart_items_select, account_id = auth.uid()) : ne lit jamais que les lignes du
+    // compte courant, sans filtre explicite à répéter ici.
+    const { data } = await supabase
+      .from("cart_items")
+      .select("id, product_id, date, end_date, slot_start_time, qty")
+      .order("created_at", { ascending: true });
+    return (data ?? []).map(toCartLine);
+  }, [supabase]);
+
+  const refresh = useCallback(async () => {
+    setLines(await fetchLines());
+  }, [fetchLines]);
+
+  useEffect(() => {
+    fetchLines().then(setLines);
+  }, [fetchLines]);
+
   const value = useMemo<CartContextValue>(
     () => ({
       lines,
-      addLine: async (line) => {
+      addLine: async (input) => {
         // Invariant 2 (spec 31) : vérifier AVANT tout qu'aucune session n'existe déjà —
         // signInAnonymously() n'est PAS idempotent (POST /signup inconditionnel + remplacement de
         // la session locale). Appelé sans cette garde, il créerait une identité à CHAQUE ajout et
         // déconnecterait un client réellement connecté dès son premier clic sur « Ajouter au
         // panier ». getSession() lit la session déjà posée (connectée ou déjà anonyme) sans
         // aller-retour réseau dans le cas courant.
-        const {
+        let {
           data: { session },
         } = await supabase.auth.getSession();
         if (!session) {
           // Invariant 1 : c'est LE seul déclencheur du projet — jamais à la simple visite, jamais
           // sur un ?ref=. Échec fermé (cahier §0/CLAUDE.md §4.4) : si la session ne peut pas être
-          // créée, la ligne n'entre PAS dans le panier — un panier sans identité derrière
-          // produirait une commande orpheline que create_order refuse désormais (Tranche 1).
-          const { error } = await supabase.auth.signInAnonymously();
-          if (error) {
+          // créée, la ligne n'entre PAS dans le panier.
+          const { data, error } = await supabase.auth.signInAnonymously();
+          if (error || !data.session) {
             return { ok: false };
           }
+          session = data.session;
         }
-        const id = crypto.randomUUID();
-        setLines((prev) => [...prev, { ...line, id }]);
+
+        // Attribution (spec 32) : best-effort, ne bloque jamais l'ajout — le cookie hifago_ref est
+        // httpOnly (illisible ici), seul un Route Handler peut le lire et poser carts.attribution_code.
+        void fetch("/api/cart/attribution", { method: "POST" }).catch(() => {});
+
+        const { error: insertError } = await supabase.from("cart_items").insert({
+          account_id: session.user.id,
+          product_id: input.productId,
+          date: input.date,
+          end_date: input.endDate ?? null,
+          slot_start_time: input.slotStartTime ?? null,
+          qty: input.qty,
+        });
+        if (insertError) {
+          return { ok: false };
+        }
+        await refresh();
         return { ok: true };
       },
-      removeLine: (id) => setLines((prev) => prev.filter((existing) => existing.id !== id)),
-      clear: () => setLines([]),
+      refresh,
     }),
-    [lines, supabase]
+    [lines, supabase, refresh]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

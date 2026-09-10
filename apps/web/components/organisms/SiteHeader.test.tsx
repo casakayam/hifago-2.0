@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { NextIntlClientProvider } from "next-intl";
-import { CartProvider, useCart, type CartLine } from "@/lib/cart/CartContext";
+import { CartProvider, useCart, type AddToCartInput } from "@/lib/cart/CartContext";
 import { loadMessages, type Locale } from "@/messages";
 import { SiteHeader } from "./SiteHeader";
 
@@ -12,11 +12,37 @@ import { SiteHeader } from "./SiteHeader";
 // (cf. lib/cart/CartContext.tsx). Mocké ici avec une session DÉJÀ active : ce fichier vérifie le
 // rendu du panier, pas le mécanisme d'identité (déjà couvert par CartContext.test.tsx) — sans ce
 // mock, addLine tenterait un vrai appel réseau (@supabase/ssr lève faute d'URL/clé en test).
+//
+// Depuis spec 32 (panier en base) : addLine écrit réellement dans cart_items (RLS directe) —
+// `from("cart_items")` simule cette table en mémoire, dans l'ordre d'insertion.
+type Row = {
+  id: string;
+  product_id: string;
+  date: string;
+  end_date: string | null;
+  slot_start_time: string | null;
+  qty: number;
+};
+let cartRows: Row[] = [];
+
 vi.mock("@hifago/supabase/client", () => ({
   createClient: () => ({
     auth: { getSession: () => Promise.resolve({ data: { session: { user: { id: "test-user" } } } }) },
+    from: (table: string) => {
+      if (table !== "cart_items") throw new Error(`table inattendue dans ce mock : ${table}`);
+      return {
+        insert: (row: { product_id: string; date: string; end_date: string | null; slot_start_time: string | null; qty: number }) => {
+          cartRows.push({ id: `row-${cartRows.length + 1}`, ...row });
+          return Promise.resolve({ error: null });
+        },
+        select: () => ({
+          order: () => Promise.resolve({ data: cartRows, error: null }),
+        }),
+      };
+    },
   }),
 }));
+vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
 //
 // ⚠️ `@/i18n/navigation` tire next-intl/navigation → next/navigation, dont la résolution casse sous
 // Vitest. Le même mock vit dans les autres tests qui rendent un lien — il vivait dans
@@ -42,7 +68,7 @@ function Entoure({
 }: {
   children: React.ReactNode;
   locale?: Locale;
-  lignes?: CartLine[];
+  lignes?: AddToCartInput[];
 }) {
   return (
     <NextIntlClientProvider locale={locale} messages={loadMessages(locale)}>
@@ -55,7 +81,7 @@ function Entoure({
 }
 
 /** Remplit le panier au montage : `CartProvider` n'accepte pas d'état initial. */
-function RemplitLePanier({ lignes }: { lignes: CartLine[] }) {
+function RemplitLePanier({ lignes }: { lignes: AddToCartInput[] }) {
   const { lines, addLine } = useCart();
   if (lines.length === 0 && lignes.length > 0) {
     for (const ligne of lignes) addLine(ligne);
@@ -63,21 +89,24 @@ function RemplitLePanier({ lignes }: { lignes: CartLine[] }) {
   return null;
 }
 
-const ligne = (id: string): CartLine => ({
-  id,
+const ligne = (id: string): AddToCartInput => ({
   productId: `p-${id}`,
-  productName: "Paseo en lancha",
-  establishmentName: "Casa Kayam",
   date: "2026-09-14",
   qty: 3,
-  priceCop: 80000,
 });
 
-// Async depuis spec 31 : addLine (donc RemplitLePanier) traverse désormais getSession() avant
-// d'ajouter une ligne — même une session mockée déjà active franchit une micro-tâche réelle. Les
-// deux `await Promise.resolve()` dans le même `act` flushent cette chaîne (getSession résolu →
-// setLines) avant que le container ne soit rendu à l'appelant.
-async function rendu(props: { isAuthenticated?: boolean; lignes?: CartLine[]; locale?: Locale } = {}) {
+// Async depuis spec 31 : addLine traverse getSession() avant d'ajouter une ligne — même une
+// session mockée déjà active franchit une micro-tâche réelle. Depuis spec 32 (panier en base),
+// addLine écrit réellement dans cart_items puis appelle refresh() : la chaîne est désormais
+// getSession → insert → refresh (getSession → select.order) → setLines, quatre micro-tâches
+// enchaînées au lieu d'une seule. Les six `await Promise.resolve()` ci-dessous flushent large
+// (marge au-dessus des quatre nécessaires) avant que le container ne soit rendu à l'appelant —
+// suffisant même pour les N appels concurrents de `RemplitLePanier` (aucun n'est chaîné à un
+// autre, donc N ne rallonge pas la profondeur, seulement la largeur de chaque palier).
+async function rendu(props: { isAuthenticated?: boolean; lignes?: AddToCartInput[]; locale?: Locale } = {}) {
+  // Chaque appel isole son propre panier : sans ce reset, les lignes ajoutées par un test
+  // précédent (table en mémoire du mock, cf. tête de fichier) fausseraient le compte du suivant.
+  cartRows = [];
   let container!: HTMLElement;
   await act(async () => {
     ({ container } = render(
@@ -85,8 +114,9 @@ async function rendu(props: { isAuthenticated?: boolean; lignes?: CartLine[]; lo
         <SiteHeader isAuthenticated={props.isAuthenticated ?? false} testId="header" />
       </Entoure>
     ));
-    await Promise.resolve();
-    await Promise.resolve();
+    for (let i = 0; i < 6; i += 1) {
+      await Promise.resolve();
+    }
   });
   return container;
 }
@@ -155,7 +185,7 @@ describe("SiteHeader", () => {
     it("est un LIEN vers la page du panier", async () => {
       const panier = (await rendu()).querySelector('[data-testid="header-cart"]') as HTMLAnchorElement;
       expect(panier.tagName).toBe("A");
-      expect(panier.getAttribute("href")).toBe("/pago");
+      expect(panier.getAttribute("href")).toBe("/carrito");
     });
   });
 

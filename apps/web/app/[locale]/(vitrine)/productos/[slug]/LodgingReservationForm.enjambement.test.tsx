@@ -43,7 +43,7 @@ function renderForm(availability = NUITS) {
   return render(
     <NextIntlClientProvider locale="es" messages={{ ProductPage: messages.ProductPage, Common: messages.Common }}>
       <LodgingReservationForm
-        productId="p" productName="GUSTO" establishmentName="Casa Kayam"
+        productId="p"
         priceCop={20000} priceTiers={null} maxQty={6} lodgingKind="dorm"
         isPmsBacked={false} availability={availability} rates={[]}
       />

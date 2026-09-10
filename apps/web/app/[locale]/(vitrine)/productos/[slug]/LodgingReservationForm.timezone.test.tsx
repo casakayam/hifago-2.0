@@ -48,8 +48,6 @@ function renderForm({ isPmsBacked, availability }: { isPmsBacked: boolean; avail
     <NextIntlClientProvider locale="es" messages={{ ProductPage: messages.ProductPage, Common: messages.Common }}>
       <LodgingReservationForm
         productId="p-tz"
-        productName="GUSTO"
-        establishmentName="Casa Kayam"
         priceCop={20000}
         priceTiers={null}
         maxQty={6}
