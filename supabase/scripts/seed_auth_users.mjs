@@ -52,14 +52,35 @@ const USERS_WITH_PASSWORD = [
 const USERS_WITHOUT_PASSWORD = [
   { id: "d0000000-0000-4000-8000-000000000001", email: "campaign-client-consent-seed@test.local" },
   { id: "d0000000-0000-4000-8000-000000000002", email: "campaign-client-no-consent-seed@test.local" },
+  // Spec 31 (identité anonyme), Tranche 2 — commande "directe" du seed (326000...→
+  // c0000000-0000-4000-8000-000000000001, référence historique) : orders.account_id est NOT NULL
+  // depuis cette tranche, donc ce fixture a besoin d'un compte réel comme n'importe quel autre. Un
+  // compte ORDINAIRE (pas is_anonymous — createUser() ne peut de toute façon pas poser ce champ,
+  // propriété interne de GoTrue posée uniquement par un vrai signInAnonymously() côté client), le
+  // fixture n'a jamais eu besoin d'exercer le comportement anonyme lui-même (déjà couvert par
+  // pgTAP) — seulement de représenter « un invité, aucun référent ».
+  { id: "d0000000-0000-4000-8000-000000000003", email: "cliente.directo.seed@test.local" },
 ];
+
+// Spec 31 (identité anonyme), Tranche 2 — LE compte technique fixe de toute réservation prise au
+// comptoir (create_manual_order_line, décision ⑧), et du backfill des commandes account_id=null
+// antérieures à cette tranche qui ne sont PAS une réservation comptoir non plus (décision de
+// Jérôme, 2026-09-10 : même compte pour les deux cas plutôt qu'un second compte technique dédié —
+// coût mesuré comme nul en pratique, aucune donnée réelle n'existe encore). Email DÉLIBÉRÉMENT
+// identique à la sentinelle déjà écrite par create_manual_order_line (apps/admin/lib/whatsapp.ts,
+// NON_REAL_EMAIL_SENTINELS) — une valeur neuve aurait exigé une troisième sentinelle. Aucun mot de
+// passe : ce compte n'est jamais censé se connecter.
+const COMPTE_TECHNIQUE_RESA_MANUELLE = {
+  id: "e0000000-0000-4000-8000-000000000001",
+  email: "reserva-manual@hifago.local",
+};
 
 async function main() {
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  for (const user of [...USERS_WITH_PASSWORD, ...USERS_WITHOUT_PASSWORD]) {
+  for (const user of [...USERS_WITH_PASSWORD, ...USERS_WITHOUT_PASSWORD, COMPTE_TECHNIQUE_RESA_MANUELLE]) {
     const withPassword = USERS_WITH_PASSWORD.includes(user);
     const { error } = await admin.auth.admin.createUser({
       id: user.id,

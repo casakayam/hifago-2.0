@@ -567,7 +567,7 @@ export type Database = {
       }
       order_lines: {
         Row: {
-          account_id: string | null
+          account_id: string
           acompte_cop: number
           acompte_pct: number
           app_commission_cop: number
@@ -595,7 +595,7 @@ export type Database = {
           total_cop: number
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           acompte_cop: number
           acompte_pct: number
           app_commission_cop: number
@@ -623,7 +623,7 @@ export type Database = {
           total_cop: number
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           acompte_cop?: number
           acompte_pct?: number
           app_commission_cop?: number
@@ -690,7 +690,7 @@ export type Database = {
       }
       orders: {
         Row: {
-          account_id: string | null
+          account_id: string
           attribution_code: string | null
           attribution_source: string | null
           created_at: string
@@ -704,7 +704,7 @@ export type Database = {
           status: string
         }
         Insert: {
-          account_id?: string | null
+          account_id: string
           attribution_code?: string | null
           attribution_source?: string | null
           created_at?: string
@@ -718,7 +718,7 @@ export type Database = {
           status?: string
         }
         Update: {
-          account_id?: string | null
+          account_id?: string
           attribution_code?: string | null
           attribution_source?: string | null
           created_at?: string

@@ -323,11 +323,16 @@ select
 insert into partner_codes (code, partner_id, active)
 values ('SEED-DEMO-REF', 'b0000000-0000-4000-8000-000000000003', true);
 
--- Commande directe : invité (account_id null), aucun référent — cf. correctif réservation invité.
+-- Commande directe : invité, aucun référent. RÉVISÉ 2026-09-10 (spec 31, Tranche 2) —
+-- account_id null n'est plus possible (NOT NULL) ; ce compte (d0000000-...-000003,
+-- supabase/scripts/seed_auth_users.mjs) REMPLACE l'ancien account_id null, jamais le compte
+-- technique des réservations comptoir (e0000000-...-000001) — un invité web n'est pas une
+-- réservation prise au comptoir, même s'il n'a pas non plus d'identité anonyme "vivante" ici (la
+-- créer via l'API Admin exigerait le mécanisme réel signInAnonymously(), hors de portée d'un seed).
 insert into orders (id, account_id, holder_name, holder_phone, holder_email)
 values (
-  'c0000000-0000-4000-8000-000000000001', null, 'Cliente Directo Seed', '+57 300 000 0001',
-  'cliente.directo.seed@test.local'
+  'c0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000003',
+  'Cliente Directo Seed', '+57 300 000 0001', 'cliente.directo.seed@test.local'
 );
 -- Feature 11 (snapshot prix+commission) : commande directe, qty=1, price_cop=80000 (produit
 -- tour-lancha-guatape ci-dessus) → total_cop=80000, direct (0/17), acompte_cop=13600.
@@ -339,7 +344,7 @@ insert into order_lines (
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values (
-  'c0000000-0000-4000-8000-000000000001', null,
+  'c0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000003',
   'b0000000-0000-4000-8000-000000000001', '2026-10-01', 1, 'reserved', 'Cliente Directo Seed',
   80000, 80000, 'direct', 0.17, 0, 0.17, 13600, 0, 13600
 );
