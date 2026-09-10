@@ -12,10 +12,10 @@ import {
   TextField,
   cn,
   dateTaggedDayButtonComponents,
-  toast,
 } from "@hifago/ui";
 import { startOfTodayInBogota } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
+import { useAddToCart } from "@/lib/cart/useAddToCart";
 import { isoDeFecha, mesPorDefecto, ultimoDiaReservable } from "@/lib/reservas/calendario";
 import { limitarCantidad, topeCantidad } from "@/lib/reservas/cantidad";
 import {
@@ -92,7 +92,8 @@ export function SlotReservationForm({
   slots: SlotRow[];
 }) {
   const t = useTranslations("ProductPage");
-  const { lines, addLine } = useCart();
+  const { lines } = useCart();
+  const addToCart = useAddToCart();
   // Borne HAUTE de l'horizon produit (six mois, décidé le 2026-08-28). Le `useMemo` reste ici et
   // n'est pas décoratif : react-day-picker doit recevoir la MÊME référence d'un rendu à l'autre.
   const dernierJourReservable = useMemo(() => ultimoDiaReservable(), []);
@@ -165,11 +166,7 @@ export function SlotReservationForm({
   async function handleAddToCart() {
     if (!selectedIso || !selectedSlot || slotRemaining < 1) return;
 
-    // Depuis spec 31 (Tranche 1) : addLine établit désormais une identité (session anonyme
-    // Supabase) avant d'ajouter la ligne — plus un simple aller-retour local. La vraie barrière de
-    // capacité reste exclusivement create_order, appelée uniquement depuis /pago ; ok:false ici ne
-    // signifie jamais "capacité refusée", seulement "l'identité n'a pas pu être établie".
-    const result = await addLine({
+    const ok = await addToCart({
       productId,
       productName,
       establishmentName,
@@ -178,10 +175,7 @@ export function SlotReservationForm({
       qty,
       priceCop,
     });
-    if (!result.ok) {
-      toast.danger(t("addToCartError"));
-      return;
-    }
+    if (!ok) return;
     setJustAdded(true);
     setQty(1);
   }

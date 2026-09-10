@@ -48,12 +48,15 @@ const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [lines, setLines] = useState<CartLine[]>([]);
+  // Un seul client pour toute la durée de vie du provider (jamais un par appel à addLine) : chaque
+  // createClient() ouvre son propre GoTrueClient (BroadcastChannel + listener), jamais fermé —
+  // un par clic sur "Ajouter au panier" fuirait un client à chaque ajout.
+  const supabase = useMemo(() => createClient(), []);
 
   const value = useMemo<CartContextValue>(
     () => ({
       lines,
       addLine: async (line) => {
-        const supabase = createClient();
         // Invariant 2 (spec 31) : vérifier AVANT tout qu'aucune session n'existe déjà —
         // signInAnonymously() n'est PAS idempotent (POST /signup inconditionnel + remplacement de
         // la session locale). Appelé sans cette garde, il créerait une identité à CHAQUE ajout et
@@ -80,7 +83,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       removeLine: (id) => setLines((prev) => prev.filter((existing) => existing.id !== id)),
       clear: () => setLines([]),
     }),
-    [lines]
+    [lines, supabase]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
