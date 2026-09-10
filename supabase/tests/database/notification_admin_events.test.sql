@@ -11,7 +11,10 @@ create function test_login(uid uuid) returns void language sql as $$
 $$;
 
 insert into auth.users (id, email) values
-  ('99991000-0000-4000-8000-000000000001', 'events-admin@test.local');
+  ('99991000-0000-4000-8000-000000000001', 'events-admin@test.local'),
+  -- RÉVISÉ 2026-09-10 (spec 31, Tranche 2) : orders.account_id est NOT NULL, ce fixture n'avait
+  -- besoin que d'une identité quelconque (aucune assertion de ce fichier ne dépend d'account_id).
+  ('99991000-0000-4000-8000-000000000017', 'events-holder@test.local');
 insert into partner_capabilities (account_id, role, source, status) values
   ('99991000-0000-4000-8000-000000000001', 'admin', 'migration', 'active');
 
@@ -25,14 +28,16 @@ insert into products (id, partner_id, establishment_id, type, name, price_cop, s
    '99991000-0000-4000-8000-000000000012', 'activity',
    jsonb_build_object('es', 'Producto Events Test'), 30000, false, 'events-test-product');
 
-insert into orders (id, holder_name, holder_email) values
-  ('99991000-0000-4000-8000-000000000014', 'Events Holder', 'events-holder@test.local');
+insert into orders (id, account_id, holder_name, holder_email) values
+  ('99991000-0000-4000-8000-000000000014', '99991000-0000-4000-8000-000000000017',
+   'Events Holder', 'events-holder@test.local');
 insert into order_lines (
-  id, order_id, product_id, date, qty, status, holder_name,
+  id, order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values (
   '99991000-0000-4000-8000-000000000015', '99991000-0000-4000-8000-000000000014',
+  '99991000-0000-4000-8000-000000000017',
   '99991000-0000-4000-8000-000000000013', '2029-01-01', 1, 'reserved', 'Events Holder',
   30000, 30000, 'direct', 0, 0, 0, 0, 0, 0
 );

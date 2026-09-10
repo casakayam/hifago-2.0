@@ -237,11 +237,13 @@ select is(
      'app_commission_cop', app_commission_cop
    ) from order_lines where id = (select (result->>'order_line_id')::uuid from tmp_manual_act)),
   jsonb_build_object(
-    'account_id', null, 'slot_start_time', null, 'qty', 2,
+    'account_id', 'e0000000-0000-4000-8000-000000000001', 'slot_start_time', null, 'qty', 2,
     'holder_name', 'Cliente Walk-in Recepción', 'status', 'reserved', 'commission_case', 'operator_manual',
     'price_cop', 50000, 'total_cop', 100000, 'referrer_commission_cop', 0, 'app_commission_cop', 0
   ),
-  'succès date unique : order_line correcte (account_id null, commission_case operator_manual, zéro commission)'
+  -- RÉVISÉ 2026-09-10 (spec 31, Tranche 2) : account_id porte désormais le compte technique fixe,
+  -- plus jamais null (orders.account_id/order_lines.account_id sont NOT NULL).
+  'succès date unique : order_line correcte (account_id = compte technique, commission_case operator_manual, zéro commission)'
 );
 -- orders/audit_log n'ont aucune policy select operator (seulement account_id=acheteur/admin pour
 -- orders, admin seul pour audit_log) : bascule admin pour ces deux lectures, même patron que
@@ -251,9 +253,10 @@ select is(
   (select jsonb_build_object('account_id', account_id, 'holder_email', holder_email, 'holder_phone', holder_phone)
      from orders where id = (select (result->>'order_id')::uuid from tmp_manual_act)),
   jsonb_build_object(
-    'account_id', null, 'holder_email', 'reserva-manual@hifago.local', 'holder_phone', '+57 300 000 0000'
+    'account_id', 'e0000000-0000-4000-8000-000000000001', 'holder_email', 'reserva-manual@hifago.local',
+    'holder_phone', '+57 300 000 0000'
   ),
-  'succès date unique : order guest checkout avec sentinelle email dédiée'
+  'succès date unique : order compte technique + sentinelle email dédiée (RÉVISÉ 2026-09-10, spec 31)'
 );
 select is(
   (select jsonb_build_object('action', action, 'entity_table', entity_table, 'note', note)

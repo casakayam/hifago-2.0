@@ -98,7 +98,10 @@ insert into products (id, partner_id, establishment_id, type, name, price_cop, s
    100000, 'actividad-qatzbog');
 
 insert into auth.users (id, email) values
-  ('ed000000-0000-4000-8000-000000000001', 'clients-tz-admin@test.local');
+  ('ed000000-0000-4000-8000-000000000001', 'clients-tz-admin@test.local'),
+  -- RÉVISÉ 2026-09-10 (spec 31, Tranche 2) : orders.account_id est NOT NULL — le client de la
+  -- fixture ci-dessous a besoin de sa propre identité, distincte de l'admin.
+  ('ed000000-0000-4000-8000-000000000004', 'clients-tz-client@test.local');
 
 insert into partner_capabilities (account_id, role, source, status) values
   ('ed000000-0000-4000-8000-000000000001', 'admin', 'migration', 'active');
@@ -106,14 +109,16 @@ insert into partner_capabilities (account_id, role, source, status) values
 -- LA fixture du lot : une nuit réservée qui commence ET finit aujourd'hui À GUATAPÉ. C'est le cas
 -- que l'admin voit tous les soirs et que la fonction classait faux. (Colonnes financières :
 -- valeurs neutres, list_clients ne lit aucun montant — même remarque que list_clients_rpc.test.sql.)
-insert into orders (id, holder_name, holder_email) values
-  ('edA00000-0000-4000-8000-000000000001', 'Cliente Hoy QATZBOG', 'cliente.hoy.qatzbog@test.local');
+insert into orders (id, account_id, holder_name, holder_email) values
+  ('edA00000-0000-4000-8000-000000000001', 'ed000000-0000-4000-8000-000000000004',
+   'Cliente Hoy QATZBOG', 'cliente.hoy.qatzbog@test.local');
 insert into order_lines (
-  order_id, product_id, date, end_date, status, qty, price_cop, total_cop, commission_case,
+  order_id, account_id, product_id, date, end_date, status, qty, price_cop, total_cop, commission_case,
   acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop,
   holder_name
 ) values (
-  'edA00000-0000-4000-8000-000000000001', 'ed000000-0000-4000-8000-000000000002',
+  'edA00000-0000-4000-8000-000000000001', 'ed000000-0000-4000-8000-000000000004',
+  'ed000000-0000-4000-8000-000000000002',
   public.today_in_bogota(), public.today_in_bogota(), 'reserved', 1, 100000, 100000, 'direct',
   0, 0, 0, 0, 0, 0, 'Cliente Hoy QATZBOG'
 );

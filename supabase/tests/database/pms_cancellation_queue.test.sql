@@ -18,6 +18,12 @@ $$;
 insert into public.partners (id, display_name)
 values ('cc000000-0000-4000-8000-000000000001', 'Partenaire C2');
 
+-- RÉVISÉ 2026-09-10 (spec 31, Tranche 2) : orders.account_id est NOT NULL. Une seule identité
+-- pour les 4 commandes de ce fichier — aucune n'en dépend, ce fichier teste le trigger d'enfilement
+-- PMS, pas une sémantique de propriétaire.
+insert into auth.users (id, email) values
+  ('cc000000-0000-4000-8000-0000000000c2', 'cliente-c2@test.local');
+
 insert into public.establishments (id, partner_id, name, lobby_connector_active, lobby_api_token)
 values ('cc000000-0000-4000-8000-000000000002', 'cc000000-0000-4000-8000-000000000001',
         '{"es":"Establecimiento C2"}'::jsonb, true, 'jeton-factice-c2');
@@ -29,15 +35,16 @@ values
   ('cc000000-0000-4000-8000-000000000011', 'cc000000-0000-4000-8000-000000000001',
    'cc000000-0000-4000-8000-000000000002', 'activity', '{"es":"Yoga C2"}'::jsonb, 'yoga-c2', 22000, null);
 
-insert into public.orders (id, holder_name, holder_email, status)
-values ('cc000000-0000-4000-8000-000000000020', 'Cliente C2', 'c2@example.test', 'reserved');
+insert into public.orders (id, account_id, holder_name, holder_email, status)
+values ('cc000000-0000-4000-8000-000000000020', 'cc000000-0000-4000-8000-0000000000c2',
+        'Cliente C2', 'c2@example.test', 'reserved');
 
-insert into public.order_lines (id, order_id, product_id, status, qty, price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop, holder_name, date, pms_booking_id)
+insert into public.order_lines (id, order_id, account_id, product_id, status, qty, price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop, holder_name, date, pms_booking_id)
 values
-  ('cc000000-0000-4000-8000-000000000030', 'cc000000-0000-4000-8000-000000000020',
+  ('cc000000-0000-4000-8000-000000000030', 'cc000000-0000-4000-8000-000000000020', 'cc000000-0000-4000-8000-0000000000c2',
    'cc000000-0000-4000-8000-000000000010', 'reserved', 1, 100000, 100000, 'direct', 0.15, 0, 0.10, 15000, 0, 10000,
    'Cliente C2', '2027-03-01', '90000001'),
-  ('cc000000-0000-4000-8000-000000000031', 'cc000000-0000-4000-8000-000000000020',
+  ('cc000000-0000-4000-8000-000000000031', 'cc000000-0000-4000-8000-000000000020', 'cc000000-0000-4000-8000-0000000000c2',
    'cc000000-0000-4000-8000-000000000011', 'reserved', 1, 22000, 22000, 'direct', 0.15, 0, 0.10, 3300, 0, 2200,
    'Cliente C2', '2027-03-01', '90000001');
 
@@ -89,10 +96,11 @@ select is(
 -- expire_stale_payment_orders, et c'est probablement le cas le plus fréquent en volume :
 -- reserve-nights tourne AVANT le paiement, donc une commande abandonnée au paiement a déjà son
 -- booking chez Lobby quand elle expire.
-insert into public.orders (id, holder_name, holder_email, status)
-values ('cc000000-0000-4000-8000-000000000021', 'Cliente C2', 'c2@example.test', 'reserved');
-insert into public.order_lines (id, order_id, product_id, status, qty, price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop, holder_name, date, pms_booking_id)
-values ('cc000000-0000-4000-8000-000000000032', 'cc000000-0000-4000-8000-000000000021',
+insert into public.orders (id, account_id, holder_name, holder_email, status)
+values ('cc000000-0000-4000-8000-000000000021', 'cc000000-0000-4000-8000-0000000000c2',
+        'Cliente C2', 'c2@example.test', 'reserved');
+insert into public.order_lines (id, order_id, account_id, product_id, status, qty, price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop, holder_name, date, pms_booking_id)
+values ('cc000000-0000-4000-8000-000000000032', 'cc000000-0000-4000-8000-000000000021', 'cc000000-0000-4000-8000-0000000000c2',
         'cc000000-0000-4000-8000-000000000010', 'reserved', 1, 100000, 100000, 'direct', 0.15, 0, 0.10, 15000, 0, 10000,
         'Cliente C2', '2027-04-01', '90000002');
 
@@ -105,10 +113,11 @@ select is(
 );
 
 -- Une ligne sans booking Lobby ne concerne pas ce mécanisme.
-insert into public.orders (id, holder_name, holder_email, status)
-values ('cc000000-0000-4000-8000-000000000022', 'Cliente C2', 'c2@example.test', 'reserved');
-insert into public.order_lines (id, order_id, product_id, status, qty, price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop, holder_name, date, pms_booking_id)
-values ('cc000000-0000-4000-8000-000000000033', 'cc000000-0000-4000-8000-000000000022',
+insert into public.orders (id, account_id, holder_name, holder_email, status)
+values ('cc000000-0000-4000-8000-000000000022', 'cc000000-0000-4000-8000-0000000000c2',
+        'Cliente C2', 'c2@example.test', 'reserved');
+insert into public.order_lines (id, order_id, account_id, product_id, status, qty, price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop, holder_name, date, pms_booking_id)
+values ('cc000000-0000-4000-8000-000000000033', 'cc000000-0000-4000-8000-000000000022', 'cc000000-0000-4000-8000-0000000000c2',
         'cc000000-0000-4000-8000-000000000011', 'reserved', 1, 22000, 22000, 'direct', 0.15, 0, 0.10, 3300, 0, 2200,
         'Cliente C2', '2027-05-01', null);
 update public.order_lines set status = 'cancelled_by_client' where id = 'cc000000-0000-4000-8000-000000000033';
@@ -125,10 +134,11 @@ select is(
 -- une réservation qui se termine bien. Ces tests ne l'attrapaient pas parce qu'ils n'exerçaient que
 -- des statuts d'annulation : un test qui ne vérifie que les cas où l'on veut que ça marche ne
 -- prouve jamais que ça s'abstient.
-insert into public.orders (id, holder_name, holder_email, status)
-values ('cc000000-0000-4000-8000-000000000023', 'Cliente C2', 'c2@example.test', 'reserved');
-insert into public.order_lines (id, order_id, product_id, status, qty, price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop, holder_name, date, pms_booking_id)
-values ('cc000000-0000-4000-8000-000000000034', 'cc000000-0000-4000-8000-000000000023',
+insert into public.orders (id, account_id, holder_name, holder_email, status)
+values ('cc000000-0000-4000-8000-000000000023', 'cc000000-0000-4000-8000-0000000000c2',
+        'Cliente C2', 'c2@example.test', 'reserved');
+insert into public.order_lines (id, order_id, account_id, product_id, status, qty, price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop, holder_name, date, pms_booking_id)
+values ('cc000000-0000-4000-8000-000000000034', 'cc000000-0000-4000-8000-000000000023', 'cc000000-0000-4000-8000-0000000000c2',
         'cc000000-0000-4000-8000-000000000010', 'reserved', 1, 100000, 100000, 'direct', 0.15, 0, 0.10, 15000, 0, 10000,
         'Cliente C2', '2027-06-01', '90000003');
 

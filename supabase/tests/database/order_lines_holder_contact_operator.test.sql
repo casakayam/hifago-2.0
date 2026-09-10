@@ -66,15 +66,20 @@ insert into product_availability (product_id, date, capacity, booked) values
 -- rôle : orders/order_lines sont RPC-only en écriture (revoke insert sur authenticated/anon), seul
 -- le rôle de connexion par défaut de ce fichier (avant tout `set local role`) a le grant nécessaire,
 -- même contrainte que les inserts partners/establishments/products ci-dessus.
-insert into orders (id, holder_name, holder_email, holder_phone) values
-  ('88960000-0000-4000-8000-000000000041', 'Holder Contact Modify', 'holder-contact-modify@hifago.test',
-   '+57 300 555 6666');
+-- RÉVISÉ 2026-09-10 (spec 31, Tranche 2) : account_id ajouté aux deux colonnes (NOT NULL) — la
+-- même identité anonyme (099) qui joue le client dans le bloc create_order plus bas, sans
+-- conséquence ici (ce fixture ne teste aucune sémantique d'identité, seulement la copie
+-- holder_phone/holder_email par modify_order_line).
+insert into orders (id, account_id, holder_name, holder_email, holder_phone) values
+  ('88960000-0000-4000-8000-000000000041', '88960000-0000-4000-8000-000000000099',
+   'Holder Contact Modify', 'holder-contact-modify@hifago.test', '+57 300 555 6666');
 insert into order_lines (
-  id, order_id, product_id, date, qty, status, holder_name, holder_phone, holder_email,
+  id, order_id, account_id, product_id, date, qty, status, holder_name, holder_phone, holder_email,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values (
   '88960000-0000-4000-8000-000000000042', '88960000-0000-4000-8000-000000000041',
+  '88960000-0000-4000-8000-000000000099',
   '88960000-0000-4000-8000-000000000031', '2029-06-10', 1, 'reserved',
   'Holder Contact Modify', '+57 300 555 6666', 'holder-contact-modify@hifago.test',
   10000, 10000, 'direct', 0.17, 0, 0.17, 1700, 0, 1700

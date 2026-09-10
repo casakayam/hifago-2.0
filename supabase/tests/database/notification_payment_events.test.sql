@@ -31,7 +31,12 @@ insert into products (id, partner_id, establishment_id, type, name, price_cop, s
 
 insert into auth.users (id, email) values
   ('99992000-0000-4000-8000-000000000021', 'notif-payment-owner@test.local'),
-  ('99992000-0000-4000-8000-000000000022', 'notif-payment-referrer@test.local');
+  ('99992000-0000-4000-8000-000000000022', 'notif-payment-referrer@test.local'),
+  -- RÉVISÉ 2026-09-10 (spec 31, Tranche 2) : orders.account_id est NOT NULL — les deux commandes
+  -- client ci-dessous ont désormais besoin d'une identité (aucune assertion de ce fichier n'en
+  -- dépend).
+  ('99992000-0000-4000-8000-000000000025', 'notif-payment-client@test.local'),
+  ('99992000-0000-4000-8000-000000000024', 'notif-payment-client-2@test.local');
 insert into partner_capabilities (partner_id, role, source, status) values
   ('99992000-0000-4000-8000-000000000001', 'referrer', 'migration', 'active'),
   ('99992000-0000-4000-8000-000000000002', 'referrer', 'migration', 'active');
@@ -40,17 +45,20 @@ update partner_accounts set partner_id = '99992000-0000-4000-8000-000000000001'
 update partner_accounts set partner_id = '99992000-0000-4000-8000-000000000002'
  where id = '99992000-0000-4000-8000-000000000022';
 
-insert into orders (id, holder_name, holder_email) values
-  ('99992000-0000-4000-8000-000000000031', 'Notif Payment Holder', 'notif-payment-client@test.local');
+insert into orders (id, account_id, holder_name, holder_email) values
+  ('99992000-0000-4000-8000-000000000031', '99992000-0000-4000-8000-000000000025',
+   'Notif Payment Holder', 'notif-payment-client@test.local');
 insert into order_lines (
-  id, order_id, product_id, date, qty, status, holder_name,
+  id, order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, referrer_partner_id, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values
   ('99992000-0000-4000-8000-000000000041', '99992000-0000-4000-8000-000000000031',
+   '99992000-0000-4000-8000-000000000025',
    '99992000-0000-4000-8000-000000000012', '2028-12-10', 1, 'reserved', 'Notif Payment Holder',
    100000, 100000, 'direct', null, 0.17, 0, 0.17, 17000, 0, 17000),
   ('99992000-0000-4000-8000-000000000042', '99992000-0000-4000-8000-000000000031',
+   '99992000-0000-4000-8000-000000000025',
    '99992000-0000-4000-8000-000000000012', '2028-12-11', 1, 'reserved', 'Notif Payment Holder',
    100000, 100000, 'external_referrer', '99992000-0000-4000-8000-000000000002', 0.17, 0.1, 0.07,
    17000, 10000, 7000);
@@ -97,14 +105,16 @@ select ok(
 ------------------------------------------------------------------------------------------------
 -- Fault-injection sur l'invariant §8.1 — LE test le plus important de cette spec.
 ------------------------------------------------------------------------------------------------
-insert into orders (id, holder_name, holder_email) values
-  ('99992000-0000-4000-8000-000000000032', 'Notif Payment Holder 2', 'notif-payment-client-2@test.local');
+insert into orders (id, account_id, holder_name, holder_email) values
+  ('99992000-0000-4000-8000-000000000032', '99992000-0000-4000-8000-000000000024',
+   'Notif Payment Holder 2', 'notif-payment-client-2@test.local');
 insert into order_lines (
-  id, order_id, product_id, date, qty, status, holder_name,
+  id, order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values (
   '99992000-0000-4000-8000-000000000043', '99992000-0000-4000-8000-000000000032',
+  '99992000-0000-4000-8000-000000000024',
   '99992000-0000-4000-8000-000000000012', '2028-12-12', 1, 'reserved', 'Notif Payment Holder 2',
   100000, 100000, 'direct', 0.17, 0, 0.17, 17000, 0, 17000
 );

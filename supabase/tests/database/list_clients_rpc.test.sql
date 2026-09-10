@@ -11,6 +11,15 @@
 -- Fixtures marquées 'QAETABCLI' pour scoper recherche/pagination indépendamment des données de
 -- supabase/seed.sql déjà présentes sur cette instance locale partagée (même précaution que
 -- list_establishments_admin_rpc.test.sql).
+--
+-- ⚠️ RÉVISÉ 2026-09-10 (spec 31, Tranche 2) : orders.account_id est NOT NULL — les 5 clients B-F,
+-- qui n'avaient délibérément AUCUN compte (résolution par email), ont chacun désormais leur propre
+-- compte réel, distinct. Ce n'est pas une perte de couverture : les 3 assertions dédiées de
+-- list_client_orders_rpc.test.sql testent déjà client_key_for_order() DIRECTEMENT (fonction pure,
+-- sans passer par `orders`) pour ses branches email/téléphone/order_id, désormais inatteignables
+-- par les deux seuls appelants réels (list_clients, list_client_orders) — pas la peine de dupliquer
+-- cette couverture ici. Seule « client sans compte → client_key = email » perd son sens tel quel :
+-- reformulée en « avec compte → toujours account_id ».
 begin;
 select plan(15);
 
@@ -33,7 +42,12 @@ insert into products (id, partner_id, establishment_id, type, name, price_cop, s
 insert into auth.users (id, email) values
   ('ec000000-0000-4000-8000-000000000001', 'clients-list-admin@test.local'),
   ('ec900000-0000-4000-8000-000000000001', 'clients-list-stranger@test.local'),
-  ('ec100000-0000-4000-8000-0000000000a1', 'clients-list-client-a-account@test.local');
+  ('ec100000-0000-4000-8000-0000000000a1', 'clients-list-client-a-account@test.local'),
+  ('ec100000-0000-4000-8000-0000000000b1', 'clients-list-client-b-account@test.local'),
+  ('ec100000-0000-4000-8000-0000000000c1', 'clients-list-client-c-account@test.local'),
+  ('ec100000-0000-4000-8000-0000000000d1', 'clients-list-client-d-account@test.local'),
+  ('ec100000-0000-4000-8000-0000000000e1', 'clients-list-client-e-account@test.local'),
+  ('ec100000-0000-4000-8000-0000000000f1', 'clients-list-client-f-account@test.local');
 
 insert into partner_capabilities (account_id, role, source, status) values
   ('ec000000-0000-4000-8000-000000000001', 'admin', 'migration', 'active');
@@ -49,91 +63,99 @@ insert into orders (id, account_id, holder_name, holder_email) values
   ('ecA00000-0000-4000-8000-000000000001', 'ec100000-0000-4000-8000-0000000000a1',
    'Cliente Proxima QAETABCLI', 'cliente.proxima.qaetabcli@test.local');
 insert into order_lines (
-  order_id, product_id, date, status, qty, price_cop, total_cop, commission_case,
+  order_id, account_id, product_id, date, status, qty, price_cop, total_cop, commission_case,
   acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop,
   holder_name
 ) values (
-  'ecA00000-0000-4000-8000-000000000001', 'ec000000-0000-4000-8000-000000000002',
+  'ecA00000-0000-4000-8000-000000000001', 'ec100000-0000-4000-8000-0000000000a1',
+  'ec000000-0000-4000-8000-000000000002',
   public.today_in_bogota() + 10, 'reserved', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
   'Cliente Proxima QAETABCLI'
 );
 
 -- Client B — pas de compte (clé = email), ligne réservée à cheval sur aujourd'hui → en_casa.
-insert into orders (id, holder_name, holder_email) values
-  ('ecB00000-0000-4000-8000-000000000001', 'Cliente Encasa QAETABCLI',
-   'cliente.encasa.qaetabcli@test.local');
+insert into orders (id, account_id, holder_name, holder_email) values
+  ('ecB00000-0000-4000-8000-000000000001', 'ec100000-0000-4000-8000-0000000000b1',
+   'Cliente Encasa QAETABCLI', 'cliente.encasa.qaetabcli@test.local');
 insert into order_lines (
-  order_id, product_id, date, end_date, status, qty, price_cop, total_cop, commission_case,
+  order_id, account_id, product_id, date, end_date, status, qty, price_cop, total_cop, commission_case,
   acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop,
   holder_name
 ) values (
-  'ecB00000-0000-4000-8000-000000000001', 'ec000000-0000-4000-8000-000000000002',
+  'ecB00000-0000-4000-8000-000000000001', 'ec100000-0000-4000-8000-0000000000b1',
+  'ec000000-0000-4000-8000-000000000002',
   public.today_in_bogota() - 1, public.today_in_bogota() + 1, 'reserved', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
   'Cliente Encasa QAETABCLI'
 );
 
 -- Client C — ligne réalisée dans le passé → pasada.
-insert into orders (id, holder_name, holder_email) values
-  ('ecC00000-0000-4000-8000-000000000001', 'Cliente Pasada QAETABCLI',
-   'cliente.pasada.qaetabcli@test.local');
+insert into orders (id, account_id, holder_name, holder_email) values
+  ('ecC00000-0000-4000-8000-000000000001', 'ec100000-0000-4000-8000-0000000000c1',
+   'Cliente Pasada QAETABCLI', 'cliente.pasada.qaetabcli@test.local');
 insert into order_lines (
-  order_id, product_id, date, status, qty, price_cop, total_cop, commission_case,
+  order_id, account_id, product_id, date, status, qty, price_cop, total_cop, commission_case,
   acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop,
   holder_name
 ) values (
-  'ecC00000-0000-4000-8000-000000000001', 'ec000000-0000-4000-8000-000000000002',
+  'ecC00000-0000-4000-8000-000000000001', 'ec100000-0000-4000-8000-0000000000c1',
+  'ec000000-0000-4000-8000-000000000002',
   public.today_in_bogota() - 10, 'fulfilled', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
   'Cliente Pasada QAETABCLI'
 );
 
 -- Client D — toutes ses lignes annulées → cancelada.
-insert into orders (id, holder_name, holder_email) values
-  ('ecD00000-0000-4000-8000-000000000001', 'Cliente Cancelada QAETABCLI',
-   'cliente.cancelada.qaetabcli@test.local');
+insert into orders (id, account_id, holder_name, holder_email) values
+  ('ecD00000-0000-4000-8000-000000000001', 'ec100000-0000-4000-8000-0000000000d1',
+   'Cliente Cancelada QAETABCLI', 'cliente.cancelada.qaetabcli@test.local');
 insert into order_lines (
-  order_id, product_id, date, status, qty, price_cop, total_cop, commission_case,
+  order_id, account_id, product_id, date, status, qty, price_cop, total_cop, commission_case,
   acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop,
   holder_name
 ) values (
-  'ecD00000-0000-4000-8000-000000000001', 'ec000000-0000-4000-8000-000000000002',
+  'ecD00000-0000-4000-8000-000000000001', 'ec100000-0000-4000-8000-0000000000d1',
+  'ec000000-0000-4000-8000-000000000002',
   public.today_in_bogota() - 5, 'cancelled_by_client', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
   'Cliente Cancelada QAETABCLI'
 );
 
 -- Client E — statuts mixtes sur 2 commandes distinctes (une annulée passée, une réservée future)
 -- → le stade le plus "actif" (proxima) l'emporte, jamais cancelada.
-insert into orders (id, holder_name, holder_email) values
-  ('ecE00000-0000-4000-8000-000000000001', 'Cliente Mixto QAETABCLI',
-   'cliente.mixto.qaetabcli@test.local'),
-  ('ecE00000-0000-4000-8000-000000000002', 'Cliente Mixto QAETABCLI',
-   'cliente.mixto.qaetabcli@test.local');
+insert into orders (id, account_id, holder_name, holder_email) values
+  ('ecE00000-0000-4000-8000-000000000001', 'ec100000-0000-4000-8000-0000000000e1',
+   'Cliente Mixto QAETABCLI', 'cliente.mixto.qaetabcli@test.local'),
+  ('ecE00000-0000-4000-8000-000000000002', 'ec100000-0000-4000-8000-0000000000e1',
+   'Cliente Mixto QAETABCLI', 'cliente.mixto.qaetabcli@test.local');
 insert into order_lines (
-  order_id, product_id, date, status, qty, price_cop, total_cop, commission_case,
+  order_id, account_id, product_id, date, status, qty, price_cop, total_cop, commission_case,
   acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop,
   holder_name
 ) values
-  ('ecE00000-0000-4000-8000-000000000001', 'ec000000-0000-4000-8000-000000000002',
+  ('ecE00000-0000-4000-8000-000000000001', 'ec100000-0000-4000-8000-0000000000e1',
+   'ec000000-0000-4000-8000-000000000002',
    public.today_in_bogota() - 5, 'cancelled_by_client', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
    'Cliente Mixto QAETABCLI'),
-  ('ecE00000-0000-4000-8000-000000000002', 'ec000000-0000-4000-8000-000000000002',
+  ('ecE00000-0000-4000-8000-000000000002', 'ec100000-0000-4000-8000-0000000000e1',
+   'ec000000-0000-4000-8000-000000000002',
    public.today_in_bogota() + 5, 'reserved', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
    'Cliente Mixto QAETABCLI');
 
 -- Client F — une ligne superseded qui SERAIT proxima si elle comptait, mais sa seule ligne
 -- "vivante" est fulfilled dans le passé → doit rester pasada (preuve que superseded est bien
 -- exclu du calcul, pas juste accessoirement absent).
-insert into orders (id, holder_name, holder_email) values
-  ('ecF00000-0000-4000-8000-000000000001', 'Cliente Superseded QAETABCLI',
-   'cliente.superseded.qaetabcli@test.local');
+insert into orders (id, account_id, holder_name, holder_email) values
+  ('ecF00000-0000-4000-8000-000000000001', 'ec100000-0000-4000-8000-0000000000f1',
+   'Cliente Superseded QAETABCLI', 'cliente.superseded.qaetabcli@test.local');
 insert into order_lines (
-  order_id, product_id, date, status, qty, price_cop, total_cop, commission_case,
+  order_id, account_id, product_id, date, status, qty, price_cop, total_cop, commission_case,
   acompte_pct, referrer_pct, app_pct, acompte_cop, referrer_commission_cop, app_commission_cop,
   holder_name
 ) values
-  ('ecF00000-0000-4000-8000-000000000001', 'ec000000-0000-4000-8000-000000000002',
+  ('ecF00000-0000-4000-8000-000000000001', 'ec100000-0000-4000-8000-0000000000f1',
+   'ec000000-0000-4000-8000-000000000002',
    public.today_in_bogota() + 100, 'superseded', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
    'Cliente Superseded QAETABCLI'),
-  ('ecF00000-0000-4000-8000-000000000001', 'ec000000-0000-4000-8000-000000000002',
+  ('ecF00000-0000-4000-8000-000000000001', 'ec100000-0000-4000-8000-0000000000f1',
+   'ec000000-0000-4000-8000-000000000002',
    public.today_in_bogota() - 20, 'fulfilled', 1, 100000, 100000, 'direct', 0, 0, 0, 0, 0, 0,
    'Cliente Superseded QAETABCLI');
 
@@ -205,8 +227,10 @@ select is(
 );
 select is(
   (select client_key from list_clients(p_search => 'Encasa QAETABCLI')),
-  'cliente.encasa.qaetabcli@test.local',
-  'client sans compte → client_key = email en minuscule'
+  'ec100000-0000-4000-8000-0000000000b1',
+  -- RÉVISÉ 2026-09-10 : tout client a désormais un compte (account_id NOT NULL) — la couverture du
+  -- repli par email vit dans list_client_orders_rpc.test.sql (fonction testée directement).
+  'client avec compte → client_key = account_id (cas B, ex-"sans compte")'
 );
 
 -- pagination ------------------------------------------------------------------------------------

@@ -36,7 +36,12 @@ insert into auth.users (id, email) values
   ('88970000-0000-4000-8000-000000000031', 'payments-admin@test.local'),
   ('88970000-0000-4000-8000-000000000032', 'payments-buyer@test.local'),
   ('88970000-0000-4000-8000-000000000033', 'payments-other@test.local'),
-  ('88970000-0000-4000-8000-000000000034', 'payments-referrer@test.local');
+  ('88970000-0000-4000-8000-000000000034', 'payments-referrer@test.local'),
+  -- RÉVISÉ 2026-09-10 (spec 31, Tranche 2) : orders.account_id est NOT NULL — l'« invité » de
+  -- l'Order A ci-dessous a désormais besoin d'une identité réelle (distincte du buyer 032, pour ne
+  -- pas fausser les cas qui comptent les commandes PAR compte), même si aucun de ces tests ne
+  -- dépend d'elle étant spécifiquement anonyme (déjà couvert par create_order.test.sql).
+  ('88970000-0000-4000-8000-000000000035', 'payments-guest@test.local');
 insert into partner_capabilities (account_id, role, source, status)
 values ('88970000-0000-4000-8000-000000000031', 'admin', 'migration', 'active');
 insert into partner_capabilities (partner_id, role, source, status)
@@ -44,16 +49,18 @@ values ('88970000-0000-4000-8000-000000000002', 'referrer', 'migration', 'active
 update partner_accounts set partner_id = '88970000-0000-4000-8000-000000000002'
  where id = '88970000-0000-4000-8000-000000000034';
 
--- Order A : invité (account_id null) — cas create_payment_intent principal (chemin invité, le plus
--- fréquent en usage réel : redirection Checkout Pro immédiatement après create_order).
+-- Order A : invité (identité distincte 035) — cas create_payment_intent principal (chemin invité,
+-- le plus fréquent en usage réel : redirection Checkout Pro immédiatement après create_order).
 insert into orders (id, account_id, holder_name, holder_email)
-values ('88970000-0000-4000-8000-000000000041', null, 'Holder Payments Guest', 'guest-payments@test.local');
+values ('88970000-0000-4000-8000-000000000041', '88970000-0000-4000-8000-000000000035',
+        'Holder Payments Guest', 'guest-payments@test.local');
 insert into order_lines (
-  id, order_id, product_id, date, qty, status, holder_name,
+  id, order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values (
   '88970000-0000-4000-8000-000000000051', '88970000-0000-4000-8000-000000000041',
+  '88970000-0000-4000-8000-000000000035',
   '88970000-0000-4000-8000-000000000021', '2028-12-01', 1, 'reserved', 'Holder Payments Guest',
   100000, 100000, 'direct', 0.17, 0, 0.17, 17000, 0, 17000
 );
@@ -100,16 +107,21 @@ insert into order_lines (
 -- create_payment_intent
 ------------------------------------------------------------------------------------------------
 
--- Cas 1 : invité (rôle anon réel, sans claim JWT) crée un intent sur sa propre commande. UN SEUL
--- appel RPC (un second appel immédiat retomberait sur payment_already_pending, cf. cas 2) — les
--- autres assertions lisent l'état persisté (payments/orders), jamais un second appel à la RPC.
-set local role anon;
+-- Cas 1 : invité (SA PROPRE session — identité 035, jamais un simple rôle anon depuis le
+-- 2026-09-10, spec 31 : orders.account_id est NOT NULL, donc la garde de create_payment_intent
+-- refuse désormais tout appelant DISTINCT du propriétaire, sans exception pour l'absence de
+-- session — cf. migration 20260909190000, le trou qu'elle laissait volontairement ouvert pour un
+-- invité sans compte n'existe plus) crée un intent sur sa propre commande. UN SEUL appel RPC (un
+-- second appel immédiat retomberait sur payment_already_pending, cf. cas 2) — les autres
+-- assertions lisent l'état persisté (payments/orders), jamais un second appel à la RPC.
+set local role authenticated;
+select test_login('88970000-0000-4000-8000-000000000035');
 select is(
   (select create_payment_intent('88970000-0000-4000-8000-000000000041') ->> 'ok'),
   'true',
   'cas 1a : invité crée un intent sur sa propre commande → ok:true'
 );
--- Lecture directe de payments : jamais sous anon/authenticated (RLS admin-only, payments_select_admin)
+-- Lecture directe de payments : jamais sous authenticated (RLS admin-only, payments_select_admin)
 -- — reset role AVANT toute lecture de cette table dans ce fichier, même discipline que le reste des
 -- RPC RLS-only déjà en place (ledger_entries.test.sql, set_order_line_status.test.sql).
 reset role;
@@ -129,15 +141,20 @@ select is(
   'cas 1d : orders.payment_status passe à pending'
 );
 
--- Cas 2 : second appel sur la même commande, intent encore pending → refusé (idempotence métier).
-set local role anon;
+-- Cas 2 : second appel sur la même commande (même identité 035), intent encore pending → refusé
+-- (idempotence métier).
+set local role authenticated;
+select test_login('88970000-0000-4000-8000-000000000035');
 select is(
   (select create_payment_intent('88970000-0000-4000-8000-000000000041') ->> 'reason'),
   'payment_already_pending',
   'cas 2 : second intent alors qu''un pending existe déjà → payment_already_pending'
 );
 
--- Cas 3 : commande inconnue → order_not_found.
+-- Cas 3 : commande inconnue → order_not_found. Indépendant de l'identité (la garde d'existence
+-- précède la garde de propriété) : rôle anon conservé ici, plus fidèle à un appel sans session.
+reset role;
+set local role anon;
 select is(
   (select create_payment_intent('00000000-0000-4000-8000-000000000099') ->> 'reason'),
   'order_not_found',
@@ -407,8 +424,10 @@ insert into order_lines (
 -- (commission_case='operator_manual', payment_status resté à son défaut 'unpaid' — create_manual_
 -- order_line ne le touche jamais), 31 minutes → ne doit JAMAIS expirer, un walk-in n'attend
 -- structurellement aucun paiement en ligne.
+-- RÉVISÉ 2026-09-10 (spec 31, Tranche 2) : account_id null remplacé par le compte technique
+-- fixe — c'est littéralement ce que représente ce scénario (walk-in), invariant 8.
 insert into orders (id, account_id, holder_name, holder_email, payment_status, created_at)
-values ('88970000-0000-4000-8000-000000000050', null,
+values ('88970000-0000-4000-8000-000000000050', 'e0000000-0000-4000-8000-000000000001',
         'Holder Walk-in Manual', 'reserva-manual@hifago.local', 'unpaid', now() - interval '31 minutes');
 insert into order_lines (
   id, order_id, account_id, product_id, date, qty, status, holder_name,
@@ -416,7 +435,7 @@ insert into order_lines (
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values (
   '88970000-0000-4000-8000-000000000085', '88970000-0000-4000-8000-000000000050',
-  null, '88970000-0000-4000-8000-000000000021',
+  'e0000000-0000-4000-8000-000000000001', '88970000-0000-4000-8000-000000000021',
   '2028-12-14', 1, 'reserved', 'Holder Walk-in Manual', 100000, 100000, 'operator_manual', 0, 0, 0, 0, 0, 0
 );
 
