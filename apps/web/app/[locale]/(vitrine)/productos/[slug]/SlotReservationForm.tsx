@@ -12,6 +12,7 @@ import {
   TextField,
   cn,
   dateTaggedDayButtonComponents,
+  toast,
 } from "@hifago/ui";
 import { startOfTodayInBogota } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
@@ -161,13 +162,14 @@ export function SlotReservationForm({
     setQty(1);
   }
 
-  function handleAddToCart() {
+  async function handleAddToCart() {
     if (!selectedIso || !selectedSlot || slotRemaining < 1) return;
 
-    // Purement local : aucun aller-retour réseau, le panier n'existe qu'en mémoire côté client
-    // (cf. lib/cart/CartContext.tsx). La vraie barrière de capacité reste exclusivement
-    // create_order, appelée uniquement depuis /pago.
-    addLine({
+    // Depuis spec 31 (Tranche 1) : addLine établit désormais une identité (session anonyme
+    // Supabase) avant d'ajouter la ligne — plus un simple aller-retour local. La vraie barrière de
+    // capacité reste exclusivement create_order, appelée uniquement depuis /pago ; ok:false ici ne
+    // signifie jamais "capacité refusée", seulement "l'identité n'a pas pu être établie".
+    const result = await addLine({
       productId,
       productName,
       establishmentName,
@@ -176,6 +178,10 @@ export function SlotReservationForm({
       qty,
       priceCop,
     });
+    if (!result.ok) {
+      toast.danger(t("addToCartError"));
+      return;
+    }
     setJustAdded(true);
     setQty(1);
   }

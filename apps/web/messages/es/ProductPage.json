@@ -20,6 +20,7 @@
   "quantityLabelHouses": "Alojamientos",
   "addToCart": "Añadir al carrito",
   "addedToCart": "Añadido al carrito.",
+  "addToCartError": "No se pudo añadir al carrito. Inténtalo de nuevo.",
   "goToCheckout": "Ir a finalizar compra",
   "reserveExternal": "Reservar",
   "selectRange": "Elige la fecha de entrada y salida en el calendario.",

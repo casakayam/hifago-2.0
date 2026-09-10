@@ -12,6 +12,7 @@ import {
   Input,
   Label,
   TextField,
+  toast,
 } from "@hifago/ui";
 import {
   formatCop,
@@ -401,9 +402,13 @@ export function LodgingReservationForm({
     }
   }
 
-  function handleAddToCart() {
+  async function handleAddToCart() {
     if (!range?.from || !range?.to || !canAdd) return;
-    addLine({
+    // Depuis spec 31 (Tranche 1) : addLine établit désormais une identité (session anonyme
+    // Supabase) avant d'ajouter la ligne. ok:false ne signifie jamais "capacité refusée",
+    // seulement "l'identité n'a pas pu être établie" — la barrière de capacité reste
+    // exclusivement create_order, appelée uniquement depuis /pago.
+    const result = await addLine({
       productId,
       productName,
       establishmentName,
@@ -412,6 +417,10 @@ export function LodgingReservationForm({
       qty,
       priceCop: estimatedUnitPriceCop,
     });
+    if (!result.ok) {
+      toast.danger(t("addToCartError"));
+      return;
+    }
     setJustAdded(true);
     setRange(undefined);
     setQty(1);

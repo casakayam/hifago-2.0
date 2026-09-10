@@ -20,6 +20,7 @@
   "quantityLabelHouses": "Units",
   "addToCart": "Add to cart",
   "addedToCart": "Added to cart.",
+  "addToCartError": "Couldn't add to cart. Try again.",
   "goToCheckout": "Go to checkout",
   "reserveExternal": "Book now",
   "selectRange": "Pick a check-in and check-out date on the calendar.",

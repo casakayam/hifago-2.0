@@ -13,6 +13,7 @@ import {
   Button,
   DayPickerCalendar as Calendar,
   Input,
+  toast,
   Label,
   TextField,
   dateTaggedDayButtonComponents,
@@ -102,13 +103,14 @@ export function ReservationForm({
     setJustAdded(false);
   }
 
-  function handleAddToCart() {
+  async function handleAddToCart() {
     if (!selectedIso || remaining < 1) return;
 
-    // Purement local : aucun aller-retour réseau, le panier n'existe qu'en mémoire côté client
-    // (cf. lib/cart/CartContext.tsx). La vraie barrière de capacité reste exclusivement
-    // create_order, appelée uniquement depuis /pago.
-    addLine({
+    // Depuis spec 31 (Tranche 1) : addLine établit désormais une identité (session anonyme
+    // Supabase) avant d'ajouter la ligne — plus un simple aller-retour local. La vraie barrière de
+    // capacité reste exclusivement create_order, appelée uniquement depuis /pago ; ok:false ici ne
+    // signifie jamais "capacité refusée", seulement "l'identité n'a pas pu être établie".
+    const result = await addLine({
       productId,
       productName,
       establishmentName,
@@ -116,6 +118,10 @@ export function ReservationForm({
       qty,
       priceCop,
     });
+    if (!result.ok) {
+      toast.danger(t("addToCartError"));
+      return;
+    }
     setJustAdded(true);
     setQty(1);
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { NextIntlClientProvider } from "next-intl";
 import { CartProvider, useCart, type CartLine } from "@/lib/cart/CartContext";
@@ -7,6 +7,16 @@ import { loadMessages, type Locale } from "@/messages";
 import { SiteHeader } from "./SiteHeader";
 
 // Pas de @testing-library/jest-dom dans ce monorepo — assertions DOM natives uniquement.
+//
+// Depuis spec 31 (Tranche 1), addLine est async et appelle getSession() avant d'ajouter une ligne
+// (cf. lib/cart/CartContext.tsx). Mocké ici avec une session DÉJÀ active : ce fichier vérifie le
+// rendu du panier, pas le mécanisme d'identité (déjà couvert par CartContext.test.tsx) — sans ce
+// mock, addLine tenterait un vrai appel réseau (@supabase/ssr lève faute d'URL/clé en test).
+vi.mock("@hifago/supabase/client", () => ({
+  createClient: () => ({
+    auth: { getSession: () => Promise.resolve({ data: { session: { user: { id: "test-user" } } } }) },
+  }),
+}));
 //
 // ⚠️ `@/i18n/navigation` tire next-intl/navigation → next/navigation, dont la résolution casse sous
 // Vitest. Le même mock vit dans les autres tests qui rendent un lien — il vivait dans
@@ -63,18 +73,27 @@ const ligne = (id: string): CartLine => ({
   priceCop: 80000,
 });
 
-function rendu(props: { isAuthenticated?: boolean; lignes?: CartLine[]; locale?: Locale } = {}) {
-  const { container } = render(
-    <Entoure locale={props.locale} lignes={props.lignes}>
-      <SiteHeader isAuthenticated={props.isAuthenticated ?? false} testId="header" />
-    </Entoure>
-  );
+// Async depuis spec 31 : addLine (donc RemplitLePanier) traverse désormais getSession() avant
+// d'ajouter une ligne — même une session mockée déjà active franchit une micro-tâche réelle. Les
+// deux `await Promise.resolve()` dans le même `act` flushent cette chaîne (getSession résolu →
+// setLines) avant que le container ne soit rendu à l'appelant.
+async function rendu(props: { isAuthenticated?: boolean; lignes?: CartLine[]; locale?: Locale } = {}) {
+  let container!: HTMLElement;
+  await act(async () => {
+    ({ container } = render(
+      <Entoure locale={props.locale} lignes={props.lignes}>
+        <SiteHeader isAuthenticated={props.isAuthenticated ?? false} testId="header" />
+      </Entoure>
+    ));
+    await Promise.resolve();
+    await Promise.resolve();
+  });
   return container;
 }
 
 describe("SiteHeader", () => {
-  it("introduit les landmarks que l'app n'avait pas", () => {
-    const container = rendu();
+  it("introduit les landmarks que l'app n'avait pas", async () => {
+    const container = await rendu();
     const header = container.querySelector("header") as HTMLElement;
     expect(header).not.toBeNull();
     expect(header.querySelectorAll("nav").length).toBe(1);
@@ -82,8 +101,8 @@ describe("SiteHeader", () => {
     expect(header.querySelector("h1")).toBeNull();
   });
 
-  it("fait du logo un lien vers l'accueil, nommé", () => {
-    const container = rendu();
+  it("fait du logo un lien vers l'accueil, nommé", async () => {
+    const container = await rendu();
     const logo = container.querySelector('[data-testid="header-home"]') as HTMLAnchorElement;
     expect(logo.tagName).toBe("A");
     expect(logo.getAttribute("href")).toBe("/");
@@ -94,8 +113,8 @@ describe("SiteHeader", () => {
     // ⚠️ Ce que la pastille compte : les LIGNES, pas la somme des `qty` (décision de Jérôme).
     // Chaque ligne du panier de test porte `qty: 3` : si un jour quelqu'un « corrige » en sommant
     // les quantités, ce test tombe avec 9 au lieu de 3.
-    it("compte les lignes sélectionnées, jamais la somme des quantités", () => {
-      const container = rendu({ lignes: [ligne("a"), ligne("b"), ligne("c")] });
+    it("compte les lignes sélectionnées, jamais la somme des quantités", async () => {
+      const container = await rendu({ lignes: [ligne("a"), ligne("b"), ligne("c")] });
       const pastille = container.querySelector('[data-slot="badge-label"], .badge__label') as HTMLElement;
       expect(pastille.textContent).toBe("3");
     });
@@ -103,27 +122,29 @@ describe("SiteHeader", () => {
     // ⚠️ Un nombre affiché ne suffit pas à un lecteur d'écran : « 3 » à côté de « panier » peut
     // s'annoncer n'importe comment. Le compte est donc DANS le nom accessible, au pluriel de la
     // langue (ICU de next-intl), jamais concaténé.
-    it("annonce le compte en toutes lettres, avec le bon pluriel", () => {
-      const vide = rendu().querySelector('[data-testid="header-cart"]') as HTMLElement;
+    it("annonce le compte en toutes lettres, avec le bon pluriel", async () => {
+      const vide = (await rendu()).querySelector('[data-testid="header-cart"]') as HTMLElement;
       expect(vide.getAttribute("aria-label")).toBe("Carrito, vacío");
 
-      const un = rendu({ lignes: [ligne("a")] }).querySelector('[data-testid="header-cart"]') as HTMLElement;
+      const un = (await rendu({ lignes: [ligne("a")] })).querySelector(
+        '[data-testid="header-cart"]'
+      ) as HTMLElement;
       expect(un.getAttribute("aria-label")).toBe("Carrito, 1 artículo");
 
-      const deux = rendu({ lignes: [ligne("a"), ligne("b")] }).querySelector(
+      const deux = (await rendu({ lignes: [ligne("a"), ligne("b")] })).querySelector(
         '[data-testid="header-cart"]'
       ) as HTMLElement;
       expect(deux.getAttribute("aria-label")).toBe("Carrito, 2 artículos");
     });
 
-    it("n'affiche aucune pastille quand le panier est vide", () => {
-      const container = rendu();
+    it("n'affiche aucune pastille quand le panier est vide", async () => {
+      const container = await rendu();
       expect(container.querySelector(".badge__label")).toBeNull();
     });
 
-    it("plafonne l'affichage à 99+ sans mentir sur le nom accessible", () => {
+    it("plafonne l'affichage à 99+ sans mentir sur le nom accessible", async () => {
       const cent = Array.from({ length: 100 }, (_, i) => ligne(String(i)));
-      const container = rendu({ lignes: cent });
+      const container = await rendu({ lignes: cent });
       expect((container.querySelector(".badge__label") as HTMLElement).textContent).toBe("99+");
       expect(
         (container.querySelector('[data-testid="header-cart"]') as HTMLElement).getAttribute("aria-label")
@@ -131,8 +152,8 @@ describe("SiteHeader", () => {
     });
 
     // Un lien, pas un bouton : le panier s'ouvre au clic du milieu, se copie, se met en favori.
-    it("est un LIEN vers la page du panier", () => {
-      const panier = rendu().querySelector('[data-testid="header-cart"]') as HTMLAnchorElement;
+    it("est un LIEN vers la page du panier", async () => {
+      const panier = (await rendu()).querySelector('[data-testid="header-cart"]') as HTMLAnchorElement;
       expect(panier.tagName).toBe("A");
       expect(panier.getAttribute("href")).toBe("/pago");
     });
@@ -142,16 +163,16 @@ describe("SiteHeader", () => {
   // avec libellés visibles). Ce qui est vérifié ici est le CÂBLAGE — que le header transmette bien
   // l'état de connexion ; le rendu de l'entrée elle-même appartient à SiteMenu.test.tsx.
   describe("le compte, transmis au menu", () => {
-    it("mène à la connexion quand le visiteur est déconnecté", () => {
-      const lien = rendu({ isAuthenticated: false }).querySelector(
+    it("mène à la connexion quand le visiteur est déconnecté", async () => {
+      const lien = (await rendu({ isAuthenticated: false })).querySelector(
         '[data-testid="header-menu-account"]'
       ) as HTMLAnchorElement;
       expect(lien.getAttribute("href")).toBe("/entrar");
       expect(lien.textContent).toBe(messages.Chrome.loginLabel);
     });
 
-    it("mène à la page du compte quand il est connecté", () => {
-      const lien = rendu({ isAuthenticated: true }).querySelector(
+    it("mène à la page du compte quand il est connecté", async () => {
+      const lien = (await rendu({ isAuthenticated: true })).querySelector(
         '[data-testid="header-menu-account"]'
       ) as HTMLAnchorElement;
       expect(lien.getAttribute("href")).toBe("/cuenta/reservas");
@@ -160,8 +181,8 @@ describe("SiteHeader", () => {
   });
 
   describe("le menu mobile", () => {
-    it("annonce son état et ce qu'il commande", () => {
-      const container = rendu();
+    it("annonce son état et ce qu'il commande", async () => {
+      const container = await rendu();
       const bouton = container.querySelector('[data-testid="header-menu-toggle"]') as HTMLButtonElement;
       const menu = container.querySelector('[data-testid="header-menu"]') as HTMLElement;
       expect(bouton.getAttribute("aria-expanded")).toBe("false");
@@ -171,8 +192,8 @@ describe("SiteHeader", () => {
       expect(bouton.getAttribute("aria-expanded")).toBe("true");
     });
 
-    it("se ferme par Échap, et rend le focus au bouton", () => {
-      const container = rendu();
+    it("se ferme par Échap, et rend le focus au bouton", async () => {
+      const container = await rendu();
       const bouton = container.querySelector('[data-testid="header-menu-toggle"]') as HTMLButtonElement;
       fireEvent.click(bouton);
       expect(bouton.getAttribute("aria-expanded")).toBe("true");
@@ -209,8 +230,8 @@ describe("SiteHeader", () => {
     });
   });
 
-  it("traduit tout ce qu'il affiche, dans les deux langues", () => {
-    const en = rendu({ locale: "en", lignes: [ligne("a")] });
+  it("traduit tout ce qu'il affiche, dans les deux langues", async () => {
+    const en = await rendu({ locale: "en", lignes: [ligne("a")] });
     expect((en.querySelector('[data-testid="header-cart"]') as HTMLElement).getAttribute("aria-label")).toBe(
       "Cart, 1 item"
     );
@@ -223,7 +244,7 @@ describe("SiteHeader", () => {
   // serveur rendrait un compte et le client un autre — pastille qui clignote, ou erreur en console.
   // Vérifié plutôt que supposé : il s'initialise à `[]` sans aucune persistance (son en-tête le
   // documente), donc les deux rendus partent du même état.
-  it("rend côté serveur exactement ce que le client rend au premier passage", () => {
+  it("rend côté serveur exactement ce que le client rend au premier passage", async () => {
     const serveur = renderToStaticMarkup(
       <NextIntlClientProvider locale="es" messages={messages}>
         <CartProvider>
@@ -231,7 +252,7 @@ describe("SiteHeader", () => {
         </CartProvider>
       </NextIntlClientProvider>
     );
-    const client = rendu();
+    const client = await rendu();
     const panierServeur = serveur.match(/aria-label="([^"]*Carrito[^"]*)"/)?.[1];
     const panierClient = (client.querySelector('[data-testid="header-cart"]') as HTMLElement).getAttribute(
       "aria-label"
