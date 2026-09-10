@@ -178,8 +178,11 @@ export function CheckoutForm({
     setError(null);
     setFailedLineKey(null);
 
-    // Pas de blocage invité (correctif réservation invité) : le compte n'apporte qu'un confort en
-    // plus, jamais une obligation — create_order accepte account_id null tel quel.
+    // Pas de blocage invité (correctif réservation invité, 2026-08-13) : le mot de passe n'a
+    // jamais été une obligation. RÉVISÉ 2026-09-10 (spec 31) : ce n'est PLUS parce que
+    // create_order accepte account_id null — il ne l'accepte plus, auth.uid() est désormais
+    // obligatoire et orders.account_id est NOT NULL — mais parce que CartContext a déjà établi
+    // une identité anonyme dès le premier ajout au panier, invisible pour ce formulaire.
     if (lines.length === 0) return;
 
     setIsSubmitting(true);

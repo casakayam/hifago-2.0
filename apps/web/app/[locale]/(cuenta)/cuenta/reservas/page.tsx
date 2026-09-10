@@ -22,8 +22,12 @@ export default async function AccountOrdersPage({
   }
 
   // order_lines(id, status) : orders_select/order_lines_select (Tranche 3) filtrent déjà sur
-  // account_id = auth.uid() — un invité (account_id null) n'a jamais accès à cet écran (redirigé
-  // ci-dessus faute de session), donc jamais de risque de fuite d'une commande invité ici.
+  // account_id = auth.uid(). RÉVISÉ 2026-09-10 (spec 31, Tranche 2) : un invité n'est PLUS
+  // redirigé ci-dessus — CartContext lui pose une identité anonyme dès le premier ajout au
+  // panier, `getUser()` la renvoie comme un compte normal, et orders.account_id n'est plus jamais
+  // null. Cet écran devient donc atteignable pour un invité, exactement comme pour un compte réel
+  // — un gain voulu (la commande d'un invité lui appartient enfin), pas une fuite : la RLS filtre
+  // toujours strictement sur SA PROPRE identité, jamais celle d'un autre visiteur.
   const { data: orders } = await supabase
     .from("orders")
     .select("id, holder_name, created_at, order_lines(id, status)")
