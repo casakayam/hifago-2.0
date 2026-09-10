@@ -125,10 +125,22 @@ migration, par l'API Admin (`supabase/scripts/seed_auth_users.mjs` est le préc�
 7. **L'email n'est jamais un identifiant.** Aucun `updateUser({email})`, aucun `linkIdentity`.
    L'email reste `orders.holder_email`. Sans quoi Supabase imposerait son unicité et « plusieurs
    commandes sur le même mail » (décision ⑤) deviendrait faux dès le deuxième navigateur.
-8. **Une réservation manuelle appartient au compte technique**, le client réel restant dans
-   `holder_name`/`holder_phone`. Jamais le compte du socio qui la saisit : il est le vendeur.
+8. **Une réservation manuelle appartient au compte technique `reserva-manual@hifago.local`**, le
+   client réel restant dans `holder_name`/`holder_phone`. Jamais le compte du socio qui la saisit :
+   il est le vendeur, pas l'acheteur. ⚠️ Cette adresse est **délibérément celle déjà écrite** par
+   `create_manual_order_line` dans `orders.holder_email` : elle figure dans
+   `NON_REAL_EMAIL_SENTINELS` (`apps/admin/lib/whatsapp.ts` l. 27-30), donc `isRealClientEmail` la
+   filtre déjà et aucun écran ne la présentera comme un contact réel. Choisir une valeur neuve
+   aurait exigé une troisième sentinelle, et l'oublier aurait affiché un faux email à un
+   prestataire.
 9. **La purge ne supprime jamais une identité qui a laissé une trace.** Les 20 FK vers
    `partner_accounts` sont **toutes NO ACTION, zéro CASCADE** : c'est un filet, pas un problème.
+10. **Seule une COMMANDE épargne une identité de la purge — un panier ne la protège pas** (tranché
+   le 2026-09-10). ⚠️ Coût assumé, à ne pas découvrir plus tard : le panier portant l'attribution
+   (invariant 3 / décision ②), un visiteur venu par le QR d'un partenaire qui revient après 30
+   jours retrouve un panier vide **et le référent perd sa commission**, sans que ni l'un ni l'autre
+   ne l'apprenne. C'est le prix d'une table qui ne se remplit pas de paniers fossiles. Si le
+   support voit remonter ce cas, c'est cette ligne qu'il faut rouvrir.
 
 ### Cas limites
 
@@ -136,6 +148,7 @@ migration, par l'API Admin (`supabase/scripts/seed_auth_users.mjs` est le préc�
 |---|---|
 | Un client **connecté** ajoute au panier | Aucune session anonyme créée (invariant 2). Sa commande porte son compte. |
 | Le visiteur ajoute, ferme l'onglet, revient | La session vit en cookie et survit ; le panier en mémoire, non (jusqu'à la spec panier). L'identité est donc plus durable que le panier — pas l'inverse. |
+| Le visiteur revient après 30 jours sans avoir commandé | Son identité a été purgée : panier vide, attribution perdue. Voulu (invariant 10), et c'est le seul cas où un référent perd une commission sans le savoir. |
 | Deux visiteurs, même email au checkout | Autorisé et voulu (décision ⑤). Deux identités, deux commandes, un seul email. |
 | Le visiteur crée un vrai compte plus tard | Hors périmètre (cf. §10). Ses commandes ne le suivent pas : c'est le prix assumé de l'invariant 7. |
 | `enable_anonymous_sign_ins` reste `false` | `signInAnonymously()` échoue → **l'ajout au panier doit échouer proprement**, jamais laisser un panier orphelin qui produira une commande sans propriétaire. |
@@ -228,8 +241,8 @@ Tranche 2.
 | ④ | Trigger `on_auth_user_created` **inchangé** | Le conditionner : il est sur INSERT, or lier un email est un UPDATE — un converti n'aurait jamais eu de ligne. |
 | ⑤ | L'identité **est** le compte, sans mot de passe ; `account_id` NOT NULL ; pas d'`updateUser` | La conversion automatique par email : `updateUser` échoue si l'email est pris, et Supabase refuse de lier sur un email non vérifié (*pre-account takeover*). |
 | ⑥ | **Aucune** confirmation d'email en plus du voucher | Une confirmation bloquante : interruption au pire endroit du parcours. |
-| ⑦ | Purge à **30 jours** des anonymes sans commande | 90 jours ; « aucune purge ». |
-| ⑧ | Réservation manuelle → **compte technique unique** | Le compte du socio (il est le vendeur) ; une identité par client (exige l'API Admin, chantier à part). |
+| ⑦ | Purge à **30 jours** des anonymes sans commande. **Le panier ne protège pas** : seule une commande épargne une identité (tranché le 2026-09-10, après reformulation explicite) | 90 jours ; « aucune purge » ; « un panier récent protège ». |
+| ⑧ | Réservation manuelle → **compte technique unique**, d'email `reserva-manual@hifago.local` | Le compte du socio (il est le vendeur) ; une identité par client (exige l'API Admin, chantier à part) ; un email distinct ou un compte par établissement. |
 
 ---
 
@@ -264,15 +277,12 @@ Tranche 2.
 
 ## 10. Points ouverts
 
-1. **⚠️ Le critère de purge n'est pas confirmé.** Jérôme a dit « si pas de commande reliée, purge
-   après 30 j ». La question posée incluait aussi « ni panier » ; il ne l'a pas repris. Pris au
-   mot, un panier de plus de 30 jours part avec son identité. Cohérent, mais **à confirmer**.
-2. **Le compte technique de l'invariant 8 n'a pas de nom arrêté**, ni de procédure de création
-   documentée sur préprod/prod.
-3. **`update_my_account_profile` pour un anonyme** : exclue par l'invariant 5, mais faut-il
-   qu'un invité puisse renseigner son nom une fois pour toutes ? Non tranché.
+1. **`update_my_account_profile` pour un anonyme** : exclue par l'invariant 5, mais faut-il qu'un
+   invité puisse renseigner son nom une fois pour toutes plutôt qu'à chaque commande ? Non tranché,
+   et sans effet sur les quatre tranches — à reprendre quand l'écran `/cuenta` sera abordé.
 
----
+*(Les deux autres points ouverts au moment de la rédaction ont été tranchés le 2026-09-10 :
+critère de purge → invariant 10 ; compte technique → invariant 8.)*
 
 ## 11. Annexe — traçabilité code→règle
 
