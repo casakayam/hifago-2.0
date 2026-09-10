@@ -6,6 +6,11 @@
 -- par cette migration (create_order, modify_order_line, create_manual_order_line) et la lecture
 -- operator via order_lines_select_operator (20260817170000, inchangée, mais jamais vérifiée pour
 -- ces deux colonnes jusqu'ici).
+--
+-- RÉVISÉ 2026-09-10 (spec 31, Tranche 1) : create_order exige désormais auth.uid() non nul
+-- (docs/journal/2026-09.md). Le bloc « achat client » ci-dessous simule donc une identité anonyme
+-- réelle (test_login_anonymous), même patron que create_order.test.sql — pas un simple retrait du
+-- rôle anon, qui échouerait maintenant en not_authenticated.
 begin;
 select plan(8);
 
@@ -14,6 +19,14 @@ create function test_login(uid uuid) returns void language sql as $$
 $$;
 create function test_logout() returns void language sql as $$
   reset request.jwt.claims;
+$$;
+-- Même patron que create_order.test.sql (spec 31) : simule un visiteur avec identité anonyme.
+create function test_login_anonymous(uid uuid) returns void language sql as $$
+  select set_config(
+    'request.jwt.claims',
+    json_build_object('sub', uid, 'role', 'authenticated', 'is_anonymous', true)::text,
+    true
+  );
 $$;
 
 -- Fixtures : 1 partenaire/établissement, 1 compte operator actif sur cet établissement, 1 produit
@@ -28,6 +41,10 @@ insert into auth.users (id, email) values
   ('88960000-0000-4000-8000-000000000021', 'holder-contact-op@test.local');
 update partner_accounts set partner_id = '88960000-0000-4000-8000-000000000001'
  where id = '88960000-0000-4000-8000-000000000021';
+-- L'identité du client « achat direct » plus bas (RÉVISÉ 2026-09-10, cf. entête).
+insert into auth.users (id, instance_id, aud, role, is_anonymous, created_at, updated_at) values
+  ('88960000-0000-4000-8000-000000000099', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', true, now(), now());
 insert into partner_capabilities (partner_id, role, source, status) values
   ('88960000-0000-4000-8000-000000000001', 'referrer', 'migration', 'active');
 insert into partner_capabilities (partner_id, role, establishment_id, source, status) values
@@ -67,8 +84,8 @@ insert into order_lines (
 -- Résultat non capturé (jamais relu depuis anon, cf. commentaire ci-dessous) — même idiome que
 -- create_order.test.sql cas 14a : un simple `select create_order(...)`, sans temp table (une temp
 -- table créée sous un rôle ne peut être ni relue ni droppée sous un autre rôle : "must be owner").
-select test_logout();
-set local role anon;
+set local role authenticated;
+select test_login_anonymous('88960000-0000-4000-8000-000000000099');
 select create_order(
   jsonb_build_array(jsonb_build_object(
     'product_id', '88960000-0000-4000-8000-000000000031', 'date', '2029-06-01', 'qty', 1
@@ -77,10 +94,11 @@ select create_order(
 );
 reset role;
 
--- Lu via l'operator (RLS order_lines_select_operator) plutôt que le rôle anon qui a écrit la ligne :
--- même piège que create_order.test.sql cas 16 (anon ne peut jamais relire ce qu'il vient d'insérer,
--- account_id = auth.uid() vaut null = null → NULL, pas true) — et ça prouve la lecture operator au
--- passage, exactement le comportement qu'on veut vérifier.
+-- Lu via l'operator (RLS order_lines_select_operator), pas via l'identité qui a écrit la ligne : ça
+-- prouve la lecture operator elle-même, le vrai objet de ce test — indépendamment de savoir si
+-- cette identité pourrait aussi se relire elle-même (elle le pourrait, account_id = auth.uid()
+-- valant désormais vrai pour une session anonyme authentifiée, cf. spec 31 ; ce n'est simplement
+-- pas ce que ce bloc vérifie).
 set local role authenticated;
 select test_login('88960000-0000-4000-8000-000000000021'); -- operator
 

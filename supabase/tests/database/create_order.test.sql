@@ -15,10 +15,19 @@
 -- compte acheteur suffit pour tous les cas authentifiés, sauf le cas positif multi-établissement
 -- (12) qui a besoin d'un second partenaire/établissement/produit.
 --
--- Correctif — réservation invité (2026-08-14) : create_order n'exige plus auth.uid() non nul —
--- v_account_id (potentiellement null) est écrit tel quel. Cas 14 ci-dessous (après le cas 13)
--- rejoue les principaux garde-fous déjà prouvés sous authenticated, mais sous anon, pour prouver
--- l'absence de régression. grant execute élargi à anon dans la même migration.
+-- Correctif — réservation invité (2026-08-14) : create_order n'exigeait plus auth.uid() non nul —
+-- v_account_id (potentiellement null) était écrit tel quel. Cas 14 ci-dessous (après le cas 13)
+-- rejoue les principaux garde-fous déjà prouvés sous authenticated, mais sous un invité, pour
+-- prouver l'absence de régression. grant execute élargi à anon dans la même migration.
+--
+-- ⚠️ RÉVISÉ le 2026-09-10 (spec 31, Tranche 1) : la garde `not_authenticated` est RÉINTRODUITE, et
+-- « invité » change de sens sans que la décision du 2026-08-14 soit renversée. Ce qu'elle
+-- garantissait — acheter SANS COMPTE, sans mot de passe — reste intact : depuis ce lot, un invité a
+-- une IDENTITÉ ANONYME Supabase (créée par CartContext au premier ajout au panier, jamais par cette
+-- RPC), donc `auth.uid()` n'est plus jamais nul pour lui. Les blocs `test_logout(); set local role
+-- anon;` ci-dessous, qui simulaient « aucune identité du tout », deviennent `test_login_anonymous`
+-- (identité anonyme réelle, cf. plus bas) — c'est la SEULE façon dont un invité atteint désormais
+-- cette RPC. Le cas 1 (vraiment aucune identité) reste seul à tester la garde elle-même.
 --
 -- Feature 7 — attribution (2026-08-14) : create_order gagne p_attribution_code/p_attribution_source
 -- et résout orders.referrer_partner_id/attribution_code/attribution_source (+ persistance
@@ -43,7 +52,7 @@
 -- pour self_referral/direct (referrer_pct=0). 3 assertions ajoutées juste après le cas 16b/16c
 -- ci-dessous, mêmes fixtures, aucune nouvelle commande.
 begin;
-select plan(93);
+select plan(94);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -59,17 +68,33 @@ create function test_logout() returns void language sql as $$
   reset request.jwt.claims;
 $$;
 
--- Cas 1 : panier vide, EN PREMIER, avant toute fixture (aucun claim JWT actif — jamais besoin de
--- test_login pour ce cas, le garde-fou n'existe même plus). Rôle anon (le vrai rôle d'un visiteur
--- jamais connecté depuis le correctif réservation invité, plutôt que authenticated + JWT vide qui
--- ne correspondait à aucun appel réel).
+-- Ajouté 2026-09-10 (spec 31) : simule un VISITEUR avec identité anonyme (is_anonymous:true dans
+-- le claim, comme le JWT réel émis par signInAnonymously()) — distinct de test_logout(), qui
+-- simule l'ABSENCE totale d'identité (cas 1 seul, désormais). uid doit correspondre à une ligne
+-- auth.users(is_anonymous=true) déjà posée (fixture V_GUEST plus bas), sinon
+-- is_anonymous_session() (lue par create_order) renverrait false et les cas 14/15/16 se
+-- comporteraient comme un compte enregistré au lieu d'un invité.
+create function test_login_anonymous(uid uuid) returns void language sql as $$
+  select set_config(
+    'request.jwt.claims',
+    json_build_object('sub', uid, 'role', 'authenticated', 'is_anonymous', true)::text,
+    true
+  );
+$$;
+
+-- Cas 1 : AUCUNE identité du tout, EN PREMIER, avant toute fixture (aucun claim JWT actif). Rôle
+-- anon pur — le seul cas de ce fichier qui reste ainsi : c'est exactement le chemin qu'aucune
+-- interface réelle ne peut plus emprunter depuis que CartContext crée une identité anonyme au
+-- premier ajout au panier (spec 31 invariant 1), mais qu'un appel direct à la RPC (curl, test)
+-- peut toujours tenter. RÉVISÉ 2026-09-10 : la garde est réintroduite, ce cas prouve désormais
+-- qu'elle est évaluée AVANT empty_cart (l'identité manque, même un panier vide n'est pas atteint).
 set local role anon;
 select is(
   (select create_order('[]'::jsonb, 'Nobody',
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
-  'empty_cart',
-  'panier vide, rôle anon, aucune identité → empty_cart (not_authenticated n''existe plus)'
+  'not_authenticated',
+  'panier vide, rôle anon, aucune identité → not_authenticated, évalué avant empty_cart'
 );
 reset role;
 
@@ -88,6 +113,15 @@ insert into establishments (id, partner_id, name) values
 insert into auth.users (id, email) values
   ('88880000-0000-4000-8000-000000000021', 'order-buyer@test.local');
 -- Pas de partner_id sur partner_accounts pour l'acheteur : c'est un simple client, pas un socio.
+
+-- L'identité de TOUS les cas « invité » ci-dessous (14/15/16), depuis le 2026-09-10 : is_anonymous
+-- = true, aucun email — exactement ce que produit signInAnonymously() côté navigateur. Le trigger
+-- on_auth_user_created (inchangé, décision ④) lui pose sa ligne partner_accounts comme pour tout
+-- compte ; c'est justement ce que le cas 16 s'appuyait sur l'ABSENCE de (cf. son commentaire) et
+-- qui est corrigé plus bas.
+insert into auth.users (id, instance_id, aud, role, is_anonymous, created_at, updated_at) values
+  ('88880000-0000-4000-8000-000000000099', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', true, now(), now());
 
 -- Produits :
 --   031 lodging sellable       → cas 5 (plafond lignes) et 6 (plafond unités)
@@ -588,13 +622,15 @@ select is(
 -- Cas 14 (correctif réservation invité) : create_order ouvert à anon (aucune session), mêmes
 -- garde-fous qu'un appel authentifié — rejoue not_sellable/lodging_cap_exceeded/date_closed/full
 -- sous anon, plus le cas positif (succès, account_id null des deux côtés). test_logout()
--- obligatoire avant chaque bloc anon : test_login('...021') a tourné plus haut (cas 2) et reste
--- actif pour toute la transaction sinon (set_config(..., true) = portée transaction, pas
--- statement) — set local role anon seul ne suffirait pas à effacer l'identité déjà posée.
+-- obligatoire avant chaque bloc invité (RÉVISÉ 2026-09-10 : test_login_anonymous plutôt que
+-- set local role anon — cf. entête du fichier) : test_login('...021') a tourné plus haut
+-- (cas 2) et reste actif pour toute la transaction sinon (set_config(..., true) = portée
+-- transaction, pas statement).
 
--- Cas 14a : anon, panier valide 1 ligne → succès, account_id null des deux côtés, booked incrémenté.
-select test_logout();
-set local role anon;
+-- Cas 14a : invité (identité anonyme), panier valide 1 ligne → succès, account_id = l'identité
+-- anonyme des deux côtés (RÉVISÉ 2026-09-10 : plus null, cf. entête), booked incrémenté.
+set local role authenticated;
+select test_login_anonymous('88880000-0000-4000-8000-000000000099');
 select create_order(
   jsonb_build_array(jsonb_build_object(
     'product_id', '88880000-0000-4000-8000-000000000041', 'date', '2028-09-01', 'qty', 2
@@ -605,25 +641,25 @@ select create_order(
 reset role;
 select is(
   (select account_id from orders where holder_name = 'Holder Guest Success'),
-  null::uuid,
-  'cas 14a : anon → orders.account_id null'
+  '88880000-0000-4000-8000-000000000099'::uuid,
+  'cas 14a : invité → orders.account_id = l''identité anonyme (plus jamais null)'
 );
 select is(
   (select ol.account_id from order_lines ol join orders o on o.id = ol.order_id
     where o.holder_name = 'Holder Guest Success'),
-  null::uuid,
-  'cas 14a : anon → order_lines.account_id null'
+  '88880000-0000-4000-8000-000000000099'::uuid,
+  'cas 14a : invité → order_lines.account_id = l''identité anonyme (plus jamais null)'
 );
 select is(
   (select booked from product_availability
     where product_id = '88880000-0000-4000-8000-000000000041' and date = '2028-09-01'),
   2,
-  'cas 14a : anon → booked incrémenté normalement (même écriture qu''un appel authentifié)'
+  'cas 14a : invité → booked incrémenté normalement (même écriture qu''un appel authentifié)'
 );
 
--- Cas 14b : anon, produit non vendable → not_sellable (même garde-fou que le cas 4).
-select test_logout();
-set local role anon;
+-- Cas 14b : invité, produit non vendable → not_sellable (même garde-fou que le cas 4).
+set local role authenticated;
+select test_login_anonymous('88880000-0000-4000-8000-000000000099');
 select is(
   (select create_order(
      jsonb_build_array(jsonb_build_object(
@@ -633,13 +669,13 @@ select is(
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
   'not_sellable',
-  'cas 14b : anon, sellable=false → not_sellable (aucune régression du garde-fou)'
+  'cas 14b : invité, sellable=false → not_sellable (aucune régression du garde-fou)'
 );
 reset role;
 
--- Cas 14c : anon, plafond lodging → lodging_cap_exceeded (même garde-fou que le cas 5).
-select test_logout();
-set local role anon;
+-- Cas 14c : invité, plafond lodging → lodging_cap_exceeded (même garde-fou que le cas 5).
+set local role authenticated;
+select test_login_anonymous('88880000-0000-4000-8000-000000000099');
 select is(
   (select create_order(
      jsonb_build_array(
@@ -653,13 +689,13 @@ select is(
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
   'lodging_cap_exceeded',
-  'cas 14c : anon, 5 lignes lodging → lodging_cap_exceeded (aucune régression du garde-fou)'
+  'cas 14c : invité, 5 lignes lodging → lodging_cap_exceeded (aucune régression du garde-fou)'
 );
 reset role;
 
--- Cas 14d : anon, date fermée par défaut produit → date_closed (même garde-fou que le cas 13c).
-select test_logout();
-set local role anon;
+-- Cas 14d : invité, date fermée par défaut produit → date_closed (même garde-fou que le cas 13c).
+set local role authenticated;
+select test_login_anonymous('88880000-0000-4000-8000-000000000099');
 select is(
   (select create_order(
      jsonb_build_array(jsonb_build_object(
@@ -669,13 +705,13 @@ select is(
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
   'date_closed',
-  'cas 14d : anon, calendar_default_open=false → date_closed (aucune régression du garde-fou)'
+  'cas 14d : invité, calendar_default_open=false → date_closed (aucune régression du garde-fou)'
 );
 reset role;
 
--- Cas 14e : anon, ressource déjà pleine → full, rien écrit (même garde-fou que le cas 9).
-select test_logout();
-set local role anon;
+-- Cas 14e : invité, ressource déjà pleine → full, rien écrit (même garde-fou que le cas 9).
+set local role authenticated;
+select test_login_anonymous('88880000-0000-4000-8000-000000000099');
 select is(
   (select create_order(
      jsonb_build_array(jsonb_build_object(
@@ -685,14 +721,14 @@ select is(
      p_holder_email => 'buyer-fixture@hifago.test'
    )->>'reason'),
   'full',
-  'cas 14e : anon, capacity=booked=1 → full (aucune régression du garde-fou)'
+  'cas 14e : invité, capacity=booked=1 → full (aucune régression du garde-fou)'
 );
 reset role;
 select is(
   (select booked from product_availability
     where product_id = '88880000-0000-4000-8000-000000000041' and date = '2028-09-02'),
   1,
-  'cas 14e : anon, échec full → booked inchangé'
+  'cas 14e : invité, échec full → booked inchangé'
 );
 
 -- Cas 15 (feature 7 — attribution) : résolution code présenté > code sauvegardé du compte > direct.
@@ -700,8 +736,8 @@ select is(
 -- aucun nouveau test de concurrence, cf. plan.
 
 -- Cas 15a : invité sans code → commande directe, les 3 colonnes null.
-select test_logout();
-set local role anon;
+set local role authenticated;
+select test_login_anonymous('88880000-0000-4000-8000-000000000099');
 select create_order(
   jsonb_build_array(jsonb_build_object(
     'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-01', 'qty', 1
@@ -721,8 +757,8 @@ select is(
 );
 
 -- Cas 15b : invité, ?ref= valide → referrer_partner_id résolu, attribution_source='link'.
-select test_logout();
-set local role anon;
+set local role authenticated;
+select test_login_anonymous('88880000-0000-4000-8000-000000000099');
 select create_order(
   jsonb_build_array(jsonb_build_object(
     'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-02', 'qty', 1
@@ -745,10 +781,24 @@ select is(
   'cas 15b : invité, code valide via ?ref= → attribution résolue, source=link'
 );
 
+-- Cas 15b bis (spec 31 invariant 3, ajouté 2026-09-10) : c'est PRÉCISÉMENT le cas où l'ancien code
+-- aurait persisté saved_attribution_code — un compte, un code frais valide présenté (même forme
+-- que le cas 15d ci-dessous, qui EST censé persister pour un compte enregistré). Seule l'exclusion
+-- explicite d'is_anonymous_session() dans create_order fait la différence. Sans elle, ce test
+-- resterait vert pour la mauvaise raison (une identité anonyme dépourvue de la colonne aurait aussi
+-- affiché null ici avant le 2026-09-10) — ce n'est plus le cas depuis que la ligne partner_accounts
+-- de tout anonyme existe (décision ④).
+select is(
+  (select saved_attribution_code from partner_accounts
+    where id = '88880000-0000-4000-8000-000000000099'),
+  null,
+  'cas 15b bis : identité anonyme, code présenté → saved_attribution_code JAMAIS persisté (invariant 3)'
+);
+
 -- Cas 15c : invité, code invalide/inactif → commande créée normalement, attribution null (jamais
 -- un blocage).
-select test_logout();
-set local role anon;
+set local role authenticated;
+select test_login_anonymous('88880000-0000-4000-8000-000000000099');
 select create_order(
   jsonb_build_array(jsonb_build_object(
     'product_id', '88880000-0000-4000-8000-000000000042', 'date', '2028-10-03', 'qty', 1
@@ -860,23 +910,30 @@ select is(
   'cas 15f : saved_attribution_code remplacé (pas cumulé, pas ignoré)'
 );
 
--- Cas 16 (feature 11 — snapshot commission) : rôle anon délibérément, PAS le compte 021 encore
--- actif ci-dessus — 021 porte désormais saved_attribution_code='ORDER-TEST-NEW' (cas 15f), qui
--- réapparaîtrait silencieusement sur tout appel 16a/16d omettant un code explicite (résolution
--- « code sauvegardé du compte », feature 7) et fausserait le cas "direct" attendu. anon n'a pas de
--- ligne partner_accounts : aucune résolution possible en dehors du code explicitement passé par
--- appel, exactement ce que ces cas veulent isoler.
+-- Cas 16 (feature 11 — snapshot commission) : identité anonyme (099) délibérément, PAS le compte
+-- 021 encore actif ci-dessus — 021 porte désormais saved_attribution_code='ORDER-TEST-NEW' (cas
+-- 15f), qui réapparaîtrait silencieusement sur tout appel 16a/16d omettant un code explicite
+-- (résolution « code sauvegardé du compte », feature 7) et fausserait le cas "direct" attendu.
 --
--- Tous les create_order ci-dessous s'exécutent D'ABORD, encore sous anon ; reset role vient APRÈS,
--- une seule fois, avant TOUTE lecture — même piège que order_lines_select (feature 6) : sous anon,
--- account_id = auth.uid() vaut null = null → NULL (pas true), donc anon ne peut jamais RELIRE la
--- ligne qu'il vient d'insérer via la RPC security definer (qui, elle, contourne la RLS pour
--- écrire). Même pattern que le cas 14a plus haut, simplement batché sur 5 créations avant le reset
--- plutôt qu'une seule. Chaque assertion compare TOUTES les colonnes du snapshot en un seul jsonb —
--- pct castés en text (numeric(5,4) stocke le texte à l'échelle déclarée, ex. '0.1700', sans
--- ambiguïté de représentation JSON contrairement à un cast float).
-select test_logout();
-set local role anon;
+-- ⚠️ RAISON RÉVISÉE le 2026-09-10 (spec 31) — l'ancienne (« anon n'a pas de ligne
+-- partner_accounts ») est devenue FAUSSE : depuis la décision ④, TOUTE identité anonyme en a une
+-- (trigger on_auth_user_created inchangé). L'isolation tient désormais à DEUX choses : 099 est une
+-- identité distincte de 021 (aucune collision par construction), ET son propre
+-- saved_attribution_code est garanti null à ce point — pas parce qu'aucun code n'y a jamais été
+-- présenté (15b EN présente un), mais parce qu'invariant 3 (is_anonymous_session() exclue de la
+-- persistance) l'a empêché d'y entrer, prouvé par le cas 15b bis juste au-dessus.
+--
+-- Tous les create_order ci-dessous s'exécutent D'ABORD ; reset role vient APRÈS, une seule fois,
+-- avant TOUTE lecture — pattern conservé du cas 14a, simplement batché sur 5 créations plutôt
+-- qu'une seule (⚠️ sa justification RLS d'origine — « anon ne peut jamais relire sa propre ligne,
+-- account_id = auth.uid() vaut NULL = NULL » — ne tient plus non plus : l'identité anonyme a
+-- désormais un account_id réel, donc orders_select la laisserait potentiellement se relire. Le
+-- `reset role` reste néanmoins correct et suffisant, juste plus l'unique voie possible). Chaque
+-- assertion compare TOUTES les colonnes du snapshot en un seul jsonb — pct castés en text
+-- (numeric(5,4) stocke le texte à l'échelle déclarée, ex. '0.1700', sans ambiguïté de
+-- représentation JSON contrairement à un cast float).
+set local role authenticated;
+select test_login_anonymous('88880000-0000-4000-8000-000000000099');
 
 -- Cas 16a : direct (aucun code) → commission_case='direct', 17/0/17, price_cop=33333 (non rond).
 select create_order(
@@ -921,7 +978,7 @@ select create_order(
 -- différents → chaque ligne porte son propre commission_case, indépendamment de l'autre. Ligne 1 =
 -- produit 043 (propriétaire 001 = référent) → self_referral. Ligne 2 = produit 038 (propriétaire
 -- 002 ≠ référent 001) → external_referrer. Même commande, même référent, deux cas différents.
--- Table temporaire créée MAINTENANT (encore anon) pour capturer l'order_id retourné, mais lue plus
+-- Table temporaire créée MAINTENANT (encore sous l'identité anonyme) pour capturer l'order_id retourné, mais lue plus
 -- bas seulement, après reset role.
 create temp table tmp_commission_multi as
   select create_order(

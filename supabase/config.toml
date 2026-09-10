@@ -226,7 +226,11 @@ refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
 enable_signup = true
 # Allow/disallow anonymous sign-ins to your project.
-enable_anonymous_sign_ins = false
+# 2026-09-10 (spec 31, Tranche 1) — activé : l'identité anonyme se crée au premier ajout au panier
+# (apps/web/lib/cart/CartContext.tsx), jamais à la simple visite. `anonymous_users` ci-dessous
+# plafonne déjà les créations par IP/heure — valeur par défaut conservée. ⚠️ Le même réglage doit
+# être posé sur le projet Supabase de préprod, qui n'est pas piloté par ce fichier.
+enable_anonymous_sign_ins = true
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
