@@ -82,3 +82,11 @@ réelles. Règle d'échappement : au-delà de 100 lignes, le piège le plus anci
 - Sur la base locale partagée : ne jamais `db reset` sans savoir si une autre session a des
   données en cours (`AGENTS-PARALLELES.md`) ; les échecs pgTAP par accumulation d'`audit_log` sont
   de la pollution, pas une régression — prouver en vidant dans la transaction du test.
+- **Grants par défaut, sens INVERSE selon table ou fonction** (2026-08-28, faillite re-mesurée le
+  2026-09-10) : une TABLE créée par `postgres` n'a PAS de grant par défaut (ci-dessus), mais une
+  FONCTION en a un — PostgreSQL accorde EXECUTE à PUBLIC sur toute nouvelle fonction. Une RPC
+  `security definer` neuve (cron ou non) est donc appelable par `anon`/`authenticated` tant qu'un
+  `revoke all on function ... from public, anon, authenticated;` explicite ne le referme pas —
+  jamais un `grant` qui manquerait, un `revoke` qui manque. Vérifier avec
+  `has_function_privilege('anon', '<fn>()', 'EXECUTE')`, jamais supposer sur la lecture du corps
+  seule.

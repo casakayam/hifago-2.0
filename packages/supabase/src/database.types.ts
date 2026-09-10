@@ -2369,6 +2369,7 @@ export type Database = {
         Args: { p_batch_size?: number; p_campaign_id: string }
         Returns: Json
       }
+      purge_expired_anonymous_identities: { Args: never; Returns: Json }
       release_order_after_pms_refusal: {
         Args: { p_order_id: string; p_reason: string }
         Returns: Json
