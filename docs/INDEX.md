@@ -44,13 +44,14 @@
 - [Vitrine : l'accueil, qui est aussi l'écran de résultats de recherche](specs/28-vitrine-accueil-et-resultats.md) — **Partiel** (reste : Tranches 1 (l'accueil) et 2 (les suggestions de la barre) livrées le 2026-09-08. Reste…) · maj 2026-09-08
 - [Vitrine : les pages de listing et l'index de catégories](specs/29-vitrine-listings-et-index-de-categories.md) — **Implémenté** · maj 2026-09-08
 - [Vitrine : les fiches produit et établissement](specs/30-vitrine-fiches-produit-et-etablissement.md) — **Implémenté** · maj 2026-09-08
-- [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-08
+- [Identité anonyme de l'invité](specs/31-identite-anonyme.md) — **Brouillon** · maj 2026-09-10
+- [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-10
 - [Gabarit de spec de feature (à copier, ne décrit aucune feature réelle)](specs/_modele.md) — **modele** · maj 2026-08-16
 - [Avant d'écrire une spec — poser les bonnes questions](specs/avant-la-spec.md) — **modele** · maj 2026-08-16
 
 ## Journal — historique chronologique (jamais chargé automatiquement)
-- [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-09
-- [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-09
+- [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-10
+- [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-10
 - [Journal hifago — août 2026](journal/2026-08.md) · maj 2026-09-01
-- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-09
+- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-10
 - [Pièges empiriques hifago — index numéroté](pieges-empiriques.md) · maj 2026-09-09
