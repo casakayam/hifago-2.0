@@ -63,7 +63,7 @@ describe("SiteMenu", () => {
 
   it("mène à la connexion ou au compte selon l'état de connexion", () => {
     expect(rendu().compte.getAttribute("href")).toBe("/entrar");
-    expect(rendu({ isAuthenticated: true }).compte.getAttribute("href")).toBe("/cuenta/reservas");
+    expect(rendu({ isAuthenticated: true }).compte.getAttribute("href")).toBe("/cuenta/perfil");
   });
 
   it("place la langue APRÈS la liste, jamais avant", () => {

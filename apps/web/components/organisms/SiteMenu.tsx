@@ -38,8 +38,10 @@ export type SiteMenuProps = {
 };
 
 // L'architecture des pages de compte sera revue (décision de Jérôme, 2026-09-02) : une seule
-// constante à changer ce jour-là.
-const ROUTE_COMPTE = "/cuenta/reservas";
+// constante à changer ce jour-là. ⚠️ CHANGÉ le 2026-09-11 (spec 35, décision ⑧) : `/cuenta/perfil`
+// est désormais l'accueil de la zone compte, pas `/cuenta/reservas` — qui reste atteignable depuis
+// un lien sur cet écran.
+const ROUTE_COMPTE = "/cuenta/perfil";
 const ROUTE_CONNEXION = "/entrar";
 
 function IconeCompte() {

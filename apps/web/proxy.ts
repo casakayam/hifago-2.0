@@ -8,6 +8,28 @@ const intlMiddleware = createMiddleware(routing);
 export default async function proxy(request: NextRequest) {
   const response = intlMiddleware(request) ?? NextResponse.next();
 
+  // Spec 35 — `?next=<chemin>` pour la garde de `(cuenta)/layout.tsx` (un layout serveur ne connaît
+  // pas le chemin courant). ⚠️ VÉRIFIÉ EN RÉEL le 2026-09-11, pas supposé : `response` ici est déjà
+  // celui que retourne `intlMiddleware(request)` (rewrite ou `next()` selon la route), et un simple
+  // `response.headers.set(...)` sur cet objet SURVIT jusqu'à `headers()` côté Server Component —
+  // testé sur les deux chemins (`/es/cuenta/reservas` direct, et `/cuenta/reservas` qui reçoit
+  // d'abord un 307 de redirection de locale : le layout ne voit alors QUE la requête suivie,
+  // `/es/cuenta/reservas`, exactement celle qui porte l'en-tête). Un commentaire antérieur de ce
+  // dépôt affirmait l'inverse — il partait de l'hypothèse qu'il fallait reconstruire
+  // `NextResponse.next({ request: { headers } })` par-dessus le rewrite de next-intl, jamais testé.
+  // ⚠️ NON RE-VÉRIFIÉ SUR VERCEL : le runtime Edge/serverless pourrait ne pas préserver cette
+  // mutation de la même façon qu'en local (`next dev`, un seul processus). Sans effet en cas
+  // d'échec silencieux — `(cuenta)/layout.tsx` retombe alors sur la redirection nue déjà en place.
+  //
+  // Le préfixe de locale est retiré ici : `LoginForm.tsx` passe `next` à `router.push()` du routeur
+  // `@/i18n/navigation`, qui préfixe LUI-MÊME la locale — un chemin déjà préfixé serait doublé.
+  const chemin = request.nextUrl.pathname;
+  const cheminSansLocale = chemin.replace(
+    new RegExp(`^/(${routing.locales.join("|")})(?=/|$)`),
+    ""
+  );
+  response.headers.set("x-hifago-pathname", cheminSansLocale || "/");
+
   // Feature 7 (attribution) — 2e responsabilité de ce proxy : un ?ref=<code> sur n'importe quelle
   // page pose un cookie de session. Volontairement sans maxAge/expires : perdu à la fermeture de
   // l'onglet, cohérent avec « vaut pour la réservation en cours » pour un invité — la durabilité

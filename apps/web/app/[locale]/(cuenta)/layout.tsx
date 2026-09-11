@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { headers } from "next/headers";
 import { createClient } from "@hifago/supabase/server";
+import { isRealAccount } from "@hifago/supabase/identity";
 import { redirect } from "@/i18n/navigation";
-import { Link } from "@/i18n/navigation";
+import { SiteHeader } from "@/components/organisms/SiteHeader";
 
 // Zone COMPTE — la SEULE garde d'accès du site (spec 27 §5). Jamais indexée.
 //
@@ -19,18 +21,18 @@ import { Link } from "@/i18n/navigation";
 // vitrine ni sur le tunnel. Ajouter une garde ailleurs que dans cette zone serait une régression
 // fonctionnelle, pas un durcissement.
 //
-// ⚠️ Un layout ne connaît pas le chemin courant, donc cette garde ne peut pas construire un
-// `?next=<chemin>` précis. La spec 27 §5 prévoit que `proxy.ts` pose le pathname en en-tête de
-// requête pour le lui donner. TOUJOURS PAS FAIT au 2026-09-07, et le renommage des routes n'était
-// pas le bon déclencheur : ce n'est pas un renommage, c'est un mécanisme. Un middleware ne peut
-// pas ajouter un en-tête de REQUÊTE à une réponse qu'il n'a pas construite lui-même — or celle-ci
-// vient d'`intlMiddleware` — donc la ligne annoncée par la spec n'est pas une ligne, et la câbler
-// à l'aveugle ferait construire un `?next=undefined` sans que rien ne le signale.
+// ⚠️ CORRIGÉ le 2026-09-11 (spec 35) : la garde était `if (!user)`, qui laisse passer une session
+// ANONYME — `getUser()` en rend une depuis la spec 31. C'est exactement le trou que la spec 34
+// (décision ⑦) a fermé sur `/cuenta/reservas` seule, en le délégant explicitement ici : « la
+// décision ⑦ vaut pour toute la zone ». `isRealAccount` (même prédicat que `CoquillaVitrine`,
+// `pago/page.tsx`, `viewerIsRealAccount`) ferme le trou pour toute la zone d'un coup.
 //
-// Conséquence assumée en attendant : la redirection est nue, et se connecter depuis `/cuenta/*`
-// renvoie à l'accueil du site. Aucune perte tant qu'il n'existe qu'UN écran de compte
-// (`/cuenta/reservas`) ; le vrai déclencheur est le lot qui ajoute `/cuenta` et `/cuenta/perfil`,
-// où l'utilisateur perdra réellement l'écran qu'il visait. Porté au backlog.
+// ⚠️ `?next=<chemin>` — RÉSOLU le 2026-09-11 (spec 35), contrairement à ce que ce commentaire
+// affirmait jusque-là. `proxy.ts` pose désormais `x-hifago-pathname` (le chemin courant, préfixe de
+// locale retiré) sur la réponse d'`intlMiddleware` — un simple `response.headers.set(...)` suffit,
+// **vérifié en réel** (voir `proxy.ts` pour le détail et sa réserve : non re-testé sur Vercel).
+// Repli automatique et silencieux si l'en-tête manque : `next` reste alors absent, exactement le
+// comportement d'avant.
 
 export const metadata: Metadata = { robots: { index: false } };
 
@@ -47,17 +49,19 @@ export default async function CuentaLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect({ href: "/entrar", locale });
+  if (!isRealAccount(user)) {
+    const chemin = (await headers()).get("x-hifago-pathname");
+    const href = chemin ? `/entrar?next=${encodeURIComponent(chemin)}` : "/entrar";
+    redirect({ href, locale });
   }
 
   return (
     <>
-      <header className="border-b border-default-200 px-4 py-3">
-        <Link href="/" className="text-lg font-semibold">
-          Hifago
-        </Link>
-      </header>
+      {/* `isAuthenticated={true}` en dur : le guard ci-dessus vient de le garantir — même geste
+          que `pago/page.tsx` passant `isRealAccount(user)` à `CheckoutForm`. `SiteHeader` est un
+          Client Component ; `CartProvider` est monté à `[locale]/layout.tsx`, au-dessus de
+          `(vitrine)` ET `(cuenta)` — `useCart()` y fonctionne déjà sans rien remonter. */}
+      <SiteHeader isAuthenticated={true} testId="site-header" />
       {children}
     </>
   );

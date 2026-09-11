@@ -205,7 +205,7 @@ describe("SiteHeader", () => {
       const lien = (await rendu({ isAuthenticated: true })).querySelector(
         '[data-testid="header-menu-account"]'
       ) as HTMLAnchorElement;
-      expect(lien.getAttribute("href")).toBe("/cuenta/reservas");
+      expect(lien.getAttribute("href")).toBe("/cuenta/perfil");
       expect(lien.textContent).toBe(messages.Chrome.accountLabel);
     });
   });
