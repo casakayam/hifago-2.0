@@ -14,9 +14,14 @@ import type { Locale } from "@/messages";
 // (CLAUDE.md §3.5).
 
 // ⚠️ Ces deux types décrivent ce que l'ÉCRAN AFFICHE, pas tout ce que la RPC sait rendre (elle
-// renvoie aussi `product_type`, `product_slug`, `price_cop` par ligne, et `status`/`created_at` sur
-// la commande). Les porter jusqu'ici sans lecteur donnerait l'illusion d'un contrat : quand un
+// renvoie aussi `product_type`, `product_slug`, `price_cop` par ligne, et `created_at` sur la
+// commande). Les porter jusqu'ici sans lecteur donnerait l'illusion d'un contrat : quand un
 // écran en aura besoin, il ajoutera le champ — c'est une ligne, et la RPC est déjà testée.
+//
+// ⚠️ `orders.status` N'EST PLUS RENDU par la RPC depuis la spec 34 (migration 20260911100000) :
+// la colonne vaut 'confirmed' sur toute ligne et rien ne l'écrit jamais. Le retrait du miroir
+// ci-dessous n'est donc pas un rétrécissement de confort — c'est la correction d'un type qui
+// aurait menti sur ce que la base envoie.
 
 /** Une ligne de commande, telle que l'écran de résultat l'affiche. */
 export type OrderLineForDisplay = {
@@ -73,7 +78,6 @@ type RpcResult = {
   order?: {
     id: string;
     reference: string;
-    status: string;
     payment_status: string;
     created_at: string;
     holder_name: string;

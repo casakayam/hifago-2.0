@@ -12,7 +12,7 @@
 --      dans la RLS, elle est une porte à part, avec sa propre clé ;
 --   5. les totaux ignorent les lignes mortes, alors que ces lignes restent LISTÉES.
 begin;
-select plan(26);
+select plan(31);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -209,6 +209,55 @@ select ok(
   has_function_privilege('anon', 'public.get_order_by_token(text)', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.get_order_by_token(text)', 'EXECUTE'),
   'anon ET authenticated peuvent l''exécuter — vérifié sur l''ACL, jamais déduit du corps'
+);
+
+-- ── Spec 34 : ce que le contrat PARTAGÉ ajoute, et ce qu'il retire ────────────────────────────
+-- Depuis 20260911100000, le payload vient de order_for_client_jsonb, partagée avec
+-- list_my_orders. Les assertions ci-dessous tiennent les trois changements de forme — les 26
+-- au-dessus, inchangées, tiennent le reste.
+
+select is(
+  (public.get_order_by_token((select access_token from t_token)) #>> '{order,lines,0,establishment_slug}'),
+  (select slug from establishments where id = '89330000-0000-4000-8000-000000000011'),
+  'chaque ligne porte le slug de son établissement — le lien vers sa fiche (spec 34 décision ③)'
+);
+
+-- La colonne est NULLABLE (20260908202000) et cette fixture ne la renseigne pas : l'écran doit
+-- pouvoir distinguer « pas de numéro » de « numéro vide », et ne rendre AUCUN bouton dans ce cas.
+select ok(
+  (public.get_order_by_token((select access_token from t_token)) #> '{order,lines,0,establishment_contact_phone}') = 'null'::jsonb,
+  'un établissement sans contact_phone rend null — jamais une chaîne vide, jamais un bouton mort'
+);
+
+update establishments set contact_phone = '+573001234567'
+ where id = '89330000-0000-4000-8000-000000000011';
+
+select is(
+  (public.get_order_by_token((select access_token from t_token)) #>> '{order,lines,0,establishment_contact_phone}'),
+  '+573001234567',
+  'le contact de l''établissement sort du contrat quand il existe (spec 34 décision ⑥)'
+);
+
+-- orders.status vaut 'confirmed' sur toute ligne et aucun update ne l'écrit nulle part
+-- (20260814161500 l''assume par écrit). Le RETIRER du payload fait passer « ne pas l''afficher »
+-- d''une discipline à une impossibilité (spec 34 invariant 4).
+select ok(
+  not ((public.get_order_by_token((select access_token from t_token)) -> 'order') ? 'status'),
+  'orders.status n''est plus transmis — placeholder jamais calculé'
+);
+
+-- ⚠️ L''assertion qui compte. order_lines_select autorise `account_id = auth.uid()` sur TOUTES les
+-- colonnes : rien en base ne s''oppose à la lecture des commissions, l''exclusion est applicative.
+-- C''est exactement la faute que le portail LEGACY commet en production (commission_estimee_cop
+-- renvoyée au front client). Cette liste blanche est le seul rempart de ce chemin — donc elle se
+-- teste (CLAUDE.md §11.20).
+select is(
+  (select count(*)::int
+     from jsonb_array_elements(public.get_order_by_token((select access_token from t_token)) #> '{order,lines}') l,
+          lateral jsonb_object_keys(l) k
+    where k like '%commission%' or k like '%\_pct' or k = 'referrer_partner_id'),
+  0,
+  'AUCUNE colonne de commission ne sort du contrat « commande vue par son client »'
 );
 
 select * from finish();

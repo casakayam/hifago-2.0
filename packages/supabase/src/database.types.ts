@@ -2344,6 +2344,7 @@ export type Database = {
           total_count: number
         }[]
       }
+      list_my_orders: { Args: never; Returns: Json }
       list_partners_admin: {
         Args: {
           p_city?: string
@@ -2444,6 +2445,10 @@ export type Database = {
       }
       offboarding_unpublish: {
         Args: { p_offboarding_id: string }
+        Returns: Json
+      }
+      order_for_client_jsonb: {
+        Args: { p_order: Database["public"]["Tables"]["orders"]["Row"] }
         Returns: Json
       }
       partner_id_for_account: { Args: { uid: string }; Returns: string }
