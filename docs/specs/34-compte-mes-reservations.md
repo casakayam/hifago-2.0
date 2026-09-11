@@ -4,7 +4,7 @@ titre: "Compte client : « Mis reservas », la liste et le détail"
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: brouillon
+statut: implemente
 maj: 2026-09-11
 revise: ["docs/01-cahier-des-charges-client.md#2c", "docs/01-cahier-des-charges-client.md#2d"]
 resume: >
@@ -37,23 +37,29 @@ repond_a:
 >
 > ⚠️ **Écrite pendant qu'un second agent construit `/cuenta/perfil` dans le même arbre.** Les
 > fichiers partagés et les gestes qui ne m'appartiennent pas sont nommés en §2 « Frontières ».
+>
+> **✅ Validée par Jérôme le 2026-09-11**, après lecture des sept points que la rédaction avait
+> tranchés seule (§10) — dont un qui s'écartait du périmètre annoncé (le namespace i18n).
+>
+> **✅ Implémentée le 2026-09-11** — les quatre tranches. Ce que le code a corrigé du texte est en
+> §10bis : **deux défauts trouvés en regardant le rendu réel**, et un e2e qu'on a découvert mort.
 
 ## Sommaire et statut
 
 | # | Section | Statut |
 |---|---|---|
-| 0 | **Contrat compact** (pour coder — lire seul, sans le reste) | en relecture |
-| 1 | Contexte et problème | en relecture |
-| 2 | Portée, tranches et frontières | en relecture |
-| 3 | Décisions retenues (entretien du 2026-09-11) | en relecture |
-| 4 | Parcours cible | en relecture |
-| 5 | Les écrans, bloc par bloc | en relecture |
-| 7 | Contrat RPC — pourquoi une RPC, et pourquoi une seule | en relecture |
-| 8 | Règles et invariants | en relecture |
-| 9 | Cas limites | en relecture |
-| 10 | Décisions tranchées / points ouverts | en relecture |
-| 11 | Annexe — traçabilité | en relecture |
-| 12 | Documents liés | en relecture |
+| 0 | **Contrat compact** (pour coder — lire seul, sans le reste) | ✅ validé 2026-09-11 |
+| 1 | Contexte et problème | ✅ validé 2026-09-11 |
+| 2 | Portée, tranches et frontières | ✅ validé 2026-09-11 |
+| 3 | Décisions retenues (entretien du 2026-09-11) | ✅ validé 2026-09-11 |
+| 4 | Parcours cible | ✅ validé 2026-09-11 |
+| 5 | Les écrans, bloc par bloc | ✅ validé 2026-09-11 |
+| 7 | Contrat RPC — pourquoi une RPC, et pourquoi une seule | ✅ validé 2026-09-11 |
+| 8 | Règles et invariants | ✅ validé 2026-09-11 |
+| 9 | Cas limites | ✅ validé 2026-09-11 |
+| 10 | Décisions tranchées / points ouverts | ✅ validé 2026-09-11 |
+| 11 | Annexe — traçabilité | ✅ validé 2026-09-11 |
+| 12 | Documents liés | ✅ validé 2026-09-11 |
 
 ---
 
@@ -697,6 +703,64 @@ depuis `20260908202000`, et la fiche établissement applique déjà cette règle
 11. **Le déménagement des sept libellés de statut** vers un namespace transverse (pt 6).
 
 ---
+
+---
+
+## 10bis. Ce que le code a corrigé du texte (2026-09-11)
+
+### Deux défauts que seul le rendu réel a montrés
+
+1. **Mes `data-testid` enfants cassaient un e2e existant.** `order-line-establishment-…`,
+   `order-line-paid-…` et `order-line-contact-…` commencent tous par `order-line-`, et
+   `payment-return.spec.ts` compte `getByTestId(/^order-line-/)` pour vérifier qu'une commande à
+   une ligne en affiche bien une : il en trouvait **trois**. Le préfixe `order-line-<uuid>` reste
+   réservé à la LIGNE ; ses enfants s'appellent `establishment-link-…`, `line-paid-…`,
+   `line-total-…`, `contact-whatsapp-…`. ⚠️ Le filet a fonctionné comme prévu — c'est un e2e
+   antérieur qui a attrapé une régression introduite par ce lot.
+2. **Deux boutons WhatsApp quasi homonymes sur le même écran.** Le pied de page de la zone vitrine
+   porte déjà « Escríbenos por WhatsApp » — le canal **Hifago** — et le bouton de la décision ⑥
+   disait « Escribir por WhatsApp », le canal **établissement**. Constaté en capturant le rendu, pas
+   en relisant le code. Le libellé **nomme désormais l'établissement** (« Escribir a Casa Kayam
+   Guatapé »). Le cahier §2c prévoit bien les deux canaux ; c'est au libellé de dire lequel.
+
+### Un e2e qui était mort sans que personne le sache
+
+`cancel-order.spec.ts`, que ce lot remplace, passait `p_lines` à `create_order` — **paramètre
+supprimé par la spec 32 le 2026-09-10**, quand le panier est passé en base et que la RPC s'est mise
+à lire ses propres lignes. Il n'aurait pas pu passer. Invisible parce que la suite e2e est en pause
+depuis le 2026-09-09, soit la veille.
+
+⚠️ **Cinq autres fichiers portent la même rupture** — `admin-order-status`, `admin-ledger`,
+`admin-modify-order-line`, `admin-product-price-tiers`, `admin-product-delete`. Porté au backlog :
+le jour où la suite sera réactivée, ces cinq-là échoueront pour une raison qui n'a rien à voir avec
+ce qu'ils testent.
+
+### Un défaut d'affichage révélé par l'écran, non corrigé
+
+Une commande dont les prestations sont **réalisées** (`fulfilled`) mais dont `payment_status` vaut
+`unpaid` s'annonce « Tu reserva aún no está pagada ». La dérivation vient de la spec 33, où elle ne
+se voyait pas (on y arrive après avoir payé) ; sur un historique, elle saute aux yeux. **Non corrigé
+dans ce lot** : il faudrait un libellé de plus et une décision sur ce que signifie cet état, et la
+correction toucherait aussi `/reserva/<jeton>`. Au backlog. *(En production le cas devrait être
+rare — `expire_stale_payment_orders` reprend une commande impayée au bout de 30 minutes ; c'est
+surtout le seed qui le produit.)*
+
+### Trois choses vérifiées par mutation, pas par relecture
+
+| Mutation appliquée | Ce qui a rougi |
+|---|---|
+| `coalesce(end_date, date)` → `date` seule dans `list_my_orders` | le séjour en cours classé « à venir », **et** l'ordre de la liste |
+| `'app_commission_cop', ol.app_commission_cop` ajouté au contrat partagé | **les deux** écrans d'un coup — la démonstration de ce que le partage achète |
+| `where id = p_line_id` → `where order_id = v_order_id` dans `cancel_order_line` | la prestation sœur, le décompte restant, **et** la file LobbyPMS (la nuit d'hôtel serait partie) |
+
+### Ce que la base savait déjà, et qu'on a failli réécrire
+
+Le prédicat « à venir / passée » **existait en SQL** depuis le 2026-08-28 : `list_clients` le
+calcule pour le tableau clients de l'admin, avec `coalesce(end_date, date)` contre
+`today_in_bogota()`. `upcoming` est la fusion exacte de ses cas `proxima` et `en_casa`. Et
+`today_in_bogota()` est `revoke`d pour `authenticated` : une lecture TypeScript **ne pouvait pas**
+appeler la définition du jour de référence, elle aurait dû la re-dériver. Deux arguments qui ne se
+voyaient qu'en lisant la base, et qui ont décidé la forme du lot.
 
 ## 11. Annexe — traçabilité
 

@@ -47,7 +47,7 @@
 - [Identité anonyme de l'invité](specs/31-identite-anonyme.md) — **Brouillon** · maj 2026-09-10
 - [Panier en base](specs/32-panier-en-base.md) — **Implémenté** · maj 2026-09-10
 - [L'écran de résultat de paiement et la fermeture du tunnel](specs/33-resultat-paiement-et-fermeture-du-tunnel.md) — **Implémenté** · maj 2026-09-11
-- [Compte client : « Mis reservas », la liste et le détail](specs/34-compte-mes-reservations.md) — **Brouillon** · maj 2026-09-11
+- [Compte client : « Mis reservas », la liste et le détail](specs/34-compte-mes-reservations.md) — **Implémenté** · maj 2026-09-11
 - [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-11
 - [Gabarit de spec de feature (à copier, ne décrit aucune feature réelle)](specs/_modele.md) — **modele** · maj 2026-08-16
 - [Avant d'écrire une spec — poser les bonnes questions](specs/avant-la-spec.md) — **modele** · maj 2026-08-16
