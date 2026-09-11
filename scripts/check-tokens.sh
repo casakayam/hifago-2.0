@@ -30,6 +30,13 @@ est_exempte() {
     # marque codée en dur, alors que nommer le fichier force la conversation au prochain drapeau.
     apps/web/components/organisms/LanguageSwitcher.tsx) return 0 ;;
 
+    # La MARQUE Google de `components/molecules/GoogleButton.tsx` : quatre valeurs hexadécimales,
+    # exactement la raison écrite au-dessus pour les drapeaux — la couleur d'un logo EST sa
+    # définition, la repeindre au thème la rendrait fausse, et les Google Brand Guidelines
+    # l'interdisent. Exempté PAR FICHIER comme la règle le prescrit : le prochain logo de marque
+    # devra rouvrir cette conversation au lieu de se glisser sous une exemption d'attribut.
+    apps/web/components/molecules/GoogleButton.tsx) return 0 ;;
+
     # Sonde de CONTRASTE d'une story : `rgba(0, 0, 0, 0)` est la valeur que rend
     # `getComputedStyle` pour un fond transparent (une sentinelle du moteur, pas une couleur
     # choisie), et `rgb(255,255,255)` le repli blanc sur lequel empiler les fonds `soft`

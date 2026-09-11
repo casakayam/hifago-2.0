@@ -27,10 +27,16 @@ export default async function LoginPage({
   const nextParam = resolvedSearchParams?.next;
   const next = typeof nextParam === "string" && nextParam.startsWith("/") ? nextParam : "/";
 
+  // `?error=auth_callback_failed` est posé par `app/auth/callback/route.ts`. Le paramètre existait
+  // depuis la feature 32 et PERSONNE ne le lisait : un échec de confirmation d'email ramenait sur un
+  // écran de connexion strictement muet. Lu maintenant, parce que l'entrée Google ajoutée le
+  // 2026-09-11 emprunte le même retour et rendrait ce silence beaucoup plus fréquent.
+  const callbackFailed = resolvedSearchParams?.error === "auth_callback_failed";
+
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
       <h1 className="text-2xl font-semibold">{t("title")}</h1>
-      <LoginForm next={next} />
+      <LoginForm next={next} callbackFailed={callbackFailed} />
     </main>
   );
 }

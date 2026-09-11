@@ -9,16 +9,23 @@ import { Link, useRouter } from "@/i18n/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { buildAuthCallbackRedirect } from "@hifago/domain";
 import { Button, Input, Label, TextField } from "@hifago/ui";
+import { OAuthSection } from "@/components/molecules/GoogleButton";
 
 // Adapté de l'ancien apps/admin/app/signup/SignupForm.tsx (git show bb254e9, supprimé depuis —
-// périmètre closed pour l'admin, cf. supabase/config.toml §11.13/§11.14, sans rapport avec ici),
-// SANS OAuthSection/Google (hors périmètre feature 32, décision Jérôme — cadrage "minimale") et
+// périmètre closed pour l'admin, cf. supabase/config.toml §11.13/§11.14, sans rapport avec ici) et
 // localisé via useTranslations (apps/web est routé ES/EN, contrairement à apps/admin).
-export function SignupForm({ next }: { next: string }) {
+//
+// `OAuthSection` était l'écart assumé de la feature 32 (« hors périmètre, cadrage minimale ») —
+// REFERMÉ le 2026-09-11 : cf. l'en-tête de `components/molecules/GoogleButton.tsx`. Un même bouton
+// sert la connexion ET l'inscription, `signInWithOAuth` créant le compte s'il n'existe pas ; c'est
+// cohérent avec l'inscription libre que cet écran assume déjà (registro/page.tsx).
+export function SignupForm({ next, initialEmail = "" }: { next: string; initialEmail?: string }) {
   const t = useTranslations("Signup");
   const locale = useLocale();
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  // Spec 33 : pré-rempli quand on arrive depuis l'écran de résultat d'une commande — le
+  // rattachement se fait par adresse email, une autre adresse ne retrouverait rien. Reste éditable.
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +81,8 @@ export function SignupForm({ next }: { next: string }) {
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-4">
+      <OAuthSection next={next} />
+
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <TextField name="email" value={email} onChange={setEmail} isRequired>
           <Label>{t("email")}</Label>

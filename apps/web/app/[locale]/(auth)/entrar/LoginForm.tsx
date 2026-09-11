@@ -10,13 +10,23 @@ import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { Button, Input, Label, TextField } from "@hifago/ui";
+import { OAuthSection } from "@/components/molecules/GoogleButton";
 
-export function LoginForm({ next }: { next: string }) {
+// `callbackFailed` : posé par `page.tsx` depuis `?error=auth_callback_failed`. Cette redirection
+// existait depuis la feature 32 (`app/auth/callback/route.ts`) et RIEN ne l'affichait — un échec de
+// confirmation d'email ramenait sur un écran de connexion muet. Le chemin devient réellement
+// emprunté maintenant qu'une entrée Google existe : son échec passe par là aussi.
+export function LoginForm({ next, callbackFailed = false }: { next: string; callbackFailed?: boolean }) {
   const t = useTranslations("Login");
+  const tCommon = useTranslations("Common");
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // Initialisé depuis la prop plutôt que rendu dans un second bloc d'alerte : deux `role="alert"`
+  // sur le même écran se disputent l'annonce, et le premier envoi efface de toute façon celui-ci.
+  const [error, setError] = useState<string | null>(
+    callbackFailed ? tCommon("oauth.callbackFailed") : null
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
@@ -41,23 +51,27 @@ export function LoginForm({ next }: { next: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex w-full max-w-sm flex-col gap-4">
-      <TextField name="email" value={email} onChange={setEmail} isRequired>
-        <Label>{t("email")}</Label>
-        <Input type="email" autoComplete="email" />
-      </TextField>
-      <TextField name="password" value={password} onChange={setPassword} isRequired>
-        <Label>{t("password")}</Label>
-        <Input type="password" autoComplete="current-password" />
-      </TextField>
-      {error ? (
-        <p role="alert" data-testid="login-error" className="text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
-      <Button type="submit" isDisabled={isSubmitting}>
-        {isSubmitting ? t("submitting") : t("submit")}
-      </Button>
+    <div className="flex w-full max-w-sm flex-col gap-4">
+      <OAuthSection next={next} />
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <TextField name="email" value={email} onChange={setEmail} isRequired>
+          <Label>{t("email")}</Label>
+          <Input type="email" autoComplete="email" />
+        </TextField>
+        <TextField name="password" value={password} onChange={setPassword} isRequired>
+          <Label>{t("password")}</Label>
+          <Input type="password" autoComplete="current-password" />
+        </TextField>
+        {error ? (
+          <p role="alert" data-testid="login-error" className="text-sm text-danger">
+            {error}
+          </p>
+        ) : null}
+        <Button type="submit" isDisabled={isSubmitting}>
+          {isSubmitting ? t("submitting") : t("submit")}
+        </Button>
+      </form>
 
       {/* Un client n'a besoin d'aucune capacité pour exister (contrairement à admin, où le
           point d'entrée self-service a été retiré le 2026-08-19 — décision propre à ce
@@ -70,6 +84,6 @@ export function LoginForm({ next }: { next: string }) {
           {t("signupLink")}
         </Link>
       </p>
-    </form>
+    </div>
   );
 }

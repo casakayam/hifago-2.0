@@ -387,12 +387,15 @@ Décidé le 2026-08-11 (cf. §1), révisé le 2026-09-07.
   (§2b.9) en pose la fondation — le justificatif présentable sur place et sa forme (QR, PDF)
   restent à trancher.
 
-*État d'implémentation, corrigé le 2026-09-07 : Google OAuth et l'inscription email/mot de passe
-avec vérification ont été construits le 2026-08-15 (feature 31) en back-end générique. Côté
-`apps/web`, **`/login`, `/signup` et `/verify-email` existent déjà** (feature 32) en email/mot de
-passe ; ce qui reste à construire sur la vitrine, c'est **Google OAuth** et **mot de passe oublié /
-réinitialisation**, qui n'existent aujourd'hui que sur `apps/admin`. Spec :
-`docs/specs/07-connexion-inscription-complete.md`.*
+*État d'implémentation, corrigé le 2026-09-07, complété le 2026-09-11 : Google OAuth et
+l'inscription email/mot de passe avec vérification ont été construits le 2026-08-15 (feature 31) en
+back-end générique. Côté `apps/web`, **`/entrar`, `/registro` et `/verificar-email` existent**
+(feature 32) en email/mot de passe — et **l'entrée Google y a été ajoutée le 2026-09-11**
+(`components/molecules/GoogleButton.tsx`, montée sur les deux premiers écrans). Le back-end
+n'avait besoin de rien : provider activé, `/auth/callback` traitant déjà la branche `code`,
+`additional_redirect_urls` déjà pourvues — seul l'écran manquait, et il n'était suivi nulle part.
+Ce qui reste à construire sur la vitrine : **mot de passe oublié / réinitialisation**, qui n'existe
+aujourd'hui que sur `apps/admin`. Spec : `docs/specs/07-connexion-inscription-complete.md`.*
 
 ### 2d. Condition d'annulation affichée avant réservation
 

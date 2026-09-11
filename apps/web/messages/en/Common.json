@@ -9,5 +9,12 @@
   },
   "carruselAnterior": "Previous photo",
   "carruselSiguiente": "Next photo",
-  "carruselIrA": "Go to photo {n}"
+  "carruselIrA": "Go to photo {n}",
+  "oauth": {
+    "google": "Continue with Google",
+    "googleRedirecting": "Redirecting…",
+    "googleError": "We could not sign you in with Google. Please try again.",
+    "separator": "or",
+    "callbackFailed": "We could not complete your sign-in. Please try again."
+  }
 }

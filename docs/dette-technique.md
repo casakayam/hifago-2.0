@@ -4,7 +4,7 @@ titre: "Dette technique et QA/UI connue — hifago"
 theme: journal
 statut: vivant
 langue: fr
-maj: 2026-09-10
+maj: 2026-09-11
 resume: >
   Dette signalée et non corrigée du chantier hifago — technique, puis QA/UI mineure. Sortie de
   docs/backlog.md le 2026-09-08 : ce fichier-là plafonne à 60 lignes et prescrit lui-même qu'un
@@ -24,6 +24,7 @@ repond_a:
 
 ## Dette technique signalée, non corrigée
 - Spec 19 Tranche 2 (remboursement Mercado Pago) non commencée. ⚠️ « Page de retour paiement dédiée toujours absente » RETIRÉ le 2026-09-10 : livrée par la spec 33 (`/reserva/<jeton>`). Ce point avait cessé d'être une dette assumée pour devenir un défaut réel — le repli « réutilise l'écran checkout » était devenu une PAGE BLANCHE le jour où la spec 32 a fait vider `cart_items` par `create_order`, sans que rien ne le relise.
+- **`SiteToaster` n'est monté nulle part dans `apps/web`** — constat écrit dans son PROPRE en-tête le 2026-09-02 (« il faut encore le MONTER dans `app/[locale]/layout.tsx`, ce que ce lot ne fait pas »), jamais refermé depuis : les `toast.danger`/`toast.success` de `ResendConfirmationForm.tsx` ne s'affichent donc jamais, et tout écran suivant qui croit pouvoir s'en servir hérite du même silence — c'est pourquoi `GoogleButton.tsx` rend son échec en ligne (2026-09-11). Correctif = une ligne de layout ; chaque lot qui le croise l'a jusqu'ici jugé hors de son périmètre, ce qui est exactement pourquoi il est ici.
 - Vitrine (`apps/web`) : polices Geist non appliquées (`--font-geist-*` du layout vs `--font-sans`/`--font-mono` consommés par HeroUI).
 - La garde de `(cuenta)` redirige vers `/entrar` SANS `?next=` : un layout serveur ne connaît pas le chemin courant, et la « ligne dans `proxy.ts` » annoncée par la spec 27 §5 n'en est pas une (un middleware ne peut pas poser d'en-tête de REQUÊTE sur une réponse construite par `intlMiddleware`). Sans effet tant qu'il n'existe qu'un écran de compte — vrai déclencheur : le lot qui ajoute `/cuenta` et `/cuenta/perfil`.
 - Remplacer une image du catalogue laisse l'ancien objet dans le bucket `catalog-media` — vrai pour `product_media`/`establishment_media` depuis la spec 04, et vrai pour l'image de catégorie que la spec 29 ajoute. À traiter globalement ou pas du tout : le corriger pour une seule entité créerait une incohérence de plus.

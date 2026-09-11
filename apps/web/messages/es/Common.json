@@ -9,5 +9,12 @@
   },
   "carruselAnterior": "Foto anterior",
   "carruselSiguiente": "Foto siguiente",
-  "carruselIrA": "Ir a la foto {n}"
+  "carruselIrA": "Ir a la foto {n}",
+  "oauth": {
+    "google": "Continuar con Google",
+    "googleRedirecting": "Redirigiendo…",
+    "googleError": "No se pudo iniciar sesión con Google. Vuelve a intentarlo.",
+    "separator": "o",
+    "callbackFailed": "No pudimos completar el inicio de sesión. Vuelve a intentarlo."
+  }
 }
