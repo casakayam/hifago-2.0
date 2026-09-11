@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { createClient } from "@hifago/supabase/client";
 import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/atoms/Button";
 import { TextField, Input, Label } from "@hifago/ui";
+import { signOutAndGoHome } from "./signOutAndGoHome";
 
 // Spec 35 décisions ④/⑪ — confirmation forte et définitive, bloquée en amont pour un compte
 // professionnel. Même patron de confirmation-remplace-le-bouton que `CancelLineButton.tsx`
@@ -69,10 +69,7 @@ export function DeleteAccountSection({
     // La suppression a réussi côté serveur (partner_accounts anonymisé, auth.users neutralisé) :
     // la session locale n'a plus rien à faire ici, mais son jeton reste techniquement valide
     // jusqu'à expiration — signOut() la révoque explicitement plutôt que d'attendre.
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    await signOutAndGoHome(router);
   }
 
   if (hasProfessionalCapability) {

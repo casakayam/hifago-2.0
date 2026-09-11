@@ -5,6 +5,10 @@ import { routing } from "./i18n/routing";
 
 const intlMiddleware = createMiddleware(routing);
 
+// `routing.locales` ne varie jamais entre requêtes : compilée une seule fois, comme
+// `intlMiddleware` ci-dessus — ce middleware tourne sur quasiment chaque requête de l'app.
+const PREFIXE_LOCALE_RE = new RegExp(`^/(${routing.locales.join("|")})(?=/|$)`);
+
 export default async function proxy(request: NextRequest) {
   const response = intlMiddleware(request) ?? NextResponse.next();
 
@@ -23,11 +27,7 @@ export default async function proxy(request: NextRequest) {
   //
   // Le préfixe de locale est retiré ici : `LoginForm.tsx` passe `next` à `router.push()` du routeur
   // `@/i18n/navigation`, qui préfixe LUI-MÊME la locale — un chemin déjà préfixé serait doublé.
-  const chemin = request.nextUrl.pathname;
-  const cheminSansLocale = chemin.replace(
-    new RegExp(`^/(${routing.locales.join("|")})(?=/|$)`),
-    ""
-  );
+  const cheminSansLocale = request.nextUrl.pathname.replace(PREFIXE_LOCALE_RE, "");
   response.headers.set("x-hifago-pathname", cheminSansLocale || "/");
 
   // Feature 7 (attribution) — 2e responsabilité de ce proxy : un ?ref=<code> sur n'importe quelle

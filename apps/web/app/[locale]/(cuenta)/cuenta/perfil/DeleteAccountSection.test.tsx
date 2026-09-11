@@ -38,6 +38,18 @@ function rendre(hasProfessionalCapability: boolean, locale: Locale = "es") {
   return container;
 }
 
+/** Ouvre la confirmation, saisit un email et soumet — répété par trois des quatre tests. */
+async function ouvrirSaisirEtSoumettre(container: HTMLElement, emailSaisi: string) {
+  await act(async () => {
+    fireEvent.click(container.querySelector('[data-testid="delete-account-button"]') as HTMLButtonElement);
+  });
+  const champ = container.querySelector('[data-testid="delete-account-email-input"]') as HTMLInputElement;
+  await act(async () => {
+    fireEvent.change(champ, { target: { value: emailSaisi } });
+    fireEvent.submit(container.querySelector('[data-testid="delete-account-confirm"]') as HTMLFormElement);
+  });
+}
+
 describe("DeleteAccountSection", () => {
   beforeEach(() => {
     appelsSignOut = 0;
@@ -57,14 +69,7 @@ describe("DeleteAccountSection", () => {
 
   it("un email qui ne correspond pas bloque l'envoi — fetch n'est JAMAIS appelé", async () => {
     const container = rendre(false);
-    await act(async () => {
-      fireEvent.click(container.querySelector('[data-testid="delete-account-button"]') as HTMLButtonElement);
-    });
-    const champ = container.querySelector('[data-testid="delete-account-email-input"]') as HTMLInputElement;
-    await act(async () => {
-      fireEvent.change(champ, { target: { value: "autre@test.local" } });
-      fireEvent.submit(container.querySelector('[data-testid="delete-account-confirm"]') as HTMLFormElement);
-    });
+    await ouvrirSaisirEtSoumettre(container, "autre@test.local");
 
     expect(container.querySelector('[data-testid="delete-account-mismatch"]')).not.toBeNull();
     expect(fetch).not.toHaveBeenCalled();
@@ -74,14 +79,7 @@ describe("DeleteAccountSection", () => {
   it("un email qui correspond envoie la requête, puis déconnecte et redirige vers l'accueil", async () => {
     vi.mocked(fetch).mockResolvedValue({ ok: true } as Response);
     const container = rendre(false);
-    await act(async () => {
-      fireEvent.click(container.querySelector('[data-testid="delete-account-button"]') as HTMLButtonElement);
-    });
-    const champ = container.querySelector('[data-testid="delete-account-email-input"]') as HTMLInputElement;
-    await act(async () => {
-      fireEvent.change(champ, { target: { value: EMAIL.toUpperCase() } });
-      fireEvent.submit(container.querySelector('[data-testid="delete-account-confirm"]') as HTMLFormElement);
-    });
+    await ouvrirSaisirEtSoumettre(container, EMAIL.toUpperCase());
 
     expect(fetch).toHaveBeenCalledWith(
       "/api/account/delete",
@@ -94,14 +92,7 @@ describe("DeleteAccountSection", () => {
   it("un échec serveur affiche une erreur et ne déconnecte PAS", async () => {
     vi.mocked(fetch).mockResolvedValue({ ok: false } as Response);
     const container = rendre(false);
-    await act(async () => {
-      fireEvent.click(container.querySelector('[data-testid="delete-account-button"]') as HTMLButtonElement);
-    });
-    const champ = container.querySelector('[data-testid="delete-account-email-input"]') as HTMLInputElement;
-    await act(async () => {
-      fireEvent.change(champ, { target: { value: EMAIL } });
-      fireEvent.submit(container.querySelector('[data-testid="delete-account-confirm"]') as HTMLFormElement);
-    });
+    await ouvrirSaisirEtSoumettre(container, EMAIL);
 
     expect(container.querySelector('[data-testid="delete-account-error"]')).not.toBeNull();
     expect(appelsSignOut).toBe(0);

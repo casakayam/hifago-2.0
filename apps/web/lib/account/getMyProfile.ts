@@ -22,6 +22,26 @@ export type MyProfile = {
   hasProfessionalCapability: boolean;
 };
 
+/**
+ * Isolée pour être appelée aussi depuis `pago/page.tsx` (repli de pré-remplissage, décision ⑦
+ * spec 35) sans passer par `getMyProfile()` : ce dernier appelle `getViewerAccount()`, donc un
+ * second `auth.getUser()` — un aller-retour réseau réel, pas un cache — alors que `pago/page.tsx` a
+ * déjà SON `user` et gère lui-même l'invité (`if (user)`, anonyme compris), une garde différente de
+ * `getViewerAccount()` (`isRealAccount` strict). Un client déjà créé, un id déjà connu : jamais un
+ * second appel à `createClient()`/`getUser()` pour la même donnée.
+ */
+export async function getPartnerAccountProfileFields(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  accountId: string
+): Promise<{ fullName: string; phone: string }> {
+  const { data } = await supabase
+    .from("partner_accounts")
+    .select("full_name, phone")
+    .eq("id", accountId)
+    .maybeSingle();
+  return { fullName: data?.full_name ?? "", phone: data?.phone ?? "" };
+}
+
 export async function getMyProfile(): Promise<MyProfile | null> {
   const viewer = await getViewerAccount();
   if (!viewer) {
@@ -29,15 +49,15 @@ export async function getMyProfile(): Promise<MyProfile | null> {
   }
 
   const supabase = await createClient();
-  const [{ data: compte }, { data: capacites }] = await Promise.all([
-    supabase.from("partner_accounts").select("full_name, phone").eq("id", viewer.id).maybeSingle(),
+  const [{ fullName, phone }, { data: capacites }] = await Promise.all([
+    getPartnerAccountProfileFields(supabase, viewer.id),
     supabase.from("partner_capabilities").select("role").limit(1),
   ]);
 
   return {
     email: viewer.email,
-    fullName: compte?.full_name ?? "",
-    phone: compte?.phone ?? "",
+    fullName,
+    phone,
     hasProfessionalCapability: Boolean(capacites && capacites.length > 0),
   };
 }

@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { createClient } from "@hifago/supabase/client";
 import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/atoms/Button";
+import { signOutAndGoHome } from "./signOutAndGoHome";
 
 // Spec 35 décision ⑨ — vit UNIQUEMENT sur /cuenta/perfil (choix explicite de Jérôme, pas dans le
 // layout partagé ni dans SiteMenu). Adapté d'`apps/admin/components/LogoutButton.tsx`, jamais
@@ -17,10 +17,7 @@ export function LogoutButton() {
 
   async function handleLogout() {
     setIsSubmitting(true);
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    await signOutAndGoHome(router);
   }
 
   return (

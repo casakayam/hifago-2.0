@@ -19,7 +19,7 @@ test("un client édite son profil, puis supprime son compte — email libéré, 
   context,
 }) => {
   const email = `e2e-perfil-${Date.now()}@test.local`;
-  const password = "Seed1234!";
+  const password = SEEDED_PASSWORD;
   const userId = await createTestUser(email, password);
 
   await loginAs(context, email, password);
@@ -102,7 +102,7 @@ test("le pré-remplissage du tunnel suit le profil, jamais une commande plus anc
   await resetAvailability(TOUR_PRODUCT_ID, TOUR_DATE, { capacity: 5, booked: 0 });
 
   const email = `e2e-pago-prefill-${Date.now()}@test.local`;
-  const password = "Seed1234!";
+  const password = SEEDED_PASSWORD;
   const userId = await createTestUser(email, password);
 
   // ① Une commande PASSÉE, avec un nom volontairement différent de ce que le profil portera —

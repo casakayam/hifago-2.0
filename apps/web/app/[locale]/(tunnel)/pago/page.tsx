@@ -3,6 +3,7 @@ import { setRequestLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@hifago/supabase/server";
 import { isRealAccount } from "@hifago/supabase/identity";
 import { getCartLines } from "@/lib/cart/getCartLines";
+import { getPartnerAccountProfileFields } from "@/lib/account/getMyProfile";
 import { CartSummary } from "@/components/organisms/CartSummary";
 import { CheckoutForm } from "./CheckoutForm";
 import type { Locale } from "@/messages";
@@ -51,15 +52,15 @@ export default async function CheckoutPage({
   let initialHolderPhone = "";
   const initialHolderEmail = user?.email ?? "";
   if (user) {
-    const { data: profile } = await supabase
-      .from("partner_accounts")
-      .select("full_name, phone")
-      .eq("id", user.id)
-      .maybeSingle();
+    // Même lecture que `getMyProfile()` (`/cuenta/perfil`), factorisée — mais pas `getMyProfile()`
+    // elle-même : elle rappellerait `getViewerAccount()`, donc un second `auth.getUser()` (un vrai
+    // aller-retour réseau, `user` est déjà résolu ci-dessus), et une garde `isRealAccount` stricte
+    // là où cet écran accepte aussi un invité (`if (user)`).
+    const profile = await getPartnerAccountProfileFields(supabase, user.id);
 
-    if (profile?.full_name) {
-      initialHolderName = profile.full_name;
-      initialHolderPhone = profile.phone ?? "";
+    if (profile.fullName) {
+      initialHolderName = profile.fullName;
+      initialHolderPhone = profile.phone;
     } else {
       const { data: lastOrder } = await supabase
         .from("orders")
