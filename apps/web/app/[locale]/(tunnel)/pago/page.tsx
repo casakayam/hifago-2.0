@@ -35,23 +35,42 @@ export default async function CheckoutPage({
   const lines = await getCartLines(locale as Locale);
 
   // Feature 32 — pré-remplissage pour un client connecté (cahier des charges client §2 point 6) :
-  // l'email vient toujours du compte auth (garanti dès l'inscription email/mot de passe), nom/
-  // téléphone viennent de la commande la plus récente du compte s'il en existe une (aucune table
-  // profil séparée). RLS déjà scopée à account_id = auth.uid() (même garde que /cuenta/reservas) —
-  // un champ pré-rempli reste éditable, jamais un verrou (CheckoutForm.tsx).
+  // l'email vient toujours du compte auth (garanti dès l'inscription email/mot de passe). Nom/
+  // téléphone : depuis la spec 35, le PROFIL (`partner_accounts.full_name`/`.phone`, existant
+  // depuis le 2026-08-19) fait foi (décision ⑦) — la commande la plus récente n'est plus qu'un
+  // REPLI, pour un compte qui n'a jamais édité son profil sur `/cuenta/perfil`. RLS déjà scopée à
+  // account_id = auth.uid() (même garde que /cuenta/reservas) — un champ pré-rempli reste
+  // éditable, jamais un verrou (CheckoutForm.tsx).
+  //
+  // ⚠️ Tout ou rien, jamais champ par champ : `full_name` vide veut dire « profil jamais édité »
+  // (c'est la RPC d'édition qui l'exige non vide — `update_my_account_profile`), donc son absence
+  // est un signal fiable pour retomber sur la commande. Un profil édité avec un téléphone laissé
+  // vide, lui, ne retombe PAS sur celui d'une commande passée — mélanger les deux sources ferait
+  // apparaître un numéro que le client a délibérément retiré de son profil.
   let initialHolderName = "";
   let initialHolderPhone = "";
   const initialHolderEmail = user?.email ?? "";
   if (user) {
-    const { data: lastOrder } = await supabase
-      .from("orders")
-      .select("holder_name, holder_phone")
-      .eq("account_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
+    const { data: profile } = await supabase
+      .from("partner_accounts")
+      .select("full_name, phone")
+      .eq("id", user.id)
       .maybeSingle();
-    initialHolderName = lastOrder?.holder_name ?? "";
-    initialHolderPhone = lastOrder?.holder_phone ?? "";
+
+    if (profile?.full_name) {
+      initialHolderName = profile.full_name;
+      initialHolderPhone = profile.phone ?? "";
+    } else {
+      const { data: lastOrder } = await supabase
+        .from("orders")
+        .select("holder_name, holder_phone")
+        .eq("account_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      initialHolderName = lastOrder?.holder_name ?? "";
+      initialHolderPhone = lastOrder?.holder_phone ?? "";
+    }
   }
 
   return (

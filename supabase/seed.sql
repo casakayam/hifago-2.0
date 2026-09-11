@@ -213,7 +213,11 @@ from (values
   -- ⚠️ Une date NEUVE était nécessaire : les huit ci-dessus sont toutes déjà dédiées à une autre
   -- spec, et `resetAvailability` fait un UPDATE — sans ligne préexistante pour (produit, date),
   -- il n'ouvre rien et la case du calendrier reste désactivée (constaté en écrivant ce spec).
-  (17, 5, 0)
+  (17, 5, 0),
+  -- Spec 35 : réservée exclusivement à e2e/perfil.spec.ts (pré-remplissage du tunnel — la commande
+  -- de setup y porte un nom délibérément différent du profil édité ensuite, pour prouver que
+  -- /pago ne retombe jamais sur elle une fois le profil rempli).
+  (16, 5, 0)
 ) as v(dia, capacity, booked);
 
 -- Feature 15 (Socio : soumettre une proposition d'édition) — profil dédié isolé. Constat en
