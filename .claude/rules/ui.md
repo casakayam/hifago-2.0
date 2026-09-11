@@ -23,6 +23,7 @@ besoin → bibliothèque et les règles responsive. Conventions d'écriture des 
 | Tables denses (catalogue, ledger, registre, modération) | TanStack Table + `SimpleTable` de `@hifago/ui` | **Jamais** le `Table` compound HeroUI ici (état interne incompatible avec le moteur headless). Listes standardisées admin/socio : `DataList` (spec 10) |
 | Table d'affichage simple | `Table` compound HeroUI | Pas de TanStack ici. Depuis un Server Component : cf. `apps.md` (jamais `items=`/`renderEmptyState=` sans `"use client"`) |
 | Écrans CRUD purs | Refine.dev en scaffolding | Jamais pour la logique métier, jamais `@refinedev/mui` |
+| Téléphone international (indicatif pays, validation E.164) | react-phone-number-input (`PhoneField` de `apps/web/components/atoms`) | Arbitrage Jérôme 2026-09-10. Import racine du package = déjà la variante `min` (jamais `/max`, jamais `libphonenumber-js` en double). `containerComponent`/`inputComponent`/`countrySelectComponent` remplacent CHACUN tout le DOM par défaut de la lib — pas de `style.css` importé, pas de second design system : le numéro reste rendu par la classe `.input` de `packages/ui` |
 | Texte d'interface | next-intl (`apps/web`) / espagnol en dur (`apps/admin`) | cf. `apps.md` |
 
 Aucune dépendance UI hors de cette carte sans arbitrage explicite de Jérôme — si le besoin ne rentre

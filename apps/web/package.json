@@ -24,7 +24,8 @@
     "next": "16.3.4",
     "next-intl": "^4.13.6",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "react-phone-number-input": "^3.4.18"
   },
   "devDependencies": {
     "@hifago/e2e-support": "*",
