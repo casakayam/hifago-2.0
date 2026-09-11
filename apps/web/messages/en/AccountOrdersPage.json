@@ -1,8 +1,25 @@
 {
-  "title": "My reservations",
-  "empty": "You don't have any reservations yet.",
-  "linesSummary": "{active} of {total} active lines",
-  "cancel": "Cancel reservation",
+  "metaTitle": "My bookings",
+  "title": "My bookings",
+  "groupUpcoming": "Upcoming",
+  "groupPast": "Past",
+  "empty": {
+    "titulo": "No bookings yet",
+    "descripcion": "Once you book something, you'll find it here."
+  },
+  "emptyCta": "Discover Guatapé",
+  "loadError": "We could not load your bookings. Please try again in a moment.",
+  "orderReference": "Booking {reference}",
+  "viewDetail": "View details",
+  "lineQty": "Quantity: {count}",
+  "linePaid": "Paid",
+  "lineTotal": "Total price",
+  "cancelLine": "Cancel",
+  "cancelConfirmTitle": "Cancel \"{product}\" on {date}?",
+  "cancelConfirmNoRefund": "The deposit already paid is not refunded.",
+  "cancelConfirmLastLine": "After this, the whole booking is cancelled.",
+  "cancelConfirmYes": "Yes, cancel",
+  "cancelConfirmNo": "No",
   "cancelling": "Cancelling…",
-  "cancelError": "Could not cancel the reservation. Please try again."
+  "cancelError": "Could not cancel. Please try again."
 }

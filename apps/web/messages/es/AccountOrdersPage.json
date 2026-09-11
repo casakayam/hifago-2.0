@@ -1,8 +1,25 @@
 {
+  "metaTitle": "Mis reservas",
   "title": "Mis reservas",
-  "empty": "Aún no tienes reservas.",
-  "linesSummary": "{active} de {total} líneas activas",
-  "cancel": "Anular reserva",
+  "groupUpcoming": "Próximas",
+  "groupPast": "Pasadas",
+  "empty": {
+    "titulo": "Aún no tienes reservas",
+    "descripcion": "Cuando reserves algo, lo encontrarás aquí."
+  },
+  "emptyCta": "Descubrir Guatapé",
+  "loadError": "No pudimos cargar tus reservas. Inténtalo de nuevo en unos instantes.",
+  "orderReference": "Reserva {reference}",
+  "viewDetail": "Ver detalle",
+  "lineQty": "Cantidad: {count}",
+  "linePaid": "Pagado",
+  "lineTotal": "Precio total",
+  "cancelLine": "Anular",
+  "cancelConfirmTitle": "¿Anular « {product} » del {date}?",
+  "cancelConfirmNoRefund": "El anticipo pagado no se devuelve.",
+  "cancelConfirmLastLine": "Después de esto, toda la reserva queda anulada.",
+  "cancelConfirmYes": "Sí, anular",
+  "cancelConfirmNo": "No",
   "cancelling": "Anulando…",
-  "cancelError": "No se pudo anular la reserva. Inténtalo de nuevo."
+  "cancelError": "No se pudo anular. Inténtalo de nuevo."
 }

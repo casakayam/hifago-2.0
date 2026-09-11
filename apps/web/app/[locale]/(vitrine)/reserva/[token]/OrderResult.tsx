@@ -12,6 +12,7 @@ import { Link, useRouter } from "@/i18n/navigation";
 import { Price } from "@/components/atoms/Price";
 import { Title } from "@/components/atoms/Title";
 import { formatLineSchedule } from "@/lib/orders/formatLineSchedule";
+import { deriveOrderState, isDeadLine } from "@/lib/orders/orderState";
 import type { OrderForDisplay } from "@/lib/orders/getOrderByToken";
 import type { Locale } from "@/messages";
 
@@ -48,8 +49,6 @@ type PaymentIntentResult = { ok: boolean; reason?: string; payment_id?: string }
 const REFRESH_INTERVAL_MS = 3000;
 const MAX_REFRESH_TICKS = 20;
 
-/** Lignes qui ne comptent plus — même liste que la RPC, qui exclut les mêmes des totaux. */
-const DEAD_LINE_STATUSES = ["cancelled_by_client", "cancelled_by_provider", "expired", "superseded"];
 
 export type OrderResultProps = {
   order: OrderForDisplay;
@@ -68,16 +67,7 @@ export function OrderResult({ order, locale, isRealAccount }: OrderResultProps) 
   // faisait réécrire trois fois les mêmes conditions (et rendait `isPayable` vrai sur une commande
   // déjà payée dont un paiement de trop avait échoué).
   const isAwaiting = order.paymentStatus === "pending";
-  const orderState =
-    order.paymentStatus === "paid"
-      ? "paid"
-      : isAwaiting
-        ? "awaiting"
-        : order.lines.some((line) => !DEAD_LINE_STATUSES.includes(line.status))
-          ? "unpaid"
-          : order.lines.some((line) => line.status === "expired")
-            ? "expired"
-            : "cancelled";
+  const orderState = deriveOrderState(order);
 
   const state = paymentError ? "failed" : orderState;
   const isPayable = orderState === "unpaid";
@@ -203,7 +193,7 @@ export function OrderResult({ order, locale, isRealAccount }: OrderResultProps) 
         <Title as="h2">{t("summary")}</Title>
         <ul className="flex flex-col gap-3">
           {order.lines.map((line) => {
-            const isDead = DEAD_LINE_STATUSES.includes(line.status);
+            const isDead = isDeadLine(line.status);
             return (
               <li
                 key={line.id}

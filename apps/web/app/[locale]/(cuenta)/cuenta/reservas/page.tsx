@@ -1,11 +1,44 @@
+import type { Metadata } from "next";
 import { redirect } from "@/i18n/navigation";
 import { setRequestLocale, getTranslations } from "next-intl/server";
-import { createClient } from "@hifago/supabase/server";
-import { OrdersList } from "./OrdersList";
+import { getMyOrders } from "@/lib/orders/getMyOrders";
+import { viewerIsRealAccount } from "@/lib/auth/viewer";
+import { PageShell } from "@/components/atoms/PageShell";
+import { Title } from "@/components/atoms/Title";
+import { LinkButton } from "@/components/atoms/LinkButton";
+import { EstadoVacio } from "@/components/molecules/EstadoVacio";
+import { OrderCard } from "./OrderCard";
+import type { Locale } from "@/messages";
 
-// Feature 8 : minimal (pas la « page compte » complète du cahier des charges), juste ce qu'il faut
-// pour rendre l'annulation testable — liste des commandes du compte connecté (RLS orders_select
-// déjà en place depuis la Tranche 3), pas de vue détaillée ligne par ligne.
+// « MIS RESERVAS » — la liste des réservations du compte (spec 34).
+//
+// ⚠️ CETTE ROUTE N'APPELLE PLUS SUPABASE ELLE-MÊME, et c'est le point du lot : elle était l'une des
+// DEUX dernières exemptions de `scripts/check-data-layer.sh`, dont l'en-tête dit « cette liste doit
+// RÉTRÉCIR à chaque lot, une ligne ajoutée est une régression ». La lecture vit dans
+// `lib/orders/getMyOrders.ts`, la résolution de qui regarde dans `lib/auth/viewer.ts`, et
+// l'exemption est retirée du script dans le même commit. Il n'en reste qu'une.
+//
+// ⚠️ LA GARDE REFUSE UNE IDENTITÉ ANONYME (décision ⑦, 2026-09-11), là où elle se contentait de
+// `Boolean(user)`. Depuis la spec 31, `getUser()` rend un utilisateur pour une session anonyme —
+// posée dès le premier ajout au panier — et cet écran lui était donc ouvert, ce que la spec 31
+// nommait un gain voulu. Jérôme l'a renversé : un invité n'a pas d'espace compte. Le recul est
+// théorique, aucun chemin de l'interface n'y menait un invité (`SiteMenu` lui affiche « Iniciar
+// sesión », `/reserva/<jeton>` « Crear una cuenta ») — la garde ne fait qu'aligner la route sur ce
+// que le chrome dit déjà.
+//
+// ⚠️ Cette garde-ci ne protège QUE cette route. La garde de ZONE vit dans `(cuenta)/layout.tsx`,
+// qui appartient au lot `/cuenta/perfil` construit en parallèle : tant qu'elle n'y est pas posée,
+// les autres écrans de la zone restent ouverts à un invité. Signalé à Jérôme, pas corrigé ici.
+// Le refus vit aussi EN BASE (`list_my_orders` → `anonymous_session`), donc il tient même si une
+// garde d'écran saute un jour.
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("AccountOrdersPage");
+  // Pas de `robots` ici : la zone entière est déjà `index: false` par son layout, et le
+  // re-déclarer ferait rougir `scripts/check-seo.sh`.
+  return { title: t("metaTitle") };
+}
+
 export default async function AccountOrdersPage({
   params,
 }: PageProps<"/[locale]/cuenta/reservas">) {
@@ -13,30 +46,59 @@ export default async function AccountOrdersPage({
   setRequestLocale(locale);
   const t = await getTranslations("AccountOrdersPage");
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  if (!(await viewerIsRealAccount())) {
     redirect({ href: "/entrar?next=/cuenta/reservas", locale });
   }
 
-  // order_lines(id, status) : orders_select/order_lines_select (Tranche 3) filtrent déjà sur
-  // account_id = auth.uid(). RÉVISÉ 2026-09-10 (spec 31, Tranche 2) : un invité n'est PLUS
-  // redirigé ci-dessus — CartContext lui pose une identité anonyme dès le premier ajout au
-  // panier, `getUser()` la renvoie comme un compte normal, et orders.account_id n'est plus jamais
-  // null. Cet écran devient donc atteignable pour un invité, exactement comme pour un compte réel
-  // — un gain voulu (la commande d'un invité lui appartient enfin), pas une fuite : la RLS filtre
-  // toujours strictement sur SA PROPRE identité, jamais celle d'un autre visiteur.
-  const { data: orders } = await supabase
-    .from("orders")
-    .select("id, holder_name, created_at, order_lines(id, status)")
-    .order("created_at", { ascending: false });
+  const orders = await getMyOrders(locale as Locale);
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-8">
-      <h1 className="text-2xl font-semibold">{t("title")}</h1>
-      <OrdersList orders={orders ?? []} />
-    </main>
+    <PageShell variant="narrow" testId="mis-reservas-page">
+      <Title as="h1">{t("title")}</Title>
+
+      {orders === null ? (
+        // L'erreur est rendue EN LIGNE et non en toast : `SiteToaster` n'est monté nulle part dans
+        // `apps/web` (dette connue, signalée depuis le 2026-09-02) — un toast ne s'afficherait
+        // jamais, et l'écran serait muet.
+        <p role="alert" data-testid="orders-load-error" className="text-sm text-danger">
+          {t("loadError")}
+        </p>
+      ) : orders.upcoming.length === 0 && orders.past.length === 0 ? (
+        <div className="flex flex-col items-center gap-4">
+          <EstadoVacio
+            titulo={t("empty.titulo")}
+            descripcion={t("empty.descripcion")}
+            testId="no-orders"
+          />
+          <LinkButton href="/">{t("emptyCta")}</LinkButton>
+        </div>
+      ) : (
+        <>
+          {/* Une section vide n'est pas rendue — même règle que les sections de l'accueil. Le
+              groupe vient de la base, ce fichier ne fait que le lire. */}
+          {orders.upcoming.length > 0 ? (
+            <section className="flex flex-col gap-4" data-testid="grupo-proximas">
+              <Title as="h2" size="sm">
+                {t("groupUpcoming")}
+              </Title>
+              {orders.upcoming.map((order) => (
+                <OrderCard key={order.id} order={order} locale={locale as Locale} />
+              ))}
+            </section>
+          ) : null}
+
+          {orders.past.length > 0 ? (
+            <section className="flex flex-col gap-4" data-testid="grupo-pasadas">
+              <Title as="h2" size="sm">
+                {t("groupPast")}
+              </Title>
+              {orders.past.map((order) => (
+                <OrderCard key={order.id} order={order} locale={locale as Locale} />
+              ))}
+            </section>
+          ) : null}
+        </>
+      )}
+    </PageShell>
   );
 }
