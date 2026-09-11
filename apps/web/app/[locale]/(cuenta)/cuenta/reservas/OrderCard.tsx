@@ -77,7 +77,7 @@ export async function OrderCard({ order, locale }: OrderCardProps) {
                     {line.establishmentSlug ? (
                       <Link
                         href={`/establecimientos/${line.establishmentSlug}`}
-                        data-testid={`order-line-establishment-${line.id}`}
+                        data-testid={`establishment-link-${line.id}`}
                         className="underline underline-offset-2"
                       >
                         {line.establishmentName}
@@ -103,7 +103,7 @@ export async function OrderCard({ order, locale }: OrderCardProps) {
                       <Price
                         amountCop={line.acompteCop}
                         locale={locale}
-                        testId={`order-line-paid-${line.id}`}
+                        testId={`line-paid-${line.id}`}
                       />
                     </dd>
                   </div>
@@ -113,7 +113,7 @@ export async function OrderCard({ order, locale }: OrderCardProps) {
                       <Price
                         amountCop={line.totalCop}
                         locale={locale}
-                        testId={`order-line-total-${line.id}`}
+                        testId={`line-total-${line.id}`}
                       />
                     </dd>
                   </div>

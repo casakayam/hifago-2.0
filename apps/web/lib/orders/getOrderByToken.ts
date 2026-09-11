@@ -1,5 +1,6 @@
 import { createClient } from "@hifago/supabase/server";
 import { resolveLocalizedField, asLocalizedField } from "@hifago/domain";
+import { urlDeContacto } from "@/lib/catalog/establecimiento";
 import type { Locale } from "@/messages";
 
 // Spec 33 — lecture d'une commande par son jeton d'URL, réservée aux Server Components
@@ -35,6 +36,19 @@ export type OrderLineForDisplay = {
   totalCop: number;
   /** `reserved` | `fulfilled` | `no_show` | `cancelled_by_client` | `cancelled_by_provider` | `expired` | `superseded` */
   status: string;
+  /** Spec 34 décision ③ — le lien vers la fiche. `null` si la prestation n'a pas d'établissement. */
+  establishmentSlug: string | null;
+  /**
+   * Spec 34 décision ⑥ — l'URL `wa.me` de l'établissement, SANS le message : celui-ci est
+   * localisé, donc ajouté par le composant, qui seul dispose du traducteur. `null` quand
+   * `contact_phone` est vide — et alors aucun bouton n'est rendu, jamais un bouton mort.
+   *
+   * ⚠️ Construite ICI et pas dans `OrderResult.tsx`, qui est `"use client"` : y importer
+   * `urlDeContacto` embarquerait tout `lib/catalog/` — et `createPublicClient` — dans le bundle
+   * navigateur. C'est l'angle mort nommé en tête de `scripts/check-data-layer.sh`, déjà réalisé
+   * une fois par `FichaEstablecimiento.tsx` : ne pas en faire une seconde occurrence.
+   */
+  establishmentContactUrl: string | null;
 };
 
 export type OrderForDisplay = {
@@ -62,6 +76,8 @@ type RpcLine = {
   product_type: string | null;
   product_slug: string | null;
   establishment_name: unknown;
+  establishment_slug: string | null;
+  establishment_contact_phone: string | null;
   date: string;
   end_date: string | null;
   slot_start_time: string | null;
@@ -124,6 +140,10 @@ export async function getOrderByToken(
       qty: line.qty,
       totalCop: line.total_cop,
       status: line.status,
+      establishmentSlug: line.establishment_slug,
+      establishmentContactUrl: line.establishment_contact_phone
+        ? urlDeContacto(line.establishment_contact_phone)
+        : null,
     })),
   };
 }

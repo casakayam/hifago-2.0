@@ -200,19 +200,62 @@ export function OrderResult({ order, locale, isRealAccount }: OrderResultProps) 
                 data-testid={`order-line-${line.id}`}
                 data-status={line.status}
                 className={cn(
-                  "flex items-center justify-between gap-4 rounded-lg border p-3 text-sm",
+                  "flex items-start justify-between gap-4 rounded-lg border p-3 text-sm",
                   isDead ? "border-default-200 text-muted" : "border"
                 )}
               >
-                <div className="flex flex-col">
+                <div className="flex flex-col gap-1">
                   <span className={cn("font-medium", isDead && "line-through")}>
                     {line.productName}
                   </span>
                   <span className="text-muted">
-                    {line.establishmentName} · {formatLineSchedule(line)} ·{" "}
-                    {t("lineQty", { count: line.qty })}
+                    {/* Spec 34 décision ③ — l'établissement devient un lien vers sa fiche. Rendu
+                        même s'il est dépublié : le 404 est rare, et recopier ici le prédicat de
+                        `establishments_select_public` créerait une seconde définition de
+                        « publiquement visible » (spec 34 §9). */}
+                    {line.establishmentSlug ? (
+                      <Link
+                        href={`/establecimientos/${line.establishmentSlug}`}
+                        data-testid={`establishment-link-${line.id}`}
+                        className="underline underline-offset-2"
+                      >
+                        {line.establishmentName}
+                      </Link>
+                    ) : (
+                      line.establishmentName
+                    )}{" "}
+                    · {formatLineSchedule(line)} · {t("lineQty", { count: line.qty })}
                   </span>
                   <span className="text-xs text-muted">{t(`lineStatus.${line.status}`)}</span>
+                  {/* Spec 34 décision ⑥ — écrire à l'établissement, message pré-rempli avec le
+                      numéro de réservation : la forme exacte du portail en production
+                      (`reservar.js`, « Hola, soy {name}, reserva #{id} »), à ceci près que
+                      `reference` porte déjà son préfixe HFG-. L'URL de base est construite côté
+                      serveur (`getOrderByToken`) ; seul le TEXTE est ajouté ici, parce qu'il est
+                      localisé. Aucun bouton si l'établissement n'a pas de numéro.
+
+                      ⚠️ Le libellé NOMME l'établissement, et ce n'est pas cosmétique : le pied de
+                      page de la zone vitrine porte déjà « Escríbenos por WhatsApp », le canal
+                      Hifago. Deux boutons WhatsApp quasi homonymes sur le même écran, dont l'un
+                      écrit au prestataire et l'autre à la plateforme — constaté en capturant le
+                      rendu réel le 2026-09-11. Le cahier §2c prévoit bien les deux canaux ; c'est
+                      au libellé de dire lequel. */}
+                  {line.establishmentContactUrl ? (
+                    <a
+                      href={`${line.establishmentContactUrl}?text=${encodeURIComponent(
+                        t("contactMessage", {
+                          name: order.holderName,
+                          reference: order.reference,
+                        })
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid={`contact-whatsapp-${line.id}`}
+                      className="text-xs underline underline-offset-2"
+                    >
+                      {t("contactWhatsApp", { establishment: line.establishmentName })}
+                    </a>
+                  ) : null}
                 </div>
                 <Price amountCop={line.totalCop} locale={locale} />
               </li>
@@ -274,13 +317,23 @@ export function OrderResult({ order, locale, isRealAccount }: OrderResultProps) 
         // Le rattachement des commandes par email est fait par `attach_orders_to_account`, appelée
         // depuis /auth/callback une fois l'email VÉRIFIÉ (spec 33 Tranche 3). L'email est pré-rempli
         // pour que le client ne rattache pas par erreur une adresse différente de sa commande.
-        <Link
-          href={`/registro?next=/cuenta/reservas&email=${encodeURIComponent(order.holderEmail)}`}
-          data-testid="create-account-link"
-          className="text-sm hover:underline"
-        >
-          {t("createAccount")}
-        </Link>
+        <div className="flex flex-col gap-1">
+          <Link
+            href={`/registro?next=/cuenta/reservas&email=${encodeURIComponent(order.holderEmail)}`}
+            data-testid="create-account-link"
+            className="text-sm hover:underline"
+          >
+            {t("createAccount")}
+          </Link>
+          {/* Spec 34 décision ⑨ — un visiteur sans compte n'annule pas lui-même : la RPC refuse
+              une session anonyme, et ouvrir « Anular » sur cette adresse donnerait un droit
+              destructif à quiconque détient le lien (il circule par email, se transfère, et une
+              annulation n'est ni remboursée ni réversible — spec 33 invariant 4). Son chemin est
+              le bouton de contact posé plus haut, sur la prestation concernée. */}
+          <p className="text-xs text-muted" data-testid="guest-cancel-hint">
+            {t("guestCancelHint")}
+          </p>
+        </div>
       )}
     </div>
   );

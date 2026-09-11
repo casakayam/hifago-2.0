@@ -27,9 +27,14 @@ export type IdentityLike = { is_anonymous?: boolean } | null | undefined;
  * Un compte avec une identité propre, jamais une session anonyme. C'est ce que l'interface appelle
  * « connecté » : un anonyme possède bien son panier et ses commandes, mais il n'a pas de compte.
  *
- * ⚠️ Une identité anonyme reste une identité valide partout ailleurs — `/cuenta/reservas` lui est
- * accessible, gain voulu de la spec 31. Ce prédicat ne décide QUE de ce que l'interface appelle
- * un compte.
+ * ⚠️ Une identité anonyme reste une identité valide partout ailleurs : elle possède son panier et
+ * ses commandes, et `/reserva/<jeton>` lui est ouvert. Ce prédicat ne décide QUE de ce que
+ * l'interface appelle un compte.
+ *
+ * ⚠️ CORRIGÉ le 2026-09-11 (spec 34 décision ⑦) : ce commentaire disait « `/cuenta/reservas` lui
+ * est accessible, gain voulu de la spec 31 ». Ce n'est plus vrai — Jérôme a renversé ce point,
+ * l'écran de compte refuse désormais une identité anonyme, et `list_my_orders` la refuse EN BASE.
+ * Le recul est faible : aucun chemin de l'interface n'y menait un invité.
  */
 export function isRealAccount(user: IdentityLike): boolean {
   return Boolean(user) && !user?.is_anonymous;

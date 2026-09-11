@@ -46,5 +46,8 @@
     "order_not_found": "We could not find the order to start the payment.",
     "mercadopago_unavailable": "We could not reach Mercado Pago. Please try again in a moment.",
     "unknown": "The payment could not be started. Please try again."
-  }
+  },
+  "contactWhatsApp": "Message {establishment}",
+  "contactMessage": "Hi, I'm {name}, booking {reference}",
+  "guestCancelHint": "To cancel or change this booking, message the establishment."
 }

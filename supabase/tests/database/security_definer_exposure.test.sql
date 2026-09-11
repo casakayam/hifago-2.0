@@ -106,8 +106,12 @@ select is(
         -- construction), donc jamais captées par ce filtre — les y ajouter serait sans effet et
         -- laisserait croire, à tort, qu'elles ont un garde à surveiller.
         'create_order',
-        'create_payment_intent',
-        'cancel_order'
+        'create_payment_intent'
+        -- ⚠️ 'cancel_order' RETIRÉE le 2026-09-11 (spec 34 décision ⑩) : la fonction est droppée
+        -- (20260911120000), et sa remplaçante `cancel_order_line` n'a besoin d'aucune entrée ici
+        -- — elle appelle `is_anonymous_session()`, donc elle se défend elle-même et le filtre
+        -- ci-dessus ne la relève pas. Cette liste RÉTRÉCIT : elle n'a jamais gagné d'entrée depuis
+        -- la spec 31, et c'est la première qu'elle perd.
       )
   ),
   '',

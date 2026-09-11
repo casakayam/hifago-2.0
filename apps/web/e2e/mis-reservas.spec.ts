@@ -66,8 +66,8 @@ test("un client voit ses prestations dépliées, en annule une, et l'autre reste
   await expect(page.getByTestId(`order-line-${ligne2.id}`)).toBeVisible();
 
   // ② Chaque prestation porte SES DEUX montants (décision ④) : payé en ligne, et prix total.
-  await expect(page.getByTestId(`order-line-paid-${ligne1.id}`)).toBeVisible();
-  await expect(page.getByTestId(`order-line-total-${ligne1.id}`)).toBeVisible();
+  await expect(page.getByTestId(`line-paid-${ligne1.id}`)).toBeVisible();
+  await expect(page.getByTestId(`line-total-${ligne1.id}`)).toBeVisible();
 
   // ③ Elle est dans « Próximas » — le groupe vient de la base, l'écran ne fait que le lire.
   await expect(page.getByTestId("grupo-proximas")).toContainText("HFG-");

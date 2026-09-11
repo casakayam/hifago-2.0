@@ -1,0 +1,29 @@
+-- Spec 34 Tranche 4 — `cancel_order` est retirée. Décision ⑩ (2026-09-11).
+--
+-- ═══ PIERRE TOMBALE ═══════════════════════════════════════════════════════════════════════════
+-- `cancel_order(p_order_id uuid)` a vécu du 2026-08-14 au 2026-09-11. Elle annulait TOUTES les
+-- lignes `reserved` d'une commande en un geste, ce qui était exactement la règle du cahier client
+-- §2c de l'époque : « annuler la réservation signifie annuler toute la commande et toutes ses
+-- lignes ». Cette règle a été renversée par Jérôme le 2026-09-11 (spec 34 décision ⑤) :
+-- l'annulation porte désormais sur UNE prestation.
+--
+-- ⚠️ SI VOUS ARRIVEZ ICI DEPUIS UN COMMENTAIRE QUI LA CITE — et une dizaine de migrations le font
+-- (« même discipline que cancel_order », « même calibrage bas-risque que cancel_order ») — la
+-- référence a migré vers `public.cancel_order_line`, migration 20260911110000. Ce qu'elles
+-- voulaient dire reste vrai et vaut pour elle : garde stricte `account_id = auth.uid()`, réponse
+-- indistincte entre « n'existe pas » et « appartient à autrui », verrou `for update` simple parce
+-- qu'aucun compteur de capacité n'est touché, et la place n'est JAMAIS rendue (cahier §7/A3).
+-- ══════════════════════════════════════════════════════════════════════════════════════════════
+--
+-- POURQUOI LA SUPPRIMER PLUTÔT QUE LA LAISSER DORMIR. Mesuré avant : zéro appelant — ni dans
+-- `apps/web` (son unique consommateur, `OrdersList.tsx`, a disparu en Tranche 3), ni dans
+-- `apps/admin` (qui passe par `set_order_line_status` et `modify_order_line`), ni dans
+-- `supabase/functions`, ni dans `packages/`. La garder aurait laissé en base une fonction
+-- exécutable par tout compte connecté, qui applique une règle que le produit a abandonnée — et
+-- une entrée dans la liste blanche du cas 2 de `security_definer_exposure.test.sql`, c'est-à-dire
+-- une exception de sécurité maintenue pour du code mort.
+--
+-- Sa remplaçante n'a besoin d'AUCUNE entrée dans cette liste blanche : elle appelle
+-- `is_anonymous_session()`, donc le contrôle la voit se défendre elle-même. La liste perd une
+-- entrée et n'en gagne aucune.
+drop function public.cancel_order(uuid);

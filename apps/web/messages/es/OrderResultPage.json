@@ -46,5 +46,8 @@
     "order_not_found": "No se pudo encontrar el pedido para iniciar el pago.",
     "mercadopago_unavailable": "No pudimos conectar con Mercado Pago. Inténtalo de nuevo en unos instantes.",
     "unknown": "No se pudo iniciar el pago. Inténtalo de nuevo."
-  }
+  },
+  "contactWhatsApp": "Escribir a {establishment}",
+  "contactMessage": "Hola, soy {name}, reserva {reference}",
+  "guestCancelHint": "Para anular o modificar esta reserva, escribe al establecimiento."
 }
