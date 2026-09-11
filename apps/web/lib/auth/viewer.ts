@@ -23,3 +23,19 @@ export async function viewerIsRealAccount(): Promise<boolean> {
   } = await supabase.auth.getUser();
   return isRealAccount(user);
 }
+
+/**
+ * Spec 35 — ajouté quand `/cuenta/perfil` en a eu besoin (l'email du compte réel, pour
+ * l'afficher et pour la confirmation de suppression qui le fait retaper). `null` pour un
+ * invité/visiteur : appelants qui doivent alors rediriger, pas afficher un écran à moitié vide.
+ */
+export async function getViewerAccount(): Promise<{ id: string; email: string } | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!isRealAccount(user) || !user?.email) {
+    return null;
+  }
+  return { id: user.id, email: user.email };
+}

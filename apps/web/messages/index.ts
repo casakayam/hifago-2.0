@@ -24,6 +24,7 @@ import esProductPage from "./es/ProductPage.json";
 import esEstablishmentPage from "./es/EstablishmentPage.json";
 import esCheckoutPage from "./es/CheckoutPage.json";
 import esAccountOrdersPage from "./es/AccountOrdersPage.json";
+import esAccountProfilePage from "./es/AccountProfilePage.json";
 import esCartPage from "./es/CartPage.json";
 import esOrderResultPage from "./es/OrderResultPage.json";
 import enChrome from "./en/Chrome.json";
@@ -39,6 +40,7 @@ import enProductPage from "./en/ProductPage.json";
 import enEstablishmentPage from "./en/EstablishmentPage.json";
 import enCheckoutPage from "./en/CheckoutPage.json";
 import enAccountOrdersPage from "./en/AccountOrdersPage.json";
+import enAccountProfilePage from "./en/AccountProfilePage.json";
 import enCartPage from "./en/CartPage.json";
 import enOrderResultPage from "./en/OrderResultPage.json";
 
@@ -63,6 +65,7 @@ const MESSAGES = {
     EstablishmentPage: esEstablishmentPage,
     CheckoutPage: esCheckoutPage,
     AccountOrdersPage: esAccountOrdersPage,
+    AccountProfilePage: esAccountProfilePage,
     CartPage: esCartPage,
     OrderResultPage: esOrderResultPage,
   },
@@ -80,6 +83,7 @@ const MESSAGES = {
     EstablishmentPage: enEstablishmentPage,
     CheckoutPage: enCheckoutPage,
     AccountOrdersPage: enAccountOrdersPage,
+    AccountProfilePage: enAccountProfilePage,
     CartPage: enCartPage,
     OrderResultPage: enOrderResultPage,
   },
