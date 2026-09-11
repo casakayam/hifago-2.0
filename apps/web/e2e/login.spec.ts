@@ -41,10 +41,7 @@ test("un compte seedé peut se connecter via le formulaire /[locale]/entrar", as
   await page.locator('input[name="holder-name"]').fill("Cliente E2E Login");
   await page.locator('input[name="holder-phone"]').fill("+57 300 111 4444");
   await page.locator('input[name="holder-email"]').fill("cliente.login@example.com");
-  // Spec 19 §0 Tranche 1 : create_order réussi enchaîne désormais automatiquement le paiement
-  // Mercado Pago (redirection réelle, seul l'appel SDK externe est mocké). order-success n'est
-  // qu'un état transitoire — la redirection peut déjà l'avoir remplacé avant que Playwright ne
-  // l'observe (race constatée en testant) : attendre l'URL finale est le seul checkpoint fiable.
+  // `redirectUrl` = le motif de l'écran de résultat (cf. `mockMercadoPagoCheckout`).
   const { redirectUrl } = await mockMercadoPagoCheckout(page);
   await page.getByTestId("submit-order-button").click();
 

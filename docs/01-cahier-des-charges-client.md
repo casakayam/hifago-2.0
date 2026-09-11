@@ -26,6 +26,28 @@ repond_a:
   uniquement) », et §3f décision 4 (« des statuts de paiement ne seront introduits que lorsque le
   paiement en ligne sera réellement implémenté ») — la condition est remplie, ces statuts existent.
 
+- **§2b.9 contrainte (a) — PÉRIMÉE le 2026-09-10**, révisée par
+  `docs/specs/33-resultat-paiement-et-fermeture-du-tunnel.md` (statut `implemente`). Elle affirme que
+  « la policy `orders_select` **exclut l'invité de toute lecture** ». C'était vrai le 2026-09-07 ; ça
+  ne l'est plus depuis la spec 31, livrée trois jours après : `orders_select` vaut
+  `is_admin() or account_id = (select auth.uid())`, et `orders.account_id` est désormais **NOT NULL**
+  et porte l'identité **anonyme** du visiteur. Un invité **peut** donc lire sa propre commande, sur
+  son propre appareil. **La décision ne change pas** — l'adresse porte bien un jeton — mais sa RAISON
+  change : le jeton ne contourne pas une policy qui exclurait l'invité, il sert à rouvrir le lien
+  **depuis l'email, des mois plus tard, sur un autre appareil, ou après purge de la session**. C'est
+  aussi ce qui justifie qu'il n'expire jamais. La contrainte (b) (ajouter l'adresse à `robots.ts`),
+  elle, tient : elle est appliquée.
+- **§2b.9 « numéro de réservation » — précisé le 2026-09-10** (même spec) : le numéro que le client
+  garde est `orders.reference`, de forme `HFG-000042`, **distinct du secret d'accès**
+  (`orders.access_token`). Le cahier ne disait pas lequel des deux était lequel ; les fusionner
+  aurait rendu impossible d'afficher ou de dicter un numéro sans donner du même geste accès aux
+  données personnelles du client.
+- **§2f « rattachement d'une commande passée en invité » — REFERMÉ le 2026-09-10** (même spec) : le
+  mécanisme existe, c'est la RPC `attach_orders_to_account`, appelée après vérification de l'email.
+  ⚠️ Elle ne rattache **que** des commandes appartenant encore à une identité anonyme — sans quoi un
+  compte réel ayant saisi l'email d'un tiers perdrait sa commande le jour où ce tiers s'inscrit
+  (arbitré par Jérôme le 2026-09-10).
+
 Ajoutés par la relecture intégrale du 2026-09-07 :
 
 - **§3a (l.275 `schedule`), §3d (l.431 « produit à créneaux ») et §3e (l.499 `'slot'`) — contredits

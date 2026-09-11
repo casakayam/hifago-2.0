@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { createClient } from "@hifago/supabase/client";
+import { isRealAccount } from "@hifago/supabase/identity";
 import { SiteHeader } from "@/components/organisms/SiteHeader";
 import { SiteFooter } from "@/components/organisms/SiteFooter";
 
@@ -23,6 +24,18 @@ import { SiteFooter } from "@/components/organisms/SiteFooter";
 // composant existant ne soit pas touché au milieu d'un lot d'écran
 // (`apps/web/components/README.md`) — on l'alimente autrement, on ne le réécrit pas.
 
+// ⚠️ SPEC 33 (2026-09-10) — « CONNECTÉ » EXCLUT UNE IDENTITÉ ANONYME.
+//
+// Ce fichier posait `isAuthenticated = Boolean(data.user)`. C'était juste jusqu'à la spec 31 : le
+// jour où `CartContext` s'est mis à appeler `signInAnonymously()` au premier ajout au panier,
+// `getUser()` a commencé à rendre un user pour un simple visiteur — et `SiteMenu` à basculer sur
+// « Mi cuenta ». Or `SiteMenu` porte le SEUL lien vers `/entrar` du chrome de la vitrine
+// (`SiteFooter` n'en a aucun) : l'entrée de connexion disparaissait donc du site ENTIER dès le
+// premier ajout au panier, et un client ne pouvait plus se connecter du tout.
+//
+// Le prédicat lui-même vit dans `@hifago/supabase/identity` — une seule définition partagée par le
+// client, le serveur et les deux apps, plutôt que trois copies qui se citent l'une l'autre.
+
 export function CoquillaVitrine({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -30,12 +43,12 @@ export function CoquillaVitrine({ children }: { children: ReactNode }) {
     let vivant = true;
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
-      if (vivant) setIsAuthenticated(Boolean(data.user));
+      if (vivant) setIsAuthenticated(isRealAccount(data.user));
     });
     // Sans cet abonnement, se connecter dans un autre onglet laisserait l'en-tête mentir jusqu'au
     // prochain rechargement complet.
     const { data: sub } = supabase.auth.onAuthStateChange((_evento, session) => {
-      if (vivant) setIsAuthenticated(Boolean(session?.user));
+      if (vivant) setIsAuthenticated(isRealAccount(session?.user));
     });
     return () => {
       vivant = false;

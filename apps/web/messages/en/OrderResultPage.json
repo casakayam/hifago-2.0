@@ -1,0 +1,50 @@
+{
+  "metaTitle": "Your booking",
+  "title": "Booking {reference}",
+  "keepLink": "Save this link: you can reopen it any time. We have also sent it to you by email.",
+  "status": {
+    "paid": "Payment confirmed!",
+    "paidDetail": "Your booking is confirmed. We have emailed you the details.",
+    "awaiting": "We are confirming your payment",
+    "awaitingDetail": "This may take a moment. This page updates on its own.",
+    "unpaid": "Your booking is not paid yet",
+    "unpaidDetail": "We hold your booking for 30 minutes. Pay the deposit to confirm it.",
+    "failed": "We could not take the deposit",
+    "failedDetail": "Your booking is still held. You can try paying again.",
+    "expired": "This booking has expired",
+    "expiredDetail": "The payment was not completed in time and the dates were released.",
+    "cancelled": "This booking was cancelled",
+    "cancelledDetail": "No line of this booking is still active."
+  },
+  "pay": "Pay the deposit",
+  "retryPayment": "Retry payment",
+  "paying": "Redirecting to Mercado Pago…",
+  "summary": "Your booking",
+  "lineQty": "Quantity: {count}",
+  "total": "Total",
+  "acompte": "Deposit (paid online)",
+  "remainder": "To pay at the establishment",
+  "holder": "Contact details",
+  "holderName": "Name",
+  "holderPhone": "WhatsApp",
+  "holderEmail": "Email",
+  "createAccount": "Create an account to find your bookings",
+  "viewOrders": "View my bookings",
+  "lineStatus": {
+    "reserved": "Booked",
+    "fulfilled": "Completed",
+    "no_show": "No-show",
+    "cancelled_by_client": "Cancelled by you",
+    "cancelled_by_provider": "Cancelled by the establishment",
+    "expired": "Expired",
+    "superseded": "Replaced"
+  },
+  "errors": {
+    "payment_already_pending": "A payment is already in progress for this order. Wait a few seconds and try again.",
+    "already_paid": "This order has already been paid.",
+    "nothing_to_pay": "There is nothing left to pay for this order.",
+    "order_not_found": "We could not find the order to start the payment.",
+    "mercadopago_unavailable": "We could not reach Mercado Pago. Please try again in a moment.",
+    "unknown": "The payment could not be started. Please try again."
+  }
+}

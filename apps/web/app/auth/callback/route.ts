@@ -47,5 +47,31 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/entrar?error=auth_callback_failed", origin));
   }
 
+  // Spec 33 Tranche 3 — rattachement des commandes passées en invité (cahier client §2b.9 :
+  // « créer un compte depuis cet écran rattache les commandes par adresse email »).
+  //
+  // ICI ET NULLE PART AILLEURS : c'est l'unique instant du parcours où l'email vient d'être
+  // VÉRIFIÉ et où une session existe. La RPC refuse tout email non confirmé — c'est son seul
+  // rempart contre le pre-account takeover — donc l'appeler plus tôt (à l'inscription) ne
+  // rattacherait jamais rien, et plus tard demanderait un déclencheur qui n'existe pas.
+  //
+  // Sans paramètre, délibérément : elle lit `auth.uid()` et l'email de `auth.users` elle-même.
+  // Un email transmis d'ici serait exactement l'attaque qu'elle empêche.
+  //
+  // ⚠️ Un échec n'interrompt JAMAIS la redirection. Le compte vient d'être créé et vérifié : c'est
+  // l'essentiel du geste que le client a demandé, et un rattachement raté le laisse devant une
+  // liste de réservations vide — gênant, jamais bloquant.
+  //
+  // ⚠️ MAIS IL N'Y A PAS DE RATTRAPAGE AUTOMATIQUE, et il ne faut pas le croire : une connexion
+  // ultérieure ne repasse PAS par ici (`LoginForm` utilise `signInWithPassword`, qui ne traverse
+  // jamais ce callback). Un échec réseau ici n'est donc jamais rejoué. La RPC est idempotente et
+  // supporterait d'être appelée à chaque session réelle — l'accrocher à l'invariant plutôt qu'à cet
+  // événement est le geste plus profond, laissé ouvert au §10 de la spec 33 faute d'arbitrage : le
+  // cahier §2b.9 ne vise que le compte créé DEPUIS l'écran de résultat, qui passe bien par ici.
+  const { error: attachError } = await supabase.rpc("attach_orders_to_account");
+  if (attachError) {
+    console.error("attach_orders_to_account a échoué après vérification d'email", attachError);
+  }
+
   return NextResponse.redirect(new URL(next, origin));
 }

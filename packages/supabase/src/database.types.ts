@@ -767,6 +767,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          access_token: string
           account_id: string
           attribution_code: string | null
           attribution_source: string | null
@@ -777,10 +778,12 @@ export type Database = {
           id: string
           marketing_consent: boolean
           payment_status: string
+          reference: string
           referrer_partner_id: string | null
           status: string
         }
         Insert: {
+          access_token?: string
           account_id: string
           attribution_code?: string | null
           attribution_source?: string | null
@@ -791,10 +794,12 @@ export type Database = {
           id?: string
           marketing_consent?: boolean
           payment_status?: string
+          reference?: string
           referrer_partner_id?: string | null
           status?: string
         }
         Update: {
+          access_token?: string
           account_id?: string
           attribution_code?: string | null
           attribution_source?: string | null
@@ -805,6 +810,7 @@ export type Database = {
           id?: string
           marketing_consent?: boolean
           payment_status?: string
+          reference?: string
           referrer_partner_id?: string | null
           status?: string
         }
@@ -2062,6 +2068,7 @@ export type Database = {
         }
         Returns: Json
       }
+      attach_orders_to_account: { Args: never; Returns: Json }
       cancel_order: { Args: { p_order_id: string }; Returns: Json }
       check_partner_invitation: { Args: { p_token: string }; Returns: Json }
       claim_notification_email_batch: {
@@ -2238,6 +2245,7 @@ export type Database = {
         }[]
       }
       expire_stale_payment_orders: { Args: never; Returns: undefined }
+      get_order_by_token: { Args: { p_token: string }; Returns: Json }
       get_product_slots: {
         Args: { p_from: string; p_product_id: string; p_to: string }
         Returns: {

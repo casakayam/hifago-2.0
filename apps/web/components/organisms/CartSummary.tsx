@@ -1,12 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { createClient } from "@hifago/supabase/client";
+// ⚠️ Corrigé le 2026-09-10 (spec 33) : ce fichier importait `useRouter` de `next/navigation`,
+// ce que `scripts/check-i18n-links.sh` refuse — le contrôle était rouge depuis la livraison de
+// la spec 32 le matin même. Sans effet visible ici (seul `refresh()` est appelé, et next-intl
+// le conserve tel quel), mais un contrôle rouge qu'on laisse rouge cesse d'en être un.
+import { useRouter } from "@/i18n/navigation";
 import { useCart } from "@/lib/cart/CartContext";
 import { Button, cn } from "@hifago/ui";
 import { Price } from "@/components/atoms/Price";
+import { formatLineSchedule } from "@/lib/orders/formatLineSchedule";
 import type { CartLineForDisplay } from "@/lib/cart/getCartLines";
 import type { Locale } from "@/messages";
 
@@ -66,13 +71,8 @@ export function CartSummary({ lines, editable, locale }: CartSummaryProps) {
             <div className="flex flex-col">
               <span className="font-medium">{line.productName}</span>
               <span className="text-muted">
-                {line.establishmentName} ·{" "}
-                {line.endDate
-                  ? `${line.date} → ${line.endDate}`
-                  : line.slotStartTime
-                    ? `${line.date} · ${line.slotStartTime}`
-                    : line.date}{" "}
-                · {t("lineQty", { count: line.qty })}
+                {line.establishmentName} · {formatLineSchedule(line)} ·{" "}
+                {t("lineQty", { count: line.qty })}
               </span>
               {line.unavailable ? (
                 <span role="alert" data-testid={`unavailable-${line.id}`} className="text-xs text-danger">

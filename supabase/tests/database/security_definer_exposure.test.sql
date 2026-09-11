@@ -60,7 +60,17 @@ select is(
         'establishment_slug_from_name',
         -- Publique par conception : vérifie un jeton d'invitation AVANT toute inscription, donc
         -- nécessairement appelable sans compte (spec 05).
-        'check_partner_invitation'
+        'check_partner_invitation',
+        -- Même famille que ci-dessus, et pour la même raison exactement (spec 33) : son garde est
+        -- un JETON à haute entropie porté par l'URL (orders.access_token, 128 bits), jamais
+        -- auth.uid(). Son destinataire principal est un client qui ouvre le lien depuis son email
+        -- de confirmation, sur un appareil où il n'a AUCUNE session — pas même anonyme, la spec 31
+        -- n'en posant une qu'au premier ajout au panier. Exiger une identité fermerait l'écran à
+        -- celui pour qui il est fait. Ce qu'elle expose (nom, téléphone, email du client) est
+        -- assumé PAR ÉCRIT au cahier client §2b.9 comme la contrepartie d'une adresse sans limite
+        -- de temps ; get_order_by_token.test.sql le vérifie explicitement plutôt que de le laisser
+        -- à la discipline d'un SELECT applicatif.
+        'get_order_by_token'
       )
   ),
   '',

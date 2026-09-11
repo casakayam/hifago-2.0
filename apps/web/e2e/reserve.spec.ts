@@ -55,10 +55,10 @@ test("connexion → catalogue → fiche produit → panier → checkout : comman
   await page.locator('input[name="holder-email"]').fill("cliente.reserve@example.com");
   await page.getByTestId("marketing-consent-checkbox").click();
 
-  // Spec 19 §0 Tranche 1 : create_order réussi enchaîne désormais automatiquement le paiement
-  // Mercado Pago (redirection réelle, seul l'appel SDK externe est mocké). order-success n'est
-  // qu'un état transitoire — la redirection peut déjà l'avoir remplacé avant que Playwright ne
-  // l'observe (race constatée en testant) : attendre l'URL finale est le seul checkpoint fiable.
+  // Spec 33 : une commande acceptée quitte le tunnel pour son adresse propre — `/reserva/<jeton>`
+  // — AVANT tout paiement. `redirectUrl` est donc le motif de cet écran-là, et non plus une URL
+  // fabriquée qui pointait sur l'accueil. L'ancien `order-success` a disparu avec l'écran de
+  // succès de CheckoutForm : il n'était qu'un état React, perdu au retour de Mercado Pago.
   const { redirectUrl } = await mockMercadoPagoCheckout(page);
   await page.getByTestId("submit-order-button").click();
   await page.waitForURL(redirectUrl);
@@ -99,7 +99,11 @@ test("capacité épuisée entre l'ajout au panier et la validation → erreur cl
 
   await expect(page.getByTestId("checkout-error")).toBeVisible();
   await expect(page.getByTestId(/^cart-line-/)).toHaveAttribute("data-failed", "true");
-  await expect(page.getByTestId("order-success")).toHaveCount(0);
+  // Spec 33 — l'équivalent de l'ancien « pas d'écran de succès » : une commande refusée ne fait
+  // PAS quitter le tunnel. Assertion plus forte que la précédente, qui se contentait de constater
+  // l'absence d'un testid (et serait restée verte même si celui-ci disparaissait pour une autre
+  // raison — ce qui vient précisément d'arriver).
+  await expect(page).toHaveURL(/\/pago(\?|$)/);
 
   // Tout-ou-rien : la tentative échouée n'a écrit ni ligne ni décrément de cupo en base.
   const { lines } = await countOrderLines(PRODUCT_ID, DATE);

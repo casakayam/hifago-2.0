@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
+import { isValidPhoneNumber } from "react-phone-number-input";
+import { Link, useRouter } from "@/i18n/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { useCart } from "@/lib/cart/CartContext";
 import { Button, Checkbox, Input, Label, TextField } from "@hifago/ui";
+import { PhoneField } from "@/components/atoms/PhoneField";
 
 // Raisons qui renvoient `line` (product_id/date de LA ligne fautive) — toujours un sous-ensemble
 // de KNOWN_REASONS ci-dessous (composé à partir de celui-ci, jamais recopié à la main : chaque
@@ -55,14 +57,14 @@ const ORDER_SCOPED_REASONS = [
 // autorité) retombe sur "unknown" plutôt que de faire échouer next-intl sur une clé manquante.
 const KNOWN_REASONS = [...LINE_SCOPED_REASONS, ...ORDER_SCOPED_REASONS] as const;
 
-// (raw éventuellement absent, ex. reason non renvoyée par la RPC) → une des valeurs de `list`, ou
-// "unknown" par repli — factorise l'idiome dupliqué aux deux sites d'appel ci-dessous
-// (create_payment_intent/PAYMENT_ERROR_REASONS et create_order/KNOWN_REASONS).
-function resolveKnownReason<T extends readonly string[]>(
-  list: T,
-  raw: string | undefined
-): T[number] | "unknown" {
-  return raw !== undefined && (list as readonly string[]).includes(raw) ? (raw as T[number]) : "unknown";
+// ⚠️ Elle était générique tant qu'elle avait DEUX jeux de raisons à traiter ; le second
+// (`create_payment_intent`) a suivi `startPayment` dans `OrderResult.tsx`, qui réécrit les trois
+// lignes sur place — un helper partagé entre le tunnel et la vitrine pour si peu ne vaut pas le
+// couplage. Ce qui restait ici, c'était la généricité sans le second appelant.
+function resolveKnownReason(raw: string | undefined): (typeof KNOWN_REASONS)[number] | "unknown" {
+  return raw !== undefined && (KNOWN_REASONS as readonly string[]).includes(raw)
+    ? (raw as (typeof KNOWN_REASONS)[number])
+    : "unknown";
 }
 
 type CreateOrderResult = {
@@ -70,25 +72,6 @@ type CreateOrderResult = {
   reason?: string;
   order_id?: string;
   line?: { product_id?: string; date?: string; qty?: number };
-};
-
-// Spec 19 §0 Tranche 1 — le paiement de l'acompte est désormais obligatoire pour confirmer une
-// réservation : create_order réussi enchaîne automatiquement create_payment_intent (RPC réelle)
-// puis POST /api/payments/create (appel SDK Mercado Pago réel) puis une redirection réelle du
-// navigateur vers Checkout Pro. Raisons mappées séparément de KNOWN_REASONS (vocabulaire distinct,
-// propre à create_payment_intent) — un motif inattendu retombe sur "unknown", même discipline.
-const PAYMENT_ERROR_REASONS = [
-  "payment_already_pending",
-  "already_paid",
-  "nothing_to_pay",
-  "order_not_found",
-  "mercadopago_unavailable",
-] as const;
-
-type PaymentIntentResult = {
-  ok: boolean;
-  reason?: string;
-  payment_id?: string;
 };
 
 export function CheckoutForm({
@@ -107,6 +90,9 @@ export function CheckoutForm({
 }) {
   const t = useTranslations("CheckoutPage");
   const tCommon = useTranslations("Common");
+  // ⚠️ `useRouter` d'`@/i18n/navigation`, jamais de `next/navigation` : la redirection vise
+  // `/reserva/<jeton>` et doit rester dans la langue du visiteur (même piège que `SignupForm`).
+  const router = useRouter();
   // Spec 32 (panier en base) : ce formulaire ne porte plus la liste du panier (CartSummary,
   // rendu en lecture seule par pago/page.tsx, juste au-dessus) — `refresh()` sert uniquement à
   // resynchroniser la pastille du header une fois la commande créée (cart_items déjà vidée côté
@@ -120,57 +106,36 @@ export function CheckoutForm({
 
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // La commande a réussi dès que pendingOrderId est posé (jamais remis à null ensuite) — le
-  // paiement qui suit peut échouer/être retenté sans jamais revenir à l'écran panier.
-  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [isPaying, setIsPaying] = useState(false);
 
-  async function startPayment(orderId: string) {
-    setPaymentError(null);
-    setIsPaying(true);
-
-    const supabase = createClient();
-    const { data, error: intentError } = await supabase.rpc("create_payment_intent", {
-      p_order_id: orderId,
-    });
-    const intentResult = data as PaymentIntentResult | null;
-    if (intentError || !intentResult?.ok) {
-      setIsPaying(false);
-      const reason = resolveKnownReason(PAYMENT_ERROR_REASONS, intentResult?.reason);
-      setPaymentError(t(`errors.${reason}`));
-      return;
-    }
-
-    let createResponse: Response;
-    try {
-      createResponse = await fetch("/api/payments/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentId: intentResult.payment_id }),
-      });
-    } catch {
-      setIsPaying(false);
-      setPaymentError(t("errors.mercadopago_unavailable"));
-      return;
-    }
-    const createResult = (await createResponse.json().catch(() => null)) as
-      | { ok: boolean; init_point?: string }
-      | null;
-    if (!createResponse.ok || !createResult?.ok || !createResult.init_point) {
-      setIsPaying(false);
-      setPaymentError(t("errors.mercadopago_unavailable"));
-      return;
-    }
-
-    // Redirection réelle vers Checkout Pro — la page se démonte ici, isPaying volontairement
-    // jamais remis à false (rien à afficher après un unmount).
-    window.location.href = createResult.init_point;
-  }
+  // ⚠️ SPEC 33 — CE FORMULAIRE NE PORTE PLUS AUCUN ÉTAT DE PAIEMENT, et c'est tout le sujet du lot.
+  //
+  // Il portait `pendingOrderId`/`paymentError`/`isPaying` et la fonction `startPayment`. Le défaut
+  // n'était pas leur existence mais leur SUPPORT : un `useState` ne survit pas à un rechargement,
+  // or le client part chez Mercado Pago et REVIENT. Au retour, `pendingOrderId` était perdu, le
+  // panier déjà vidé par `create_order` (spec 32), et `pago/page.tsx` ne rendait donc plus rien —
+  // page blanche, sans numéro ni message.
+  //
+  // Désormais : dès que la commande existe et que Lobby a accepté, on quitte le tunnel pour
+  // `/reserva/<jeton>`, une adresse RECHARGEABLE, et c'est elle qui pilote le paiement
+  // (`OrderResult.tsx`). Ce formulaire redevient ce qu'il annonce : des coordonnées et un bouton.
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+
+    // `PhoneField` (2026-09-10) ne pose jamais l'attribut natif `required`/`type="tel"` bloquant —
+    // par construction, comme `Field` (cf. son en-tête), pour ne jamais dépendre du `noValidate` du
+    // <form> ci-dessous (qu'il n'a pas — dette connue, `.claude/rules/apps.md`). Contrairement aux
+    // deux autres champs (bloqués par la validation native faute de `noValidate`), le téléphone
+    // doit donc désormais être vérifié ici : requis, puis format E.164 réel via la même lib.
+    if (!holderPhone.trim()) {
+      setError(t("errors.phone_required"));
+      return;
+    }
+    if (!isValidPhoneNumber(holderPhone)) {
+      setError(t("errors.phone_invalid"));
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -191,7 +156,7 @@ export function CheckoutForm({
 
     const result = data as CreateOrderResult | null;
     if (rpcError || !result?.ok) {
-      const reason = resolveKnownReason(KNOWN_REASONS, result?.reason);
+      const reason = resolveKnownReason(result?.reason);
       setError(t(`errors.${reason}`));
       return;
     }
@@ -212,9 +177,9 @@ export function CheckoutForm({
     // (« échec fermé uniquement AVANT confirmation »), que le code violait en silence. Le succès
     // n'est affiché QU'APRÈS l'accord de Lobby, et `startPayment` n'est jamais atteint sans lui.
     //
-    // ⚠️ `setPendingOrderId` a été DÉPLACÉ après cet appel, et c'est le geste central : c'est lui
-    // qui bascule l'écran sur « commande confirmée ». Le remonter au-dessus rendrait tout le reste
-    // décoratif.
+    // ⚠️ La redirection vers `/reserva/<jeton>` n'est atteinte qu'APRÈS cet appel, et c'est le geste
+    // central : c'est elle qui annonce la commande au client. La remonter au-dessus rendrait tout
+    // le reste décoratif.
     let pmsResponse: Response;
     try {
       pmsResponse = await fetch("/api/pms/reserve-nights", {
@@ -248,49 +213,25 @@ export function CheckoutForm({
     // create_order a déjà vidé cart_items côté serveur (contrat spec 32 §0) — refresh() ne fait
     // que resynchroniser la pastille du header avec cet état déjà réel, jamais une suppression.
     void refresh();
-    setPendingOrderId(orderId);
-    void startPayment(orderId);
-  }
 
-  if (pendingOrderId) {
-    return (
-      <div className="flex flex-col gap-3">
-        <p role="status" data-testid="order-success" className="text-lg font-medium">
-          {t("orderSuccess")} ({pendingOrderId})
-        </p>
-        {paymentError ? (
-          <>
-            <p role="alert" data-testid="payment-error" className="text-sm text-danger">
-              {paymentError}
-            </p>
-            <Button
-              type="button"
-              onPress={() => startPayment(pendingOrderId)}
-              isDisabled={isPaying}
-              data-testid="retry-payment-button"
-              className="w-fit"
-            >
-              {isPaying ? t("submitting") : t("retryPayment")}
-            </Button>
-          </>
-        ) : (
-          <p data-testid="payment-processing" className="text-sm text-muted">
-            {t("paymentProcessing")}
-          </p>
-        )}
-        {/* Feature 8 : lien discret vers /cuenta/reservas pour un client connecté — cohérence de
-            parcours à coût nul, jamais montré à un invité (rien à lister sans session). */}
-        {isAuthenticated ? (
-          <Link
-            href="/cuenta/reservas"
-            data-testid="view-orders-link"
-            className="text-sm text-muted hover:underline"
-          >
-            {t("viewOrdersLink")}
-          </Link>
-        ) : null}
-      </div>
-    );
+    // Spec 33 — le jeton est lu en RLS DIRECTE, jamais renvoyé par `create_order` : `orders_select`
+    // autorise déjà le propriétaire à lire sa propre ligne, et depuis la spec 31 l'invité EST un
+    // propriétaire (`account_id` NOT NULL, identité anonyme). Rouvrir une RPC critique (CLAUDE.md
+    // §4) pour deux champs de retour n'aurait eu aucune contrepartie.
+    const { data: orderRow } = await supabase
+      .from("orders")
+      .select("access_token")
+      .eq("id", orderId)
+      .maybeSingle();
+
+    if (!orderRow?.access_token) {
+      // Ne devrait jamais arriver (colonne NOT NULL). La commande EST prise et Lobby a accepté :
+      // on ne défait rien, on le dit — le client la retrouvera par son email de confirmation.
+      setError(t("errors.unknown"));
+      return;
+    }
+
+    router.push(`/reserva/${orderRow.access_token}`);
   }
 
   // Le panier (liste + total) est affiché juste au-dessus par `CartSummary` en lecture seule
@@ -302,10 +243,15 @@ export function CheckoutForm({
           <Label>{t("holderName")}</Label>
           <Input />
         </TextField>
-        <TextField name="holder-phone" value={holderPhone} onChange={setHolderPhone} isRequired>
-          <Label>{t("holderPhone")}</Label>
-          <Input type="tel" />
-        </TextField>
+        <PhoneField
+          name="holder-phone"
+          label={t("holderPhone")}
+          countryLabel={t("holderPhoneCountry")}
+          value={holderPhone}
+          onChange={setHolderPhone}
+          isRequired
+          testId="holder-phone"
+        />
         <TextField name="holder-email" value={holderEmail} onChange={setHolderEmail} isRequired>
           <Label>{t("holderEmail")}</Label>
           <Input type="email" />

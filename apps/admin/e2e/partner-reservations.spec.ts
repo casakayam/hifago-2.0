@@ -71,10 +71,7 @@ test("un socio voit dans Mis reservas une réservation réelle sur son produit, 
   await page.locator('input[name="holder-name"]').fill(holderName);
   await page.locator('input[name="holder-phone"]').fill(holderPhone);
   await page.locator('input[name="holder-email"]').fill(`cliente.reservas.${stamp}@example.com`);
-  // Spec 19 §0 Tranche 1 : create_order réussi enchaîne désormais automatiquement le paiement
-  // Mercado Pago (redirection réelle, seul l'appel SDK externe est mocké). order-success n'est
-  // qu'un état transitoire — la redirection peut déjà l'avoir remplacé avant que Playwright ne
-  // l'observe (race constatée en testant) : attendre l'URL finale est le seul checkpoint fiable.
+  // `redirectUrl` = le motif de l'écran de résultat (cf. `mockMercadoPagoCheckout`).
   const { redirectUrl } = await mockMercadoPagoCheckout(page);
   await page.getByTestId("submit-order-button").click();
   await page.waitForURL(redirectUrl);

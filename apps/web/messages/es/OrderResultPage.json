@@ -1,0 +1,50 @@
+{
+  "metaTitle": "Tu reserva",
+  "title": "Reserva {reference}",
+  "keepLink": "Guarda este enlace: puedes volver a abrirlo cuando quieras. También te lo enviamos por correo.",
+  "status": {
+    "paid": "¡Pago confirmado!",
+    "paidDetail": "Tu reserva está confirmada. Te enviamos los detalles por correo electrónico.",
+    "awaiting": "Estamos confirmando tu pago",
+    "awaitingDetail": "Puede tardar unos instantes. Esta página se actualiza sola.",
+    "unpaid": "Tu reserva aún no está pagada",
+    "unpaidDetail": "Guardamos tu reserva 30 minutos. Paga el anticipo para confirmarla.",
+    "failed": "No pudimos cobrar el anticipo",
+    "failedDetail": "Tu reserva sigue guardada. Puedes intentar el pago de nuevo.",
+    "expired": "Esta reserva expiró",
+    "expiredDetail": "No se completó el pago a tiempo y las fechas quedaron liberadas.",
+    "cancelled": "Esta reserva fue anulada",
+    "cancelledDetail": "Ninguna línea de esta reserva sigue activa."
+  },
+  "pay": "Pagar el anticipo",
+  "retryPayment": "Reintentar pago",
+  "paying": "Redirigiendo a Mercado Pago…",
+  "summary": "Tu reserva",
+  "lineQty": "Cantidad: {count}",
+  "total": "Total",
+  "acompte": "Anticipo (pago en línea)",
+  "remainder": "A pagar en el establecimiento",
+  "holder": "Datos de contacto",
+  "holderName": "Nombre",
+  "holderPhone": "WhatsApp",
+  "holderEmail": "Correo electrónico",
+  "createAccount": "Crear una cuenta para encontrar tus reservas",
+  "viewOrders": "Ver mis reservas",
+  "lineStatus": {
+    "reserved": "Reservada",
+    "fulfilled": "Realizada",
+    "no_show": "No se presentó",
+    "cancelled_by_client": "Anulada por ti",
+    "cancelled_by_provider": "Anulada por el establecimiento",
+    "expired": "Expirada",
+    "superseded": "Reemplazada"
+  },
+  "errors": {
+    "payment_already_pending": "Ya hay un pago en curso para este pedido. Espera unos segundos e inténtalo de nuevo.",
+    "already_paid": "Este pedido ya fue pagado.",
+    "nothing_to_pay": "No hay nada pendiente de pago para este pedido.",
+    "order_not_found": "No se pudo encontrar el pedido para iniciar el pago.",
+    "mercadopago_unavailable": "No pudimos conectar con Mercado Pago. Inténtalo de nuevo en unos instantes.",
+    "unknown": "No se pudo iniciar el pago. Inténtalo de nuevo."
+  }
+}

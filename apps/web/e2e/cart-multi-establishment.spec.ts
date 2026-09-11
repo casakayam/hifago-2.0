@@ -78,10 +78,7 @@ test("panier avec une ligne par établissement → une seule commande, 2 lignes"
   await page.locator('input[name="holder-name"]').fill("Cliente E2E Multi Establecimiento");
   await page.locator('input[name="holder-phone"]').fill(phone);
   await page.locator('input[name="holder-email"]').fill("cliente.multi.establecimiento@example.com");
-  // Spec 19 §0 Tranche 1 : create_order réussi enchaîne désormais automatiquement le paiement
-  // Mercado Pago (redirection réelle, seul l'appel SDK externe est mocké). order-success n'est
-  // qu'un état transitoire — la redirection peut déjà l'avoir remplacé avant que Playwright ne
-  // l'observe (race constatée en testant) : attendre l'URL finale est le seul checkpoint fiable.
+  // `redirectUrl` = le motif de l'écran de résultat (cf. `mockMercadoPagoCheckout`).
   const { redirectUrl } = await mockMercadoPagoCheckout(page);
   await page.getByTestId("submit-order-button").click();
 
@@ -138,7 +135,11 @@ test("une ligne dépasse la capacité restante de sa ressource → erreur ciblé
   await page.getByTestId("submit-order-button").click();
 
   await expect(page.getByTestId("checkout-error")).toBeVisible();
-  await expect(page.getByTestId("order-success")).toHaveCount(0);
+  // Spec 33 — l'équivalent de l'ancien « pas d'écran de succès » : une commande refusée ne fait
+  // PAS quitter le tunnel. Assertion plus forte que la précédente, qui constatait l'absence d'un
+  // testid et serait restée verte même si celui-ci disparaissait pour une autre raison — ce qui
+  // vient précisément d'arriver.
+  await expect(page).toHaveURL(/\/pago(\?|$)/);
 
   const tourLine = page.locator('[data-testid^="cart-line-"]', { hasText: TOUR_DATE });
   const kayakLine = page.locator('[data-testid^="cart-line-"]', { hasText: KAYAK_DATE });

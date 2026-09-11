@@ -59,10 +59,7 @@ test("un client réserve un alojamiento par plage de nuits, depuis la fiche prod
   await page.getByLabel("Nombre completo").fill("Cliente E2E Alojamiento");
   await page.getByRole("textbox", { name: "WhatsApp" }).fill("+573009998877");
   await page.getByLabel("Correo electrónico").fill(`cliente.e2e.alojamiento.${TIMESTAMP}@test.local`);
-  // Spec 19 §0 Tranche 1 : create_order réussi enchaîne désormais automatiquement le paiement
-  // Mercado Pago (redirection réelle, seul l'appel SDK externe est mocké). order-success n'est
-  // qu'un état transitoire — la redirection peut déjà l'avoir remplacé avant que Playwright ne
-  // l'observe (race constatée en testant) : attendre l'URL finale est le seul checkpoint fiable.
+  // `redirectUrl` = le motif de l'écran de résultat (cf. `mockMercadoPagoCheckout`).
   const { redirectUrl } = await mockMercadoPagoCheckout(page);
   await page.getByTestId("submit-order-button").click();
 

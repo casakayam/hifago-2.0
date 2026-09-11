@@ -61,6 +61,23 @@ export async function createCheckoutPreference(
         failure: input.failureUrl,
       },
       auto_return: "approved",
+      // ⚠️ DÉCISION JÉRÔME 2026-09-10 (spec 33 §3 décision ③) — les moyens de paiement HORS LIGNE
+      // sont retirés du tunnel, et ce n'est pas une optimisation : c'était une impasse mesurée.
+      // Mercado Pago rend `pending` pour un paiement en espèces (Efecty, Baloto), c'est-à-dire un
+      // bon à régler en point de vente SOUS 1 À 3 JOURS. Or `expire_stale_payment_orders` annule
+      // toute commande `pending` de plus de 30 MINUTES : le client repartait avec un bon inutile et
+      // une réservation annulée avant même d'avoir pu payer, sans que rien ne le lui dise.
+      //
+      // Allonger la fenêtre d'expiration a été écarté d'emblée : immobiliser des places trois jours
+      // aggraverait le « Trou (a) » du backlog (rien ne libère un cupo quand une commande expire),
+      // lui-même en attente d'arbitrage. On ne construit pas sur un trou ouvert.
+      //
+      // Conséquence assumée : un client sans carte ni PSE ne peut plus réserver. `pending` reste
+      // possible (revue anti-fraude), mais redevient rare et court — d'où le bandeau d'attente de
+      // `OrderResult`, qui reste nécessaire.
+      payment_methods: {
+        excluded_payment_types: [{ id: "ticket" }, { id: "atm" }],
+      },
       notification_url: input.notificationUrl,
     },
     // Idempotence liée à NOTRE paiement interne (pas une clé aléatoire par appel SDK) : un retry

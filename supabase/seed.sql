@@ -206,7 +206,14 @@ from (values
   (15, 10, 0),
   -- Feature 18 : réservée exclusivement à e2e/partner-qr-tool.spec.ts (parcours bout-en-bout via le
   -- vrai lien /[locale]/r/[code] généré par /partner/tools, disjointe de toutes les dates ci-dessus).
-  (20, 10, 0)
+  (20, 10, 0),
+  -- Spec 33 : réservée exclusivement à e2e/payment-return.spec.ts (retour de paiement →
+  -- /reserva/<jeton>). Capacity 5 et non 10 : ce spec passe trois commandes d'affilée sur la même
+  -- date, il lui en faut assez pour ne jamais buter sur la capacité, jamais plus.
+  -- ⚠️ Une date NEUVE était nécessaire : les huit ci-dessus sont toutes déjà dédiées à une autre
+  -- spec, et `resetAvailability` fait un UPDATE — sans ligne préexistante pour (produit, date),
+  -- il n'ouvre rien et la case du calendrier reste désactivée (constaté en écrivant ce spec).
+  (17, 5, 0)
 ) as v(dia, capacity, booked);
 
 -- Feature 15 (Socio : soumettre une proposition d'édition) — profil dédié isolé. Constat en

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@hifago/supabase/server";
+import { isRealAccount } from "@hifago/supabase/identity";
 import { getCartLines } from "@/lib/cart/getCartLines";
 import { CartSummary } from "@/components/organisms/CartSummary";
 import { CheckoutForm } from "./CheckoutForm";
@@ -59,7 +60,10 @@ export default async function CheckoutPage({
       <CartSummary lines={lines} editable={false} locale={locale as Locale} />
       {lines.length > 0 ? (
         <CheckoutForm
-          isAuthenticated={Boolean(user)}
+          // ⚠️ Spec 33 — `isRealAccount`, jamais `Boolean(user)` seul. Depuis la spec 31 un invité
+          // A une identité : le calcul d'origine masquait le lien « Iniciar sesión » du formulaire
+          // (le seul du tunnel) à tous ceux qui en avaient justement besoin.
+          isAuthenticated={isRealAccount(user)}
           initialHolderName={initialHolderName}
           initialHolderPhone={initialHolderPhone}
           initialHolderEmail={initialHolderEmail}

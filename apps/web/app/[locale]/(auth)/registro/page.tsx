@@ -30,10 +30,19 @@ export default async function SignupPage({
   const nextParam = resolvedSearchParams?.next;
   const next = typeof nextParam === "string" && nextParam.startsWith("/") ? nextParam : "/";
 
+  // Spec 33 — `?email=` est posé par l'écran de résultat d'une commande (`/reserva/<jeton>`), qui
+  // propose de créer un compte. Le pré-remplir n'est pas un confort : le rattachement des commandes
+  // se fait PAR ADRESSE EMAIL (cahier §2b.9), donc un client qui s'inscrirait avec une autre
+  // adresse ne retrouverait jamais sa réservation, sans comprendre pourquoi.
+  // Le champ reste ÉDITABLE — un pré-remplissage, jamais un verrou (même règle que le checkout) —
+  // et ne donne aucun droit : c'est l'email VÉRIFIÉ qui décide du rattachement, pas celui-ci.
+  const emailParam = resolvedSearchParams?.email;
+  const initialEmail = typeof emailParam === "string" ? emailParam : "";
+
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
       <h1 className="text-2xl font-semibold">{t("title")}</h1>
-      <SignupForm next={next} />
+      <SignupForm next={next} initialEmail={initialEmail} />
     </main>
   );
 }

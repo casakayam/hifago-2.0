@@ -28,25 +28,49 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, reason: "invalid_body" }, { status: 400 });
   }
 
+  // Spec 33 — le jeton de retour est lu dans la MÊME requête, par l'embed PostgREST sur la FK
+  // `payments.order_id → orders.id` : le navigateur n'a jamais à le transmettre, et cette étape ne
+  // coûte pas un second aller-retour sur un chemin où le client attend déjà Mercado Pago.
   const service = createServiceRoleClient();
   const { data: payment, error: readError } = await service
     .from("payments")
-    .select("id, order_id, amount_cop, payer_email, status")
+    .select("id, order_id, amount_cop, payer_email, status, orders(access_token)")
     .eq("id", paymentId)
     .maybeSingle();
 
   if (readError || !payment) {
     return Response.json({ ok: false, reason: "payment_not_found" }, { status: 404 });
   }
+
   if (payment.status !== "pending") {
     return Response.json({ ok: false, reason: "payment_not_pending" }, { status: 409 });
   }
 
-  // Retour vers l'écran checkout existant (pas encore de page de statut dédiée — le branchement
-  // écran réel est différé, cf. spec 19 §10 : construit "prêt mais non branché" tant qu'aucun
-  // identifiant sandbox réel n'est disponible pour tester en conditions réelles). `es` en dur : le
-  // locale du panier n'est pas conservé sur `orders`/`payments` aujourd'hui — à revisiter si un
-  // jour le retour doit respecter la langue d'origine du client.
+  const order = payment.orders;
+  if (!order?.access_token) {
+    // Ne devrait jamais arriver (colonne NOT NULL depuis 20260910170000) — mais échouer ici est
+    // préférable à fabriquer une back_url qui ramènerait le client sur une page introuvable après
+    // avoir payé.
+    return Response.json({ ok: false, reason: "order_not_found" }, { status: 404 });
+  }
+
+  // Spec 33 — RETOUR VERS L'ADRESSE PROPRE À LA COMMANDE, et non plus vers l'écran de checkout.
+  //
+  // Ce que ça corrige : les trois back_urls pointaient sur `${origin}/es/pago`, un écran qui ne
+  // rend `<CheckoutForm>` que si le panier n'est pas vide. Depuis que `create_order` vide
+  // `cart_items` dans sa propre transaction (spec 32, 2026-09-10), le client revenait de Mercado
+  // Pago sur une PAGE VIDE — un `<h1>` et « ton panier est vide », sans numéro, sans confirmation,
+  // sans message d'échec. Le repli assumé par la spec 19 (« réutilise l'écran checkout ») était
+  // devenu faux sans que rien ne le relise.
+  //
+  // ⚠️ AUCUN PRÉFIXE DE LOCALE, et c'est le correctif entier de la locale forcée. `resolveLocale`
+  // de next-intl résout dans l'ordre : préfixe du chemin → cookie NEXT_LOCALE → Accept-Language →
+  // `es`. Un chemin SANS préfixe tombe donc sur la langue réelle du visiteur. Et c'est le `/es` en
+  // dur qui CASSAIT ce repli, pas son absence : un chemin préfixé fait résoudre `es` par la
+  // première branche, et `syncCookie` réécrit alors NEXT_LOCALE à `es` — un anglophone qui payait
+  // ne revenait pas seulement sur une page espagnole, TOUTE LA SUITE de sa session basculait.
+  // Aucune colonne `orders.locale` n'est nécessaire : le mécanisme existait déjà, il était
+  // neutralisé.
   // Feature 32 — bug réel trouvé en testant via tunnel (docs/journal/2026-08.md, 2026-08-21) :
   // `new URL(request.url).origin` seul retombe sur l'adresse locale du serveur dès que la requête
   // traverse un reverse proxy/tunnel qui ne réécrit pas request.url lui-même — `back_urls`/
@@ -58,7 +82,7 @@ export async function POST(request: Request) {
     forwardedHost: request.headers.get("x-forwarded-host"),
     forwardedProto: request.headers.get("x-forwarded-proto"),
   });
-  const returnUrl = `${origin}/es/pago`;
+  const returnUrl = `${origin}/reserva/${order.access_token}`;
 
   try {
     const { initPoint } = await createCheckoutPreference({

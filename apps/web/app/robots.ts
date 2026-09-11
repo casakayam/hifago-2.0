@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { getSiteUrl, isProductionSite } from "@/lib/seo/siteUrl";
+import { routing } from "@/i18n/routing";
 
 // DÉCISION Jérôme 2026-09-01 : TOUS les crawlers IA sont autorisés en production — GPTBot,
 // ClaudeBot, Google-Extended, PerplexityBot, OAI-SearchBot, ChatGPT-User, CCBot… Pour Hifago,
@@ -18,8 +19,25 @@ import { getSiteUrl, isProductionSite } from "@/lib/seo/siteUrl";
  *
  * `/{locale}/r/` : redirections d'attribution derrière les QR imprimés — sans contenu propre, et
  * chaque passage de crawler y fabrique une visite attribuée parasite.
+ *
+ * `/{locale}/reserva/` : l'écran de résultat d'une commande (spec 33). ⚠️ SEULE entrée de cette
+ * liste dont la raison n'est PAS le budget de crawl — c'est la seule qui protège des données
+ * personnelles (nom, téléphone, email du client, cahier §2b.9). Le geste voulu est donc bien
+ * d'empêcher le CHARGEMENT de la page par un robot, pas seulement son indexation : d'où un
+ * Disallow, et AUCUN `robots: { index: false }` sur la page elle-même — les deux ensemble
+ * s'annulent, une page en Disallow n'étant jamais chargée, son noindex n'est jamais lu
+ * (`.claude/rules/seo.md` règle 5).
  */
-const DISALLOW = ["/es/r/", "/en/r/", "/auth/", "/api/"];
+// ⚠️ DÉRIVÉ de `routing.locales`, jamais énuméré à la main : ajouter une 3e locale exposerait
+// sinon `/pt/reserva/<jeton>` aux crawlers — c'est-à-dire des données personnelles, pas seulement
+// du budget de crawl. Les deux chemins non localisés restent écrits en clair (ils vivent hors de
+// `[locale]`).
+const CHEMINS_LOCALISES = ["r", "reserva"];
+const DISALLOW = [
+  ...routing.locales.flatMap((locale) => CHEMINS_LOCALISES.map((chemin) => `/${locale}/${chemin}/`)),
+  "/auth/",
+  "/api/",
+];
 
 export default function robots(): MetadataRoute.Robots {
   const siteUrl = getSiteUrl();

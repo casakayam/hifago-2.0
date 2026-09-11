@@ -49,10 +49,7 @@ test("un lien ?ref=<code> actif ne casse rien du parcours invité, et aucun cham
   await page.locator('input[name="holder-name"]').fill("Cliente E2E Attribution");
   await page.locator('input[name="holder-phone"]').fill("+57 300 111 5555");
   await page.locator('input[name="holder-email"]').fill("cliente.attribution@example.com");
-  // Spec 19 §0 Tranche 1 : create_order réussi enchaîne désormais automatiquement le paiement
-  // Mercado Pago (redirection réelle, seul l'appel SDK externe est mocké). order-success n'est
-  // qu'un état transitoire — la redirection peut déjà l'avoir remplacé avant que Playwright ne
-  // l'observe (race constatée en testant) : attendre l'URL finale est le seul checkpoint fiable.
+  // `redirectUrl` = le motif de l'écran de résultat (cf. `mockMercadoPagoCheckout`).
   const { redirectUrl } = await mockMercadoPagoCheckout(page);
   await page.getByTestId("submit-order-button").click();
 
