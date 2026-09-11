@@ -2216,6 +2216,7 @@ export type Database = {
         }
         Returns: string
       }
+      delete_my_account: { Args: never; Returns: Json }
       delete_product: {
         Args: { p_note?: string; p_product_id: string }
         Returns: undefined
