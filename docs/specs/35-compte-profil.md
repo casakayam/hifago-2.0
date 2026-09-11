@@ -10,26 +10,28 @@
 > (`CLAUDE.md` §10), donc la seule qui ne pouvait pas être tranchée seule. Le détail de chaque
 > arbitrage et sa raison sont au §3.
 >
-> 🔲 **Spec en cours de validation avec Jérôme, section par section** — aucune section n'est encore
-> actée. Rien n'est implémenté.
+> **✅ ENTIÈREMENT LIVRÉE le 2026-09-11** — les cinq tranches. Jérôme a autorisé l'implémentation
+> directement après lecture de la spec (fast-track explicite, pas de tour de validation section par
+> section supplémentaire) ; §10bis documente les trois écarts que le code a corrigés du texte
+> initial, trouvés en écrivant T1.
 
 ## Sommaire et statut
 
 | # | Section | Statut |
 |---|---|---|
-| 0 | **Contrat compact** | 🔲 à valider |
-| 1 | Contexte et problème | 🔲 à valider |
-| 2 | Portée et tranches | 🔲 à valider |
-| 3 | Décisions retenues (entretien) | 🔲 à valider |
-| 4 | Parcours cible | 🔲 à valider |
-| 5 | Les écrans, bloc par bloc | 🔲 à valider |
-| 6 | Modèle de données (delta) | 🔲 à valider |
-| 7 | Contrat — RPC et Route Handler | 🔲 à valider |
-| 8 | Règles et invariants | 🔲 à valider |
-| 9 | Cas limites | 🔲 à valider |
-| 10 | Décisions tranchées seule / points ouverts | 🔲 à valider |
-| 11 | Annexe — traçabilité | 🔲 à valider |
-| 12 | Documents liés | 🔲 à valider |
+| 0 | **Contrat compact** | ✅ livré 2026-09-11 |
+| 1 | Contexte et problème | ✅ 2026-09-11 |
+| 2 | Portée et tranches | ✅ 2026-09-11 |
+| 3 | Décisions retenues (entretien) | ✅ 2026-09-11 |
+| 4 | Parcours cible | ✅ 2026-09-11 |
+| 5 | Les écrans, bloc par bloc | ✅ 2026-09-11 |
+| 6 | Modèle de données (delta) | ✅ 2026-09-11 |
+| 7 | Contrat — RPC et Route Handler | ✅ 2026-09-11 (§10bis : écarts corrigés) |
+| 8 | Règles et invariants | ✅ 2026-09-11 |
+| 9 | Cas limites | ✅ 2026-09-11 |
+| 10 | Décisions tranchées seule / points ouverts | ✅ 2026-09-11 |
+| 11 | Annexe — traçabilité | ✅ 2026-09-11 |
+| 12 | Documents liés | ✅ 2026-09-11 — cahier §2c révisé dans le même geste |
 
 ---
 
@@ -143,15 +145,17 @@ pourquoi l'entretien (§3) a précédé tout code.
 
 ### Tranches
 
-⚠️ Séquencement réel : la moitié serveur de T4 a été faite avec T1 (§10bis).
+✅ **Les cinq tranches sont livrées** (2026-09-11). Séquencement réel : la moitié serveur de T4 a été
+faite avec T1 (§10bis) ; l'écran de T4 (boutons déconnexion/suppression) a été construit avec T3,
+dans les mêmes fichiers.
 
 | # | Contenu | Preuve de fait | Dépend de |
 |---|---|---|---|
-| **T1 ✅** | RPC `delete_my_account()`, tests pgTAP | Anonymise `partner_accounts` seul ; refuse anonyme et capacité active ; `orders`/`order_lines` inchangées par mutation | — |
-| **T2** | `(cuenta)/layout.tsx` (garde + en-tête), `SiteMenu.tsx` | Garde refuse un anonyme sur TOUTE la zone (pas seulement `/reservas`) ; en-tête = `SiteHeader` ; « Mi cuenta » → `/cuenta/perfil` | — |
-| **T3** | `/cuenta/perfil` — affichage + édition | Nom/téléphone affichés et modifiables, appelle `update_my_account_profile` (existante) | T2 |
-| **T4** | Déconnexion + suppression — *serveur ✅, écran à faire* | Route Handler : confirmation vérifiée côté serveur, compte professionnel jamais transmis à l'API Admin, `email_confirm` présent (6 tests Vitest, 2 mutations). Reste : les boutons | T1, T3 |
-| **T5** | Pré-remplissage du tunnel | `pago/page.tsx` lit le profil en priorité | T3, coordination avec l'autre agent |
+| **T1 ✅** | RPC `delete_my_account()`, tests pgTAP | Anonymise `partner_accounts` seul ; refuse anonyme et capacité active ; `orders`/`order_lines` inchangées par mutation — 15/15 pgTAP, 2 mutations vérifiées | — |
+| **T2 ✅** | `(cuenta)/layout.tsx` (garde + en-tête), `SiteMenu.tsx` | Garde refuse un anonyme sur TOUTE la zone (pas seulement `/reservas`) ; en-tête = `SiteHeader` ; « Mi cuenta » → `/cuenta/perfil` ; `?next=` résolu en réel (proxy.ts) | — |
+| **T3 ✅** | `/cuenta/perfil` — affichage + édition | Nom/téléphone affichés et modifiables, appelle `update_my_account_profile` (existante) — 3 Vitest, mutation vérifiée | T2 |
+| **T4 ✅** | Déconnexion + suppression | Route Handler (confirmation serveur, garde professionnelle avant l'API Admin, `email_confirm`) + écran (bouton déconnexion, section de suppression désactivée en amont) — 6 Vitest + 4 Vitest composant, 2 e2e réels | T1, T3 |
+| **T5 ✅** | Pré-remplissage du tunnel | `pago/page.tsx` lit le profil en priorité, repli sur la dernière commande — 1 e2e réel qui fait DIVERGER les deux sources, mutation vérifiée | T3, coordonné avec l'autre agent (fichier partagé, non modifié depuis par lui) |
 
 ---
 
@@ -450,9 +454,35 @@ dans une seule passe. Il ne reste de T4 que son écran.
 
 ## 12. Documents liés
 
-- `docs/01-cahier-des-charges-client.md` §2c — à réviser dans le même geste (déconnexion,
-  suppression absentes).
-- `docs/specs/34-compte-mes-reservations.md` — chantier parallèle, dépendance sur `(cuenta)/layout.tsx`.
-- `docs/specs/27-architecture-vitrine-et-routage.md` §5 — garde de zone, origine du problème `?next=`.
-- `docs/dette-technique.md` — à mettre à jour si le point ouvert « incohérence RPC/Admin API » est
-  accepté tel quel.
+- `docs/01-cahier-des-charges-client.md` §2c — **révisé** (déconnexion, suppression désormais
+  présentes, avec renvoi vers cette spec).
+- `docs/specs/34-compte-mes-reservations.md` — chantier parallèle, dépendance sur `(cuenta)/layout.tsx`
+  (livrée : la garde de zone refuse désormais un invité, comme sa décision ⑦ l'exigeait).
+- `docs/specs/27-architecture-vitrine-et-routage.md` §5 — garde de zone, origine du problème `?next=`
+  (résolu, §10bis et `proxy.ts`).
+- `docs/dette-technique.md` — le point « incohérence RPC/Admin API » (§10) reste ouvert, accepté tel
+  quel pour ce lot ; à y porter si personne ne le referme avant que le fichier soit relu.
+
+## 13. Livré et vérifié (2026-09-11)
+
+**Livré** : `delete_my_account()` (migration, RPC) ; Route Handler `/api/account/delete` ; garde de
+zone `isRealAccount` + en-tête `SiteHeader` dans `(cuenta)/layout.tsx` ; `?next=` résolu dans
+`proxy.ts` ; `SiteMenu` pointant vers `/cuenta/perfil` ; l'écran `/cuenta/perfil` complet (profil,
+déconnexion, suppression) ; `pago/page.tsx` lisant le profil en priorité ; cahier §2c révisé.
+
+**Vérifié** : 15 assertions pgTAP (`delete_my_account.test.sql`) + les 4 tests de sécurité/RLS
+existants toujours verts après la nouvelle fonction `security definer` ; 690/690 Vitest `apps/web`
+(dont 19 neufs sur ce lot) ; 6 e2e réels (2 sur `/cuenta/perfil`, 1 sur le pré-remplissage du
+tunnel, 3 de non-régression relancés) ; les six contrôles CI ; rendu réel capturé en 390×844 et
+1280×900, ES et EN, y compris l'état « confirmation de suppression ouverte ». **Cinq mutations
+exécutées** (la garde professionnelle sur son second chemin, l'anonymisation qui déborderait sur
+`orders`, la vérification d'email qui disparaîtrait, `email_confirm` qui manquerait, le
+pré-remplissage qui ignorerait le profil) — chacune fait rougir exactement ce qu'elle doit.
+**Vérifié en réel, pas supposé** : l'API Admin Supabase libère bien l'ancien email (`auth.users` ET
+`auth.identities`), constaté par une requête directe en base après une suppression réelle en e2e —
+décision ⑤ prouvée hors mock.
+
+**Non fait, assumé** : point ouvert §10 (incohérence RPC/Admin API) non traité, accepté tel quel ;
+`?next=` non re-vérifié sur Vercel (dette nommée, sans risque en cas d'échec silencieux) ; aucune
+validation section par section supplémentaire au-delà de l'entretien §3 (Jérôme a autorisé
+l'implémentation directement après lecture de la spec).

@@ -369,6 +369,15 @@ Décidé le 2026-08-11 (cf. §1), révisé le 2026-09-07.
   en cours ; le **profil** (ses informations, source du pré-remplissage) ; **l'annulation d'une
   commande entière** ; et le moyen de **contacter l'établissement ou Hifago**, par un contact
   WhatsApp **par réservation**, avec le numéro de réservation dans le message.
+- **Se déconnecter** et **supprimer son compte** — absents de ce cahier jusqu'au 2026-09-11,
+  ajoutés par la spec 35 (`docs/specs/35-compte-profil.md` §3) après entretien : la suppression
+  **anonymise** le compte (nom et téléphone effacés de `partner_accounts`, email et mot de passe
+  neutralisés côté connexion, l'ancien email redevenant utilisable) mais ne touche **jamais** les
+  commandes déjà passées — elles portent leur propre copie de nom/email/téléphone, indépendante du
+  compte, précisément pour que l'établissement garde de quoi honorer une réservation à venir même
+  après suppression. Confirmation forte (l'email retapé), définitive, sans délai de grâce. Bloquée
+  pour tout compte porteur d'une capacité professionnelle (référent, opérateur, admin), pour éviter
+  d'en détruire un par erreur depuis l'écran client.
 - ⚠️ **Modification partielle d'une réservation : retirée du premier périmètre** (2026-09-07).
   Cela renverse la décision du 2026-08-13 (« depuis son compte, un client peut modifier une
   réservation sans annuler l'ensemble »). Reste une **cible future**, portée au backlog ; le
