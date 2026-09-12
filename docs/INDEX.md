@@ -57,5 +57,5 @@
 - [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-11
 - [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-11
 - [Journal hifago — août 2026](journal/2026-08.md) · maj 2026-09-01
-- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-12
+- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-11
 - [Pièges empiriques hifago — index numéroté](pieges-empiriques.md) · maj 2026-09-09
