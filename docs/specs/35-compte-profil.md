@@ -1,3 +1,28 @@
+---
+id: specs-compte-profil
+titre: "Compte client : profil, édition, déconnexion, suppression"
+theme: specs
+public: [ia, dev, jerome]
+langue: fr
+statut: implemente
+maj: 2026-09-11
+revise: ["docs/01-cahier-des-charges-client.md#2c"]
+resume: >
+  Fait de /cuenta/perfil l'accueil de la zone compte : affichage et édition du nom/téléphone
+  (réutilise update_my_account_profile, RPC existante depuis le 2026-08-19), déconnexion, et
+  suppression de compte par anonymisation — jamais les commandes, qui portent leur propre copie de
+  PII et de commissions, indépendante du compte. Ferme le trou de garde de zone que la spec 34
+  avait délégué ((cuenta)/layout.tsx refusait une session anonyme sur SA route seulement) et pose
+  un en-tête commun (SiteHeader). Le tunnel de paiement lit désormais ce profil en priorité sur la
+  dernière commande pour son pré-remplissage.
+mots_cles: [compte, profil, perfil, deconnexion, suppression, anonymisation, delete_my_account, update_my_account_profile, isRealAccount]
+repond_a:
+  - "Comment un client édite-t-il son nom ou son téléphone ?"
+  - "Que devient une commande passée quand son client supprime son compte ?"
+  - "Un référent ou un admin peut-il supprimer son compte depuis l'écran client ?"
+  - "Comment se déconnecter depuis apps/web ?"
+---
+
 # Compte client : profil, édition, déconnexion, suppression
 
 > **Cible stack** : hifago, `apps/web`. Chantier construit **en parallèle** de la spec 34

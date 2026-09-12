@@ -3,7 +3,7 @@ id: refonte-cdc-client
 titre: "Cahier des charges — portail client (marketplace global, Guatapé = première localisation)"
 theme: cadrage
 statut: brouillon
-maj: 2026-09-10
+maj: 2026-09-11
 resume: >
   Comportement métier cible du portail de réservation client, dérivé du comportement réel actuel
   et challengé section par section avec Jérôme avant reprise dans la refonte.
@@ -102,6 +102,13 @@ Ajoutés par la réécriture du §2 le 2026-09-07 — **contradictions internes 
   ligne en place, snapshots préservés — mais il vaut désormais côté **socio/admin**
   (`modify_order_line`), pas côté client, dont le seul geste self-service sur une commande
   existante est l'annulation entière.
+- **§2c gagne déconnexion et suppression de compte — 2026-09-11**, ajoutées par
+  `docs/specs/35-compte-profil.md` (statut `implemente`) : deux gestes absents du cahier jusqu'ici,
+  pas une révision d'un point déjà tranché. La suppression **anonymise** le compte
+  (`partner_accounts.full_name`/`.phone` effacés, `auth.users` neutralisé) et ne touche **jamais**
+  les commandes déjà passées — la PII et les commissions y sont dénormalisées, indépendantes du
+  compte. Bloquée pour tout compte porteur d'une capacité professionnelle (référent, opérateur,
+  admin). Le §2c ci-dessus porte directement les deux nouveaux points, pas seulement cette ligne.
 
 > Méthode : une section = une unité de validation avec Jérôme. Statut par section :
 > `brouillon` → `en relecture` → `✅ validé par Jérôme le AAAA-MM-JJ`.
