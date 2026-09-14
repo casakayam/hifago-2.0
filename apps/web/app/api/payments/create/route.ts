@@ -1,6 +1,7 @@
 import { createServiceRoleClient } from "@hifago/supabase/service";
 import { resolveOrigin } from "@hifago/domain";
 import { createCheckoutPreference } from "@/lib/mercadopago/client";
+import { isPaymentsMockEnabled } from "@/lib/mercadopago/mock";
 
 // Spec 19 §0 Tranche 1 — création de la préférence Checkout Pro. Le CLIENT appelle d'abord
 // create_payment_intent(order_id) directement via son propre client Supabase (RPC anon/
@@ -83,6 +84,17 @@ export async function POST(request: Request) {
     forwardedProto: request.headers.get("x-forwarded-proto"),
   });
   const returnUrl = `${origin}/reserva/${order.access_token}`;
+
+  // Mode dev — voir apps/web/lib/mercadopago/mock.ts. Remplace UNIQUEMENT ce dernier geste (l'appel
+  // SDK externe) : l'autorisation et le montant au-dessus restent validés côté serveur exactement
+  // comme en prod, et /api/payments/mock-checkout relit lui aussi payments.amount_cop en base —
+  // jamais un montant fabriqué dans cette URL.
+  if (isPaymentsMockEnabled()) {
+    const mockUrl = new URL(`${origin}/api/payments/mock-checkout`);
+    mockUrl.searchParams.set("paymentId", payment.id);
+    mockUrl.searchParams.set("returnUrl", returnUrl);
+    return Response.json({ ok: true, init_point: mockUrl.toString() });
+  }
 
   try {
     const { initPoint } = await createCheckoutPreference({

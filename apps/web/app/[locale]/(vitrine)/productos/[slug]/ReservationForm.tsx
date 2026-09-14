@@ -20,7 +20,7 @@ import { startOfTodayInBogota } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
 import { useAddToCart } from "@/lib/cart/useAddToCart";
 import { isoDeFecha, mesPorDefecto, ultimoDiaReservable } from "@/lib/reservas/calendario";
-import { limitarCantidad, topeCantidad } from "@/lib/reservas/cantidad";
+import { limitarCantidad, pisoCantidad, topeCantidad } from "@/lib/reservas/cantidad";
 import {
   CLAVE_PLAZAS,
   agregarEnCarrito,
@@ -34,6 +34,7 @@ export function ReservationForm({
   productId,
   availability,
   durationDays = 1,
+  minQty = 1,
 }: {
   productId: string;
   availability: AvailabilityRow[];
@@ -47,6 +48,8 @@ export function ReservationForm({
    * de tarification NUITÉE de lodging (cf. son propre branchement sur la seule présence d'`end_date`).
    */
   durationDays?: number;
+  /** `products.min_qty`, replié à 1 — cf. `lib/reservas/cantidad.ts`. */
+  minQty?: number;
 }) {
   const t = useTranslations("ProductPage");
   const { lines } = useCart();
@@ -56,7 +59,7 @@ export function ReservationForm({
   const dernierJourReservable = useMemo(() => ultimoDiaReservable(), []);
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState(minQty);
 
   const byDate = useMemo(
     () => new Map(availability.map((row) => [row.date, row])),
@@ -127,14 +130,14 @@ export function ReservationForm({
   function handleSelectDate(date: Date | undefined) {
     if (!date) {
       setSelectedDate(undefined);
-      setQty(1);
+      setQty(minQty);
       return;
     }
     // Cliquer n'importe quel jour de la semaine sélectionne le DÉPART de cette semaine, jamais le
     // jour cliqué lui-même — `byDate` (et donc la capacité/le panier) ne connaît que les départs.
     const departIso = porJourDepart.get(format(date, "yyyy-MM-dd"));
     setSelectedDate(departIso ? parseISO(departIso) : date);
-    setQty(1);
+    setQty(minQty);
   }
 
   // Spec 28 Tranche 3 : sur succès, `useAddToCart` redirige déjà vers l'accueil — il n'y a plus
@@ -196,11 +199,16 @@ export function ReservationForm({
         name="qty"
         value={String(qty)}
         isDisabled={!selectedRow}
-        onChange={(value) => setQty(limitarCantidad(Number(value), remaining))}
+        onChange={(value) => setQty(limitarCantidad(Number(value), minQty, remaining))}
       >
         <Label>{t("quantityLabel")}</Label>
-        <Input id="qty" type="number" min={1} max={topeCantidad(remaining)} />
+        <Input id="qty" type="number" min={pisoCantidad(minQty, remaining)} max={topeCantidad(remaining)} />
       </TextField>
+      {minQty > 1 ? (
+        <p className="text-xs text-muted" data-testid="min-qty-hint">
+          {t("minQtyHint", { count: minQty })}
+        </p>
+      ) : null}
 
       <Button
         data-testid="add-to-cart-button"

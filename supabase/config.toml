@@ -162,7 +162,11 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3100"
+# `env(...)` depuis le 2026-09-14 (incident : un `config push` a failli remplacer le site_url
+# préprod, déjà correctement pointé sur son déploiement Vercel, par cette valeur locale — .env
+# fournit le défaut local, un push vers un autre projet DOIT exporter la vraie valeur cible avant
+# de lancer `config push`, jamais un défaut implicite). Documenté dans `.env.example`.
+site_url = "env(SUPABASE_AUTH_SITE_URL)"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
@@ -171,16 +175,21 @@ site_url = "http://127.0.0.1:3100"
 # l'arrêter) — hifago tourne sur son propre port dédié pour tout ce chantier.
 # Port 3101 ajouté le 2026-08-14 : apps/admin (scission monorepo web/admin) a ses propres flux
 # Supabase Auth basés sur une redirection (reset de mot de passe) depuis son propre port.
+# Chaque entrée en `env(...)` depuis le 2026-09-14, même raison que site_url ci-dessus — un projet
+# distinct (préprod, puis prod) n'a besoin QUE de 4 entrées réelles (bare+wildcard × web/admin) ;
+# les 11 variables ci-dessous existent pour couvrir tous les variants locaux nécessaires (protocole
+# × host × port, cf. commentaires historiques conservés) — sur une cible non locale, dupliquer les
+# 4 valeurs réelles sur les variables en trop est inoffensif (entrées dupliquées dans une allow-list).
 additional_redirect_urls = [
-  "https://127.0.0.1:3100",
-  "http://127.0.0.1:3101",
-  "https://127.0.0.1:3101",
+  "env(SUPABASE_AUTH_REDIRECT_WEB_HTTPS_127)",
+  "env(SUPABASE_AUTH_REDIRECT_ADMIN_HTTP_127)",
+  "env(SUPABASE_AUTH_REDIRECT_ADMIN_HTTPS_127)",
   # localhost (pas seulement 127.0.0.1) : Feature 31, playwright.config.ts d'apps/admin utilise
   # baseURL http://localhost:3101 — Next 16 bloque par défaut les ressources dev cross-origin
   # (allowedDevOrigins), donc les liens email (confirmation/recovery) et le callback OAuth doivent
   # rester sur la même origine que celle utilisée pour naviguer l'app, jamais mélanger les deux.
-  "http://localhost:3101",
-  "https://localhost:3101",
+  "env(SUPABASE_AUTH_REDIRECT_ADMIN_HTTP_LOCALHOST)",
+  "env(SUPABASE_AUTH_REDIRECT_ADMIN_HTTPS_LOCALHOST)",
   # Bug réel constaté le 2026-08-15 (Feature 31) : une origine nue (sans /**) ne matche PAS un
   # redirect_to avec chemin+query (ex. /auth/callback?next=%2F) — seuls les emails (lien figé dans
   # le template, jamais validé dynamiquement) fonctionnaient avec les entrées ci-dessus ; le flux
@@ -188,16 +197,16 @@ additional_redirect_urls = [
   # et retombait sur site_url (port 3100, la vitrine — aucune route pour traiter le code, code brut
   # affiché dans l'URL). Wildcard glob (gobwas/glob, `**` = tout chemin) obligatoire pour tout
   # redirect_to qui porte un chemin.
-  "http://localhost:3101/**",
-  "http://127.0.0.1:3101/**",
+  "env(SUPABASE_AUTH_REDIRECT_ADMIN_HTTP_LOCALHOST_WILDCARD)",
+  "env(SUPABASE_AUTH_REDIRECT_ADMIN_HTTP_127_WILDCARD)",
   # Feature 32 (inscription client apps/web, port 3100) : même piège que ci-dessus pour 3101 —
   # sans ces entrées, le futur /auth/callback d'apps/web (confirmation d'inscription) retomberait
   # silencieusement sur site_url au lieu de la route réelle. Même paire localhost/127.0.0.1,
   # même absence volontaire de wildcard https (mêmes raisons, jamais rouvertes ici).
-  "http://localhost:3100",
-  "https://localhost:3100",
-  "http://localhost:3100/**",
-  "http://127.0.0.1:3100/**",
+  "env(SUPABASE_AUTH_REDIRECT_WEB_HTTP_LOCALHOST)",
+  "env(SUPABASE_AUTH_REDIRECT_WEB_HTTPS_LOCALHOST)",
+  "env(SUPABASE_AUTH_REDIRECT_WEB_HTTP_LOCALHOST_WILDCARD)",
+  "env(SUPABASE_AUTH_REDIRECT_WEB_HTTP_127_WILDCARD)",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600

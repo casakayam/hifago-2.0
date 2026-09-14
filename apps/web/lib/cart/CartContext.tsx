@@ -23,6 +23,17 @@ export type CartLine = {
 
 export type AddToCartInput = Omit<CartLine, "id">;
 
+// Retour Jérôme (2026-09-14) : un panier ajouté en visiteur (session anonyme) disparaissait après
+// connexion — corrigé pour signInWithPassword directement dans LoginForm.tsx (lecture AVANT/
+// réécriture APRÈS par le MÊME client, aucun état ne traverse la bascule d'identité). `signInWithOAuth`
+// (GoogleButton.tsx) ne peut PAS faire pareil : le navigateur quitte réellement la page pour un
+// domaine tiers (accounts.google.com) — aucun état React/JS ne survit à cette navigation complète
+// (cf. son propre commentaire). `sessionStorage` SURVIT en revanche à une redirection pleine page
+// (scopé par origine + onglet, jamais par navigation) : GoogleButton y dépose le panier anonyme
+// juste avant de partir, cette clé le consomme au premier montage suivant, quelle que soit la page
+// d'atterrissage (CartProvider vit dans le layout racine, donc sur CHAQUE page).
+export const PENDING_CART_MERGE_KEY = "hifago_pending_cart_merge";
+
 type CartContextValue = {
   lines: CartLine[];
   // Async depuis spec 31 (invariant 1/2) : le premier ajout crée une session anonyme Supabase
@@ -87,6 +98,73 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     fetchLines().then(setLines);
   }, [fetchLines]);
+
+  // Consomme un panier anonyme déposé par GoogleButton.tsx juste avant une redirection OAuth —
+  // voir le commentaire de PENDING_CART_MERGE_KEY ci-dessus. Tourne à CHAQUE montage (donc sur
+  // chaque page, `CartProvider` étant dans le layout racine) mais ne fait rien en l'absence de
+  // clé : `getItem` répond `null` sur l'immense majorité des chargements.
+  //
+  // ⚠️ AUCUNE GARDE D'ANNULATION AU DÉMONTAGE (contrairement à un premier essai, 2026-09-14) — et
+  // ce n'est pas un oubli, c'est ce qui CASSAIT la fusion en dev. `CartProvider` vit dans le layout
+  // racine et ne démonte jamais réellement en pratique (comme `fetchLines`/`addLine`/`refresh`
+  // ci-dessus, qui n'ont eux non plus aucune garde) — mais React StrictMode (actif par défaut en
+  // dev sur l'App Router) MONTE/DÉMONTE/REMONTE ce composant une fois au premier rendu de chaque
+  // page. Une garde `annule` posée au démontage passait donc à `true` avant même que
+  // `getSession()` ait le temps de se résoudre, et la fusion entière retombait silencieusement dans
+  // le premier `if` sans jamais écrire en base — reproduit en réel (retour Jérôme : le panier
+  // restait sur l'ancienne identité anonyme après connexion Google, sans la moindre erreur visible).
+  // La clé sessionStorage est de toute façon retirée AVANT tout `await` : un second passage de
+  // StrictMode ne duplique jamais rien, la garde n'apportait donc rien qu'une panne silencieuse.
+  useEffect(() => {
+    async function consommer() {
+      let brut: string | null = null;
+      try {
+        brut = sessionStorage.getItem(PENDING_CART_MERGE_KEY);
+      } catch {
+        return; // sessionStorage indisponible (navigation privée stricte) — jamais bloquant.
+      }
+      if (!brut) return;
+
+      // Retirée IMMÉDIATEMENT, avant toute tentative de fusion : un échec plus bas ne doit jamais
+      // la faire retenter au prochain chargement (elle dupliquerait les lignes déjà fusionnées).
+      try {
+        sessionStorage.removeItem(PENDING_CART_MERGE_KEY);
+      } catch {
+        /* best-effort */
+      }
+
+      let payload: { fromAccountId: string; lines: CartLine[] } | null = null;
+      try {
+        payload = JSON.parse(brut);
+      } catch {
+        return;
+      }
+      if (!payload?.lines?.length) return;
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      // Ne fusionne QUE si l'identité a réellement changé (redirection OAuth réussie vers un AUTRE
+      // compte) — sinon (échec silencieux avant même le départ vers Google, ou re-consommation
+      // impossible de toute façon vu le removeItem ci-dessus) on ne duplique jamais une ligne déjà
+      // en place sous la même identité anonyme.
+      if (!session || session.user.id === payload.fromAccountId) return;
+
+      await supabase.from("cart_items").insert(
+        payload.lines.map((line) => ({
+          account_id: session.user.id,
+          product_id: line.productId,
+          date: line.date,
+          end_date: line.endDate ?? null,
+          slot_start_time: line.slotStartTime ?? null,
+          qty: line.qty,
+        }))
+      );
+      setLines(await fetchLines());
+    }
+
+    void consommer();
+  }, [supabase, fetchLines]);
 
   const value = useMemo<CartContextValue>(
     () => ({

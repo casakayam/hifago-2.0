@@ -48,6 +48,7 @@ function renderView(overrides: {
     fotos: [],
     precio: { tipo: "monto", cop: 120000 },
     unidad: overrides.unit ?? null,
+    minQty: 1,
     modoReserva: "lodging",
     urlExterna: null,
     ocurrencia: null,

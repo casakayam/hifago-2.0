@@ -19,6 +19,7 @@
     "lodging_cap_exceeded": "Puedes reservar como máximo 4 alojamientos (12 unidades en total) por pedido.",
     "prestation_cap_exceeded": "Puedes añadir como máximo 20 servicios por pedido.",
     "qty_cap_exceeded": "La cantidad máxima por servicio es 20.",
+    "qty_below_minimum": "La cantidad elegida es inferior al mínimo requerido para este servicio.",
     "email_required": "El correo electrónico es obligatorio.",
     "email_invalid": "El correo electrónico no es válido.",
     "phone_required": "El número de WhatsApp es obligatorio.",

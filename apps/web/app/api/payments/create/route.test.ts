@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Spec 33 — CE FICHIER EXISTE POUR UNE RAISON PRÉCISE : la `back_url` envoyée à Mercado Pago est
 // invisible partout ailleurs. Elle part dans la préférence, jamais dans l'`init_point` que le
@@ -15,6 +15,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const PAYMENT_ID = "44444444-4444-4444-8444-444444444444";
 const ORDER_ID = "55555555-5555-4555-8555-555555555555";
 const ACCESS_TOKEN = "0123456789abcdef0123456789abcdef";
+const ORIGINAL_ENV = { ...process.env };
 
 let preferenceInput: Record<string, unknown> | null = null;
 let orderRow: { access_token: string } | null = { access_token: ACCESS_TOKEN };
@@ -114,5 +115,34 @@ describe("POST /api/payments/create — la back_url de retour", () => {
     });
     await POST(request);
     expect(preferenceInput?.successUrl).toBe(`https://hifago.co/reserva/${ACCESS_TOKEN}`);
+  });
+});
+
+// apps/web/lib/mercadopago/mock.ts — voir docs/specs/19-paiement-mercadopago-acompte-ledger.md.
+describe("POST /api/payments/create — mode mock (MERCADOPAGO_MOCK_MODE)", () => {
+  beforeEach(() => {
+    preferenceInput = null;
+    orderRow = { access_token: ACCESS_TOKEN };
+  });
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  it("ne contacte jamais Mercado Pago quand le flag est actif hors production", async () => {
+    process.env.MERCADOPAGO_MOCK_MODE = "true";
+    delete process.env.VERCEL_ENV;
+    const response = await POST(requete());
+    const body = (await response.json()) as { ok: boolean; init_point?: string };
+    expect(preferenceInput).toBeNull();
+    expect(body.init_point).toContain("/api/payments/mock-checkout");
+    expect(body.init_point).toContain(`paymentId=${PAYMENT_ID}`);
+  });
+
+  it("ignore le flag sur un déploiement de production déclarée — VERCEL_ENV l'emporte", async () => {
+    process.env.MERCADOPAGO_MOCK_MODE = "true";
+    process.env.VERCEL_ENV = "production";
+    await POST(requete());
+    expect(preferenceInput).not.toBeNull();
   });
 });

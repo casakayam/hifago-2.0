@@ -182,12 +182,13 @@ export function FichaProducto({
               rates={ficha.tarifas}
             />
           ) : ficha.modoReserva === "slot" ? (
-            <SlotReservationForm productId={ficha.id} slots={ficha.franjas} />
+            <SlotReservationForm productId={ficha.id} slots={ficha.franjas} minQty={ficha.minQty} />
           ) : (
             <ReservationForm
               productId={ficha.id}
               availability={ficha.disponibilidad}
               durationDays={ficha.duracionDias ?? undefined}
+              minQty={ficha.minQty}
             />
           )}
 

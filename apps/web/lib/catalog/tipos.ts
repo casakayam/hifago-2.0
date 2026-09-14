@@ -232,6 +232,12 @@ export type FichaProducto = {
    * `alojamiento.lodgingKind`, qui est une nature de couchage. Elle suffixe le prix affiché.
    */
   unidad: string | null;
+  /**
+   * `products.min_qty`, replié à 1. N'a de sens QUE hors lodging : `create_order` ne le vérifie
+   * (`qty_below_minimum`) que dans sa branche non-lodging — `LodgingReservationForm` l'ignore et
+   * garde son propre plancher fixé à 1 (spec 30 §7a, `lib/reservas/cantidad.ts`).
+   */
+  minQty: number;
   modoReserva: ModoReserva;
   /** Non nul ⟺ `modoReserva === "vitrina"` — sauf pour un evento, qui l'est par son type. */
   urlExterna: string | null;

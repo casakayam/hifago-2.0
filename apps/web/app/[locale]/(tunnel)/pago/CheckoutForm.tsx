@@ -32,6 +32,7 @@ const LINE_SCOPED_REASONS = [
   "unsupported_date_range",
   "slot_required",
   "unsupported_slot_combination",
+  "qty_below_minimum",
 ] as const;
 
 // Raisons de create_order qui ne visent PAS une ligne précise (visibles seulement au niveau de la

@@ -16,7 +16,7 @@ import { startOfTodayInBogota } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
 import { useAddToCart } from "@/lib/cart/useAddToCart";
 import { isoDeFecha, mesPorDefecto, ultimoDiaReservable } from "@/lib/reservas/calendario";
-import { limitarCantidad, topeCantidad } from "@/lib/reservas/cantidad";
+import { limitarCantidad, pisoCantidad, topeCantidad } from "@/lib/reservas/cantidad";
 import {
   CLAVE_PLAZAS,
   agregarEnCarrito,
@@ -80,9 +80,12 @@ function diaCompleto(daySlots: SlotRow[] | undefined, inCartByKey: Map<string, n
 export function SlotReservationForm({
   productId,
   slots,
+  minQty = 1,
 }: {
   productId: string;
   slots: SlotRow[];
+  /** `products.min_qty`, replié à 1 — cf. `lib/reservas/cantidad.ts`. */
+  minQty?: number;
 }) {
   const t = useTranslations("ProductPage");
   const { lines } = useCart();
@@ -93,7 +96,7 @@ export function SlotReservationForm({
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [selectedSlotStartTime, setSelectedSlotStartTime] = useState<string | undefined>();
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState(minQty);
 
   const byDate = useMemo(() => {
     const map = new Map<string, SlotRow[]>();
@@ -145,13 +148,13 @@ export function SlotReservationForm({
   function handleSelectDate(date: Date | undefined) {
     setSelectedDate(date);
     setSelectedSlotStartTime(undefined);
-    setQty(1);
+    setQty(minQty);
   }
 
   function handleSelectSlot(slot: SlotRow) {
     if (remainingForSlot(slot, inCartByKey) < 1) return;
     setSelectedSlotStartTime(toHHMM(slot.slot_start_time));
-    setQty(1);
+    setQty(minQty);
   }
 
   // Spec 28 Tranche 3 : sur succès, `useAddToCart` redirige déjà vers l'accueil — il n'y a plus
@@ -263,11 +266,21 @@ export function SlotReservationForm({
         name="qty"
         value={String(qty)}
         isDisabled={!selectedSlot}
-        onChange={(value) => setQty(limitarCantidad(Number(value), slotRemaining))}
+        onChange={(value) => setQty(limitarCantidad(Number(value), minQty, slotRemaining))}
       >
         <Label>{t("quantityLabel")}</Label>
-        <Input id="qty" type="number" min={1} max={topeCantidad(slotRemaining)} />
+        <Input
+          id="qty"
+          type="number"
+          min={pisoCantidad(minQty, slotRemaining)}
+          max={topeCantidad(slotRemaining)}
+        />
       </TextField>
+      {minQty > 1 ? (
+        <p className="text-xs text-muted" data-testid="min-qty-hint">
+          {t("minQtyHint", { count: minQty })}
+        </p>
+      ) : null}
 
       <Button
         data-testid="add-to-cart-button"

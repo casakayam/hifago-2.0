@@ -379,7 +379,9 @@ export function LodgingReservationForm({
   // dans le même geste, et l'utilisateur repique une sortie dedans.
   function handleQtyChange(value: string) {
     const brut = Number(value);
-    const suivant = limitarCantidad(brut, qtyMax);
+    // min fixé à 1, jamais products.min_qty : create_order ne le vérifie que hors lodging (le
+    // plafond lodging est l'agrégat lodging_cap_exceeded, sans rapport) — cf. lib/reservas/cantidad.ts.
+    const suivant = limitarCantidad(brut, 1, qtyMax);
     setQty(suivant);
     if (!range?.from) return;
 

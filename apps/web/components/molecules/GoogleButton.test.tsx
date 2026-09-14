@@ -18,10 +18,15 @@ import { GoogleButton, OAuthSection } from "./GoogleButton";
 type AppelOAuth = { provider: string; options?: { redirectTo?: string } };
 let appels: AppelOAuth[] = [];
 let erreurOAuth: { message: string } | null = null;
+// Panier anonyme courant, tel que `useCart()` le rendrait — vide par défaut (comportement inchangé
+// des tests existants), écrasé par les tests du dépôt de panier avant Google (2026-09-14).
+let lignesPanier: { id: string; productId: string; date: string; qty: number }[] = [];
+let sessionAnonyme: { user: { id: string } } | null = { user: { id: "anon-1" } };
 
 vi.mock("@hifago/supabase/client", () => ({
   createClient: () => ({
     auth: {
+      getSession: () => Promise.resolve({ data: { session: sessionAnonyme } }),
       signInWithOAuth: (input: AppelOAuth) => {
         appels.push(input);
         return Promise.resolve({ data: { url: null, provider: "google" }, error: erreurOAuth });
@@ -29,6 +34,18 @@ vi.mock("@hifago/supabase/client", () => ({
     },
   }),
 }));
+
+// `useCart` neutralisé : le rendu du bouton react-aria et le préfixage de locale ne dépendent pas
+// du panier — seuls les tests dédiés du dépôt sessionStorage (2026-09-14) le font varier.
+// `PENDING_CART_MERGE_KEY` reste la VRAIE constante (jamais recopiée) : un import réel à côté du
+// mock, pas une chaîne dupliquée qui pourrait diverger silencieusement.
+const { PENDING_CART_MERGE_KEY: CLE_DEPOT_PANIER } = await vi.importActual<
+  typeof import("@/lib/cart/CartContext")
+>("@/lib/cart/CartContext");
+vi.mock("@/lib/cart/CartContext", async (importOriginal) => {
+  const reel = await importOriginal<typeof import("@/lib/cart/CartContext")>();
+  return { ...reel, useCart: () => ({ lines: lignesPanier }) };
+});
 
 function rendre(element: React.ReactElement, locale: Locale = "es") {
   const { container } = render(
@@ -57,6 +74,9 @@ function nextTransmis() {
 beforeEach(() => {
   appels = [];
   erreurOAuth = null;
+  lignesPanier = [];
+  sessionAnonyme = { user: { id: "anon-1" } };
+  sessionStorage.clear();
 });
 
 describe("GoogleButton", () => {
@@ -110,6 +130,32 @@ describe("GoogleButton", () => {
 
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(bouton.textContent).toContain(loadMessages("es").Common.oauth.googleRedirecting);
+  });
+
+  // Retour Jérôme (2026-09-14) : un panier anonyme partait perdu à la connexion Google — aucun état
+  // React ne survit à la redirection pleine page vers accounts.google.com, `sessionStorage` si
+  // (consommé par CartContext.tsx au retour, voir son propre commentaire).
+  describe("dépôt du panier avant la redirection (2026-09-14)", () => {
+    it("dépose le panier anonyme dans sessionStorage AVANT de partir vers Google", async () => {
+      lignesPanier = [{ id: "l1", productId: "p1", date: "2026-10-01", qty: 2 }];
+      await presser(rendre(<GoogleButton />));
+
+      const brut = sessionStorage.getItem(CLE_DEPOT_PANIER);
+      expect(brut).not.toBeNull();
+      expect(JSON.parse(brut!)).toEqual({ fromAccountId: "anon-1", lines: lignesPanier });
+    });
+
+    it("ne dépose rien quand le panier anonyme est vide", async () => {
+      await presser(rendre(<GoogleButton />));
+      expect(sessionStorage.getItem(CLE_DEPOT_PANIER)).toBeNull();
+    });
+
+    it("ne dépose rien sans session lisible, même avec des lignes en mémoire", async () => {
+      sessionAnonyme = null;
+      lignesPanier = [{ id: "l1", productId: "p1", date: "2026-10-01", qty: 2 }];
+      await presser(rendre(<GoogleButton />));
+      expect(sessionStorage.getItem(CLE_DEPOT_PANIER)).toBeNull();
+    });
   });
 });
 

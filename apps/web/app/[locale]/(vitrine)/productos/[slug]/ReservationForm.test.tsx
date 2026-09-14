@@ -29,13 +29,14 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function renderForm(durationDays?: number) {
+function renderForm(durationDays?: number, minQty?: number) {
   return render(
     <NextIntlClientProvider locale="es" messages={{ ProductPage: messages.ProductPage, Common: messages.Common }}>
       <ReservationForm
         productId="p1"
         availability={[{ date: DEPARTURE, capacity: 5, booked: 0 }]}
         durationDays={durationDays}
+        minQty={minQty}
       />
     </NextIntlClientProvider>
   );
@@ -78,5 +79,35 @@ describe("ReservationForm — durationDays absent (activité/transport, comporte
 
     expect(document.querySelector('[data-date="2026-06-10"]')?.hasAttribute("disabled")).toBe(false);
     expect(document.querySelector('[data-date="2026-06-11"]')?.hasAttribute("disabled")).toBe(true);
+  });
+});
+
+// Retour Jérôme (2026-09-14, produit "Hiking Group", min_qty: 2) : le champ Cantidad partait
+// toujours de 1, sans empêcher ni signaler une saisie sous le plancher — create_order refusait déjà
+// silencieusement (qty_below_minimum, jamais traduit avant ce lot).
+describe("ReservationForm — min_qty > 1 (Jérôme, 2026-09-14)", () => {
+  it("la quantité part directement du plancher, jamais de 1", () => {
+    renderForm(undefined, 2);
+    fireEvent.click(document.querySelector('[data-date="2026-06-10"]')!);
+
+    expect((document.getElementById("qty") as HTMLInputElement).value).toBe("2");
+  });
+
+  it("l'ajout au panier envoie le plancher, jamais 1", () => {
+    renderForm(undefined, 2);
+    fireEvent.click(document.querySelector('[data-date="2026-06-10"]')!);
+    fireEvent.click(screen.getByTestId("add-to-cart-button"));
+
+    expect(addLine).toHaveBeenCalledWith({ productId: "p1", date: DEPARTURE, qty: 2 });
+  });
+
+  it("affiche l'indication du minimum, absente quand min_qty vaut 1", () => {
+    renderForm(undefined, 2);
+    expect(screen.getByTestId("min-qty-hint").textContent).toBe("Cantidad mínima: 2");
+  });
+
+  it("aucune indication de minimum quand min_qty est absent/1", () => {
+    renderForm();
+    expect(screen.queryByTestId("min-qty-hint")).toBeNull();
   });
 });

@@ -15,6 +15,7 @@
   "selectSlotDate": "Elige un día en el calendario para ver los horarios disponibles.",
   "selectSlotTime": "Elige un horario.",
   "quantityLabel": "Cantidad",
+  "minQtyHint": "Cantidad mínima: {count}",
   "quantityLabelBeds": "Camas",
   "quantityLabelRooms": "Habitaciones",
   "quantityLabelHouses": "Alojamientos",

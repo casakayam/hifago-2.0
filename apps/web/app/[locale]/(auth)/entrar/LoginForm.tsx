@@ -35,6 +35,26 @@ export function LoginForm({ next, callbackFailed = false }: { next: string; call
     setIsSubmitting(true);
 
     const supabase = createClient();
+
+    // ⚠️ Retour Jérôme (2026-09-14) : un panier ajouté en visiteur (session anonyme, spec 31
+    // invariant 1) disparaissait après connexion vers un compte RÉEL déjà existant — jamais
+    // documenté nulle part (spec 32 §10 ne parle que des COMMANDES déjà passées, via
+    // `attach_orders_to_account`, appelée à l'INSCRIPTION seulement). Cause : `cart_items` est
+    // scopé par `account_id`, `signInWithPassword` bascule `auth.uid()` sur une identité TOTALEMENT
+    // différente (spec 31 invariant 7 interdit `linkIdentity`/`updateUser({email})`), et la RLS
+    // (`cart_items_select`, `account_id = auth.uid()`) rend les lignes de l'ancienne identité
+    // structurellement invisibles à la nouvelle — pas un cache, reproductible à chaque fois.
+    //
+    // Correctif : lecture PUIS réécriture par CE MÊME client, aux deux instants (avant/après le
+    // changement d'identité) — jamais un rattachement serveur cross-identité comme
+    // `attach_orders_to_account` (qui, lui, prouve l'identité par un EMAIL VÉRIFIÉ ; `cart_items` ne
+    // porte aucun email, cette preuve n'existe pas ici). Best-effort : une erreur de lecture/écriture
+    // ne bloque jamais la connexion elle-même — cohérent avec le reste du panier (attribution,
+    // CartContext.tsx).
+    const { data: anonLines } = await supabase
+      .from("cart_items")
+      .select("product_id, date, end_date, slot_start_time, qty");
+
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -44,6 +64,17 @@ export function LoginForm({ next, callbackFailed = false }: { next: string; call
       setError(t("error"));
       setIsSubmitting(false);
       return;
+    }
+
+    if (anonLines && anonLines.length > 0) {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
+        await supabase
+          .from("cart_items")
+          .insert(anonLines.map((line) => ({ ...line, account_id: session.user.id })));
+      }
     }
 
     router.push(next);

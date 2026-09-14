@@ -167,6 +167,7 @@ export const getProductoPorSlug = cache(
       fotos: enFotos(fotosProducto, urlPublica),
       precio: resolverPrecio(producto.price_label, producto.price_cop),
       unidad: producto.unit,
+      minQty: producto.min_qty ?? 1,
       modoReserva,
       urlExterna: producto.external_booking_url,
       // Renseignée pour tout evento, INDÉPENDAMMENT du mode : la date d'un événement est une

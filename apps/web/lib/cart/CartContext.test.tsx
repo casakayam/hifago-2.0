@@ -1,6 +1,7 @@
+import { StrictMode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { CartProvider, useCart, type AddToCartInput } from "./CartContext";
+import { CartProvider, PENDING_CART_MERGE_KEY, useCart, type AddToCartInput } from "./CartContext";
 
 // Invariants 1/2 de la spec 31 (docs/specs/31-identite-anonyme.md) — le point précis qui a motivé
 // ce test : signInAnonymously() n'est PAS idempotent (POST /signup inconditionnel), donc l'appeler
@@ -33,9 +34,19 @@ vi.mock("@hifago/supabase/client", () => ({
     auth: { getSession, signInAnonymously },
     from: (table: string) => {
       if (table !== "cart_items") throw new Error(`table inattendue dans ce mock : ${table}`);
+      type NouvelleLigne = {
+        product_id: string;
+        date: string;
+        end_date: string | null;
+        slot_start_time: string | null;
+        qty: number;
+      };
       return {
-        insert: (row: { product_id: string; date: string; end_date: string | null; slot_start_time: string | null; qty: number }) => {
-          rows.push({ id: `row-${rows.length + 1}`, ...row });
+        // Accepte une ligne seule (addLine) OU un tableau (fusion du panier anonyme au login,
+        // 2026-09-14, LoginForm.tsx/CartContext.tsx) — même mock des deux côtés.
+        insert: (input: NouvelleLigne | NouvelleLigne[]) => {
+          const nouvelles = Array.isArray(input) ? input : [input];
+          for (const row of nouvelles) rows.push({ id: `row-${rows.length + 1}`, ...row });
           return Promise.resolve({ error: null });
         },
         select: () => ({
@@ -111,5 +122,127 @@ describe("CartContext — invariants 1/2 (session anonyme au premier ajout)", ()
     // la résolution de la chaîne getSession → signInAnonymously ne dépend d'aucun timer réel.
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.getByTestId("count").textContent).toBe("0");
+  });
+});
+
+// Retour Jérôme (2026-09-14) : un panier anonyme partait perdu à la connexion Google. GoogleButton.tsx
+// dépose le panier dans sessionStorage juste avant de partir vers Google ; ce bloc prouve que
+// CartProvider le consomme correctement au montage suivant — celui de la page d'atterrissage de
+// /auth/callback, quelle qu'elle soit.
+describe("CartContext — consommation du panier déposé avant une redirection OAuth (2026-09-14)", () => {
+  beforeEach(() => {
+    currentSession = null;
+    rows = [];
+    sessionStorage.clear();
+  });
+
+  it("fusionne les lignes déposées quand l'identité a réellement changé (OAuth réussi)", async () => {
+    currentSession = { user: { id: "compte-reel" } };
+    sessionStorage.setItem(
+      PENDING_CART_MERGE_KEY,
+      JSON.stringify({
+        fromAccountId: "anon-avant-google",
+        lines: [{ id: "l1", productId: "p1", date: "2026-10-01", qty: 2 }],
+      })
+    );
+
+    render(
+      <CartProvider>
+        <Sonde />
+      </CartProvider>
+    );
+
+    await screen.findByText("1");
+    expect(rows).toEqual([
+      {
+        id: "row-1",
+        account_id: "compte-reel",
+        product_id: "p1",
+        date: "2026-10-01",
+        end_date: null,
+        slot_start_time: null,
+        qty: 2,
+      },
+    ]);
+  });
+
+  it("ne fusionne rien si l'identité n'a PAS changé — jamais une ligne dupliquée sous le même anonyme", async () => {
+    currentSession = { user: { id: "anon-1" } };
+    sessionStorage.setItem(
+      PENDING_CART_MERGE_KEY,
+      JSON.stringify({
+        fromAccountId: "anon-1", // la MÊME identité : signInWithOAuth n'a jamais réellement abouti.
+        lines: [{ id: "l1", productId: "p1", date: "2026-10-01", qty: 2 }],
+      })
+    );
+
+    render(
+      <CartProvider>
+        <Sonde />
+      </CartProvider>
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(rows).toHaveLength(0);
+  });
+
+  it("retire la clé sessionStorage immédiatement — jamais un retry qui dupliquerait au prochain montage", async () => {
+    currentSession = { user: { id: "compte-reel" } };
+    sessionStorage.setItem(
+      PENDING_CART_MERGE_KEY,
+      JSON.stringify({ fromAccountId: "anon-avant-google", lines: [{ id: "l1", productId: "p1", date: "2026-10-01", qty: 2 }] })
+    );
+
+    render(
+      <CartProvider>
+        <Sonde />
+      </CartProvider>
+    );
+    await screen.findByText("1");
+
+    expect(sessionStorage.getItem(PENDING_CART_MERGE_KEY)).toBeNull();
+  });
+
+  it("aucune clé déposée → aucun appel superflu, comportement identique à avant ce lot", async () => {
+    currentSession = { user: { id: "compte-reel" } };
+    render(
+      <CartProvider>
+        <Sonde />
+      </CartProvider>
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(rows).toHaveLength(0);
+    expect(screen.getByTestId("count").textContent).toBe("0");
+  });
+
+  // ⚠️ CE TEST EST CELUI QUI AURAIT ATTRAPÉ LE BUG RÉEL (retour Jérôme, 2026-09-14) : un premier
+  // essai posait une garde `annule` au démontage, invisible en rendu normal (comme les tests
+  // ci-dessus, qui passaient tous). Seul React.StrictMode (actif par défaut en dev sur l'App
+  // Router, jamais activé par défaut par `render()` de Testing Library) monte/démonte/remonte un
+  // composant une fois au premier rendu — exactement ce qui faisait passer `annule` à `true` avant
+  // que `getSession()` ait fini de résoudre, et silencieusement avorter la fusion en vrai navigateur
+  // alors que CE MÊME test, sans StrictMode, restait vert. Mutation : réintroduire la garde
+  // `annule`/`return () => { annule = true }` fait rougir CE test précis, aucun des précédents.
+  it("fusionne quand même sous React.StrictMode (mount → unmount → remount immédiat du dev)", async () => {
+    currentSession = { user: { id: "compte-reel" } };
+    sessionStorage.setItem(
+      PENDING_CART_MERGE_KEY,
+      JSON.stringify({
+        fromAccountId: "anon-avant-google",
+        lines: [{ id: "l1", productId: "p1", date: "2026-10-01", qty: 2 }],
+      })
+    );
+
+    render(
+      <StrictMode>
+        <CartProvider>
+          <Sonde />
+        </CartProvider>
+      </StrictMode>
+    );
+
+    await screen.findByText("1");
+    expect(rows).toHaveLength(1);
   });
 });

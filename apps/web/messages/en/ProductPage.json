@@ -15,6 +15,7 @@
   "selectSlotDate": "Pick a day on the calendar to see available time slots.",
   "selectSlotTime": "Choose a time slot.",
   "quantityLabel": "Quantity",
+  "minQtyHint": "Minimum quantity: {count}",
   "quantityLabelBeds": "Beds",
   "quantityLabelRooms": "Rooms",
   "quantityLabelHouses": "Units",

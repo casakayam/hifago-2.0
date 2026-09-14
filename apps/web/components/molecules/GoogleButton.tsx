@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { buildAuthCallbackRedirect } from "@hifago/domain";
 import { createClient } from "@hifago/supabase/client";
 import { Button } from "@/components/atoms/Button";
+import { PENDING_CART_MERGE_KEY, useCart } from "@/lib/cart/CartContext";
 
 // Entrée Google de la vitrine (2026-09-11) — le seul morceau du parcours d'authentification que la
 // feature 32 avait laissé de côté. Le cahier client §2c tranche « deux mécanismes : email/mot de
@@ -60,6 +61,7 @@ export type GoogleButtonProps = {
 export function GoogleButton({ next = "/", testId = "google-signin-button" }: GoogleButtonProps) {
   const t = useTranslations("Common");
   const locale = useLocale();
+  const { lines } = useCart();
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [hasFailed, setHasFailed] = useState(false);
 
@@ -68,6 +70,32 @@ export function GoogleButton({ next = "/", testId = "google-signin-button" }: Go
     setIsRedirecting(true);
 
     const supabase = createClient();
+
+    // Retour Jérôme (2026-09-14) : un panier anonyme partait perdu à la connexion — corrigé pour
+    // signInWithPassword dans LoginForm.tsx (lecture/écriture par le même client, avant/après). Ce
+    // bouton ne peut pas faire pareil : `signInWithOAuth` fait quitter la page pour de vrai (voir
+    // le commentaire sur `next` ci-dessous) — aucun état React ne survit. `sessionStorage`, lui,
+    // survit à une redirection pleine page (scopé par origine+onglet, jamais par navigation) :
+    // déposé ici juste avant de partir, consommé par CartContext.tsx au premier montage suivant
+    // (donc sur la page d'atterrissage de `/auth/callback`, quelle qu'elle soit). `fromAccountId`
+    // est ce qui empêche une double fusion si la redirection échoue avant même de partir (la
+    // session resterait la MÊME identité anonyme, cf. le garde côté CartContext.tsx).
+    if (lines.length > 0) {
+      const {
+        data: { session: sessionAnonyme },
+      } = await supabase.auth.getSession();
+      if (sessionAnonyme) {
+        try {
+          sessionStorage.setItem(
+            PENDING_CART_MERGE_KEY,
+            JSON.stringify({ fromAccountId: sessionAnonyme.user.id, lines })
+          );
+        } catch {
+          /* navigation privée stricte — best-effort, jamais bloquant */
+        }
+      }
+    }
+
     // ⚠️ `next` PRÉFIXÉ DE LA LOCALE COURANTE, et ce n'est pas la faute que la spec 33 vient de
     // corriger — c'en est l'inverse. Là-bas, un `/es` ÉCRIT EN DUR imposait l'espagnol à tout le
     // monde ; ici le préfixe est la langue réellement lue, donc il la PRÉSERVE. Sans lui,
