@@ -1,6 +1,7 @@
 {
   "title": "Hifago",
   "description": "Actividades y experiencias en Guatapé.",
+  "migasEtiqueta": "Ruta de navegación",
   "h1": "Actividades y alojamientos en Guatapé",
   "emptyState": {
     "titulo": "No encontramos ofertas con esos criterios.",

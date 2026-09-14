@@ -5,6 +5,7 @@ import { JsonLd } from "@/components/seo/JsonLd";
 import { PageShell } from "@/components/atoms/PageShell";
 import { Title } from "@/components/atoms/Title";
 import { EstadoVacio } from "@/components/molecules/EstadoVacio";
+import { BarraNavegacion } from "@/components/organisms/BarraNavegacion";
 import { SeccionOfertas } from "@/components/organisms/SeccionOfertas";
 import { buscarSecciones, hrefSeccion } from "@/lib/catalog/buscar";
 import { escribirCriterios, leerCriterios, leerDesdeCarrito } from "@/lib/catalog/criterios";
@@ -16,6 +17,7 @@ import { getSiteUrl } from "@/lib/seo/siteUrl";
 import type { Locale } from "@/messages";
 import { BuscadorInicio } from "./BuscadorInicio";
 import { labelsBuscador } from "./labelsBuscador";
+import { tiposDeBarra } from "./tiposDeBarra";
 
 // L'ACCUEIL, QUI EST AUSSI L'ÉCRAN DE RÉSULTATS (spec 28, Tranche 1 — 2026-09-08).
 //
@@ -65,6 +67,7 @@ export default async function HomePage({ params, searchParams }: PageProps<"/[lo
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("HomePage");
+  const tCommon = await getTranslations("Common");
 
   // Les critères de l'URL sont les SEULS qui filtrent (spec 28 §0 invariant 10) : plus aucun
   // filtrage en mémoire. `leerCriterios` ne lève jamais — un paramètre invalide est ignoré, jamais
@@ -94,6 +97,7 @@ export default async function HomePage({ params, searchParams }: PageProps<"/[lo
   });
 
   const labels = await labelsBuscador(locale as Locale);
+  const tiposBarra = await tiposDeBarra(locale as Locale);
 
   return (
     <PageShell variant="large">
@@ -110,6 +114,18 @@ export default async function HomePage({ params, searchParams }: PageProps<"/[lo
       <div className="sr-only">
         <Title as="h1">{t("h1")}</Title>
       </div>
+
+      {/* Barre de navigation combinée (2026-09-14) : sur la home, un seul "Inicio" (page courante,
+          pas de fil réel à afficher) accolé aux 5 onglets de type — validée en Storybook avant ce
+          branchement (décision de Jérôme). Aucun tipoActivo : la home n'est le sujet d'aucun type
+          précis. */}
+      <BarraNavegacion
+        migas={[{ nombre: tCommon("breadcrumbHome") }]}
+        migasEtiqueta={t("migasEtiqueta")}
+        locale={locale as Locale}
+        tipos={tiposBarra}
+        tiposEtiqueta={tCommon("selectorTipoEtiqueta")}
+      />
 
       {/* ⚠️ Hôte CLIENT obligatoire : toutes les props de `SearchPanel` sont des fonctions, qu'un
           Server Component ne sait pas sérialiser. `aujourdIso` est calculé à Guatapé — jamais dans

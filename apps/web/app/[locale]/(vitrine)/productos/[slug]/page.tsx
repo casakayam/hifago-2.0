@@ -5,7 +5,8 @@ import { formatOccurrenceLabel } from "@/lib/products/formatOccurrenceLabel";
 import { getProductoPorSlug } from "@/lib/catalog/producto";
 import { segmentoDeTipo } from "@/lib/catalog/segmentos";
 import { PageShell } from "@/components/atoms/PageShell";
-import { Migas, type MigaItem } from "@/components/molecules/Migas";
+import type { MigaItem } from "@/components/molecules/Migas";
+import { BarraNavegacion } from "@/components/organisms/BarraNavegacion";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { buildPageMetadata } from "@/lib/seo/pageMetadata";
 import { getSiteUrl } from "@/lib/seo/siteUrl";
@@ -13,6 +14,7 @@ import { buildProductJsonLd } from "@/lib/seo/jsonld/product";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/jsonld/breadcrumb";
 import { migasParaJsonLd } from "@/lib/seo/migas";
 import type { Locale } from "@/messages";
+import { tiposDeBarra } from "../../tiposDeBarra";
 import { FichaProducto } from "./FichaProducto";
 
 // LA FICHE D'UNE OFFRE (spec 30 §5a).
@@ -131,7 +133,14 @@ export default async function ProductoPage({ params }: PageProps<"/[locale]/prod
           page déclarait un `BreadcrumbList` de deux entrées SANS afficher le moindre fil. */}
       <JsonLd data={buildBreadcrumbJsonLd(getSiteUrl(), migasParaJsonLd(migas, locale, rutaCanonica))} />
 
-      <Migas items={migas} etiqueta={t("migasEtiqueta")} locale={locale as Locale} testId="migas" />
+      <BarraNavegacion
+        migas={migas}
+        migasEtiqueta={t("migasEtiqueta")}
+        locale={locale as Locale}
+        tipos={await tiposDeBarra(locale as Locale)}
+        tipoActivo={ficha.tipo}
+        tiposEtiqueta={tCommon("selectorTipoEtiqueta")}
+      />
 
       <FichaProducto ficha={ficha} etiquetas={{ ocurrencia }} locale={locale as Locale} />
     </PageShell>

@@ -4,8 +4,8 @@ import { todayInBogota } from "@hifago/domain";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { PageShell } from "@/components/atoms/PageShell";
 import { Title } from "@/components/atoms/Title";
-import { Migas } from "@/components/molecules/Migas";
 import { EstadoVacio } from "@/components/molecules/EstadoVacio";
+import { BarraNavegacion } from "@/components/organisms/BarraNavegacion";
 import { IndiceCategorias } from "@/components/organisms/IndiceCategorias";
 import { listarTagsConOferta } from "@/lib/catalog/buscar";
 import { hayCriterios, leerCriterios } from "@/lib/catalog/criterios";
@@ -16,6 +16,7 @@ import type { Locale } from "@/messages";
 import { BuscadorInicio } from "../BuscadorInicio";
 import { metadataListado } from "../ListadoTipo";
 import { labelsBuscador } from "../labelsBuscador";
+import { tiposDeBarra } from "../tiposDeBarra";
 
 // `/[locale]/actividades` — L'INDEX DE CATÉGORIES (spec 29 §5a, décisions 3 à 8).
 //
@@ -90,11 +91,13 @@ export default async function ActividadesPage({
         )}
       />
 
-      <Migas
-        items={migas}
-        etiqueta={t("migasEtiqueta")}
+      <BarraNavegacion
+        migas={migas}
+        migasEtiqueta={t("migasEtiqueta")}
         locale={locale as Locale}
-        testId="migas"
+        tipos={await tiposDeBarra(locale as Locale)}
+        tipoActivo="activity"
+        tiposEtiqueta={tCommon("selectorTipoEtiqueta")}
       />
 
       {/* VISIBLE (décision 5) — contrairement au `<h1>` masqué de l'accueil. */}

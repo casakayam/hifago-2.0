@@ -22,7 +22,7 @@ export type TypeBadgeProps = {
   testId?: string;
 };
 
-type StyleBadge = {
+export type StyleBadge = {
   color: "accent" | "success" | "warning" | "default";
   variant: "soft" | "secondary" | "primary";
 };
@@ -58,7 +58,7 @@ type StyleBadge = {
 // l'atome ne rend jamais en admin, mais garder une combinaison qu'on sait fausse quelque part
 // alors qu'une autre passe partout n'avait aucun intérêt. `danger` n'est employé nulle part :
 // dans ce design system le rouge annonce une erreur, jamais une catégorie de produit.
-const STYLES_PAR_TYPE: Record<string, StyleBadge> = {
+export const STYLES_PAR_TYPE: Record<string, StyleBadge> = {
   lodging: { color: "accent", variant: "soft" },
   camp: { color: "accent", variant: "secondary" },
   activity: { color: "success", variant: "secondary" },
@@ -68,7 +68,7 @@ const STYLES_PAR_TYPE: Record<string, StyleBadge> = {
   evento: { color: "warning", variant: "primary" },
 };
 
-const STYLE_INCONNU: StyleBadge = { color: "default", variant: "soft" };
+export const STYLE_INCONNU: StyleBadge = { color: "default", variant: "soft" };
 
 export function TypeBadge({ type, label, testId }: TypeBadgeProps) {
   const style = STYLES_PAR_TYPE[type] ?? STYLE_INCONNU;

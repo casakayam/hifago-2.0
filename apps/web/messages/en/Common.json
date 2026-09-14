@@ -1,6 +1,7 @@
 {
   "cancellationPolicy": "A cancellation or a no-show on your part is never refunded.",
   "breadcrumbHome": "Home",
+  "selectorTipoEtiqueta": "Types of offer",
   "error": {
     "titulo": "Something went wrong",
     "descripcion": "We could not load this page. Please try again in a moment.",

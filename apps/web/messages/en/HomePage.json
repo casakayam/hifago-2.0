@@ -1,6 +1,7 @@
 {
   "title": "Hifago",
   "description": "Activities and experiences in Guatapé.",
+  "migasEtiqueta": "Breadcrumb",
   "h1": "Activities and places to stay in Guatapé",
   "emptyState": {
     "titulo": "We found no offers matching those criteria.",
