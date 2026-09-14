@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { tiersFromColumn, type PriceTier } from "@/lib/products/priceTiers";
+import { groupDiscountFromColumns, type GroupDiscount } from "@/lib/products/groupDiscount";
 import { emptyStayRates, stayRatesFromColumn, type DraftStayRates } from "@/lib/products/stayRates";
 import { slotRulesFromColumn, type DraftSlotRule } from "@/lib/products/slotRules";
 import { asLodgingKind, asLodgingUnit, type LodgingKind, type LodgingUnit } from "@hifago/domain";
@@ -51,6 +52,11 @@ export type ProductTypeFieldsInit = {
   defaultCapacity?: number | null;
   stayRates?: unknown;
   durationDays?: number | null;
+  // Remise par seuil de remplissage cumulé (migration 20260914130000) — camp uniquement, colonne
+  // group_discount_pct en fraction (0.20), converti en pourcentage lisible côté formulaire par
+  // groupDiscountFromColumns (cf. groupDiscount.ts).
+  groupDiscountThresholdQty?: number | null;
+  groupDiscountPct?: number | null;
   slotRules?: unknown;
   priceLabel?: string | null;
   occurrenceType?: OccurrenceType;
@@ -101,6 +107,9 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
     init.stayRates ? stayRatesFromColumn(init.stayRates) : emptyStayRates(),
   );
   const [durationDays, setDurationDays] = useState(init.durationDays != null ? String(init.durationDays) : "");
+  const [groupDiscount, setGroupDiscount] = useState<GroupDiscount>(() =>
+    groupDiscountFromColumns(init.groupDiscountThresholdQty, init.groupDiscountPct),
+  );
   const [slotRules, setSlotRules] = useState<DraftSlotRule[]>(() => slotRulesFromColumn(init.slotRules));
 
   const [priceLabel, setPriceLabel] = useState(init.priceLabel ?? "");
@@ -150,6 +159,7 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
     lodgingKind, setLodgingKind, unit, setUnit,
     defaultCapacity, setDefaultCapacity, stayRates, setStayRates,
     durationDays, setDurationDays,
+    groupDiscount, setGroupDiscount,
     slotRules, setSlotRules,
     priceLabel, setPriceLabel,
     occurrenceType, setOccurrenceType,
@@ -192,6 +202,8 @@ export type RawProductFieldsPayload = {
   default_capacity?: number | null;
   stay_rates?: unknown;
   duration_days?: number | null;
+  group_discount_threshold_qty?: number | null;
+  group_discount_pct?: number | null;
   slot_rules?: unknown;
   price_label?: string | null;
   occurrence_type?: OccurrenceType;
@@ -227,6 +239,8 @@ export function payloadToFieldsInit(payload: RawProductFieldsPayload): ProductTy
     defaultCapacity: payload.default_capacity,
     stayRates: payload.stay_rates,
     durationDays: payload.duration_days,
+    groupDiscountThresholdQty: payload.group_discount_threshold_qty,
+    groupDiscountPct: payload.group_discount_pct,
     slotRules: payload.slot_rules,
     priceLabel: payload.price_label,
     occurrenceType: payload.occurrence_type,

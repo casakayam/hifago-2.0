@@ -18,7 +18,7 @@
 -- geste que les policies `_select_public` laissent bien passer ce qu'il faut.
 
 begin;
-select plan(24);
+select plan(29);
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────────────────────────
 insert into partners (id, display_name) values
@@ -27,13 +27,18 @@ insert into partners (id, display_name) values
 -- Établissement A : DEUX couchages vendables → doit être groupé en UNE carte.
 -- Établissement B : UN seul couchage vendable → ne doit PAS être groupé.
 -- Établissement C : archivé → rien de lui ne doit sortir.
+-- Établissement D : DEUX couchages vendables aussi, mais JAMAIS taggé (chantier "catégories
+-- partout", 2026-09-14) — sert à distinguer, sous p_sin_tag, une carte groupée non classée d'une
+-- carte groupée classée (A, ci-dessous).
 insert into establishments (id, partner_id, name, status) values
   ('aaaa1111-0000-0000-0000-00000000000a', 'aaaa1111-0000-0000-0000-000000000001',
    '{"es":"Hotel Agrupado"}'::jsonb, 'active'),
   ('aaaa1111-0000-0000-0000-00000000000b', 'aaaa1111-0000-0000-0000-000000000001',
    '{"es":"Cabaña Sola"}'::jsonb, 'active'),
   ('aaaa1111-0000-0000-0000-00000000000c', 'aaaa1111-0000-0000-0000-000000000001',
-   '{"es":"Archivado"}'::jsonb, 'archived');
+   '{"es":"Archivado"}'::jsonb, 'archived'),
+  ('aaaa1111-0000-0000-0000-00000000000d', 'aaaa1111-0000-0000-0000-000000000001',
+   '{"es":"Hotel Agrupado Sin Tag"}'::jsonb, 'active');
 
 insert into products
   (id, partner_id, establishment_id, type, slug, name, price_cop, sellable, capacity, max_qty, schedule)
@@ -57,6 +62,13 @@ values
   ('aaaa1111-0000-0000-0000-000000000105', 'aaaa1111-0000-0000-0000-000000000001',
    'aaaa1111-0000-0000-0000-00000000000c', 'lodging', 'sc-archivado',
    '{"es":"Archivado"}'::jsonb, 1000, true, 2, null, 'date'),
+  -- D : deux couchages, jamais taggés (ni au niveau produit ni au niveau établissement)
+  ('aaaa1111-0000-0000-0000-000000000106', 'aaaa1111-0000-0000-0000-000000000001',
+   'aaaa1111-0000-0000-0000-00000000000d', 'lodging', 'sc-hab-d1',
+   '{"es":"Hab D1"}'::jsonb, 80000, true, 2, null, 'date'),
+  ('aaaa1111-0000-0000-0000-000000000107', 'aaaa1111-0000-0000-0000-000000000001',
+   'aaaa1111-0000-0000-0000-00000000000d', 'lodging', 'sc-hab-d2',
+   '{"es":"Hab D2"}'::jsonb, 85000, true, 2, null, 'date'),
   -- Activités : bornes de quantité différentes, pour le filtre personas
   ('aaaa1111-0000-0000-0000-000000000201', 'aaaa1111-0000-0000-0000-000000000001',
    'aaaa1111-0000-0000-0000-00000000000b', 'activity', 'sc-jetski',
@@ -77,10 +89,26 @@ insert into product_calendar (product_id, date, open) values
 -- Spec 29 — fixtures de tags. `sc-jetski` est classée, `sc-sin-tope` et `sc-cerrada` ne le sont
 -- pas : c'est ce contraste qui rend `p_sin_tag` vérifiable.
 insert into catalog_tags (id, label, slug) values
-  ('aaaa1111-0000-0000-0000-000000000301', '{"es":"Kayak de prueba"}'::jsonb, 'sc-tag-kayak');
+  ('aaaa1111-0000-0000-0000-000000000301', '{"es":"Kayak de prueba"}'::jsonb, 'sc-tag-kayak'),
+  -- Chantier "catégories partout" (2026-09-14) — deux tags DISTINCTS pour isoler chaque source de
+  -- la bifurcation établissement/produit (cf. section dédiée plus bas) : les mélanger sur un seul
+  -- tag aurait rendu chaque assertion positive par la MAUVAISE raison.
+  ('aaaa1111-0000-0000-0000-000000000302', '{"es":"Piscina de prueba"}'::jsonb, 'sc-tag-piscina'),
+  ('aaaa1111-0000-0000-0000-000000000303', '{"es":"Vista de prueba"}'::jsonb, 'sc-tag-vista');
 
 insert into product_tag_assignments (product_id, tag_id) values
-  ('aaaa1111-0000-0000-0000-000000000201', 'aaaa1111-0000-0000-0000-000000000301');
+  ('aaaa1111-0000-0000-0000-000000000201', 'aaaa1111-0000-0000-0000-000000000301'),
+  -- Cabaña Sola (B, UN seul couchage → carte PRODUIT) : source produit, cas non-groupé inchangé.
+  ('aaaa1111-0000-0000-0000-000000000104', 'aaaa1111-0000-0000-0000-000000000302'),
+  -- Une CHAMBRE de l'Hotel Agrupado (A, DEUX couchages → carte ÉTABLISSEMENT groupée), avec un tag
+  -- QUI N'EST JAMAIS POSÉ AU NIVEAU ÉTABLISSEMENT : doit rester sans aucun effet sur la carte
+  -- groupée — c'est exactement la limite structurelle que la bifurcation corrige.
+  ('aaaa1111-0000-0000-0000-000000000101', 'aaaa1111-0000-0000-0000-000000000303');
+
+insert into establishment_tag_assignments (establishment_id, tag_id) values
+  -- L'Hotel Agrupado (A) lui-même, au niveau ÉTABLISSEMENT, avec un tag DIFFÉRENT de celui posé
+  -- sur sa chambre : c'est CE tag-ci qui doit le faire apparaître.
+  ('aaaa1111-0000-0000-0000-00000000000a', 'aaaa1111-0000-0000-0000-000000000302');
 
 set local role anon;
 
@@ -259,6 +287,40 @@ select is(
   (select n_alojamientos from search_catalog(p_limite => 100000)
    where id = 'aaaa1111-0000-0000-0000-000000000201'),
   null::bigint, '…et une activité non plus'
+);
+
+-- ── Bifurcation établissement/produit du filtre par tag (chantier "catégories partout", 2026-09-14) ─
+-- cf. commentaire de tête de la migration `search_catalog_tag_bifurcation` : un tag posé sur
+-- `establishment_tag_assignments` décide pour une carte GROUPÉE, un tag posé sur
+-- `product_tag_assignments` décide pour une carte PRODUIT — jamais l'inverse.
+select is(
+  (select count(*)::int from search_catalog(p_limite => 100000, p_tag_slug => 'sc-tag-piscina')
+   where id = 'aaaa1111-0000-0000-0000-00000000000a' and es_establecimiento),
+  1, 'un tag posé sur l''ÉTABLISSEMENT groupé le fait apparaître comme carte groupée'
+);
+
+select is(
+  (select count(*)::int from search_catalog(p_limite => 100000, p_tag_slug => 'sc-tag-piscina')
+   where id = 'aaaa1111-0000-0000-0000-000000000104' and not es_establecimiento),
+  1, '…et le MÊME slug, posé sur un PRODUIT non groupé, fait apparaître sa carte produit'
+);
+
+select is(
+  (select count(*)::int from search_catalog(p_limite => 100000, p_tag_slug => 'sc-tag-vista')),
+  0,
+  'un tag posé sur une CHAMBRE d''un établissement groupé n''a aucun effet — seul le tag de l''établissement compte pour une carte groupée'
+);
+
+select is(
+  (select count(*)::int from search_catalog(p_limite => 100000, p_sin_tag => true)
+   where id = 'aaaa1111-0000-0000-0000-00000000000d' and es_establecimiento),
+  1, 'p_sin_tag garde une carte groupée qu''AUCUN tag d''établissement ne classe'
+);
+
+select is(
+  (select count(*)::int from search_catalog(p_limite => 100000, p_sin_tag => true)
+   where id = 'aaaa1111-0000-0000-0000-00000000000a' and es_establecimiento),
+  0, '…et écarte une carte groupée dont l''établissement porte un tag'
 );
 
 select * from finish();

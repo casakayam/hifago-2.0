@@ -53,6 +53,7 @@ function renderView(overrides: {
     urlExterna: null,
     ocurrencia: null,
     duracionDias: null,
+    descuentoGrupo: null,
     alojamiento: {
       lodgingKind: overrides.lodgingKind ?? null,
       capacity: overrides.capacity,

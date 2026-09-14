@@ -1,0 +1,16 @@
+{
+  "partner": "aeroturex",
+  "establishment": "aeroturex",
+  "name": { "es": "Bus compartido Medellín ↔ Guatapé" },
+  "price_cop": 80000,
+  "unit": "per_person",
+  "capacity": 40,
+  "default_capacity": 40,
+  "min_qty": 1,
+  "max_qty": 8,
+  "address": "Aeropuerto José María Córdova, Rionegro, Antioquia",
+  "lat": 6.1645,
+  "lon": -75.4231,
+  "tags": [],
+  "photos": []
+}

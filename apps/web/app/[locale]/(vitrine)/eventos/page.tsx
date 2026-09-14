@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
 import { setRequestLocale } from "next-intl/server";
 import type { Locale } from "@/messages";
-import { ListadoTipo, metadataListado } from "../ListadoTipo";
+import { IndiceCategoriasConOfertas } from "../IndiceCategoriasConOfertas";
+import { metadataListado } from "../ListadoTipo";
 
-// `/[locale]/eventos` — le listing des offres de type `evento` (spec 29 §5c).
-//
-// ⚠️ Cette page est volontairement MINCE : les quatre listings ne diffèrent que par leur type, et
-// tout le reste — la requête, le fil d'Ariane, le titre, le bloc de recherche, l'état vide, le
-// défilement — vit dans `ListadoTipo`. Y ajouter quoi que ce soit ici, c'est l'ajouter à un seul
-// des quatre écrans.
+// `/[locale]/eventos` — l'index de catégories du type `evento` (généralisé 2026-09-14, spec 29
+// §5c révisée). Volontairement MINCE : les cinq index ne diffèrent que par leur type, tout le
+// reste vit dans `IndiceCategoriasConOfertas`.
 //
 // Elle n'appelle aucune requête Supabase et n'importe rien de `@hifago/ui` : les deux règles
 // vérifiées par `scripts/check-data-layer.sh` (spec 27) sont tenues sans dérogation.
@@ -25,6 +23,6 @@ export default async function EventosPage({ params, searchParams }: PageProps<"/
   setRequestLocale(locale);
 
   return (
-    <ListadoTipo tipo="evento" locale={locale as Locale} searchParams={await searchParams} />
+    <IndiceCategoriasConOfertas tipo="evento" locale={locale as Locale} searchParams={await searchParams} />
   );
 }

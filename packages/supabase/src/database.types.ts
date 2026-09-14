@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -437,6 +432,39 @@ export type Database = {
             columns: ["submitted_by"]
             isOneToOne: false
             referencedRelation: "partner_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      establishment_tag_assignments: {
+        Row: {
+          created_at: string
+          establishment_id: string
+          tag_id: string
+        }
+        Insert: {
+          created_at?: string
+          establishment_id: string
+          tag_id: string
+        }
+        Update: {
+          created_at?: string
+          establishment_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "establishment_tag_assignments_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "establishment_tag_assignments_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_tags"
             referencedColumns: ["id"]
           },
         ]
@@ -1811,6 +1839,8 @@ export type Database = {
           duration_minutes: number | null
           establishment_id: string
           external_booking_url: string | null
+          group_discount_pct: number | null
+          group_discount_threshold_qty: number | null
           id: string
           lat: number | null
           lobby_category_id: number | null
@@ -1858,6 +1888,8 @@ export type Database = {
           duration_minutes?: number | null
           establishment_id: string
           external_booking_url?: string | null
+          group_discount_pct?: number | null
+          group_discount_threshold_qty?: number | null
           id?: string
           lat?: number | null
           lobby_category_id?: number | null
@@ -1905,6 +1937,8 @@ export type Database = {
           duration_minutes?: number | null
           establishment_id?: string
           external_booking_url?: string | null
+          group_discount_pct?: number | null
+          group_discount_threshold_qty?: number | null
           id?: string
           lat?: number | null
           lobby_category_id?: number | null
@@ -2556,21 +2590,35 @@ export type Database = {
           total_seccion: number
         }[]
       }
-      search_catalog_tags: {
+      search_catalog_categorias: {
         Args: {
           p_desde?: string
           p_hasta?: string
           p_personas?: number
+          p_por_categoria?: number
           p_query?: string
-          p_tipo?: string
+          p_tipo: string
         }
         Returns: {
-          description: Json
+          categoria_description: Json
+          categoria_image_path: string
+          categoria_label: Json
+          categoria_slug: string
+          descripcion: Json
+          es_establecimiento: boolean
           es_sin_tag: boolean
-          image_path: string
-          label: Json
+          establecimiento: Json
+          fotos: Json
+          id: string
+          n_alojamientos: number
+          nombre: Json
+          precio_cop: number
+          precio_desde: number
+          precio_label: string
+          rango_categoria: number
           slug: string
-          total: number
+          tipo: string
+          total_categoria: number
         }[]
       }
       set_capability_status: {
@@ -2870,3 +2918,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

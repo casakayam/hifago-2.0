@@ -137,13 +137,20 @@ test("l'accueil rend plusieurs sections, activités d'abord, chacune avec son <h
   // (URL en espagnol dans les deux locales) et le `Link` de `@/i18n/navigation`, seul à conserver
   // le préfixe de langue. ⚠️ Celui des activités mène à un INDEX DE TAGS (spec 29) et porte donc un
   // autre libellé — la cible, elle, suit la même table.
+  //
+  // ⚠️ SEULE l'ACTIVITÉ est vérifiée ici, et c'est voulu (2026-09-14, bug signalé par Jérôme) :
+  // depuis que `mostrarVerMas` conditionne le lien à `total > tarjetas.length` (une section ne
+  // promet plus « Ver más » quand elle montre déjà tout — sinon le lien mène à une page qui
+  // affiche EXACTEMENT les mêmes cartes), un type dont le catalogue local ne dépasse pas
+  // `POR_SECCION` (8) ne rend simplement PLUS ce lien — ce n'est plus assertable sans contrôler le
+  // volume de données. Le « Ver más » des activités reste, lui, INCONDITIONNEL par construction
+  // (labelVerMas ci-dessus) : c'est le seul type sûr d'après le seed local (>8 offres). La
+  // construction du href pour un autre type ne dépend que de la table testée dans
+  // `segmentos.test.ts` (`segmentoDeTipo`) — pas besoin de la reprouver ici pour un type dont le
+  // compte fluctue.
   await expect(page.getByTestId("seccion-activity-ver-mas")).toHaveAttribute(
     "href",
     "/es/actividades"
-  );
-  await expect(page.getByTestId("seccion-lodging-ver-mas")).toHaveAttribute(
-    "href",
-    "/es/alojamientos"
   );
 });
 

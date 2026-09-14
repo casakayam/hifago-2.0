@@ -8,6 +8,7 @@ import { EstablishmentContactBlock } from "./EstablishmentContactBlock";
 import { EstablishmentStayBlock } from "./EstablishmentStayBlock";
 import { EstablishmentPmsBlock } from "./EstablishmentPmsBlock";
 import { EstablishmentStatusBlock } from "./EstablishmentStatusBlock";
+import { EstablishmentTagsBlock } from "./EstablishmentTagsBlock";
 import { EstablishmentProductsTable } from "./EstablishmentProductsTable";
 
 export default async function AdminEstablishmentDetailPage({
@@ -54,6 +55,22 @@ export default async function AdminEstablishmentDetailPage({
     id: m.id,
     url: supabase.storage.from("catalog-media").getPublicUrl(m.storage_path).data.publicUrl,
   }));
+
+  // Catégories (chantier "catégories partout", 2026-09-14) — même patron que ProductTagsBlock
+  // (products/[id]/edit/page.tsx), aucun gating par type : un établissement est TOUJOURS éligible.
+  const [{ data: tagsRaw }, { data: tagAssignments }] = await Promise.all([
+    supabase.from("catalog_tags").select("id, label").order("slug"),
+    supabase
+      .from("establishment_tag_assignments")
+      .select("tag_id")
+      .eq("establishment_id", establishment.id),
+  ]);
+
+  const allTags = (tagsRaw ?? []).map((tag) => ({
+    id: tag.id,
+    label: resolveLocalizedField(asLocalizedField(tag.label), "es") ?? tag.id,
+  }));
+  const initialTagIds = (tagAssignments ?? []).map((a) => a.tag_id);
 
   // RLS (products_select_public) : l'admin voit aussi les activités non publiées (sellable=false).
   const { data: products } = await supabase
@@ -110,6 +127,12 @@ export default async function AdminEstablishmentDetailPage({
       />
 
       <EstablishmentPhotosBlock establishmentId={establishment.id} initialPhotos={photos} />
+
+      <EstablishmentTagsBlock
+        establishmentId={establishment.id}
+        allTags={allTags}
+        initialTagIds={initialTagIds}
+      />
 
       <EstablishmentProductsTable products={products ?? []} />
     </div>

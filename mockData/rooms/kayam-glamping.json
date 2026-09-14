@@ -1,0 +1,11 @@
+{
+  "partner": "kayam",
+  "establishment": "kayam",
+  "name": { "es": "Glamping" },
+  "price_cop": 165000,
+  "unit": "per_two",
+  "capacity": 2,
+  "unit_count": 3,
+  "lodging_kind": "private",
+  "photos": ["1.webp", "2.webp", "3.webp", "4.webp"]
+}

@@ -1,7 +1,21 @@
 import { test, expect, type Page } from "@playwright/test";
 
-// L'INDEX DE CATÉGORIES ET LES PAGES DE CATÉGORIE (spec 29, Tranche 2 — 2026-09-08).
-// `/es/actividades`, `/es/actividades/[tag]` et `/es/actividades/otras`.
+// L'INDEX DE CATÉGORIES ET LES PAGES DE CATÉGORIE (spec 29, généralisée 2026-09-14 — chantier
+// "catégories partout"). `/es/actividades`, `/es/actividades/[categoria]` et `/es/actividades/otras`.
+//
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// CE QUI A CHANGÉ DEPUIS LA VERSION PRÉCÉDENTE DE CE FICHIER
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// L'index ne montre plus des TUILES vides (image + nom, aucune offre) qu'on cliquait pour
+// atteindre la liste : chaque catégorie est maintenant une SECTION « comme l'accueil »
+// (`SeccionOfertas`) — un titre, un aperçu de ses offres, un « Ver más » qui ne se rend QUE si la
+// catégorie en a plus que ce qu'elle montre (`mostrarVerMas`). Conséquences directes sur ce spec :
+//   • une carte d'offre EST maintenant visible sur l'index (l'inverse de l'ancien comportement) ;
+//   • une catégorie n'est plus cliquable comme un tout — seules ses cartes et son éventuel
+//     « Ver más » le sont ; aucune fixture actuelle du seed ne dépasse le plafond par catégorie
+//     (6), donc rien ici ne clique un « Ver más » — cette navigation est prouvée par
+//     `SeccionOfertas.test.tsx` (le lien ne se rend que si `mostrarVerMas`) et par les tests de
+//     la page de catégorie ci-dessous, atteints par URL directe comme le fait déjà le test 404.
 //
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 // CE QU'IL PROUVE, ET POURQUOI ÇA NE PEUT PAS SE PROUVER PLUS BAS
@@ -10,25 +24,26 @@ import { test, expect, type Page } from "@playwright/test";
 // Deux règles du cahier §2a ne vivent NI dans un composant NI dans une seule requête :
 //
 //   • « seuls les tags portant au moins une offre publiée y figurent — un tag vide produirait une
-//     page vide que Google indexerait ». Elle se joue en SQL (`search_catalog_tags`), et son
+//     page vide que Google indexerait ». Elle se joue en SQL (`search_catalog_categorias`), et son
 //     versant visible est qu'une catégorie absente de l'index rend AUSSI 404 sur sa page. Les deux
 //     moitiés doivent s'accorder, et seul un e2e le voit.
-//   • « la page des activités est un index de sous-catégories, sans produit ; on y clique pour
-//     atteindre la liste des offres d'un tag ». C'est un parcours à deux écrans.
+//   • Le fil d'Ariane et le texte éditorial d'une page de catégorie ne se prouvent qu'en y arrivant
+//     réellement rendue.
 //
-// Le reste — l'aplat sans image, le bloc absent sans texte, l'ordre alphabétique — est couvert par
-// les tests de composant et par `buscar.test.ts`. Rien n'est re-prouvé ici.
+// Le reste — l'aplat sans image, le bloc absent sans texte, l'ordre alphabétique, le « Ver más »
+// conditionnel — est couvert par les tests de composant et par `buscar.test.ts`. Rien n'est
+// re-prouvé ici.
 //
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 // LES DONNÉES DU SEED, ET CE QUE CHACUNE EXERCE
 // ─────────────────────────────────────────────────────────────────────────────────────────────
-//   `deportes-nauticos`  2 offres (kayak + lancha)      → une tuile qui compte plusieurs offres
-//   `naturaleza`         1 offre  (caminata)            → une tuile ordinaire
-//   `cultura`            1 offre NON VENDABLE           → ABSENTE : le prédicat `sellable` s'applique
-//   `gastronomia`        aucune offre                   → ABSENTE : la règle du cahier §2a
-//   « Otras »            1 activité sans aucun tag      → la tuile de rattrapage (décision 1)
+//   `deportes-nauticos`  2 offres (kayak + lancha)      → une catégorie ordinaire, sous le plafond
+//   `naturaleza`         1 offre  (caminata)             → une catégorie ordinaire
+//   `cultura`            1 offre NON VENDABLE            → ABSENTE : le prédicat `sellable` s'applique
+//   `gastronomia`        aucune offre                    → ABSENTE : la règle du cahier §2a
+//   « Otras »            1 activité sans aucun tag       → la catégorie de rattrapage (décision 1)
 //
-// ⚠️ CE SPEC N'ÉCRIT RIEN EN BASE, et n'affirme jamais un NOMBRE de tuiles : la base locale est
+// ⚠️ CE SPEC N'ÉCRIT RIEN EN BASE, et n'affirme jamais un NOMBRE de catégories : la base locale est
 // partagée avec les autres specs, qui y créent et suppriment des produits en permanence. On
 // affirme des catégories NOMMÉES, présentes ou absentes.
 
@@ -46,7 +61,9 @@ async function irA(page: Page, ruta: string) {
   return response;
 }
 
-test("l'index montre les catégories qui ont une offre, et SEULEMENT celles-là", async ({ page }) => {
+test("l'index montre les catégories qui ont une offre — avec un aperçu de leurs offres — et SEULEMENT celles-là", async ({
+  page,
+}) => {
   const response = await irA(page, "actividades");
   expect(response?.status()).toBe(200);
 
@@ -59,36 +76,38 @@ test("l'index montre les catégories qui ont une offre, et SEULEMENT celles-là"
   await expect(page.getByTestId(`categoria-${CAT_SIN_OFERTA}`)).toHaveCount(0);
   await expect(page.getByTestId(`categoria-${CAT_SOLO_NO_VENDIBLE}`)).toHaveCount(0);
 
-  // ⚠️ L'index ne liste AUCUNE offre — c'est ce qui le distingue des cinq autres routes.
-  await expect(page.getByTestId(`tarjeta-${ACTIVIDAD_KAYAK}`)).toHaveCount(0);
+  // ⚠️ L'index montre maintenant un APERÇU DES OFFRES de chaque catégorie — comme l'accueil,
+  // section par section — ce qui distingue ce lot de la version précédente (tuiles vides).
+  await expect(page.getByTestId(`tarjeta-${ACTIVIDAD_KAYAK}`)).toBeVisible();
 
   // Un seul <h1>, et VISIBLE (décision 5).
   await expect(page.locator("h1")).toHaveCount(1);
   await expect(page.locator("h1")).toBeVisible();
 });
 
-test("la tuile « Otras actividades » rattrape ce qu'aucune catégorie ne classe", async ({ page }) => {
+test("la catégorie « Otras actividades » rattrape ce qu'aucune catégorie ne classe", async ({ page }) => {
   // La décision 1 : une offre publiée ne doit jamais devenir invisible depuis la navigation par
-  // catégorie sous prétexte que personne ne l'a rangée.
+  // catégorie sous prétexte que personne ne l'a rangée. Sous le plafond par catégorie, elle
+  // apparaît directement dans sa section de l'index — pas besoin de cliquer pour la voir.
   await irA(page, "actividades");
   await expect(page.getByTestId("categoria-otras")).toBeVisible();
-
-  await page.getByTestId("categoria-otras-link").click();
-  await page.waitForURL(/\/es\/actividades\/otras/);
-  await page.waitForLoadState("networkidle");
-
   await expect(page.getByTestId(`tarjeta-${ACTIVIDAD_SIN_TAG}`)).toBeVisible();
-  // …et elle ne montre QUE des offres non classées : le kayak est dans une catégorie.
-  await expect(page.getByTestId(`tarjeta-${ACTIVIDAD_KAYAK}`)).toHaveCount(0);
+
+  // Sa section ne montre QUE des offres non classées : le kayak est dans une catégorie, donc
+  // absent de la section « Otras ».
+  const seccionOtras = page.getByTestId("categoria-otras");
+  await expect(seccionOtras.getByTestId(`tarjeta-${ACTIVIDAD_KAYAK}`)).toHaveCount(0);
 });
 
-test("cliquer une catégorie mène à ses offres, et le fil d'Ariane remonte à l'index", async ({
+test("la page dédiée d'une catégorie montre ses offres, et le fil d'Ariane remonte à l'index", async ({
   page,
 }) => {
-  await irA(page, "actividades");
-  await page.getByTestId(`categoria-${CAT_NAUTICOS}`).getByRole("link").first().click();
-  await page.waitForURL(new RegExp(`/es/actividades/${CAT_NAUTICOS}`));
+  // ⚠️ Atteinte par URL directe, pas par clic : aucune fixture du seed ne dépasse le plafond par
+  // catégorie (6 offres), donc son « Ver más » ne se rend jamais sur CET écran (comportement
+  // voulu, prouvé par `SeccionOfertas.test.tsx`). C'est la même route qu'un « Ver más » ouvrirait.
+  const response = await page.goto(`/es/actividades/${CAT_NAUTICOS}`);
   await page.waitForLoadState("networkidle");
+  expect(response?.status()).toBe(200);
 
   await expect(page.getByTestId(`tarjeta-${ACTIVIDAD_KAYAK}`)).toBeVisible();
   // Le texte éditorial de la catégorie : le SEUL contenu rédactionnel indexable de cette page
@@ -138,20 +157,24 @@ test("une catégorie sans offre publiée rend 404, jamais une page vide indexabl
   expect(inconnue?.status(), "slug inconnu").toBe(404);
 });
 
-test("les critères de recherche filtrent les tuiles — une tuile ne mène jamais à une page vide", async ({
+test("les critères de recherche filtrent les sections — une catégorie absente n'y figure plus", async ({
   page,
 }) => {
   // ⚠️ LA décision 3. `naturaleza` ne porte qu'une caminata, qui ne répond pas à « kayak » : sa
-  // tuile doit disparaître, sinon le visiteur cliquerait pour arriver sur « aucun résultat ».
+  // section doit disparaître, sinon le visiteur verrait une catégorie dont l'unique offre ne
+  // correspond pas à sa recherche.
   const response = await irA(page, "actividades?q=kayak");
   expect(response?.status()).toBe(200);
 
   await expect(page.getByTestId(`categoria-${CAT_NAUTICOS}`)).toBeVisible();
   await expect(page.getByTestId(`categoria-${CAT_NATURALEZA}`)).toHaveCount(0);
 
-  // Et les critères suivent la tuile vers sa liste (cahier §2a : « les critères se conservent »).
-  await page.getByTestId(`categoria-${CAT_NAUTICOS}`).getByRole("link").first().click();
-  await page.waitForURL(/q=kayak/);
+  // Et les critères suivent vers la page dédiée (cahier §2a : « les critères se conservent »),
+  // atteinte ici par URL directe — cf. note du test précédent sur l'absence de « Ver más ».
+  const dansLaCategorie = await page.goto(`/es/actividades/${CAT_NAUTICOS}?q=kayak`);
+  await page.waitForLoadState("networkidle");
+  expect(dansLaCategorie?.status()).toBe(200);
+  await expect(page.getByTestId(`tarjeta-${ACTIVIDAD_KAYAK}`)).toBeVisible();
 });
 
 test("une recherche sans résultat dans une catégorie VIVANTE rend 200, pas 404", async ({

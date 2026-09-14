@@ -1,0 +1,9 @@
+{
+  "partner": "kayam",
+  "establishment": "kayam",
+  "name": { "es": "Yoga session" },
+  "external_booking_url": "https://wa.me/573001112233?text=Hola%2C%20quiero%20info%20sobre%20la%20sesi%C3%B3n%20de%20Yoga%20en%20Casa%20Kayam",
+  "tags": ["bienestar"],
+  "photos": ["1.webp"],
+  "_extra_columns": { "category": "bienestar" }
+}

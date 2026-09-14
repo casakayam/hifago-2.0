@@ -122,7 +122,9 @@ export type SugerenciaCatalogo = {
 };
 
 /**
- * Une CATÉGORIE de l'index `/es/actividades` (spec 29 §0).
+ * Une CATÉGORIE d'un type d'offre, avec un aperçu de ses items (spec 29, généralisée 2026-09-14 —
+ * `/es/actividades`, `/es/alojamientos`, etc. affichent maintenant chacune une section par
+ * catégorie, sur le même patron que les sections de l'accueil).
  *
  * ⚠️ Le mot « catégorie » et non « tag » est délibéré : depuis la décision de Jérôme du 2026-09-08,
  * une ligne de `catalog_tags` porte une image, un nom et un texte — c'est une entité éditoriale que
@@ -132,22 +134,23 @@ export type SugerenciaCatalogo = {
  * l'URL de l'image depuis son `storage_path`. Un composant ne parle jamais à Storage et ne résout
  * jamais un champ JSONB.
  */
-export type CategoriaConOferta = {
-  /** `kayak` — ou `otras` pour la tuile qui rattrape ce qu'aucune catégorie ne classe. */
+export type CategoriaConTarjetas = {
+  /** `kayak` — ou `otras` pour la catégorie qui rattrape ce qu'aucun tag ne classe. */
   slug: string;
   /** Chemin SANS préfixe de langue : `/actividades/kayak`. */
   href: string;
   /**
-   * ⚠️ VIDE quand `esSinTag` est vrai. « Otras actividades » n'est pas une ligne de la base : son
-   * nom et son texte viennent des messages next-intl, donc de la page. Cette couche ne traduit
-   * rien — même règle que le texte alternatif des photos et que les libellés de suggestion.
+   * ⚠️ VIDE quand `esSinTag` est vrai. « Otras actividades »/« Otros alojamientos » n'est pas une
+   * ligne de la base : son nom et son texte viennent des messages next-intl, donc de la page.
+   * Cette couche ne traduit rien — même règle que le texte alternatif des photos et que les
+   * libellés de suggestion.
    */
   nombre: string;
   /** Déjà résolu, `null` si la catégorie n'a pas encore été rédigée. */
   descripcion: string | null;
-  /** URL publique déjà résolue, `null` → la tuile rend un aplat. */
+  /** URL publique déjà résolue, `null` → aucune photo (le pattern de section n'en affiche pas). */
   foto: FotoTarjeta | null;
-  /** Vrai pour LA seule tuile « Otras actividades », toujours rendue en dernier. */
+  /** Vrai pour LA seule catégorie de rattrapage, toujours rendue en dernier. */
   esSinTag: boolean;
   /**
    * Les locales où le NOM est réellement saisi — pas obtenu par repli.
@@ -158,6 +161,10 @@ export type CategoriaConOferta = {
    * JSONB brut — le résoudre puis tenter de deviner s'il vient d'un repli serait impossible.
    */
   localesNativas: string[];
+  /** Plafonnées à `porCategoria` — c'est la base qui plafonne, jamais un `.slice()` ici. */
+  tarjetas: TarjetaOferta[];
+  /** Nombre d'offres de la catégorie AVANT plafonnement — alimente `mostrarVerMas`. */
+  total: number;
   testId: string;
 };
 
@@ -250,6 +257,13 @@ export type FichaProducto = {
    * calendrier de réservation doit surligner la semaine complète autour d'un départ sélectionné.
    */
   duracionDias: number | null;
+  /**
+   * `products.group_discount_threshold_qty`/`group_discount_pct` (migration 20260914130000) — non
+   * nul seulement pour `camp`, tous deux ensemble ou aucun (contrainte CHECK). Texte informatif
+   * statique seulement (décision Jérôme) : jamais un compteur de remplissage en temps réel, ni un
+   * prix recalculé côté client — `create_order` reste la seule source du prix engageant.
+   */
+  descuentoGrupo: { umbralPersonas: number; porcentaje: number } | null;
   disponibilidad: FilaDisponibilidad[];
   tarifas: FilaTarifa[];
   franjas: FilaFranja[];

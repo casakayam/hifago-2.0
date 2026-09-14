@@ -4,10 +4,8 @@
   "name": { "es": "Campamento 1" },
   "description": { "es": "Lorem ipsum dolor sit amet, consectetur adipiscing elit." },
   "price_cop": 1000000,
-  "price_tiers": [
-    { "min_qty": 1, "max_qty": 15, "price_cop": 1000000 },
-    { "min_qty": 16, "max_qty": 20, "price_cop": 900000 }
-  ],
+  "group_discount_threshold_qty": 16,
+  "group_discount_pct": 0.20,
   "capacity": 20,
   "duration_days": 7,
   "departures": [

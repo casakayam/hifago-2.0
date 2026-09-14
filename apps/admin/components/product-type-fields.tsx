@@ -117,7 +117,7 @@ export function ProductTypeFields({
 }) {
   const {
     isEvento, isCamp, isActivity, isLodging, isTransport,
-    hasLocationAndTags, hasTags, hasPriceQtyFields, hasCheckInOut, hasDefaultCapacity,
+    hasLocationAndTags, hasTags, hasPriceQtyFields, hasCheckInOut, hasDefaultCapacity, hasGroupDiscount,
   } = productTypeGating(type);
 
   // Le déclencheur est "une valeur existe", pas "quel mode du sélecteur est actif" — vrai que l'ID
@@ -374,6 +374,37 @@ export function ProductTypeFields({
             Cuántas unidades hay disponibles cada día por defecto (antes de excepciones en el
             calendario). No es lo mismo que Cantidad mínima/máxima, que solo limita cuánto puede
             pedir un cliente en una sola reserva.
+          </p>
+        </div>
+      ) : null}
+
+      {hasGroupDiscount ? (
+        <div className="flex flex-col gap-1.5">
+          <div className="grid grid-cols-2 gap-4">
+            <TextField
+              fullWidth
+              name="group-discount-threshold-qty"
+              value={state.groupDiscount.thresholdQty}
+              onChange={(value) => state.setGroupDiscount({ ...state.groupDiscount, thresholdQty: value })}
+            >
+              <Label>Descuento por grupo — a partir de (personas) — opcional</Label>
+              <Input type="number" min={1} data-testid="group-discount-threshold-qty-input" />
+            </TextField>
+            <TextField
+              fullWidth
+              name="group-discount-pct"
+              value={state.groupDiscount.pct}
+              onChange={(value) => state.setGroupDiscount({ ...state.groupDiscount, pct: value })}
+            >
+              <Label>Porcentaje de descuento — opcional</Label>
+              <Input type="number" min={1} max={99} data-testid="group-discount-pct-input" />
+            </TextField>
+          </div>
+          <p className="text-xs text-muted" data-testid="group-discount-help">
+            Si el total de personas ya inscritas en esta salida (todas las reservas juntas) alcanza
+            este umbral, el precio de esa reserva y de las siguientes baja el porcentaje indicado.
+            Distinto de los tramos de precio: esto depende de cuánta gente se anota en total, no de
+            la cantidad de UNA sola reserva. Completa los dos campos juntos, o deja ambos vacíos.
           </p>
         </div>
       ) : null}

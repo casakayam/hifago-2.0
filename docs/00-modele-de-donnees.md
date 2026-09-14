@@ -3,7 +3,7 @@ id: refonte-modele-donnees
 titre: "Audit du modèle de données cible — entités partagées"
 theme: cadrage
 statut: brouillon
-maj: 2026-08-13
+maj: 2026-09-14
 resume: >
   Audit champ par champ des entités centrales (établissement, chambre, produit, compte,
   code partenaire), croisé avec le code actuel et les décisions déjà prises côté client/socio.
@@ -26,6 +26,12 @@ repond_a:
 
 Relevés par la relecture intégrale du 2026-09-07. Les sections ci-dessous ne sont pas réécrites —
 ces lignes en tiennent lieu. §2 fait exception : il a bien été réécrit le 2026-08-27.
+
+- **§4 (produit), ligne « Prix par palier de quantité/personnes » — mise à jour.** Révisé par
+  `docs/specs/36-remise-remplissage-camp.md` (2026-09-14) : le modèle "seuil + pourcentage" que
+  cette ligne disait jamais construit l'est désormais, pour `camp` uniquement
+  (`group_discount_threshold_qty`/`group_discount_pct`, remplissage cumulé d'une session). Reste
+  distinct de `price_tiers` (tarif par quantité de ligne), pas une évolution de celui-ci.
 
 - **§1, ligne « Identifiant public stable (slug) » — périmé.** Révisé par
   `docs/specs/24-modele-hebergement-et-surface-lobbypms.md` (T1, 2026-08-27) : `establishments.slug`
@@ -252,7 +258,7 @@ PMS optionnel, photos.
 |---|---|
 | Prix, planification, capacité, photos, description | ✅ |
 | **Tags de catégorisation** | ✅ **livré (2026-08-15, spec 08)** — `catalog_tags`/`product_tag_assignments`, multi-valeurs, remplace la catégorie fixe (`products.category`) à l'écran admin direct. Colonne `category` conservée en base, toujours utilisée par le flux socio (`product_proposals`) — migration complète non tranchée, cf. spec 08 §10. |
-| **Prix par palier de quantité/personnes** | ⚠️ **livré sous une forme différente (2026-08-15, spec 08 ; étendu 2026-08-16, spec 12)** — `products.price_tiers` (tranches de quantité avec un prix absolu par tranche, résolu côté `create_order`), pas le modèle "seuil + pourcentage de remise sur un prix de base" décrit ci-dessus au moment de l'audit — jamais construit tel quel. Activité **et alojamiento** (`type='lodging'`, spec 12 — `qty` = nombre de personnes, mécanisme réutilisé tel quel plutôt que dupliqué). Toujours hors périmètre pour un hôtel à chambres sans PMS (§2). |
+| **Prix par palier de quantité/personnes** | ⚠️ **livré sous une forme différente (2026-08-15, spec 08 ; étendu 2026-08-16, spec 12)** — `products.price_tiers` (tranches de quantité avec un prix absolu par tranche, résolu côté `create_order`), pas le modèle "seuil + pourcentage de remise sur un prix de base" décrit ci-dessus au moment de l'audit. Activité **et alojamiento** (`type='lodging'`, spec 12 — `qty` = nombre de personnes, mécanisme réutilisé tel quel plutôt que dupliqué). Toujours hors périmètre pour un hôtel à chambres sans PMS (§2). Le modèle "seuil + %" lui-même **est désormais construit, pour `camp` uniquement** (2026-09-14, spec 36) — `products.group_discount_threshold_qty`/`group_discount_pct`, sur le remplissage CUMULÉ d'une session (`product_availability.booked`), pas la quantité d'une ligne — mécanisme distinct de `price_tiers`, pas une généralisation de celui-ci. |
 | **Bornes min/max de quantité par réservation** | ✅ **livré (2026-08-15, spec 08)** — `products.min_qty`/`max_qty`, appliquées réellement dans `create_order` (remplace le plafond générique codé en dur `qty > 20`). N'existait dans aucun audit précédent — demandé par Jérôme en cours de session, absent aussi côté legacy pour une activité (`max_units` y est un vestige lodging sans UI). |
 | **Suppression réelle d'une activité** | ✅ **livré (2026-08-15, spec 08)** — RPC `delete_product`, garde-fou anti-commande (`order_lines`) fidèle au comportement déjà en place côté legacy (`catalogService.deleteProduct`) — la seule des quatre demandes de la spec 08 qui soit une reprise, pas une extension. |
 | **Coordonnées géographiques propres** | ✅ **livré (2026-08-16, spec 11 ; étendu specs 12/13/14)** — `products.address`/`lat`/`lon` (mirror `establishments`), nullable, exposé au formulaire pour `activity`/`lodging`/`hotel`/`transport` |

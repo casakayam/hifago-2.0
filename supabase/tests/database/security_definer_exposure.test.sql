@@ -101,7 +101,7 @@ select is(
         'is_anonymous_session',
         -- LISTE BLANCHE (invariant 5, spec 31) : ces RPC acceptent DÉLIBÉRÉMENT un visiteur
         -- anonyme — c'est le parcours client lui-même (panier, paiement, annulation). Ne pas
-        -- ajouter search_catalog/search_catalog_tags/get_product_slots/expand_product_slots/
+        -- ajouter search_catalog/search_catalog_categorias/get_product_slots/expand_product_slots/
         -- client_key_for_order ici : elles ne contiennent aucun auth.uid( (lecture publique par
         -- construction), donc jamais captées par ce filtre — les y ajouter serait sans effet et
         -- laisserait croire, à tort, qu'elles ont un garde à surveiller.

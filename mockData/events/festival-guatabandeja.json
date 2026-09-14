@@ -1,0 +1,13 @@
+{
+  "partner": "kayam",
+  "establishment": "kayam",
+  "name": { "es": "Festival Gastronómico Guatabandeja" },
+  "description": { "es": "Los restaurantes guatapenses sacan su mejor versión de la bandeja y de la cocina antioqueña." },
+  "price_label": "Entrada libre",
+  "occurrence_type": "recurring",
+  "occurrence_date": "2027-07-23",
+  "recurrence_frequency_days": 365,
+  "external_booking_url": "https://wa.me/573001112233?text=Hola%2C%20quiero%20info%20sobre%20el%20Festival%20Guatabandeja",
+  "tags": [],
+  "photos": ["1.webp"]
+}

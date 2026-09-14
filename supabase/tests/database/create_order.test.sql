@@ -52,7 +52,7 @@
 -- pour self_referral/direct (referrer_pct=0). 3 assertions ajoutées juste après le cas 16b/16c
 -- ci-dessous, mêmes fixtures, aucune nouvelle commande.
 begin;
-select plan(93);
+select plan(99);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -1540,6 +1540,109 @@ select is(
   'slot_not_found',
   'cas 21g : slot_start_time hors plage de la règle → slot_not_found (rien matérialisé)'
 );
+
+-- Cas 22 (remise par seuil de remplissage cumulé, camps — demande Jérôme du 2026-09-14, migration
+-- 20260914130000). Produit dédié 050 (046 déjà pris par le cas 18), group_discount_threshold_qty=16,
+-- group_discount_pct=0.20 (mêmes valeurs que l'exemple donné par Jérôme : camp 20 places, -20% à
+-- partir de 16 personnes), price_cop=100000, duration_days=1 (un seul jour, sans rapport avec le
+-- multi-jours du cas 17 — pas le sujet ici). product_availability.booked porte le remplissage AVANT
+-- chaque scénario ; provider_resource_calendar réglée large (capacité 20, booked=0) pour ne jamais
+-- interférer — seul product_availability doit gouverner le déclenchement de la remise (§0 du plan :
+-- c'est la bonne table, provider_resource_calendar est la ressource partagée de l'établissement).
+-- reset role avant chaque insert de fixture, authenticated + test_login restaurés juste avant
+-- l'appel RPC — même patron que les cas 18/20 ci-dessus (products_write_admin exige is_admin()).
+reset role;
+insert into products (
+  id, partner_id, establishment_id, type, name, price_cop, sellable, slug, duration_days,
+  group_discount_threshold_qty, group_discount_pct
+) values (
+  '88880000-0000-4000-8000-000000000050', '88880000-0000-4000-8000-000000000001',
+  '88880000-0000-4000-8000-000000000011', 'camp',
+  jsonb_build_object('es', 'Campamento Remise Seuil'), 100000, true,
+  'order-test-camp-group-discount', 1, 16, 0.20
+);
+
+-- Cas 22a : remplissage avant=10, qty=3 → après=13, strictement sous le seuil (16) → prix plein,
+-- aucune remise. Preuve que la comparaison ne se déclenche pas trop tôt.
+insert into product_availability (product_id, date, capacity, booked) values
+  ('88880000-0000-4000-8000-000000000050', '2028-12-25', 20, 10);
+insert into provider_resource_calendar (establishment_id, slot_date, capacity, booked) values
+  ('88880000-0000-4000-8000-000000000011', '2028-12-25', 20, 0);
+set local role authenticated;
+select test_login('88880000-0000-4000-8000-000000000021');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000050', 'date', '2028-12-25', 'qty', 3
+)));
+create temp table tmp_camp_discount_below as
+  select create_order('Holder Camp Discount Below', p_holder_email => 'buyer-fixture@hifago.test') as result;
+select is(
+  (select result->>'ok' from tmp_camp_discount_below), 'true',
+  'cas 22a : remplissage avant (10) + qty (3) = 13 < seuil (16) → succès'
+);
+select is(
+  (select jsonb_build_object('price_cop', price_cop, 'total_cop', total_cop) from order_lines
+    where product_id = '88880000-0000-4000-8000-000000000050' and date = '2028-12-25'),
+  jsonb_build_object('price_cop', 100000, 'total_cop', 300000),
+  'cas 22a : price_cop inchangé, total_cop = prix plein (100000*3), aucune remise sous le seuil'
+);
+drop table tmp_camp_discount_below;
+
+-- Cas 22b : remplissage avant=13, qty=3 → après=16, EXACTEMENT le seuil → remise appliquée.
+-- Décision actée avec Jérôme : la ligne qui franchit elle-même le seuil en bénéficie (comparaison
+-- >=, pas >) — date distincte de 22a, même produit, pour isoler les deux remplissages.
+reset role;
+insert into product_availability (product_id, date, capacity, booked) values
+  ('88880000-0000-4000-8000-000000000050', '2028-12-26', 20, 13);
+insert into provider_resource_calendar (establishment_id, slot_date, capacity, booked) values
+  ('88880000-0000-4000-8000-000000000011', '2028-12-26', 20, 0);
+set local role authenticated;
+select test_login('88880000-0000-4000-8000-000000000021');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000050', 'date', '2028-12-26', 'qty', 3
+)));
+create temp table tmp_camp_discount_at as
+  select create_order('Holder Camp Discount At', p_holder_email => 'buyer-fixture@hifago.test') as result;
+select is(
+  (select result->>'ok' from tmp_camp_discount_at), 'true',
+  'cas 22b : remplissage avant (13) + qty (3) = 16, exactement le seuil → succès'
+);
+select is(
+  (select jsonb_build_object('price_cop', price_cop, 'total_cop', total_cop) from order_lines
+    where product_id = '88880000-0000-4000-8000-000000000050' and date = '2028-12-26'),
+  jsonb_build_object('price_cop', 100000, 'total_cop', 240000),
+  'cas 22b : price_cop inchangé, total_cop = 100000*3*(1-0.20) = 240000, remise dès l''égalité (>=)'
+);
+drop table tmp_camp_discount_at;
+
+-- Cas 22c (non-régression) : camp SANS group_discount configuré (produit 044, déjà fixturé au cas
+-- 17, group_discount_threshold_qty/pct laissés null) — même avec un remplissage avant élevé et une
+-- quantité qui franchirait n'importe quel seuil plausible, aucune remise ne s'applique. Date neuve
+-- (2028-12-30), sans rapport avec les cas 17a/c sur ce même produit.
+reset role;
+insert into product_availability (product_id, date, capacity, booked) values
+  ('88880000-0000-4000-8000-000000000044', '2028-12-30', 20, 15);
+insert into provider_resource_calendar (establishment_id, slot_date, capacity, booked) values
+  ('88880000-0000-4000-8000-000000000011', '2028-12-30', 20, 0),
+  ('88880000-0000-4000-8000-000000000011', '2028-12-31', 20, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-01-01', 20, 0);
+set local role authenticated;
+select test_login('88880000-0000-4000-8000-000000000021');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000044', 'date', '2028-12-30', 'qty', 3
+)));
+create temp table tmp_camp_no_discount as
+  select create_order('Holder Camp No Discount', p_holder_email => 'buyer-fixture@hifago.test') as result;
+select is(
+  (select result->>'ok' from tmp_camp_no_discount), 'true',
+  'cas 22c : camp sans group_discount configuré → succès normal'
+);
+select is(
+  (select total_cop::int from order_lines
+    where product_id = '88880000-0000-4000-8000-000000000044' and date = '2028-12-30'),
+  270000,
+  'cas 22c : total_cop = 90000*3, comportement inchangé sans configuration (non-régression)'
+);
+drop table tmp_camp_no_discount;
 
 select * from finish();
 rollback;

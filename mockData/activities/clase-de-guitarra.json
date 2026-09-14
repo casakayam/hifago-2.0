@@ -1,0 +1,10 @@
+{
+  "partner": "kayam",
+  "establishment": "kayam",
+  "name": { "es": "Clase de guitarra" },
+  "duration_minutes": 60,
+  "external_booking_url": "https://wa.me/573001112233?text=Hola%2C%20quiero%20reservar%20una%20Clase%20de%20Guitarra%20en%20Kayam%20Lab",
+  "tags": ["musica"],
+  "photos": ["1.webp", "2.webp"],
+  "_extra_columns": { "category": "musica", "qty_unit": "hours" }
+}

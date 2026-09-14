@@ -1,0 +1,10 @@
+{
+  "partner": "aeroturex",
+  "name": { "es": "AeroTurex" },
+  "description": { "es": "Transporte de pasajeros entre Medellín (aeropuerto) y Guatapé." },
+  "address": "Aeropuerto José María Córdova, Rionegro, Antioquia",
+  "lat": 6.1645,
+  "lon": -75.4231,
+  "operated_directly": false,
+  "status": "active"
+}

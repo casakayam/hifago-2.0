@@ -1,0 +1,10 @@
+{
+  "partner": "kayam",
+  "establishment": "kayam",
+  "name": { "es": "AUDO" },
+  "price_cop": 46000,
+  "unit": "per_person",
+  "capacity": 6,
+  "lodging_kind": "dorm",
+  "photos": ["1.webp", "2.webp", "3.webp", "4.webp"]
+}

@@ -18,7 +18,25 @@
     "descripcion": "Check back soon — our partners publish new experiences regularly."
   },
   "sinTag": {
-    "nombre": "Other activities",
-    "descripcion": "Everything that doesn't fit a category yet."
+    "activity": {
+      "nombre": "Other activities",
+      "descripcion": "Everything that doesn't fit a category yet."
+    },
+    "lodging": {
+      "nombre": "Other places to stay",
+      "descripcion": "Everything that doesn't fit a category yet."
+    },
+    "transport": {
+      "nombre": "Other transport",
+      "descripcion": "Everything that doesn't fit a category yet."
+    },
+    "camp": {
+      "nombre": "Other camps",
+      "descripcion": "Everything that doesn't fit a category yet."
+    },
+    "evento": {
+      "nombre": "Other events",
+      "descripcion": "Everything that doesn't fit a category yet."
+    }
   }
 }

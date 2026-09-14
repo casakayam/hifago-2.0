@@ -1,0 +1,16 @@
+{
+  "partner": "gotravel",
+  "establishment": "gotravel",
+  "name": { "es": "Privado Medellín ↔ Guatapé · hasta 7 pers." },
+  "price_cop": 507000,
+  "unit": "per_house",
+  "capacity": 7,
+  "default_capacity": 7,
+  "min_qty": 1,
+  "max_qty": 1,
+  "address": "Medellín, Antioquia, Colombia",
+  "lat": 6.2442,
+  "lon": -75.5736,
+  "tags": [],
+  "photos": []
+}

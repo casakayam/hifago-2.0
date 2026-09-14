@@ -1,0 +1,16 @@
+{
+  "partner": "gotravel",
+  "establishment": "gotravel",
+  "name": { "es": "Privado aeropuerto ↔ Guatapé · hasta 7 pers." },
+  "price_cop": 362000,
+  "unit": "per_house",
+  "capacity": 7,
+  "default_capacity": 7,
+  "min_qty": 1,
+  "max_qty": 1,
+  "address": "Aeropuerto José María Córdova, Rionegro, Antioquia",
+  "lat": 6.1645,
+  "lon": -75.4231,
+  "tags": [],
+  "photos": []
+}

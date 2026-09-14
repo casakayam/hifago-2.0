@@ -1,0 +1,11 @@
+{
+  "partner": "bania",
+  "establishment": "bania",
+  "name": { "es": "Bania Travel — casa completa" },
+  "price_cop": 1320000,
+  "unit": "per_house",
+  "capacity": 20,
+  "unit_count": 1,
+  "lodging_kind": "whole_house",
+  "photos": ["1.jpeg", "2.jpeg", "3.jpeg", "5.jpeg", "7.jpeg", "9.jpeg"]
+}

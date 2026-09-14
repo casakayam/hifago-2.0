@@ -31,6 +31,7 @@
   "pmsAvailabilityRetry": "Try again",
   "pmsAvailabilityRateLimited": "Too many requests in a row. Wait a moment and try again.",
   "estimatedTotal": "Estimated total",
+  "groupDiscount": "Once {threshold, plural, one {# person has} other {# people have}} signed up for this departure, the price drops {pct}%.",
   "occurrence": {
     "recurringUntilDate": "Every {days} days, until {date}.",
     "recurringForCount": "Every {days} days, for {count} occurrences.",

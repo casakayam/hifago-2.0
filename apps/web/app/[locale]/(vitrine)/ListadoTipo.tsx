@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { todayInBogota } from "@hifago/domain";
@@ -7,7 +8,7 @@ import { Title } from "@/components/atoms/Title";
 import { EstadoVacio } from "@/components/molecules/EstadoVacio";
 import { BarraNavegacion } from "@/components/organisms/BarraNavegacion";
 import { ListadoInfinito } from "@/components/organisms/ListadoInfinito";
-import { buscarTipo } from "@/lib/catalog/buscar";
+import { SLUG_SIN_TAG, buscarCategorias, buscarTipo } from "@/lib/catalog/buscar";
 import {
   TAMANO_PAGINA,
   escribirCriterios,
@@ -58,19 +59,67 @@ async function libelles(tipo: TipoOferta, locale: Locale) {
 }
 
 /**
- * Ce qu'il faut savoir d'une catégorie pour rendre SA page (spec 29 §5b).
+ * Ce qu'il faut savoir d'une catégorie pour rendre SA page (spec 29 §5b, généralisée à tout type
+ * le 2026-09-14).
  *
- * ⚠️ `esSinTag` change la REQUÊTE, pas seulement l'affichage : « Otras actividades » ne filtre pas
- * sur un tag, elle demande les offres qui n'en portent AUCUN (`p_sin_tag` de `search_catalog`).
+ * ⚠️ `esSinTag` change la REQUÊTE, pas seulement l'affichage : la catégorie de rattrapage ne
+ * filtre pas sur un tag, elle demande les offres qui n'en portent AUCUN (`p_sin_tag` de
+ * `search_catalog`).
  */
 export type CategoriaDeListado = {
   slug: string;
-  /** Déjà résolu : le nom de la catégorie, ou celui de `messages/` pour « Otras actividades ». */
+  /** Déjà résolu : le nom de la catégorie, ou celui de `messages/` pour la catégorie de rattrapage. */
   nombre: string;
   /** Déjà résolu, `null` si la catégorie n'est pas rédigée. */
   descripcion: string | null;
   esSinTag: boolean;
+  /** cf. `CategoriaConTarjetas.localesNativas` — portée jusqu'ici pour `metadataCategoria`. */
+  localesNativas: string[];
 };
+
+/**
+ * Résout un segment d'URL en catégorie affichable, `null` si la page ne doit pas exister —
+ * catégorie inconnue, ou qui ne porte plus aucune offre (spec 29 §5b, décisions 1/2).
+ *
+ * ⚠️ SANS CRITÈRES, à dessein : « cette catégorie existe-t-elle ? » ne dépend pas de la recherche
+ * en cours — une catégorie vivante dont aucune offre ne correspond aux critères doit rendre 200 et
+ * un état vide, jamais 404. `cache()` déduplique entre `generateMetadata` et la page (même motif
+ * que les deux fiches, `productos/[slug]`/`establecimientos/[slug]`).
+ */
+const getCategorias = cache(async (tipo: TipoOferta, locale: string) =>
+  buscarCategorias(tipo, {}, { porCategoria: 1, locale })
+);
+
+export async function resolverCategoria(
+  tipo: TipoOferta,
+  slug: string,
+  locale: Locale
+): Promise<CategoriaDeListado | null> {
+  const categorias = await getCategorias(tipo, locale);
+  const encontrada = categorias.find((c) => c.slug === slug);
+  if (!encontrada) return null;
+
+  if (encontrada.esSinTag) {
+    // Ses libellés viennent de next-intl, jamais de la base : ce n'est pas une ligne de
+    // `catalog_tags`. `buscarCategorias` les laisse vides à dessein (elle ne traduit rien).
+    const t = await getTranslations({ locale, namespace: "ListadoPage" });
+    return {
+      slug: SLUG_SIN_TAG,
+      nombre: t(`sinTag.${tipo}.nombre`),
+      descripcion: t(`sinTag.${tipo}.descripcion`),
+      esSinTag: true,
+      localesNativas: encontrada.localesNativas,
+    };
+  }
+
+  return {
+    slug: encontrada.slug,
+    nombre: encontrada.nombre,
+    descripcion: encontrada.descripcion,
+    esSinTag: false,
+    localesNativas: encontrada.localesNativas,
+  };
+}
 
 /** Les métadonnées d'une page de listing — appelée par le `generateMetadata` de chaque route. */
 export async function metadataListado(tipo: TipoOferta, locale: Locale): Promise<Metadata> {
@@ -92,28 +141,30 @@ export async function metadataListado(tipo: TipoOferta, locale: Locale): Promise
 }
 
 /**
- * Les métadonnées d'une page de CATÉGORIE.
+ * Les métadonnées d'une page de CATÉGORIE, pour tout type (généralisée 2026-09-14 — `pathFor`
+ * était câblé en dur sur `/actividades/`, bug latent invisible tant qu'une seule route l'appelait).
  *
  * ⚠️ `nativeLocales` n'est PAS laissé au défaut ici, contrairement aux listings : le nom et le texte
  * d'une catégorie sont du CONTENU PARTENAIRE (JSONB), pas de l'interface. Une page servie en repli
  * — nom espagnol sous une URL `/en/` — doit rester `noindex` avec un canonical vers la langue
  * source (règle SEO 2), sinon Google indexe deux URL portant le même texte espagnol.
  *
- * L'exception est « Otras actividades », dont les libellés viennent de next-intl : elle est native
- * dans les deux locales, comme n'importe quel écran d'interface.
+ * L'exception est la catégorie de rattrapage, dont les libellés viennent de next-intl : elle est
+ * native dans les deux locales, comme n'importe quel écran d'interface — `resolverCategoria` le
+ * reflète déjà dans `categoria.localesNativas`.
  */
 export async function metadataCategoria(
   categoria: CategoriaDeListado,
-  locale: Locale,
-  nativeLocales?: readonly string[]
+  tipo: TipoOferta,
+  locale: Locale
 ): Promise<Metadata> {
   const t = await getTranslations({ locale, namespace: "ListadoPage" });
   return buildPageMetadata({
     locale,
-    pathFor: (candidate) => `/${candidate}/actividades/${categoria.slug}`,
+    pathFor: (candidate) => `/${candidate}/${segmentoDeTipo(tipo)}/${categoria.slug}`,
     title: t("meta.title", { seccion: categoria.nombre }),
     description: categoria.descripcion ?? t("meta.description", { seccion: categoria.nombre }),
-    nativeLocales,
+    nativeLocales: categoria.localesNativas,
   });
 }
 

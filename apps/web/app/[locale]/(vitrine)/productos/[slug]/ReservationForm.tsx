@@ -35,6 +35,7 @@ export function ReservationForm({
   availability,
   durationDays = 1,
   minQty = 1,
+  groupDiscount,
 }: {
   productId: string;
   availability: AvailabilityRow[];
@@ -50,6 +51,13 @@ export function ReservationForm({
   durationDays?: number;
   /** `products.min_qty`, replié à 1 — cf. `lib/reservas/cantidad.ts`. */
   minQty?: number;
+  /**
+   * `products.group_discount_threshold_qty`/`group_discount_pct` (migration 20260914130000) —
+   * non défini pour tout type autre que camp. Texte informatif statique seulement (décision
+   * Jérôme) : jamais un compteur de remplissage en temps réel ni un prix recalculé ici — le prix
+   * engageant reste révélé uniquement par `create_order` au checkout.
+   */
+  groupDiscount?: { umbralPersonas: number; porcentaje: number };
 }) {
   const t = useTranslations("ProductPage");
   const { lines } = useCart();
@@ -185,6 +193,15 @@ export function ReservationForm({
           components={dateTaggedDayButtonComponents}
         />
       </div>
+
+      {groupDiscount ? (
+        <p className="text-sm text-muted" data-testid="group-discount-hint">
+          {t("groupDiscount", {
+            threshold: groupDiscount.umbralPersonas,
+            pct: groupDiscount.porcentaje,
+          })}
+        </p>
+      ) : null}
 
       {selectedRow ? (
         <p className="text-sm text-muted" aria-live="polite">

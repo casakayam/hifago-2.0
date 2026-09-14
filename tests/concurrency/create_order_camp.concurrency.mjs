@@ -387,6 +387,135 @@ async function runScenario2Once(run) {
   );
 }
 
+// --- Scénario 3 : remise par seuil de remplissage cumulé sous concurrence réelle -----------------
+// Migration 20260914130000 (demande Jérôme du 2026-09-14) — camp capacity=20 EXACTEMENT égale au
+// nombre de tentatives (N=20, qty=1 chacune) : aucune survente à prouver ici (déjà couvert par les
+// scénarios 1/2, capacité volontairement large sur product_availability pour eux), le seul sujet
+// est la justesse du PRIX sous course réelle. threshold=16 → quel que soit l'ordre réel
+// d'entrelacement (imprévisible sous concurrence), la trajectoire de remplissage va forcément de
+// 0 à 20 sans trou (20 succès, qty=1 chacun) : exactement les 5 lignes dont le remplissage AVANT
+// elles est déjà ≥15 (donc après ≥16) sont remisées — peu importe QUELLE identité obtient quelle
+// position, ce compte (15 plein tarif / 5 remisées) est invariant. Une seule ligne mal calculée
+// sous une vraie interférence (lecture d'un remplissage périmé, remise appliquée deux fois, etc.)
+// ferait dévier ce compte — preuve plus forte qu'un test séquentiel (cas 22 pgTAP) qui ne peut pas
+// exercer de vraie course sur v_camp_fill_before_qty.
+const SCENARIO_3_N = 20;
+const SCENARIO_3_CAMP_ID = "70000000-0000-4000-8000-000000000030";
+const SCENARIO_3_DATE = "2029-03-01";
+const SCENARIO_3_PRICE_COP = 100000;
+const SCENARIO_3_THRESHOLD_QTY = 16;
+const SCENARIO_3_PCT = 0.2;
+const SCENARIO_3_DISCOUNTED_COP = Math.round(SCENARIO_3_PRICE_COP * (1 - SCENARIO_3_PCT)); // 80000
+const SCENARIO_3_EXPECTED_DISCOUNTED_LINES = SCENARIO_3_N - SCENARIO_3_THRESHOLD_QTY + 1; // 5
+const SCENARIO_3_EXPECTED_FULL_PRICE_LINES = SCENARIO_3_N - SCENARIO_3_EXPECTED_DISCOUNTED_LINES; // 15
+
+async function seedScenario3(seedClient) {
+  await seedClient.query(
+    `insert into products (
+       id, partner_id, establishment_id, type, name, price_cop, sellable, slug, duration_days,
+       group_discount_threshold_qty, group_discount_pct
+     ) values ($1, $2, $3, 'camp', jsonb_build_object('es', 'Camp concurrency group discount'),
+       $4, true, $5, 1, $6, $7)`,
+    [
+      SCENARIO_3_CAMP_ID,
+      PARTNER_ID,
+      ESTABLISHMENT_ID,
+      SCENARIO_3_PRICE_COP,
+      "camp-concurrency-group-discount",
+      SCENARIO_3_THRESHOLD_QTY,
+      SCENARIO_3_PCT,
+    ]
+  );
+  // Capacité PROPRE du camp EXACTEMENT égale à N — c'est elle qui gouverne group_discount_threshold_qty
+  // (product_availability.booked, pas provider_resource_calendar). Ressource partagée volontairement
+  // large (100) : jamais la contrainte testée ici, seul le remplissage propre du camp doit compter.
+  await seedClient.query(
+    "insert into product_availability (product_id, date, capacity, booked) values ($1, $2, $3, 0)",
+    [SCENARIO_3_CAMP_ID, SCENARIO_3_DATE, SCENARIO_3_N]
+  );
+  await seedClient.query(
+    "insert into provider_resource_calendar (establishment_id, slot_date, capacity, booked) values ($1, $2, 100, 0)",
+    [ESTABLISHMENT_ID, SCENARIO_3_DATE]
+  );
+}
+
+async function runScenario3Once(run) {
+  const seedClient = new Client({ connectionString: CONNECTION_STRING });
+  await seedClient.connect();
+  await resetAll(seedClient);
+  await seedScenario3(seedClient);
+
+  const cart = [{ product_id: SCENARIO_3_CAMP_ID, date: SCENARIO_3_DATE, qty: 1 }];
+  const clients = await Promise.all(
+    Array.from({ length: SCENARIO_3_N }, (_, i) => connectBuyer(i, cart))
+  );
+  const { go, markReady } = makeBarrier(SCENARIO_3_N);
+
+  const settled = await Promise.allSettled(
+    clients.map(async (client) => {
+      markReady();
+      await go;
+      const res = await client.query(
+        "select create_order($1, $2, $3, $4) as result",
+        ["Concurrency Camp Discount Buyer", "concurrency-camp-discount-buyer@hifago.test", null, false]
+      );
+      return res.rows[0].result;
+    })
+  );
+
+  const rejected = settled.filter((s) => s.status === "rejected");
+  const results = settled.filter((s) => s.status === "fulfilled").map((s) => s.value);
+  const successes = results.filter((r) => r.ok === true);
+  const failures = results.filter((r) => r.ok === false);
+
+  const { rows: lines } = await seedClient.query(
+    "select total_cop::int as total_cop from order_lines where product_id = $1",
+    [SCENARIO_3_CAMP_ID]
+  );
+  const fullPriceCount = lines.filter((l) => l.total_cop === SCENARIO_3_PRICE_COP).length;
+  const discountedCount = lines.filter((l) => l.total_cop === SCENARIO_3_DISCOUNTED_COP).length;
+  const unexpectedTotals = lines.filter(
+    (l) => l.total_cop !== SCENARIO_3_PRICE_COP && l.total_cop !== SCENARIO_3_DISCOUNTED_COP
+  );
+
+  const { rows: avail } = await seedClient.query(
+    "select capacity, booked from product_availability where product_id = $1 and date = $2",
+    [SCENARIO_3_CAMP_ID, SCENARIO_3_DATE]
+  );
+  const bookedMatchesCapacity = avail[0]?.booked === avail[0]?.capacity;
+
+  console.log(
+    `  [scénario 3] run ${run}: succès ${successes.length} / ${SCENARIO_3_N} (doit être exactement ${SCENARIO_3_N}), ` +
+      `plein tarif ${fullPriceCount} (attendu ${SCENARIO_3_EXPECTED_FULL_PRICE_LINES}), ` +
+      `remisées ${discountedCount} (attendu ${SCENARIO_3_EXPECTED_DISCOUNTED_LINES}), ` +
+      `total_cop inattendus ${unexpectedTotals.length}, rejets ${rejected.length}`
+  );
+  if (rejected.length > 0) {
+    for (const r of rejected) {
+      console.error(`    rejet inattendu (connexion/deadlock ?) : ${r.reason?.message ?? r.reason}`);
+    }
+  }
+  if (failures.length > 0) {
+    console.error(`    échecs inattendus (capacité=N, tous devraient réussir) : ${JSON.stringify(failures)}`);
+  }
+  if (unexpectedTotals.length > 0) {
+    console.error(`    total_cop hors des deux valeurs attendues : ${JSON.stringify(unexpectedTotals)}`);
+  }
+
+  await endAll(clients);
+  await seedClient.end();
+
+  return (
+    rejected.length === 0 &&
+    successes.length === SCENARIO_3_N &&
+    failures.length === 0 &&
+    fullPriceCount === SCENARIO_3_EXPECTED_FULL_PRICE_LINES &&
+    discountedCount === SCENARIO_3_EXPECTED_DISCOUNTED_LINES &&
+    unexpectedTotals.length === 0 &&
+    bookedMatchesCapacity
+  );
+}
+
 async function runScenario(name, runOnce) {
   console.log(`\n=== ${name} — ${RUNS} runs consécutifs requis ===`);
   for (let run = 1; run <= RUNS; run++) {
@@ -418,6 +547,12 @@ async function main() {
     runScenario2Once
   );
   if (!scenario2Ok) process.exit(1);
+
+  const scenario3Ok = await runScenario(
+    "Scénario 3 — remise par seuil de remplissage cumulé sous concurrence réelle",
+    runScenario3Once
+  );
+  if (!scenario3Ok) process.exit(1);
 
   console.log(
     "\nTous les scénarios ont tenu leurs 5 runs consécutifs propres — create_order (camp multi-jours) validé sous concurrence réelle."

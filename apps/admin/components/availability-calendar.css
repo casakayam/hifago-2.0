@@ -87,6 +87,15 @@
   font-weight: 500;
 }
 
+/* Remise par seuil de remplissage cumulé (migration 20260914130000) — se superpose à
+   --configured ci-dessus (les deux classes sont posées ensemble) : un contour distinct
+   (--success si le token existe côté admin, sinon un cercle décoratif) signale visuellement le
+   franchissement, mais l'information reste d'abord PORTÉE PAR LE TEXTE du badge ("· Descuento
+   activo", posé côté composant) — jamais la couleur seule (ui.md). */
+.availability-badge.availability-badge--discount-reached {
+  box-shadow: inset 0 0 0 2px var(--accent-foreground);
+}
+
 /* Precio especial (product_date_rates) — second line under the cupo/estado badge, same visual
    hierarchy as RoomDateEditor's stacked span (room-availability-grid.tsx): status first, price
    dimmed below it. */

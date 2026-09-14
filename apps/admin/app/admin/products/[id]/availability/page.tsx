@@ -12,7 +12,7 @@ export default async function ProductAvailabilityPage({
   // RLS (products_select_public) : l'admin voit aussi les activités non publiées.
   const { data: product } = await supabase
     .from("products")
-    .select("id, name, calendar_default_open, default_capacity")
+    .select("id, name, calendar_default_open, default_capacity, group_discount_threshold_qty")
     .eq("id", id)
     .maybeSingle();
 
@@ -51,6 +51,7 @@ export default async function ProductAvailabilityPage({
         calendar={calendar ?? []}
         rates={rates ?? []}
         defaultCapacity={product.default_capacity}
+        groupDiscountThresholdQty={product.group_discount_threshold_qty}
       />
     </div>
   );

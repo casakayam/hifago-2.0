@@ -3,7 +3,7 @@ id: refonte-cdc-client
 titre: "Cahier des charges — portail client (marketplace global, Guatapé = première localisation)"
 theme: cadrage
 statut: brouillon
-maj: 2026-09-13
+maj: 2026-09-14
 resume: >
   Comportement métier cible du portail de réservation client, dérivé du comportement réel actuel
   et challengé section par section avec Jérôme avant reprise dans la refonte.
@@ -70,6 +70,13 @@ Ajoutés par la relecture intégrale du 2026-09-07 :
   de remise » — le mécanisme de *remise* décrit ici n'a jamais été construit, pour aucun type de
   produit (cf. `00-modele-de-donnees.md` §3, ligne « Prix par palier de quantité/personnes »). Ce
   qui est faux, c'est l'idée qu'un hébergement n'aurait aucune tarification par nombre de personnes.
+- **§3a, « remise optionnelle par quantité/nombre de personnes » — construite, pour `camp`
+  uniquement (2026-09-14).** `docs/specs/36-remise-remplissage-camp.md` referme l'écart signalé par
+  la puce précédente : `products.group_discount_threshold_qty`/`group_discount_pct` existent
+  désormais, mais portent sur le remplissage **cumulé** d'une session de camp
+  (`product_availability.booked`), pas la quantité d'une seule ligne — une lecture plus étroite que
+  ce §3a envisageait (activité/transport/camp/evento). L'extension aux autres types reste un
+  chantier distinct, non décidé.
 - **§4, renvoi au « gap critique » du modèle de données — périmé.** Fermé par
   `docs/specs/24-modele-hebergement-et-surface-lobbypms.md` (T3, 2026-08-27) : une chambre est
   désormais un produit `lodging` avec son `product_availability` et son `product_date_rates`. Voir

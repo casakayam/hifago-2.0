@@ -2,6 +2,7 @@ import { buildLocalizedPayload, type LocalizedValue } from "@/components/localiz
 import type { StagedPhoto } from "@/components/product-photos-staged";
 import { lowestTierPrice, toPriceTiersColumn } from "@/lib/products/priceTiers";
 import { toStayRatesColumn } from "@/lib/products/stayRates";
+import { toGroupDiscountColumns } from "@/lib/products/groupDiscount";
 import { toSlotRuleRows } from "@/lib/products/slotRules";
 import { productTypeGating, type ProductType, type ProductTypeFieldsState } from "@/lib/products/useProductTypeFieldsState";
 
@@ -65,7 +66,14 @@ export function buildProductCreationPayload(
         }
       : {}),
     ...(isCamp
-      ? { price_cop: priceCopOuNull, duration_days: Number(fields.durationDays) }
+      ? {
+          price_cop: priceCopOuNull,
+          duration_days: Number(fields.durationDays),
+          // Remise par seuil de remplissage cumulé (migration 20260914130000) — création
+          // uniquement, même limitation que duration_days ci-dessus (« gap préexistant, jamais
+          // éditable aujourd'hui », cf. product-form.tsx) : pas une omission distincte.
+          ...toGroupDiscountColumns(fields.groupDiscount),
+        }
       : {}),
     ...(hasCheckInOut
       ? { check_in_time: fields.checkInTime || null, check_out_time: fields.checkOutTime || null }

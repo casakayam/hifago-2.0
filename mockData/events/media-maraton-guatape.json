@@ -1,0 +1,12 @@
+{
+  "partner": "kayam",
+  "establishment": "kayam",
+  "name": { "es": "Media Maratón de Guatapé · 3ª versión" },
+  "description": { "es": "Corre entre zócalos y colores: la tercera versión de la MMG recorre las calles más coloridas de Colombia y la orilla del embalse. Programa: Distancias 5K, 10K y 21K · Gran bolsa de premios · Entrenamiento oficial 10K." },
+  "price_label": "5K y 10K $120.000 · 21K $130.000",
+  "occurrence_type": "once",
+  "occurrence_date": "2026-09-27",
+  "external_booking_url": "https://wa.me/573001112233?text=Hola%2C%20quiero%20info%20sobre%20la%20Media%20Marat%C3%B3n%20de%20Guatap%C3%A9",
+  "tags": [],
+  "photos": ["1.webp"]
+}

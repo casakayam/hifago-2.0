@@ -53,7 +53,7 @@ function statusFor(
   availabilityByDate: Map<string, AvailabilityRow>,
   calendarByDate: Map<string, boolean>,
   calendarDefaultOpen: boolean,
-  defaultCapacity: number | null
+  defaultCapacity: number | null,
 ) {
   const explicitOpen = calendarByDate.get(dateStr);
   const isOpen = explicitOpen ?? calendarDefaultOpen;
@@ -286,6 +286,7 @@ export function AvailabilityCalendar({
   calendar = [],
   rates = [],
   defaultCapacity = null,
+  groupDiscountThresholdQty = null,
 }: {
   entityId: string;
   // Feature 20 : "resource" adapte le même composant à la clé établissement (ressource partagée
@@ -305,6 +306,12 @@ export function AvailabilityCalendar({
   // pertinent en mode "product" — les appelants "resource" ne fournissent jamais cette prop (pas
   // de colonne équivalente pour une ressource partagée), exactement comme `rates` ci-dessus.
   defaultCapacity?: number | null;
+  // Remise par seuil de remplissage cumulé (migration 20260914130000) — camp uniquement,
+  // optionnel/null par défaut : les appelants "resource" ne le fournissent jamais (pas de colonne
+  // équivalente sur provider_resource_calendar), même posture que `defaultCapacity` ci-dessus.
+  // Permet à l'établissement de savoir, à l'arrivée, s'il doit appliquer la remise sur le solde
+  // encaissé en espèces (cf. plan — le solde n'est pas suivi numériquement par Hifago).
+  groupDiscountThresholdQty?: number | null;
 }) {
   const router = useRouter();
 
@@ -374,6 +381,12 @@ export function AvailabilityCalendar({
       } else if (status.kind === "configured") {
         title = `${status.booked}/${status.capacity}`;
         className = "availability-badge availability-badge--configured";
+        // Remise par seuil de remplissage cumulé — jamais la seule couleur pour porter
+        // l'information (ui.md) : le texte du badge lui-même change, pas seulement sa classe.
+        if (groupDiscountThresholdQty !== null && status.booked >= groupDiscountThresholdQty) {
+          title = `${status.booked}/${status.capacity} · Descuento activo`;
+          className += " availability-badge--discount-reached";
+        }
       } else if (status.kind === "default") {
         title = `Por defecto: ${status.capacity}`;
         className = "availability-badge availability-badge--default";
@@ -399,6 +412,7 @@ export function AvailabilityCalendar({
     calendarDefaultOpen,
     defaultCapacity,
     rateByDate,
+    groupDiscountThresholdQty,
   ]);
 
   function renderEventContent(arg: EventContentArg) {

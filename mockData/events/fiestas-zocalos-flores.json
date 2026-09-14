@@ -1,0 +1,13 @@
+{
+  "partner": "kayam",
+  "establishment": "kayam",
+  "name": { "es": "Fiestas Zócalos y Flores · Silletas y Colores" },
+  "description": { "es": "Cuatro días de fiesta en el pueblo de los zócalos: silleteros, ferias campesinas, trovas, orquestas y festival de cerveza. Programa: Taller de zócalos · Ferias, silletas y zócalo en vivo · Desfile de silleteros · Festival de la Cerveza." },
+  "price_label": "Gratis",
+  "occurrence_type": "recurring",
+  "occurrence_date": "2027-07-23",
+  "recurrence_frequency_days": 365,
+  "external_booking_url": "https://wa.me/573001112233?text=Hola%2C%20quiero%20info%20sobre%20las%20Fiestas%20Z%C3%B3calos%20y%20Flores",
+  "tags": [],
+  "photos": ["1.webp"]
+}

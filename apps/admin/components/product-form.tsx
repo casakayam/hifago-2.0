@@ -17,6 +17,7 @@ import { ProductTypeFields } from "@/components/product-type-fields";
 import type { LobbyRoomOption } from "@/components/lobby-option-picker";
 import { StagedProductPhotos, type StagedPhoto } from "@/components/product-photos-staged";
 import { lowestTierPrice, toPriceTiersColumn, validatePriceTiers } from "@/lib/products/priceTiers";
+import { validateGroupDiscount } from "@/lib/products/groupDiscount";
 import { validateSlotRules, toSlotRuleRows } from "@/lib/products/slotRules";
 import { toStayRatesColumn, validateStayRates } from "@/lib/products/stayRates";
 import { buildProductCreationPayload } from "@/lib/products/productCreationPayload";
@@ -282,6 +283,13 @@ export function ProductForm({
       if (isCamp && (!fields.durationDays || Number(fields.durationDays) < 1)) {
         toast.danger("La duración (días) es obligatoria para un campamento.");
         return;
+      }
+      if (isCamp) {
+        const groupDiscountError = validateGroupDiscount(fields.groupDiscount);
+        if (groupDiscountError) {
+          toast.danger(groupDiscountError);
+          return;
+        }
       }
       if (isActivity) {
         const slotRulesError = validateSlotRules(fields.slotRules);

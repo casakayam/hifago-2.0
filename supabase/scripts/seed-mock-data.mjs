@@ -478,6 +478,10 @@ async function creerProduits(admin, svc, produits, { dossier, type }, idPartenai
       check_out_time: item.check_out_time ?? null,
       duration_minutes: item.duration_minutes ?? null,
       duration_days: item.duration_days ?? null,
+      // Remise par seuil de remplissage cumulé (migration 20260914130000) — camp uniquement,
+      // les deux ensemble ou aucun (contrainte CHECK products_group_discount_pair).
+      group_discount_threshold_qty: item.group_discount_threshold_qty ?? null,
+      group_discount_pct: item.group_discount_pct ?? null,
       start_time: item.start_time ?? null,
       occurrence_type: item.occurrence_type ?? null,
       occurrence_date: item.occurrence_date ?? null,

@@ -19,10 +19,19 @@ import { test, expect, type Page } from "@playwright/test";
 // pont, avec le vrai composant. Ce qui reste hors de sa portée, c'est le PONT lui-même : il est
 // donc appelé ici directement, en HTTP, contre la vraie base.
 //
-// ⚠️ TROIS DES QUATRE LISTINGS SONT VIDES AVEC LE SEED ACTUEL — aucun camp, aucun evento, aucun
-// transporte n'y est vendable (vérifié en base le 2026-09-08). Ce n'est pas un défaut du lot :
-// c'est le cas « route structurelle sans offre » du §9, qui doit rendre 200 et un état vide, jamais
-// un 404. Il se trouve que c'est aussi la seule façon de le tester, et elle est gratuite.
+// ⚠️ NE PLUS SUPPOSER un type structurellement vide avec le seed actuel — vrai le 2026-09-08 (aucun
+// camp/evento/transporte vendable), FAUX depuis que `mockData/` (rejoué localement,
+// `seed-mock-data.mjs`) y ajoute des offres réelles. Le cas « route structurelle sans offre » du §9
+// — 200 et un état vide, jamais un 404 — se teste maintenant par un CRITÈRE qui ne peut correspondre
+// à rien (`?q=zzz-…`), jamais en comptant sur un type resté vide par hasard.
+//
+// ⚠️ Depuis le 2026-09-14, ces quatre routes ne rendent PLUS un listing plat : comme `/actividades`,
+// elles sont un index de catégories montrant un aperçu d'offres par catégorie (`IndiceCategorias
+// ConOfertas`, chantier "catégories partout"). Ce que ce fichier prouvait déjà — la route existe,
+// le segment choisit le bon type, le fil d'Ariane, la recherche repart à l'accueil — reste vrai à
+// l'identique ; le comportement du NOUVEAU pattern (catégories, « Ver más » conditionnel) est prouvé
+// une seule fois, sur `/actividades`, par `categorias.spec.ts` — pas ici, pour ne pas le reprouver
+// quatre fois.
 //
 // ⚠️ CE SPEC N'ÉCRIT RIEN EN BASE : pas de `resetAvailability`, pas de `mode: "serial"`. Il
 // n'affirme jamais un NOMBRE de cartes — la base locale est partagée avec les autres specs, qui y
@@ -62,15 +71,19 @@ test("les quatre routes de listing répondent, avec un seul <h1> visible", async
   }
 });
 
-test("le « Ver más » de l'accueil mène au listing du type, et le fil d'Ariane ramène", async ({
+test("le listing du type montre ses cartes, et le fil d'Ariane ramène à l'accueil", async ({
   page,
 }) => {
-  // Le parcours complet, celui qui justifie ce lot : l'accueil → la section alojamientos → sa page.
-  await page.goto("/es");
+  // ⚠️ Atteinte par URL directe, PAS en cliquant le « Ver más » de l'accueil (2026-09-14, bug
+  // signalé par Jérôme) : depuis que `mostrarVerMas` conditionne ce lien à `total >
+  // tarjetas.length`, un type dont le catalogue local ne dépasse pas `POR_SECCION` (8) — c'est le
+  // cas de `lodging` aujourd'hui — ne le rend simplement plus sur l'accueil. La construction du
+  // href elle-même (table `segmentos.test.ts`) et le clic générique sont couverts par
+  // `home.spec.ts` (activités, seul type sûr d'après le seed local) ; ce test-ci porte sur la
+  // PAGE DE DESTINATION, atteignable qu'un lien y mène ou non.
+  const response = await page.goto("/es/alojamientos");
   await page.waitForLoadState("networkidle");
-  await page.getByTestId("seccion-lodging-ver-mas").click();
-  await page.waitForURL(/\/es\/alojamientos/);
-  await page.waitForLoadState("networkidle");
+  expect(response?.status()).toBe(200);
 
   // La carte groupée du seed est bien là : le segment d'URL a choisi le bon type en SQL, et le
   // regroupement des couchages s'applique ici comme sur l'accueil.
@@ -106,7 +119,10 @@ test("une recherche lancée depuis un listing repart à l'accueil", async ({ pag
 test("une section sans offre rend 200 et un état vide, jamais un 404", async ({ page }) => {
   // Le cas du §9 : une route structurelle ne disparaît pas parce que le catalogue est vide. C'est
   // l'inverse d'une page de catégorie, qui elle rend 404 quand elle n'a rien (spec 29, invariant 5).
-  const response = await irA(page, "camps");
+  //
+  // ⚠️ Filtré par un critère IMPOSSIBLE plutôt que de compter sur un type resté vide par hasard —
+  // cf. l'en-tête : `camps` avait 0 offre le 2026-09-08, ce n'est plus garanti (`mockData/`).
+  const response = await irA(page, `camps?q=${BUSQUEDA_SIN_RESULTADO}`);
   expect(response?.status()).toBe(200);
   await expect(page.getByTestId("estado-vacio")).toBeVisible();
   // La barre reste au-dessus, utilisable : un cul-de-sac ne se termine jamais par un écran mort.
@@ -119,8 +135,14 @@ test("un `pagina` invalide ou hors bornes rend la page normale, jamais une erreu
   // ⚠️ Le plafond n'est pas un réglage d'affichage : sans lui, `?pagina=99999` fait demander des
   // millions de lignes à Postgres depuis une URL publique et anonyme. Ici on vérifie le versant
   // visible de la règle — la page reste normale ; `criterios.test.ts` vérifie la borne elle-même.
+  //
+  // ⚠️ Sur `/alojamientos/otras`, PAS `/alojamientos` : depuis le 2026-09-14 l'index de catégories
+  // (cette route) ne lit plus `pagina` du tout — seule la page d'une catégorie (`ListadoTipo`,
+  // même mécanisme qu'avant) le fait encore. `otras` est le slug réservé de la catégorie de
+  // rattrapage (spec 29) : elle existe toujours tant qu'une offre du type reste non classée,
+  // aucune fixture dédiée à créer.
   for (const valeur of ["abc", "0", "-3", "99999"]) {
-    const response = await irA(page, `alojamientos?pagina=${valeur}`);
+    const response = await irA(page, `alojamientos/otras?pagina=${valeur}`);
     expect(response?.status(), `?pagina=${valeur}`).toBe(200);
     await expect(page.getByTestId(`tarjeta-${ESTABLECIMIENTO_AGRUPADO}`)).toBeVisible();
   }

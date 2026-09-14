@@ -42,7 +42,7 @@ const BUCKET_MEDIA = "catalog-media";
 //
 // `establishment(...)` ne demande JAMAIS `photo_urls` : la colonne est hors du GRANT SELECT public
 // (20260819110000), et la demander ferait échouer la requête ENTIÈRE — pas seulement ce champ.
-const COLUMNAS_PRODUCTO = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, capacity, unit_count, lodging_kind, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, duration_days, lobby_category_id, establishment:establishments(id, slug, name, description, address)`;
+const COLUMNAS_PRODUCTO = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, capacity, unit_count, lodging_kind, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, duration_days, group_discount_threshold_qty, group_discount_pct, lobby_category_id, establishment:establishments(id, slug, name, description, address)`;
 
 /**
  * ⚠️ Mémoïsé par `cache` de React, et ce n'est pas une optimisation : `generateMetadata` et le
@@ -196,6 +196,13 @@ export const getProductoPorSlug = cache(
           }
         : null,
       duracionDias: producto.duration_days,
+      descuentoGrupo:
+        producto.group_discount_threshold_qty != null && producto.group_discount_pct != null
+          ? {
+              umbralPersonas: producto.group_discount_threshold_qty,
+              porcentaje: Math.round(producto.group_discount_pct * 100),
+            }
+          : null,
       disponibilidad: (disponibilidad ?? []) as FilaDisponibilidad[],
       tarifas: (tarifas ?? []) as FilaTarifa[],
       franjas: (franjas ?? []) as FilaFranja[],

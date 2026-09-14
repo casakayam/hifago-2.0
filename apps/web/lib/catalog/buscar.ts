@@ -15,7 +15,7 @@ import {
   type FotoTarjeta,
   type PrecioTarjeta,
   type Seccion,
-  type CategoriaConOferta,
+  type CategoriaConTarjetas,
   type TarjetaOferta,
   type TipoOferta,
 } from "./tipos";
@@ -45,10 +45,12 @@ import {
 const BUCKET_MEDIA = "catalog-media";
 
 /**
- * Une ligne brute de `search_catalog`. Exportée depuis le 2026-09-08 : `sugerencias.ts` lit la
- * MÊME RPC, donc il lui faut la même forme de ligne — pas une seconde description de la même chose.
+ * Les colonnes CARTE communes à `search_catalog` et `search_catalog_categorias` — cette dernière
+ * ajoute juste les colonnes de catégorie et remplace `total_seccion`/`rango_seccion` par leurs
+ * équivalents par catégorie. `enTarjeta` ne lit que cette forme : les deux RPC s'y convertissent
+ * sans mapper deux fois la même chose.
  */
-export type FilaCatalogo = {
+type FilaCarta = {
   tipo: string;
   es_establecimiento: boolean;
   id: string;
@@ -60,10 +62,29 @@ export type FilaCatalogo = {
   precio_label: string | null;
   establecimiento: unknown;
   fotos: unknown;
-  total_seccion: number;
-  rango_seccion: number;
   /** `null` sur toute carte non groupée — cf. la note dans `enTarjeta`. */
   n_alojamientos: number | null;
+};
+
+/**
+ * Une ligne brute de `search_catalog`. Exportée depuis le 2026-09-08 : `sugerencias.ts` lit la
+ * MÊME RPC, donc il lui faut la même forme de ligne — pas une seconde description de la même chose.
+ */
+export type FilaCatalogo = FilaCarta & {
+  total_seccion: number;
+  rango_seccion: number;
+};
+
+/** Une ligne brute de `search_catalog_categorias` — une carte, rattachée à SA catégorie. */
+type FilaCategoria = FilaCarta & {
+  /** `null` sur la ligne de rattrapage (`es_sin_tag`) — pas une ligne de `catalog_tags`. */
+  categoria_slug: string | null;
+  categoria_label: unknown;
+  categoria_description: unknown;
+  categoria_image_path: string | null;
+  es_sin_tag: boolean;
+  total_categoria: number;
+  rango_categoria: number;
 };
 
 /**
@@ -74,7 +95,7 @@ export type FilaCatalogo = {
  * fonction testait le MONTANT avant le LIBELLÉ, l'inverse des deux autres écrans. Un produit
  * portant les deux se serait affiché « 120.000 COP » ici et « Consultar » sur sa propre fiche.
  */
-function precioDe(fila: FilaCatalogo): PrecioTarjeta {
+function precioDe(fila: FilaCarta): PrecioTarjeta {
   if (fila.es_establecimiento) {
     return fila.precio_desde != null ? { tipo: "desde", cop: fila.precio_desde } : null;
   }
@@ -111,7 +132,7 @@ function fotosDe(
  * résolu), pas une phrase composée. C'est ce qui permet de la partager avec une couche qui, elle,
  * n'affiche rien.
  */
-export function identidadDeFila(fila: FilaCatalogo, locale: string) {
+export function identidadDeFila(fila: FilaCarta, locale: string) {
   return {
     clave: `${fila.es_establecimiento ? "establecimiento" : "producto"}-${fila.id}`,
     href: fila.es_establecimiento
@@ -124,7 +145,7 @@ export function identidadDeFila(fila: FilaCatalogo, locale: string) {
 }
 
 function enTarjeta(
-  fila: FilaCatalogo,
+  fila: FilaCarta,
   locale: string,
   urlPublica: (ruta: string) => string
 ): TarjetaOferta | null {
@@ -268,38 +289,49 @@ export function hrefSeccion(tipo: TipoOferta, sufijoCriterios: string): string {
   return `/${segmentoDeTipo(tipo)}${sufijoCriterios}`;
 }
 
-/** Le slug RÉSERVÉ de la page des activités qu'aucune catégorie ne classe (spec 29 §6a).
+/** Le lien « Ver más » d'une catégorie : sa page dédiée, critères conservés. */
+export function hrefCategoria(tipo: TipoOferta, slug: string, sufijoCriterios: string): string {
+  return `/${segmentoDeTipo(tipo)}/${slug}${sufijoCriterios}`;
+}
+
+/** Le slug RÉSERVÉ de la catégorie qu'aucun tag ne classe, pour tout type (spec 29 §6a,
+ *  généralisée 2026-09-14 — portait seulement sur `/actividades` jusque-là).
  *
  *  ⚠️ Il est aussi interdit à `catalog_tags` par une contrainte SQL — la valeur vit donc à deux
  *  endroits, et c'est assumé : le TypeScript ne peut pas lire une contrainte Postgres. Le test
- *  pgTAP `search_catalog_tags.test.sql` tient l'autre bout. */
+ *  pgTAP `search_catalog_categorias.test.sql` tient l'autre bout. */
 export const SLUG_SIN_TAG = "otras";
 
 /**
- * Les CATÉGORIES à montrer sur `/es/actividades` (spec 29 §7a).
+ * Les CATÉGORIES d'UN type, chacune avec ses items PLAFONNÉS (spec 29 §7a, généralisée à tout
+ * `TipoOferta` le 2026-09-14 — remplace `listarTagsConOferta`, qui ne rendait que l'index SANS
+ * items et seulement pour `activity`). Sert deux usages avec la MÊME lecture : l'index d'un type
+ * (`porCategoria` élevé, les `tarjetas` s'affichent) et la résolution d'une page `[categoria]`
+ * (`porCategoria: 1`, seuls `slug`/`nombre`/`descripcion`/`esSinTag`/`localesNativas` sont lus).
  *
- * ⚠️ Elle prend les CRITÈRES et la LOCALE, là où la spec 27 §0 annonçait `listarTagsConOferta(tipo)` :
- * l'index respecte la recherche en cours (décision 3 — une tuile ne mène jamais à une page vide), et
- * l'ordre alphabétique porte sur le libellé résolu, donc dépend de la langue.
+ * ⚠️ Elle prend les CRITÈRES et la LOCALE : l'index respecte la recherche en cours (décision 3 —
+ * une catégorie ne mène jamais à une page vide), et l'ordre alphabétique porte sur le libellé
+ * résolu, donc dépend de la langue.
  *
  * ⚠️ LE TRI EST FAIT ICI, PAS EN SQL, et ce n'est pas un choix de commodité : la base ne connaît ni
  * la locale demandée ni le repli JSONB. Un `order by label->>'es'` classerait la version anglaise
  * par ses libellés espagnols, et ignorerait la collation — « Ñandú » après « Zip line », les accents
  * rangés au hasard. `Intl.Collator` fait les deux correctement.
  */
-export async function listarTagsConOferta(
+export async function buscarCategorias(
   tipo: TipoOferta,
   criterios: Criterios,
-  { locale }: { locale: string }
-): Promise<CategoriaConOferta[]> {
+  { porCategoria, locale }: { porCategoria: number; locale: string }
+): Promise<CategoriaConTarjetas[]> {
   const supabase = createPublicClient();
 
-  const { data, error } = await supabase.rpc("search_catalog_tags", {
+  const { data, error } = await supabase.rpc("search_catalog_categorias", {
     p_tipo: tipo,
     p_query: criterios.q ?? undefined,
     p_personas: criterios.personas ?? undefined,
     p_desde: criterios.desde ?? undefined,
     p_hasta: criterios.hasta ?? undefined,
+    p_por_categoria: porCategoria,
   });
 
   // Échec franc : un index de catégories vide rendu comme un index normal ferait croire au visiteur
@@ -309,26 +341,21 @@ export async function listarTagsConOferta(
   const urlPublica = (ruta: string) =>
     supabase.storage.from(BUCKET_MEDIA).getPublicUrl(ruta).data.publicUrl;
 
-  type FilaTag = {
-    slug: string | null;
-    label: unknown;
-    description: unknown;
-    image_path: string | null;
-    total: number;
-    es_sin_tag: boolean;
-  };
+  const segmento = segmentoDeTipo(tipo);
+  const porSlug = new Map<string, CategoriaConTarjetas>();
+  let sinTag: CategoriaConTarjetas | null = null;
 
-  const categorias: CategoriaConOferta[] = [];
-  let sinTag: CategoriaConOferta | null = null;
+  for (const fila of (data ?? []) as FilaCategoria[]) {
+    const tarjeta = enTarjeta(fila, locale, urlPublica);
+    if (!tarjeta) continue;
 
-  for (const fila of (data ?? []) as FilaTag[]) {
     if (fila.es_sin_tag) {
-      // ⚠️ `nombre` et `descripcion` restent VIDES : « Otras actividades » n'est pas une ligne de
-      // `catalog_tags`, ses libellés viennent de next-intl et donc de la page. Cette couche ne
-      // traduit rien (spec 29 §0).
-      sinTag = {
+      // ⚠️ `nombre` et `descripcion` restent VIDES : la catégorie de rattrapage n'est pas une
+      // ligne de `catalog_tags`, ses libellés viennent de next-intl et donc de la page. Cette
+      // couche ne traduit rien (spec 29 §0).
+      sinTag ??= {
         slug: SLUG_SIN_TAG,
-        href: `/actividades/${SLUG_SIN_TAG}`,
+        href: `/${segmento}/${SLUG_SIN_TAG}`,
         nombre: "",
         descripcion: null,
         foto: null,
@@ -337,34 +364,42 @@ export async function listarTagsConOferta(
         // dans les deux locales), pas du contenu partenaire. Sa page est donc indexable dans les
         // deux langues, contrairement à une catégorie rédigée dans une seule.
         localesNativas: [...routing.locales],
+        tarjetas: [],
+        total: fila.total_categoria,
         testId: `categoria-${SLUG_SIN_TAG}`,
       };
+      sinTag.tarjetas.push(tarjeta);
       continue;
     }
 
     // Une ligne sans slug ne peut pas être un lien : elle disparaît plutôt que de casser la page.
-    if (!fila.slug) continue;
+    if (!fila.categoria_slug) continue;
 
-    categorias.push({
-      slug: fila.slug,
-      href: `/actividades/${fila.slug}`,
+    const categoria = porSlug.get(fila.categoria_slug) ?? {
+      slug: fila.categoria_slug,
+      href: `/${segmento}/${fila.categoria_slug}`,
       // Repli sur le slug : une catégorie sans libellé dans aucune langue reste cliquable.
-      nombre: resolveLocalizedField(asLocalizedField(fila.label), locale) ?? fila.slug,
-      descripcion: resolveLocalizedField(asLocalizedField(fila.description), locale) ?? null,
-      foto: fila.image_path ? { url: urlPublica(fila.image_path) } : null,
+      nombre: resolveLocalizedField(asLocalizedField(fila.categoria_label), locale) ?? fila.categoria_slug,
+      descripcion: resolveLocalizedField(asLocalizedField(fila.categoria_description), locale) ?? null,
+      foto: fila.categoria_image_path ? { url: urlPublica(fila.categoria_image_path) } : null,
       esSinTag: false,
       localesNativas: routing.locales.filter((candidate) =>
-        hasNativeContent(fila.label, candidate)
+        hasNativeContent(fila.categoria_label, candidate)
       ),
-      testId: `categoria-${fila.slug}`,
-    });
+      tarjetas: [],
+      total: fila.total_categoria,
+      testId: `categoria-${fila.categoria_slug}`,
+    };
+    categoria.tarjetas.push(tarjeta);
+    porSlug.set(fila.categoria_slug, categoria);
   }
 
+  const categorias = [...porSlug.values()];
   const collator = new Intl.Collator(locale);
   categorias.sort((a, b) => collator.compare(a.nombre, b.nombre));
 
-  // ⚠️ « Otras actividades » TOUJOURS EN DERNIER, jamais dans l'ordre alphabétique : ce n'est pas
-  // une catégorie parmi les autres, c'est ce qui reste. La placer entre « Kayak » et « Senderismo »
-  // laisserait croire à une catégorie éditoriale de plus.
+  // ⚠️ La catégorie de rattrapage TOUJOURS EN DERNIER, jamais dans l'ordre alphabétique : ce n'est
+  // pas une catégorie parmi les autres, c'est ce qui reste. La placer entre « Kayak » et
+  // « Senderismo » laisserait croire à une catégorie éditoriale de plus.
   return sinTag ? [...categorias, sinTag] : categorias;
 }

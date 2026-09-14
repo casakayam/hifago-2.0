@@ -140,6 +140,21 @@ describe("SeccionOfertas", () => {
     expect(lien.className).toContain("min-h-11");
   });
 
+  it("ne rend PAS le lien « Ver más » quand `mostrarVerMas` vaut faux — une catégorie sur son propre écran", () => {
+    // Le pattern par catégorie (`/alojamientos`, `/actividades`, etc.) ne veut le lien QUE si la
+    // catégorie a plus d'offres que celles montrées — contrairement à l'accueil, qui le rend
+    // toujours (défaut `true`, testé juste avant/après).
+    const { container } = rendu({ mostrarVerMas: false });
+    expect(container.querySelector('[data-testid="seccion-ver-mas"]')).toBeNull();
+  });
+
+  it("rend le lien « Ver más » par défaut, et explicitement quand `mostrarVerMas` vaut vrai", () => {
+    const parDefaut = rendu();
+    expect(parDefaut.container.querySelector('[data-testid="seccion-ver-mas"]')).not.toBeNull();
+    const explicite = rendu({ mostrarVerMas: true });
+    expect(explicite.container.querySelector('[data-testid="seccion-ver-mas"]')).not.toBeNull();
+  });
+
   it("accepte un libellé DIFFÉRENT pour les activités, dont le « Ver más » mène à un index de tags", () => {
     const { container } = rendu({
       hrefVerMas: "/actividades",

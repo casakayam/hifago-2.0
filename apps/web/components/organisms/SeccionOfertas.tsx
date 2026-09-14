@@ -41,6 +41,13 @@ export type SeccionOfertasProps = {
   locale: Locale;
   /** Vrai pour la PREMIÈRE section de la page : sa première carte porte le LCP. */
   prioridad?: boolean;
+  /**
+   * Faux quand la catégorie n'a rien de plus à montrer (`total <= tarjetas.length`) : pas de
+   * « Ver más » qui mènerait à la page qu'on vient déjà de voir en entier. Défaut `true` — ne
+   * change rien pour l'accueil, qui a toujours plus d'offres par type qu'il n'en montre et ne
+   * calcule pas cette condition (`buscarSecciones` ne connaît pas ce total-là).
+   */
+  mostrarVerMas?: boolean;
   testId?: string;
 };
 
@@ -67,6 +74,7 @@ export function SeccionOfertas({
   tarjetas,
   locale,
   prioridad,
+  mostrarVerMas,
   testId,
 }: SeccionOfertasProps) {
   return (
@@ -105,13 +113,15 @@ export function SeccionOfertas({
           le préfixe de langue, et ce lien est le maillage interne qui fait découvrir les pages de
           listing à un crawler. `min-h-11` = 44 px de cible tactile ; `self-start` pour que la zone
           cliquable s'arrête au texte au lieu de courir sur toute la largeur. */}
-      <Link
-        href={hrefVerMas}
-        className="inline-flex min-h-11 items-center self-start rounded-[var(--radius)] text-base underline-offset-4 hover:underline focus-visible:status-focused"
-        data-testid={testId ? `${testId}-ver-mas` : undefined}
-      >
-        {labelVerMas}
-      </Link>
+      {mostrarVerMas !== false ? (
+        <Link
+          href={hrefVerMas}
+          className="inline-flex min-h-11 items-center self-start rounded-[var(--radius)] text-base underline-offset-4 hover:underline focus-visible:status-focused"
+          data-testid={testId ? `${testId}-ver-mas` : undefined}
+        >
+          {labelVerMas}
+        </Link>
+      ) : null}
     </section>
   );
 }

@@ -18,7 +18,25 @@
     "descripcion": "Vuelve pronto: nuestros aliados publican nuevas experiencias con frecuencia."
   },
   "sinTag": {
-    "nombre": "Otras actividades",
-    "descripcion": "Todo lo que todavía no entra en una categoría."
+    "activity": {
+      "nombre": "Otras actividades",
+      "descripcion": "Todo lo que todavía no entra en una categoría."
+    },
+    "lodging": {
+      "nombre": "Otros alojamientos",
+      "descripcion": "Todo lo que todavía no entra en una categoría."
+    },
+    "transport": {
+      "nombre": "Otros transportes",
+      "descripcion": "Todo lo que todavía no entra en una categoría."
+    },
+    "camp": {
+      "nombre": "Otros camps",
+      "descripcion": "Todo lo que todavía no entra en una categoría."
+    },
+    "evento": {
+      "nombre": "Otros eventos",
+      "descripcion": "Todo lo que todavía no entra en una categoría."
+    }
   }
 }

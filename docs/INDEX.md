@@ -5,8 +5,8 @@
 > Un seul fichier à ouvrir pour savoir ce qui existe : celui-ci.
 
 ## Cadrage — architecture, modèle de données, cahiers des charges
-- [Audit du modèle de données cible — entités partagées](00-modele-de-donnees.md) · maj 2026-09-07
-- [Cahier des charges — portail client (marketplace global, Guatapé = première localisation)](01-cahier-des-charges-client.md) · maj 2026-09-13
+- [Audit du modèle de données cible — entités partagées](00-modele-de-donnees.md) · maj 2026-09-14
+- [Cahier des charges — portail client (marketplace global, Guatapé = première localisation)](01-cahier-des-charges-client.md) · maj 2026-09-14
 - [Cahier des charges — portail socio (aujourd'hui /partner)](02-cahier-des-charges-socio.md) · maj 2026-09-07
 - [Cahier des charges — back-office admin (aujourd'hui /admin)](03-cahier-des-charges-admin.md) · maj 2026-09-07
 - [Choix de stack et architecture cible](04-architecture-cible.md) · maj 2026-09-07
@@ -49,13 +49,14 @@
 - [L'écran de résultat de paiement et la fermeture du tunnel](specs/33-resultat-paiement-et-fermeture-du-tunnel.md) — **Implémenté** · maj 2026-09-11
 - [Compte client : « Mis reservas », la liste et le détail](specs/34-compte-mes-reservations.md) — **Implémenté** · maj 2026-09-11
 - [Compte client : profil, édition, déconnexion, suppression](specs/35-compte-profil.md) — **Implémenté** · maj 2026-09-12
-- [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-13
+- [Remise par seuil de remplissage cumulé (camps)](specs/36-remise-remplissage-camp.md) — **Implémenté** · maj 2026-09-14
+- [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-14
 - [Gabarit de spec de feature (à copier, ne décrit aucune feature réelle)](specs/_modele.md) — **modele** · maj 2026-08-16
 - [Avant d'écrire une spec — poser les bonnes questions](specs/avant-la-spec.md) — **modele** · maj 2026-08-16
 
 ## Journal — historique chronologique (jamais chargé automatiquement)
 - [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-14
-- [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-13
+- [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-14
 - [Journal hifago — août 2026](journal/2026-08.md) · maj 2026-09-01
 - [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-14
 - [Pièges empiriques hifago — index numéroté](pieges-empiriques.md) · maj 2026-09-09

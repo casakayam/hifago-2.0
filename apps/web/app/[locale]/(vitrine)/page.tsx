@@ -159,9 +159,25 @@ export default async function HomePage({ params, searchParams }: PageProps<"/[lo
             // sous-catégories (`/es/actividades`, spec 29) : son libellé doit le dire, sinon le
             // lien promet une chose et en donne une autre.
             labelVerMas={seccion.tipo === "activity" ? t("verMasTags") : t("verMas")}
-            variante={seccion.tipo === "activity" ? "lista" : "grilla"}
+            // ⚠️ Toutes les sections en grille depuis le 2026-09-14 (retour explicite de Jérôme) :
+            // les activités utilisaient `Card layout="row"` (`variante="lista"`) depuis la spec 28
+            // §5, mais c'était un choix esthétique de Jérôme lui-même, jamais une contrainte
+            // fonctionnelle (même contenu de carte dans les deux variantes) — et il portait un
+            // défaut non résolu (carrousel écrasé dans la vignette de 64px, spec 28 §10bis). Il
+            // avait déjà inversé ce même choix pour les chambres d'établissement le 2026-09-08
+            // (spec 30 §3.9 : « la photo est ce qui décide », cf. journal) ; ce changement aligne
+            // les activités sur cette même logique déjà actée ailleurs.
+            variante="grilla"
             tarjetas={seccion.tarjetas}
             locale={locale as Locale}
+            // ⚠️ « L'accueil a toujours plus d'offres du type qu'il n'en montre » n'est vrai QUE
+            // sans filtre actif (le catalogue dépasse 8 par type) — signalé par Jérôme le
+            // 2026-09-14 : sous une recherche qui ne laisse que ≤8 résultats d'un type, « Ver más »
+            // se rendait quand même et menait à une page montrant EXACTEMENT les mêmes cartes.
+            // Exception : les activités, dont le lien ne promet pas « plus d'offres » mais « Ver
+            // todas las categorías » (labelVerMas ci-dessus) — une vue par catégorie reste utile
+            // quel que soit le compte, donc pas soumise à cette condition.
+            mostrarVerMas={seccion.tipo === "activity" || seccion.total > seccion.tarjetas.length}
             // Une seule image de toute la page est prioritaire : la première carte de la première
             // section, c'est-à-dire le LCP. Toutes les autres restent en `lazy` — cinq sections de
             // huit cartes précharger ensemble, ce sont des dizaines de requêtes inutiles.

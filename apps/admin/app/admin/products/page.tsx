@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField, resolveListParams } from "@hifago/domain";
+import { buttonVariants } from "@hifago/ui";
 import { ProductsList, type ProductRow } from "./ProductsList";
 import { PRODUCTS_FILTER_DEFINITIONS } from "@/lib/lists/filters";
 import { PRODUCTS_DEFAULT_SORT, PRODUCTS_SORT_WHITELIST } from "@/lib/lists/sortable-columns";
@@ -116,7 +118,12 @@ export default async function AdminProductsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Catálogo</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Catálogo</h1>
+        <Link href="/admin/products/new" className={buttonVariants()} data-testid="new-product-link">
+          Nueva actividad
+        </Link>
+      </div>
       <ProductsList
         rows={rows}
         page={page}

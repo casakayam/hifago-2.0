@@ -45,7 +45,10 @@ export function productTypeGating(type: ProductType) {
     // filtrer dessus — camp n'a en revanche pas besoin d'adresse propre (déjà celle de son
     // établissement), d'où un booléen SÉPARÉ de hasLocationAndTags plutôt qu'un ajout à ce dernier
     // (qui aurait aussi fait apparaître les champs adresse/lat/lon, jamais demandés pour camp).
-    hasTags: isActivity || isLodging || isTransport || isCamp,
+    // `evento` rejoint hasTags le 2026-09-14 (chantier "catégories partout" — Jérôme : "tout doit
+    // pouvoir en avoir") — même raisonnement que camp, pas d'adresse propre non plus, donc toujours
+    // absent de hasLocationAndTags.
+    hasTags: isActivity || isLodging || isTransport || isCamp || isEvento,
     hasPriceQtyFields: isActivity || isLodging || isTransport,
     hasCheckInOut: isLodging,
     // Types qui matérialisent product_availability — seuls ceux-là peuvent porter un cupo par
@@ -58,6 +61,11 @@ export function productTypeGating(type: ProductType) {
     // formulaire (pas fait, resterait à ajouter si on veut que le partenaire voie/ajuste la valeur
     // avant de valider plutôt que de la découvrir après coup).
     hasDefaultCapacity: isActivity || isCamp || isTransport || isLodging,
+    // Remise par seuil de remplissage cumulé (migration 20260914130000, demande Jérôme du
+    // 2026-09-14) — camp UNIQUEMENT, imposé aussi côté base (products_group_discount_camp_only) :
+    // seul ce type a aujourd'hui un remplissage cumulé fiable par départ (product_availability).
+    // Étendre à activité/transport/evento serait un chantier distinct, pas une omission ici.
+    hasGroupDiscount: isCamp,
   };
 }
 

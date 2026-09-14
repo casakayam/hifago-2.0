@@ -189,6 +189,7 @@ export function FichaProducto({
               availability={ficha.disponibilidad}
               durationDays={ficha.duracionDias ?? undefined}
               minQty={ficha.minQty}
+              groupDiscount={ficha.descuentoGrupo ?? undefined}
             />
           )}
 

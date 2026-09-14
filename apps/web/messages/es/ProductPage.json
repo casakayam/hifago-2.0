@@ -31,6 +31,7 @@
   "pmsAvailabilityRetry": "Reintentar",
   "pmsAvailabilityRateLimited": "Demasiadas consultas seguidas. Espera un momento y vuelve a intentarlo.",
   "estimatedTotal": "Total estimado",
+  "groupDiscount": "A partir de {threshold, plural, one {# persona anotada} other {# personas anotadas}} en esta salida, el precio baja un {pct}%.",
   "occurrence": {
     "recurringUntilDate": "Cada {days} días, hasta el {date}.",
     "recurringForCount": "Cada {days} días, durante {count} repeticiones.",

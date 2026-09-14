@@ -1,0 +1,10 @@
+{
+  "partner": "kayam",
+  "establishment": "kayam",
+  "name": { "es": "Español 30min" },
+  "duration_minutes": 30,
+  "external_booking_url": "https://wa.me/573001112233?text=Hola%2C%20quiero%20reservar%20una%20clase%20de%20Espa%C3%B1ol%20de%2030min%20en%20Casa%20Kayam",
+  "tags": ["arte"],
+  "photos": ["1.webp"],
+  "_extra_columns": { "category": "arte" }
+}
