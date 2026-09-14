@@ -1,9 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { format, parseISO } from "date-fns";
+import { addDays, format, parseISO } from "date-fns";
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
 // Calendar/CalendarDayButton restent volontairement sur react-day-picker (pas le Calendar HeroUI
 // v3, encore "in progress" et d'API CalendarDate totalement différente) : logique de
 // modifiers/disabled/DayButton custom (dates pleines/dernière place, attribut data-date ciblé par
@@ -34,9 +33,20 @@ type AvailabilityRow = { date: string; capacity: number; booked: number };
 export function ReservationForm({
   productId,
   availability,
+  durationDays = 1,
 }: {
   productId: string;
   availability: AvailabilityRow[];
+  /**
+   * `products.duration_days` — non nul seulement pour `camp`. `availability` ne porte que la date
+   * de DÉPART de chaque édition (`product_availability`, une ligne par départ, jamais une par
+   * jour) : ce champ dit sur combien de jours faire apparaître/surligner la semaine complète autour
+   * d'un départ, purement visuel. La donnée envoyée au panier reste toujours la date de départ
+   * seule (`selectedIso`) — jamais une plage — `create_order` calcule les jours bloqués côté
+   * serveur depuis `products.duration_days`, un `end_date` ferait basculer la ligne dans la branche
+   * de tarification NUITÉE de lodging (cf. son propre branchement sur la seule présence d'`end_date`).
+   */
+  durationDays?: number;
 }) {
   const t = useTranslations("ProductPage");
   const { lines } = useCart();
@@ -47,12 +57,26 @@ export function ReservationForm({
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [qty, setQty] = useState(1);
-  const [justAdded, setJustAdded] = useState(false);
 
   const byDate = useMemo(
     () => new Map(availability.map((row) => [row.date, row])),
     [availability]
   );
+
+  // Jour ISO -> ISO du départ dont il fait partie (lui-même si `durationDays` vaut 1, le défaut).
+  // Sert à la fois à autoriser le CLIC n'importe où dans la semaine et à retrouver le départ réel
+  // à partir du jour cliqué — `byDate` (donc `selectedRow`/`remaining`) ne connaît lui QUE les
+  // départs, jamais les jours intermédiaires.
+  const porJourDepart = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of availability) {
+      const depart = parseISO(row.date);
+      for (let i = 0; i < durationDays; i += 1) {
+        map.set(format(addDays(depart, i), "yyyy-MM-dd"), row.date);
+      }
+    }
+    return map;
+  }, [availability, durationDays]);
 
   // Cupos déjà occupés par CE produit/CETTE date dans le panier en cours (pas encore en base) —
   // le plafond client reste indicatif (jamais la vraie barrière, qui reste exclusivement
@@ -92,23 +116,33 @@ export function ReservationForm({
   // relecture adversariale du lot fuseau, pas par la liste initiale.)
   const defaultMonth = mesPorDefecto(availability[0]?.date);
 
+  // Les jours à surligner autour du départ SÉLECTIONNÉ — vide dès que `durationDays` vaut 1 (tous
+  // les autres types passant par ce formulaire), donc sans effet visuel hors camp.
+  const diasSemanaSeleccionada = useMemo(() => {
+    if (!selectedIso || durationDays <= 1) return [];
+    const depart = parseISO(selectedIso);
+    return Array.from({ length: durationDays }, (_, i) => addDays(depart, i));
+  }, [selectedIso, durationDays]);
+
   function handleSelectDate(date: Date | undefined) {
-    setSelectedDate(date);
+    if (!date) {
+      setSelectedDate(undefined);
+      setQty(1);
+      return;
+    }
+    // Cliquer n'importe quel jour de la semaine sélectionne le DÉPART de cette semaine, jamais le
+    // jour cliqué lui-même — `byDate` (et donc la capacité/le panier) ne connaît que les départs.
+    const departIso = porJourDepart.get(format(date, "yyyy-MM-dd"));
+    setSelectedDate(departIso ? parseISO(departIso) : date);
     setQty(1);
-    setJustAdded(false);
   }
 
+  // Spec 28 Tranche 3 : sur succès, `useAddToCart` redirige déjà vers l'accueil — il n'y a plus
+  // rien à faire ici avec la valeur de retour (ni toast, ni reset local : le composant est sur le
+  // point de se démonter).
   async function handleAddToCart() {
     if (!selectedIso || remaining < 1) return;
-
-    const ok = await addToCart({
-      productId,
-      date: selectedIso,
-      qty,
-    });
-    if (!ok) return;
-    setJustAdded(true);
-    setQty(1);
+    await addToCart({ productId, date: selectedIso, qty });
   }
 
   return (
@@ -134,12 +168,13 @@ export function ReservationForm({
             // Borne HAUTE : au-delà de l'horizon produit, rien n'est vendable. Sans elle, ces
             // dates paraissaient sélectionnables et n'étaient refusées qu'après coup.
             { after: dernierJourReservable },
-            (date) => !byDate.has(format(date, "yyyy-MM-dd")),
+            (date) => !porJourDepart.has(format(date, "yyyy-MM-dd")),
           ]}
-          modifiers={{ lastSpot: lastSpotDates, full: fullDates }}
+          modifiers={{ lastSpot: lastSpotDates, full: fullDates, campWeek: diasSemanaSeleccionada }}
           modifiersClassNames={{
             lastSpot: "ring-2 ring-accent",
             full: "line-through opacity-60",
+            campWeek: "bg-accent/20",
           }}
           // data-date (ISO, indépendant de la locale) : cible stable pour les tests e2e, la locale
           // d'affichage du calendrier ne doit jamais faire flancher un sélecteur de test. Référence
@@ -166,15 +201,6 @@ export function ReservationForm({
         <Label>{t("quantityLabel")}</Label>
         <Input id="qty" type="number" min={1} max={topeCantidad(remaining)} />
       </TextField>
-
-      {justAdded ? (
-        <p role="status" data-testid="added-to-cart" className="text-sm font-medium text-accent">
-          {t("addedToCart")}{" "}
-          <Link href="/pago" className="underline" data-testid="go-to-checkout-link">
-            {t("goToCheckout")}
-          </Link>
-        </p>
-      ) : null}
 
       <Button
         data-testid="add-to-cart-button"

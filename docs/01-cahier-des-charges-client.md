@@ -3,7 +3,7 @@ id: refonte-cdc-client
 titre: "Cahier des charges — portail client (marketplace global, Guatapé = première localisation)"
 theme: cadrage
 statut: brouillon
-maj: 2026-09-11
+maj: 2026-09-13
 resume: >
   Comportement métier cible du portail de réservation client, dérivé du comportement réel actuel
   et challengé section par section avec Jérôme avant reprise dans la refonte.
@@ -654,9 +654,13 @@ future.*
 - hôtel/hostel PMS-backed : la disponibilité vient d'une lecture **fraîche** du PMS à chaque
   vérification (jamais mise en cache au moment de réserver) ;
 - hôtel/hostel ou logement entier non PMS-backed : la disponibilité vient d'un **calendrier
-  interne**, tenu par le prestataire lui-même (il ouvre/ferme ses dates) — **fermé par défaut**
-  pour un nouvel hébergement tant que le prestataire n'a pas explicitement ouvert des dates
-  (zéro risque de survente sur des nuits déjà prises en dehors du système).
+  interne**, tenu par le prestataire lui-même. **Révisé le 2026-09-13 (décision Jérôme,
+  `docs/journal/2026-09.md`)** : **ouvert par défaut** dès la création (fenêtre glissante de 6 mois,
+  `products.default_capacity` amorce `product_availability`, cf. `docs/05-reference-technique.md`
+  si besoin du détail technique) — c'est désormais le prestataire qui vient **fermer** les jours
+  déjà pris (hors du système), l'inverse de la polarité d'origine (validée le 2026-08-11, corrigée
+  le 2026-08-13). Un logement rattaché à un PMS reste géré exclusivement par ce PMS, jamais par ce
+  mécanisme.
 
 **Disponibilité des prestations** (activités, transport, camps, eventos) — calendrier interne
 par produit, avec deux niveaux de fermeture :

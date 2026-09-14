@@ -2448,6 +2448,10 @@ export type Database = {
         Args: { p_offboarding_id: string }
         Returns: Json
       }
+      open_default_lodging_availability: {
+        Args: { p_horizon?: string; p_product_id: string }
+        Returns: undefined
+      }
       order_for_client_jsonb: {
         Args: { p_order: Database["public"]["Tables"]["orders"]["Row"] }
         Returns: Json
@@ -2483,6 +2487,14 @@ export type Database = {
         }
         Returns: number
       }
+      resolve_lodging_default_capacity: {
+        Args: {
+          p_capacity: number
+          p_lodging_kind: string
+          p_unit_count: number
+        }
+        Returns: number
+      }
       resolve_payment_reconciliation_entry: {
         Args: { p_entry_id: string; p_note: string }
         Returns: Json
@@ -2508,6 +2520,7 @@ export type Database = {
         Args: { p_invitation_id: string }
         Returns: Json
       }
+      roll_lodging_availability_window: { Args: never; Returns: undefined }
       search_catalog: {
         Args: {
           p_desde?: string

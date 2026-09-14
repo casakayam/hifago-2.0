@@ -48,11 +48,16 @@ export function productTypeGating(type: ProductType) {
     hasTags: isActivity || isLodging || isTransport || isCamp,
     hasPriceQtyFields: isActivity || isLodging || isTransport,
     hasCheckInOut: isLodging,
-    // Types qui matérialisent product_availability à date unique (create_order /
-    // modify_order_line) — seuls ceux-là peuvent porter un cupo par défaut. evento : pas encore
-    // réellement réservable côté client. lodging : a déjà son propre modèle de capacité
-    // (capacity/couchage) — hors périmètre.
-    hasDefaultCapacity: isActivity || isCamp || isTransport,
+    // Types qui matérialisent product_availability — seuls ceux-là peuvent porter un cupo par
+    // défaut. evento : pas encore réellement réservable côté client, toujours hors périmètre.
+    // lodging : INCLUS depuis le 2026-09-13 (migration 20260913100000_lodging_default_
+    // availability.sql, décision Jérôme) — le calendrier d'une chambre est désormais ouvert par
+    // défaut (fenêtre glissante de 6 mois matérialisée à la création + cron quotidien), le
+    // partenaire ferme seulement les jours déjà pris. Si ce champ reste vide, la RPC calcule
+    // elle-même la valeur (resolve_lodging_default_capacity) — le champ n'est PAS pré-rempli côté
+    // formulaire (pas fait, resterait à ajouter si on veut que le partenaire voie/ajuste la valeur
+    // avant de valider plutôt que de la découvrir après coup).
+    hasDefaultCapacity: isActivity || isCamp || isTransport || isLodging,
   };
 }
 

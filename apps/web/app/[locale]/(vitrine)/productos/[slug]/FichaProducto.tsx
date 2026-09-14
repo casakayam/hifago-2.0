@@ -184,7 +184,11 @@ export function FichaProducto({
           ) : ficha.modoReserva === "slot" ? (
             <SlotReservationForm productId={ficha.id} slots={ficha.franjas} />
           ) : (
-            <ReservationForm productId={ficha.id} availability={ficha.disponibilidad} />
+            <ReservationForm
+              productId={ficha.id}
+              availability={ficha.disponibilidad}
+              durationDays={ficha.duracionDias ?? undefined}
+            />
           )}
 
           <p className="text-xs text-muted">{tCommon("cancellationPolicy")}</p>

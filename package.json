@@ -25,6 +25,7 @@
     "test:notification-integration": "for f in tests/notification-integration/*.integration.mjs; do node \"$f\" || exit 1; done",
     "test:notification-real": "node tests/notification-real/send_8_real_emails.mjs",
     "db:setup": "bash scripts/db-setup.sh",
+    "db:mock-data": "node supabase/scripts/seed-mock-data.mjs",
     "docs:index": "node scripts/docs_index.js --build",
     "docs:check": "node scripts/docs_index.js --check",
     "check:instructions": "node scripts/check-instructions.mjs"

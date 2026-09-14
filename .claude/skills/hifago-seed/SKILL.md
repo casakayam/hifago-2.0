@@ -56,3 +56,8 @@ tout `supabase/seed.sql` est généré.
 ## Ce qui est normal, ne pas le signaler comme un problème
 Le seed grossit au fil du chantier à mesure que de nouveaux cas limites sont identifiés — c'est
 voulu, pas une dérive à corriger.
+
+## Données de test rejouables sans reset
+Pour ajouter des établissements/activités/tags/partenaires de test SANS `db reset` (donc sans
+perdre le travail en cours, y compris en préprod) : `/hifago-mock-data`, pas ce skill-ci — mécanisme
+JSON dans `mockData/`, create-if-missing, jamais un reset.

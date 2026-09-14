@@ -238,6 +238,12 @@ export type FichaProducto = {
   /** Renseigné pour un evento, quel que soit son `modoReserva` : la date est une propriété du TYPE. */
   ocurrencia: DatosOcurrencia | null;
   alojamiento: DatosAlojamiento | null;
+  /**
+   * `products.duration_days` — non nul seulement pour `camp` (contrainte CHECK). Une ligne de
+   * `disponibilidad` porte la date de DÉPART seule ; c'est ce champ qui dit sur combien de jours le
+   * calendrier de réservation doit surligner la semaine complète autour d'un départ sélectionné.
+   */
+  duracionDias: number | null;
   disponibilidad: FilaDisponibilidad[];
   tarifas: FilaTarifa[];
   franjas: FilaFranja[];
