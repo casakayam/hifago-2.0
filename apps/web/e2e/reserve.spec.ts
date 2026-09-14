@@ -8,6 +8,8 @@ import {
   getAvailability,
   mockMercadoPagoCheckout,
   seedDate,
+  irAPagoTrasAgregar,
+  esperarRetornoTrasAgregar,
 } from "@hifago/e2e-support";
 
 // Feature 6 : le flux Checkpoint B (bouton unique "Reservar" appelant reserve_order_line
@@ -35,10 +37,7 @@ test("connexion → catalogue → fiche produit → panier → checkout : comman
 
   await page.locator(`[data-date="${DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
-  await expect(page.getByTestId("added-to-cart")).toBeVisible();
-
-  await page.getByTestId("go-to-checkout-link").click();
-  await expect(page).toHaveURL(/\/es\/pago/);
+  await irAPagoTrasAgregar(page);
   await expect(page.getByTestId(/^cart-line-/)).toHaveCount(1);
 
   // Jamais un prix COP figé en dur (cette base locale est partagée avec d'autres agents, cf.
@@ -78,7 +77,7 @@ test("capacité épuisée entre l'ajout au panier et la validation → erreur cl
   await page.getByTestId("tarjeta-tour-lancha-guatape-link").click();
   await page.locator(`[data-date="${DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
-  await expect(page.getByTestId("added-to-cart")).toBeVisible();
+  await esperarRetornoTrasAgregar(page);
 
   // Simule un autre acheteur qui prend les places restantes pendant que CE client remplit son
   // formulaire de checkout. La vraie barrière anti-survente est désormais exclusivement
@@ -91,7 +90,7 @@ test("capacité épuisée entre l'ajout au panier et la validation → erreur cl
   // validation finale.
   await setBooked(PRODUCT_ID, DATE, 2);
 
-  await page.getByTestId("go-to-checkout-link").click();
+  await page.goto("/es/pago");
   await page.locator('input[name="holder-name"]').fill("Cliente E2E Reserve Full");
   await page.locator('input[name="holder-phone"]').fill("+57 300 111 3333");
   await page.locator('input[name="holder-email"]').fill("cliente.reserve.full@example.com");

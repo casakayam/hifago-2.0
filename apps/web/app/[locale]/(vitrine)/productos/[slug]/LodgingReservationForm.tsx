@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps 
 import { format, parseISO } from "date-fns";
 import { useTranslations } from "next-intl";
 import type { DateRange } from "react-day-picker";
-import { Link } from "@/i18n/navigation";
 import {
   Button,
   DayPickerCalendar as Calendar,
@@ -106,7 +105,6 @@ export function LodgingReservationForm({
 
   const [range, setRange] = useState<DateRange | undefined>();
   const [qty, setQty] = useState(1);
-  const [justAdded, setJustAdded] = useState(false);
 
   // Spec 21 §13 — un alojamiento PMS-backed n'a jamais de product_availability peuplée (Lobby fait
   // foi) : `availability` (prop SSR) reste vide, remplacée par un fetch client mois par mois.
@@ -373,7 +371,6 @@ export function LodgingReservationForm({
   // survit à la sélection.
   function handleSelectRange(next: DateRange | undefined) {
     setRange(next);
-    setJustAdded(false);
   }
 
   // Monter la quantité peut invalider une plage DÉJÀ posée, sans qu'aucun clic n'ait eu lieu sur
@@ -399,18 +396,17 @@ export function LodgingReservationForm({
     }
   }
 
+  // Spec 28 Tranche 3 : sur succès, `useAddToCart` redirige déjà vers l'accueil — il n'y a plus
+  // rien à faire ici avec la valeur de retour (ni toast, ni reset local : le composant est sur le
+  // point de se démonter).
   async function handleAddToCart() {
     if (!range?.from || !range?.to || !canAdd) return;
-    const ok = await addToCart({
+    await addToCart({
       productId,
       date: format(range.from, "yyyy-MM-dd"),
       endDate: format(range.to, "yyyy-MM-dd"),
       qty,
     });
-    if (!ok) return;
-    setJustAdded(true);
-    setRange(undefined);
-    setQty(1);
   }
 
   // Nommer l'unité de `qty` là où elle se saisit. « Cantidad » ne disait pas de QUOI, alors que la
@@ -531,15 +527,6 @@ export function LodgingReservationForm({
       {canAdd ? (
         <p className="text-sm font-medium" data-testid="lodging-estimated-price">
           {t("estimatedTotal")}: {formatCop(estimatedUnitPriceCop * qty)}
-        </p>
-      ) : null}
-
-      {justAdded ? (
-        <p role="status" data-testid="added-to-cart" className="text-sm font-medium text-accent">
-          {t("addedToCart")}{" "}
-          <Link href="/pago" className="underline" data-testid="go-to-checkout-link">
-            {t("goToCheckout")}
-          </Link>
         </p>
       ) : null}
 

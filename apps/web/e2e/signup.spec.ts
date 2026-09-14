@@ -5,6 +5,7 @@ import {
   mockMercadoPagoCheckout,
   latestCallbackLink,
   seedDate,
+  irAPagoTrasAgregar,
 } from "@hifago/e2e-support";
 
 // Feature 32 : chemin heureux unique — inscription client sur apps/web (jusqu'ici inexistante,
@@ -40,10 +41,7 @@ test("un client s'inscrit, confirme par email, puis paie connecté avec ses info
   await page.getByTestId("tarjeta-tour-lancha-guatape-link").click();
   await page.locator(`[data-date="${DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
-  await expect(page.getByTestId("added-to-cart")).toBeVisible();
-
-  await page.getByTestId("go-to-checkout-link").click();
-  await expect(page).toHaveURL(/\/es\/pago/);
+  await irAPagoTrasAgregar(page);
 
   // §3.5 — premier achat de ce compte tout juste créé (aucune commande antérieure) : l'email doit
   // déjà être rempli depuis auth.users.email, nom/téléphone doivent rester vides.

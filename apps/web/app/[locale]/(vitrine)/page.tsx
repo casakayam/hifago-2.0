@@ -7,7 +7,9 @@ import { Title } from "@/components/atoms/Title";
 import { EstadoVacio } from "@/components/molecules/EstadoVacio";
 import { SeccionOfertas } from "@/components/organisms/SeccionOfertas";
 import { buscarSecciones, hrefSeccion } from "@/lib/catalog/buscar";
-import { escribirCriterios, leerCriterios } from "@/lib/catalog/criterios";
+import { escribirCriterios, leerCriterios, leerDesdeCarrito } from "@/lib/catalog/criterios";
+import { esTipoOferta, type TipoOferta } from "@/lib/catalog/tipos";
+import { getCartLines } from "@/lib/cart/getCartLines";
 import { buildWebSiteJsonLd } from "@/lib/seo/jsonld/site";
 import { buildPageMetadata } from "@/lib/seo/pageMetadata";
 import { getSiteUrl } from "@/lib/seo/siteUrl";
@@ -67,12 +69,29 @@ export default async function HomePage({ params, searchParams }: PageProps<"/[lo
   // Les critères de l'URL sont les SEULS qui filtrent (spec 28 §0 invariant 10) : plus aucun
   // filtrage en mémoire. `leerCriterios` ne lève jamais — un paramètre invalide est ignoré, jamais
   // une 400 : une URL mal recopiée doit rendre l'accueil normale, pas une page cassée.
-  const criterios = leerCriterios(await searchParams);
+  const paramsBrutos = await searchParams;
+  const criterios = leerCriterios(paramsBrutos);
   const sufijoCriterios = escribirCriterios(criterios);
 
-  // LA seule requête de la page, et elle ne part pas d'ici : `lib/catalog/` la porte, avec le
-  // client anonyme sans cookies. Les sections vides ne sont pas dans le tableau rendu.
-  const secciones = await buscarSecciones(criterios, { porSeccion: POR_SECCION, locale });
+  // Spec 28 Tranche 3 (cahier §2b.5) : le réordonnancement ne s'applique QUE juste après un ajout
+  // au panier (décision Jérôme) — jamais à une simple visite de l'accueil. `desdeCarrito` porte ce
+  // signal ; en son absence, `tiposEnCarrito` reste `undefined` et `buscarSecciones` se comporte
+  // EXACTEMENT comme avant ce lot — zéro requête de plus.
+  let tiposEnCarrito: ReadonlySet<TipoOferta> | undefined;
+  if (leerDesdeCarrito(paramsBrutos)) {
+    const lineas = await getCartLines(locale as Locale);
+    tiposEnCarrito = new Set(lineas.map((linea) => linea.productType).filter(esTipoOferta));
+  }
+
+  // La requête PRINCIPALE de la page (plus `getCartLines` ci-dessus, seulement juste après un
+  // ajout au panier) — ni l'une ni l'autre ne part d'ici : `lib/catalog/`/`lib/cart/` les portent,
+  // jamais un `.from()`/`createClient()` dans ce fichier (spec 27 invariant 2). Les sections vides
+  // ne sont pas dans le tableau rendu.
+  const secciones = await buscarSecciones(criterios, {
+    porSeccion: POR_SECCION,
+    locale,
+    tiposEnCarrito,
+  });
 
   const labels = await labelsBuscador(locale as Locale);
 

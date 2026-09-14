@@ -1,6 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { resetAvailability, countOrderLines, mockMercadoPagoCheckout, seedDate } from "@hifago/e2e-support";
+import {
+  resetAvailability,
+  countOrderLines,
+  mockMercadoPagoCheckout,
+  seedDate,
+  irAPagoTrasAgregar,
+} from "@hifago/e2e-support";
 
 // Feature 6 : la fiche produit n'a plus aucun état dépendant de l'authentification (le bouton
 // "Añadir al carrito" est identique connecté ou non — la vérification de session a été déplacée
@@ -30,10 +36,7 @@ test("un compte seedé peut se connecter via le formulaire /[locale]/entrar", as
   await page.getByTestId("tarjeta-tour-lancha-guatape-link").click();
   await page.locator(`[data-date="${DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
-  await expect(page.getByTestId("added-to-cart")).toBeVisible();
-
-  await page.getByTestId("go-to-checkout-link").click();
-  await expect(page).toHaveURL(/\/es\/pago/);
+  await irAPagoTrasAgregar(page);
   // Preuve directe : isAuthenticated=true a été lu côté serveur pour CETTE requête — le message
   // "Inicia sesión para validar tu pedido." ne doit jamais apparaître ici.
   await expect(page.getByText("Inicia sesión")).toHaveCount(0);

@@ -132,7 +132,10 @@ function AvecContraste({ legende, children }: { legende: string; children: React
 // et chaque case est une combinaison réellement atteignable — « outline en rouge » n'existe pas
 // dans le `variant` à 7 valeurs de HeroUI.
 export const Matrice: Story = {
-  args: { children: "Reservar" },
+  args: {
+    children: "Reservar",
+    variant: "solid"
+  },
   render: (args) => (
     <div className="flex flex-col gap-6">
       <Legende>

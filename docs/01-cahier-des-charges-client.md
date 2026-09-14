@@ -84,6 +84,11 @@ Ajoutés par la relecture intégrale du 2026-09-07 :
   pour l'hébergement.** Livré par `docs/specs/12-admin-alojamiento-house.md` (majoration week-end
   dans `products.stay_rates`, nouveauté assumée face à la v1). Séjour minimum et délai de préavis
   minimum, eux, restent bien à construire.
+- **§3e, « le modèle de la ligne de panier reste à concevoir » (et « rend le réordonnancement
+  littéralement inécrivable ») — périmé, `docs/specs/32-panier-en-base.md`.** Cette spec a livré ce
+  modèle le 2026-09-10 : `cart_items.product_id` se joint à `products.type`, ce qui a exactement
+  débloqué le réordonnancement (spec 28 Tranche 3, livrée le 2026-09-13). Le corps de §3e n'est pas
+  réécrit — cette puce en tient lieu.
 
 Ajoutés par la réécriture du §2 le 2026-09-07 — **contradictions internes à ce document**, que
 `npm run docs:check` ne sait pas détecter (il ne vérifie que le couplage spec↔cahier) :

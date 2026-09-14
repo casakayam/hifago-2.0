@@ -5,7 +5,8 @@ theme: specs
 public: [ia, dev, jerome]
 langue: fr
 statut: implemente
-maj: 2026-09-10
+revise: ["docs/01-cahier-des-charges-client.md#3e"]
+maj: 2026-09-13
 resume: >
   Fait passer le panier de la mémoire du navigateur (CartContext) à deux tables Postgres (carts,
   cart_items) rattachées à l'identité posée par la spec 31 — condition validée le 2026-09-07 pour

@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
 import {
   Button,
   DayPickerCalendar as Calendar,
@@ -95,7 +94,6 @@ export function SlotReservationForm({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [selectedSlotStartTime, setSelectedSlotStartTime] = useState<string | undefined>();
   const [qty, setQty] = useState(1);
-  const [justAdded, setJustAdded] = useState(false);
 
   const byDate = useMemo(() => {
     const map = new Map<string, SlotRow[]>();
@@ -148,7 +146,6 @@ export function SlotReservationForm({
     setSelectedDate(date);
     setSelectedSlotStartTime(undefined);
     setQty(1);
-    setJustAdded(false);
   }
 
   function handleSelectSlot(slot: SlotRow) {
@@ -157,18 +154,17 @@ export function SlotReservationForm({
     setQty(1);
   }
 
+  // Spec 28 Tranche 3 : sur succès, `useAddToCart` redirige déjà vers l'accueil — il n'y a plus
+  // rien à faire ici avec la valeur de retour (ni toast, ni reset local : le composant est sur le
+  // point de se démonter).
   async function handleAddToCart() {
     if (!selectedIso || !selectedSlot || slotRemaining < 1) return;
-
-    const ok = await addToCart({
+    await addToCart({
       productId,
       date: selectedIso,
       slotStartTime: toHHMM(selectedSlot.slot_start_time),
       qty,
     });
-    if (!ok) return;
-    setJustAdded(true);
-    setQty(1);
   }
 
   return (
@@ -272,15 +268,6 @@ export function SlotReservationForm({
         <Label>{t("quantityLabel")}</Label>
         <Input id="qty" type="number" min={1} max={topeCantidad(slotRemaining)} />
       </TextField>
-
-      {justAdded ? (
-        <p role="status" data-testid="added-to-cart" className="text-sm font-medium text-accent">
-          {t("addedToCart")}{" "}
-          <Link href="/pago" className="underline" data-testid="go-to-checkout-link">
-            {t("goToCheckout")}
-          </Link>
-        </p>
-      ) : null}
 
       <Button
         data-testid="add-to-cart-button"

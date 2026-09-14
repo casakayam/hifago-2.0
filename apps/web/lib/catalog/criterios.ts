@@ -143,3 +143,28 @@ export function leerPagina(params: ParamsBrutos): number {
 export function hayCriterios(criterios: Criterios): boolean {
   return Object.keys(criterios).length > 0;
 }
+
+/**
+ * Vrai si l'accueil est atteinte juste après un ajout au panier (spec 28 Tranche 3).
+ *
+ * ⚠️ `desdeCarrito` n'est PAS un critère, et ne rejoint jamais `Criterios` — même raison que
+ * `pagina` ci-dessus : ce n'est pas ce qu'on cherche, c'est d'où on vient. L'y mettre le ferait
+ * écrire par `escribirCriterios` dans les liens « Ver más » et le canonical.
+ *
+ * Rien n'échoue jamais : une valeur absente ou différente de `"1"` répond simplement non.
+ */
+export function leerDesdeCarrito(params: ParamsBrutos): boolean {
+  return primero(params.desdeCarrito) === "1";
+}
+
+/**
+ * Le lien que `useAddToCart` construit pour revenir à l'accueil : les critères conservés, plus le
+ * flag qui déclenche le réordonnancement selon le panier (`page.tsx`, `buscarSecciones`).
+ *
+ * Un seul endroit définit le nom du paramètre — le lecteur (`leerDesdeCarrito`) et l'écrivain sont
+ * dans ce même fichier, jamais une chaîne recopiée à la main d'un côté ou de l'autre.
+ */
+export function hrefRetornoCarrito(criterios: Criterios): string {
+  const sufijo = escribirCriterios(criterios);
+  return `/${sufijo}${sufijo ? "&" : "?"}desdeCarrito=1`;
+}

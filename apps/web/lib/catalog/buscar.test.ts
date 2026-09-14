@@ -165,6 +165,30 @@ describe("buscarSecciones", () => {
     expect(secciones).toHaveLength(1);
     expect(secciones[0].tarjetas).toHaveLength(1);
   });
+
+  it("⚠️ réordonne selon `tiposEnCarrito` (spec 28 Tranche 3) sans jamais rappeler ORDEN_SECCIONES", async () => {
+    state.filas = [
+      fila({ tipo: "camp", slug: "camp-x", rango_seccion: 1, total_seccion: 1 }),
+      fila({ tipo: "activity", slug: "kayak", rango_seccion: 1 }),
+      fila({ tipo: "lodging", slug: "cuarto", rango_seccion: 1, es_establecimiento: true }),
+    ];
+    const secciones = await buscarSecciones(
+      {},
+      { porSeccion: 8, locale: "es", tiposEnCarrito: new Set(["activity"]) }
+    );
+    // "activity" est déjà au panier : elle tombe en dernier, "lodging"/"camp" (absents) passent
+    // devant dans leur ordre habituel.
+    expect(secciones.map((s) => s.tipo)).toEqual(["lodging", "camp", "activity"]);
+  });
+
+  it("sans `tiposEnCarrito`, l'ordre reste ORDEN_SECCIONES — comportement inchangé", async () => {
+    state.filas = [
+      fila({ tipo: "camp", slug: "camp-x", rango_seccion: 1, total_seccion: 1 }),
+      fila({ tipo: "activity", slug: "kayak", rango_seccion: 1 }),
+    ];
+    const secciones = await buscarSecciones({}, { porSeccion: 8, locale: "es" });
+    expect(secciones.map((s) => s.tipo)).toEqual(["activity", "camp"]);
+  });
 });
 
 describe("buscarTipo", () => {

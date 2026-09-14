@@ -17,6 +17,7 @@ import {
 import type { SearchSuggestion } from "@/components/organisms/SearchBar";
 import { escribirCriterios } from "@/lib/catalog/criterios";
 import type { Criterios, SugerenciaCatalogo, TipoOferta } from "@/lib/catalog/tipos";
+import { guardarUltimosCriterios } from "@/lib/catalog/ultimosCriterios";
 
 // L'hôte client du bloc de recherche de l'accueil (2026-09-08, Tranche 1 du lot D —
 // docs/specs/28-vitrine-accueil-et-resultats.md §5 « BuscadorInicio — l'hôte client »).
@@ -122,6 +123,20 @@ export function BuscadorInicio({
     setFirmaAplicada(firmaUrl);
     setCriterios(desdeCriterios(criteriosIniciales));
   }
+
+  // ⚠️ « CRITÈRES CONSERVÉS » (spec 28 Tranche 3, cahier §2b.5). La fiche produit ne porte JAMAIS
+  // les critères dans son URL (spec 28 §4) : c'est ICI, sur l'accueil, qu'il faut les mémoriser
+  // pour qu'`useAddToCart` puisse les relire au moment de rediriger après un ajout au panier.
+  // Se branche sur `firmaUrl` (et lui passe directement CETTE chaîne, pas `criteriosIniciales`) :
+  // il change au montage (arrivée avec des critères déjà dans l'URL) et à chaque recherche
+  // soumise, alors que `criteriosIniciales` est un nouvel objet à chaque rendu — le lui passer
+  // aurait redéclenché l'effet sans rapport avec un vrai changement de critères.
+  //
+  // ⚠️ SANS CONDITION sur `hayCriterios` — un visiteur qui a cherché "kayak" puis a vidé le champ
+  // doit voir la mémoire suivre, pas rester bloquée sur l'ancienne recherche.
+  useEffect(() => {
+    guardarUltimosCriterios(firmaUrl);
+  }, [firmaUrl]);
 
   // ─────────────────────────────────────────────────────────────────────────────────────────
   // LES SUGGESTIONS (Tranche 2)

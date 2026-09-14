@@ -1,5 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { withDb, createPmsBackedEstablishmentFixture, mockPmsNightAvailability, isoDate } from "@hifago/e2e-support";
+import {
+  withDb,
+  createPmsBackedEstablishmentFixture,
+  mockPmsNightAvailability,
+  isoDate,
+  esperarRetornoTrasAgregar,
+} from "@hifago/e2e-support";
 
 // Spec 21 §13 (gap comblé) — GET /api/pms/night-availability alimente le calendrier d'un logement
 // PMS-backed (Casa Kayam). Établissement DÉDIÉ créé dans ce test (jamais "Casa Kayam Guatapé" du
@@ -75,7 +81,11 @@ test("le calendrier d'un logement PMS-backed reflète la disponibilité Lobby, e
   await expect(page.getByTestId("range-unavailable-warning")).not.toBeVisible();
   await expect(page.getByTestId("lodging-estimated-price")).toBeVisible();
   await page.getByTestId("add-to-cart-button").click();
-  await expect(page.getByTestId("added-to-cart")).toBeVisible();
+  // Spec 28 Tranche 3 : l'ajout redirige désormais vers l'accueil (cahier §2b.5) — ce test
+  // continue de tester LA MÊME fiche produit ensuite (scénario Lobby injoignable), il y revient
+  // explicitement plutôt que d'enchaîner sur l'écran où le redirect vient de le déposer.
+  await esperarRetornoTrasAgregar(page);
+  await page.goto(`/es/productos/${SLUG}`);
 
   // Lobby injoignable → bandeau dégradé, bouton « réessayer », et surtout : aucune nuit n'est
   // SÉLECTIONNABLE. C'est le correctif du 2026-08-28 — auparavant le calendrier se laissait

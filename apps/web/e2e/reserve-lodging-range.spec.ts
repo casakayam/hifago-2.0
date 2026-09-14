@@ -1,5 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { withDb, mockMercadoPagoCheckout, isoDate, deleteOrdersByHolderName } from "@hifago/e2e-support";
+import {
+  withDb,
+  mockMercadoPagoCheckout,
+  isoDate,
+  deleteOrdersByHolderName,
+  irAPagoTrasAgregar,
+} from "@hifago/e2e-support";
 
 // Spec 17 §0 Tranche 2 (docs/specs/17-calendrier-disponibilite-refonte.md) — alojamiento (maison
 // entière) réservé par plage de nuits, branche create_order end_date. La logique de create_order
@@ -50,8 +56,7 @@ test("un client réserve un alojamiento par plage de nuits, depuis la fiche prod
   await expect(page.getByTestId("lodging-estimated-price")).toContainText("400.000"); // 2 nuits × 200000 × qty 1
 
   await page.getByTestId("add-to-cart-button").click();
-  await expect(page.getByTestId("added-to-cart")).toBeVisible();
-  await page.getByTestId("go-to-checkout-link").click();
+  await irAPagoTrasAgregar(page);
   await page.waitForLoadState("networkidle");
 
   await expect(page.getByTestId("cart-total")).toContainText("400.000");

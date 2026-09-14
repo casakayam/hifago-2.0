@@ -3,7 +3,9 @@ import {
   MAX_PAGINAS,
   escribirCriterios,
   hayCriterios,
+  hrefRetornoCarrito,
   leerCriterios,
+  leerDesdeCarrito,
   leerPagina,
 } from "./criterios";
 
@@ -125,5 +127,33 @@ describe("leerPagina", () => {
     // dans le canonical, deux endroits où il n'a rien à faire.
     const criterios = leerCriterios({ q: "kayak", pagina: "3" });
     expect(escribirCriterios(criterios)).toBe("?q=kayak");
+  });
+});
+
+describe("leerDesdeCarrito", () => {
+  it("répond vrai uniquement sur la valeur exacte \"1\"", () => {
+    expect(leerDesdeCarrito({ desdeCarrito: "1" })).toBe(true);
+    expect(leerDesdeCarrito({})).toBe(false);
+    expect(leerDesdeCarrito({ desdeCarrito: "0" })).toBe(false);
+    expect(leerDesdeCarrito({ desdeCarrito: "true" })).toBe(false);
+  });
+
+  it("prend la première valeur quand le paramètre est répété", () => {
+    expect(leerDesdeCarrito({ desdeCarrito: ["1", "0"] })).toBe(true);
+  });
+
+  it("ne fuit jamais dans les critères : escribirCriterios ne l'écrit pas", () => {
+    const criterios = leerCriterios({ q: "kayak", desdeCarrito: "1" });
+    expect(escribirCriterios(criterios)).toBe("?q=kayak");
+  });
+});
+
+describe("hrefRetornoCarrito", () => {
+  it("pose le flag seul quand il n'y a aucun critère", () => {
+    expect(hrefRetornoCarrito({})).toBe("/?desdeCarrito=1");
+  });
+
+  it("ajoute le flag à la suite des critères existants", () => {
+    expect(hrefRetornoCarrito({ q: "kayak" })).toBe("/?q=kayak&desdeCarrito=1");
   });
 });

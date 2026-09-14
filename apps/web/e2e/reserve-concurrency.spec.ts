@@ -6,6 +6,7 @@ import {
   countOrderLines,
   mockMercadoPagoCheckout,
   seedDate,
+  irAPagoTrasAgregar,
 } from "@hifago/e2e-support";
 
 // Le test le plus important de ce jalon (cf. plan Checkpoint B) : jusqu'ici l'invariant
@@ -50,9 +51,7 @@ test("N BrowserContext isolés, chacun jusqu'à la validation finale du panier c
     const { redirectUrl } = await mockMercadoPagoCheckout(page);
     await page.locator(`[data-date="${LAST_SPOT_DATE}"]`).click();
     await page.getByTestId("add-to-cart-button").click();
-    await expect(page.getByTestId("added-to-cart")).toBeVisible();
-
-    await page.getByTestId("go-to-checkout-link").click();
+    await irAPagoTrasAgregar(page);
     await page.locator('input[name="holder-name"]').fill(`Cliente Concurrencia ${email}`);
     await page.locator('input[name="holder-phone"]').fill(`+57 300 000 ${pages.length}000`);
     await page.locator('input[name="holder-email"]').fill(email);

@@ -5,6 +5,7 @@ import { createPublicClient } from "@/lib/supabase/publicClient";
 // métadonnées déclarent `noindex`. Le module est un prédicat pur, sans dépendance.
 import { hasNativeContent } from "@/lib/seo/nativeContent";
 import { routing } from "@/i18n/routing";
+import { ordenarTipos } from "./ordenSecciones";
 import { segmentoDeTipo } from "./segmentos";
 import {
   ORDEN_SECCIONES,
@@ -166,10 +167,18 @@ function argumentos(criterios: Criterios, tipos: TipoOferta[] | null) {
  *
  * `p_limite` doit couvrir toutes les sections plafonnées, sinon la dernière est tronquée par la
  * limite globale — piège invisible, la page rendrait juste moins de cartes sans erreur.
+ *
+ * `tiposEnCarrito` (spec 28 Tranche 3) : quand fourni, les sections sont réordonnées selon
+ * `ordenarTipos` au lieu de `ORDEN_SECCIONES` — appelé par `page.tsx` seulement juste après un
+ * ajout au panier (cahier §2b.5, décision Jérôme : jamais à une simple visite de l'accueil).
  */
 export async function buscarSecciones(
   criterios: Criterios,
-  { porSeccion, locale }: { porSeccion: number; locale: string }
+  {
+    porSeccion,
+    locale,
+    tiposEnCarrito,
+  }: { porSeccion: number; locale: string; tiposEnCarrito?: ReadonlySet<TipoOferta> }
 ): Promise<Seccion[]> {
   const supabase = createPublicClient();
   const tipos = criterios.tipo ? [criterios.tipo] : null;
@@ -202,8 +211,11 @@ export async function buscarSecciones(
   }
 
   // L'ordre vient d'ici, jamais d'un composant (cahier §2a) — et une section vide n'est pas rendue,
-  // elle est absente du tableau : le composant n'a aucune décision à prendre.
-  return ORDEN_SECCIONES.map((tipo) => porTipo.get(tipo)).filter(
+  // elle est absente du tableau : le composant n'a aucune décision à prendre. `tiposEnCarrito`
+  // substitue l'ordre habituel par la partition de la spec 28 Tranche 3 ; le filtre des sections
+  // vides est inchangé dans les deux cas.
+  const orden = tiposEnCarrito ? ordenarTipos(tiposEnCarrito) : ORDEN_SECCIONES;
+  return orden.map((tipo) => porTipo.get(tipo)).filter(
     (seccion): seccion is Seccion => seccion !== undefined
   );
 }

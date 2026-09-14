@@ -4,6 +4,7 @@ import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Geist, Geist_Mono } from "next/font/google";
 import { routing } from "@/i18n/routing";
+import { SiteToaster } from "@/components/organisms/SiteToaster";
 import { CartProvider } from "@/lib/cart/CartContext";
 import { getSiteUrl } from "@/lib/seo/siteUrl";
 import "../globals.css";
@@ -58,6 +59,11 @@ export default async function PublicLocaleLayout({
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <NextIntlClientProvider>
           <CartProvider>{children}</CartProvider>
+          {/* ⚠️ Monté nulle part jusqu'ici (spec 28 Tranche 3, 2026-09-13) — `SiteToaster.tsx`
+              documentait déjà ce manque depuis le 2026-09-02 : sans lui, AUCUN toast de cet écran
+              n'était visible, `toast.danger` de `useAddToCart` compris. Frère de `{children}`,
+              jamais une enveloppe (cf. l'avertissement de `SiteToaster.tsx`). */}
+          <SiteToaster />
         </NextIntlClientProvider>
       </body>
     </html>

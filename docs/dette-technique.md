@@ -4,7 +4,7 @@ titre: "Dette technique et QA/UI connue — hifago"
 theme: journal
 statut: vivant
 langue: fr
-maj: 2026-09-11
+maj: 2026-09-13
 resume: >
   Dette signalée et non corrigée du chantier hifago — technique, puis QA/UI mineure. Sortie de
   docs/backlog.md le 2026-09-08 : ce fichier-là plafonne à 60 lignes et prescrit lui-même qu'un
@@ -24,7 +24,11 @@ repond_a:
 
 ## Dette technique signalée, non corrigée
 - Spec 19 Tranche 2 (remboursement Mercado Pago) non commencée. ⚠️ « Page de retour paiement dédiée toujours absente » RETIRÉ le 2026-09-10 : livrée par la spec 33 (`/reserva/<jeton>`). Ce point avait cessé d'être une dette assumée pour devenir un défaut réel — le repli « réutilise l'écran checkout » était devenu une PAGE BLANCHE le jour où la spec 32 a fait vider `cart_items` par `create_order`, sans que rien ne le relise.
-- **`SiteToaster` n'est monté nulle part dans `apps/web`** — constat écrit dans son PROPRE en-tête le 2026-09-02 (« il faut encore le MONTER dans `app/[locale]/layout.tsx`, ce que ce lot ne fait pas »), jamais refermé depuis : les `toast.danger`/`toast.success` de `ResendConfirmationForm.tsx` ne s'affichent donc jamais, et tout écran suivant qui croit pouvoir s'en servir hérite du même silence — c'est pourquoi `GoogleButton.tsx` rend son échec en ligne (2026-09-11). Correctif = une ligne de layout ; chaque lot qui le croise l'a jusqu'ici jugé hors de son périmètre, ce qui est exactement pourquoi il est ici.
+- ~~**`SiteToaster` n'est monté nulle part dans `apps/web`**~~ — **REFERMÉ le 2026-09-13** (spec 28
+  Tranche 3) : monté en frère de `{children}` dans `app/[locale]/layout.tsx`. `toast.danger`/
+  `toast.success` de `ResendConfirmationForm.tsx`/`useAddToCart.ts` sont désormais visibles.
+  `GoogleButton.tsx`, écrit avant ce correctif, continue de rendre son échec en ligne — pas repris,
+  hors périmètre de cette tranche.
 - Vitrine (`apps/web`) : polices Geist non appliquées (`--font-geist-*` du layout vs `--font-sans`/`--font-mono` consommés par HeroUI).
 - La garde de `(cuenta)` redirige vers `/entrar` SANS `?next=` : un layout serveur ne connaît pas le chemin courant, et la « ligne dans `proxy.ts` » annoncée par la spec 27 §5 n'en est pas une (un middleware ne peut pas poser d'en-tête de REQUÊTE sur une réponse construite par `intlMiddleware`). Sans effet tant qu'il n'existe qu'un écran de compte — vrai déclencheur : le lot qui ajoute `/cuenta` et `/cuenta/perfil`.
 - Remplacer une image du catalogue laisse l'ancien objet dans le bucket `catalog-media` — vrai pour `product_media`/`establishment_media` depuis la spec 04, et vrai pour l'image de catégorie que la spec 29 ajoute. À traiter globalement ou pas du tout : le corriger pour une seule entité créerait une incohérence de plus.
@@ -39,6 +43,24 @@ repond_a:
 - ⚠️ **Secret Vault `web_app_public_url` posé dans aucun environnement** (2026-09-10, spec 33) — `apply_payment_webhook` y lit l'URL publique pour le lien « Ver tu reserva » de l'email de confirmation, même patron que `admin_app_public_url` (20260824040000). En son absence l'email part quand même, **sans le lien** (choix assumé : le client a payé, une confirmation sans lien vaut mieux que pas de confirmation). À poser dès qu'un projet préprod existe.
 - **`SearchAction` JSON-LD : à décider, plus à écarter.** `lib/seo/jsonld/site.ts` l'excluait parce que « la recherche est un filtre en mémoire sans URL adressable » — faux depuis la spec 28, les critères vivent dans l'URL. Le nœud reste sans `potentialAction` par non-décision.
 - **Sept `data-testid` posés le 2026-09-08 qu'aucun test n'exerce** (`indice-categorias`, `establishment-info`, `establishment-address`, `volver-al-catalogo`, `vitrina-contact-link`, `price-label-vitrina-input`, `establishment-contact-block`). Des ancres prêtes, pas du code mort — à ne pas supprimer, à consommer quand la couverture des deux fiches et de l'admin éditorial s'étendra.
+
+## Dette trouvée en vérifiant la spec 28 Tranche 3, le 2026-09-13
+
+Chacune reproduite à l'identique contre le code d'AVANT cette tranche (`git stash` + rejeu sur base
+fraîche) — aucune n'est une régression de ce lot, toutes hors de son périmètre.
+
+- **`reserve-lodging-range.spec.ts` : le total du panier sur `/pago` ne compte pas les nuits.** Un
+  séjour de 2 nuits à 200 000 (estimation correcte affichée sur la fiche : 400 000) n'affiche que
+  200 000 sur `/pago` — `CartSummary`/le calcul du total semblent ignorer `end_date` pour un produit
+  à plage de dates, contrairement à l'estimation côté formulaire.
+- **`reserve.spec.ts` (« capacité épuisée ») : une ligne de panier refusée par `create_order` ne
+  porte pas `data-failed="true"`** comme l'écran de checkout est censé le marquer.
+- **`cart-multi-establishment.spec.ts` (test 1) : `countOrdersByPhone` compare une chaîne exacte**,
+  alors que `PhoneField` (2026-09-10) normalise en E.164 compact — un numéro de test écrit avec des
+  espaces ne retrouve jamais sa commande. Aucune commande n'est perdue en réalité (vérifié en base),
+  seul le test se trompe de format.
+- **`reserve-lodging-pms-availability.spec.ts` : timeout au clic d'une seconde date de plage** sur
+  un calendrier PMS-backed, reproductible même isolé sur base fraîche — cause non investiguée.
 
 ## Dette QA/UI mineure connue
 les tests e2e parallèles se disputent encore les 8 places d'une section pendant une MÊME exécution (`cart-multi-establishment` passe seul, échoue en suite) — le `globalTeardown` ajouté le 2026-09-08 empêche l'accumulation ENTRE exécutions, pas la concurrence intra-suite ; il faudrait des données scopées par test · le fil d'Ariane HeroUI rend la page courante en `<span role="link" aria-disabled>` : un lecteur d'écran annonce « lien désactivé », anti-motif WAI-ARIA — `aria-current` est correct, le reste vient du socle · Palette SVAR non harmonisée avec HeroUI · pas de refetch agenda au changement de vue · e2e spec 18 (créneaux horaires) absents · tri/filtre catalogue par tag manquant · Tranche 4 spec 17, Tranche 2 specs 11/12/13 · `waitForLoadState` sur `admin-camp-booking.spec.ts` · `LocalizedTextField` lot 2 établissement · `admin-evento-vitrine.spec.ts` (`#name-es`) · sidebar admin non repliée sous `md` · activer les créneaux jetski réels via `set_product_slot_capacity` · 6 fichiers pgTAP sensibles au volume de données locales accumulées (`audit_log` non scopé) · `admin-reconciliation.spec.ts`/`admin-home-navigation.spec.ts` fragiles en exécution parallèle · échec Vitest non identifié, DEUX fois le 2026-09-07 (1 puis 2 tests), toujours dans un `npm run test` monorepo enchaîné après typecheck+lint, jamais reproduit ensuite en ~15 exécutions — nom jamais capturé, sortie non conservée.

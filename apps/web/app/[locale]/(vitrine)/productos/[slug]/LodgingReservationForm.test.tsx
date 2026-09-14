@@ -14,6 +14,9 @@ vi.mock("@/i18n/navigation", () => ({
       {children}
     </a>
   ),
+  // Spec 28 Tranche 3 : `useAddToCart` appelle désormais `useRouter()` pour rediriger vers
+  // l'accueil sur succès — le lien de retour n'est plus le sujet de ce fichier.
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 // Panier vide et figé : ce fichier teste la réaction du calendrier à la quantité, pas la mécanique

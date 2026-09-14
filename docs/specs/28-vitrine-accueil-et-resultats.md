@@ -4,13 +4,13 @@ titre: "Vitrine : l'accueil, qui est aussi l'écran de résultats de recherche"
 theme: specs
 public: [ia, dev, jerome]
 langue: fr
-statut: partiel
+statut: implemente
 reste: >
-  Tranches 1 (l'accueil) et 2 (les suggestions de la barre) livrées le 2026-09-08. Reste la
-  Tranche 3 — l'ordre des sections selon le panier — bloquée par deux specs non écrites :
-  l'identité anonyme, puis le panier en base. Deux points à arbitrer : le décompte de couchages sur
-  la carte groupée, et le carrousel de la carte d'activité dans un visuel de 64 px (§10bis).
-maj: 2026-09-08
+  Les 3 tranches sont livrées (Tranche 3 le 2026-09-13). Un seul point reste ouvert : le carrousel
+  de la carte d'activité dans un visuel de 64 px (§10bis) — décision visuelle, à voir dans
+  Storybook avant de coder. Le décompte de couchages sur la carte groupée, autrefois listé ici,
+  est refermé depuis le 2026-09-09 (commit 4be2b05 — `TarjetaOferta.tsx` rend `nAlojamientos`).
+maj: 2026-09-13
 resume: >
   Construit le premier écran du chantier front : l'accueil de la vitrine, qui porte le bloc de
   recherche et une section par type d'offre, et qui devient l'écran de résultats dès que des
@@ -234,13 +234,13 @@ cherche, on filtre, on clique.
 **Tranche 2 — les suggestions de la barre.** `SearchBar` accepte une liste vide, et `Entrée` soumet
 toujours le texte tapé — c'est son contrat. La recherche est donc complète sans elles.
 
-**Tranche 3 — le réordonnancement des sections selon le panier.**
-⚠️ **Sorti de la Tranche 1 le 2026-09-07, sur constat d'infaisabilité.** Deux raisons cumulées,
-trouvées par l'audit : `CartLine` **ne porte pas le type de l'offre** (rien dans le panier ne dit
-si une ligne est une activité ou un transport), et le panier est un état **client** que `page.tsx`,
-Server Component, ne peut pas lire. Jérôme a tranché le même jour que **le panier vivra en base, sur
-l'identité du visiteur** (cahier §3e) — ce qui rend le réordonnancement faisable côté serveur, mais
-**après** deux specs dont celle-ci dépend alors : l'identité anonyme, puis le panier en base.
+**Tranche 3 — le réordonnancement des sections selon le panier, et le retour à l'accueil qui le
+déclenche. ✅ Livrée le 2026-09-13** — voir §10sexies pour le contrat complet.
+⚠️ **Sortie de la Tranche 1 le 2026-09-07, sur constat d'infaisabilité** : deux raisons cumulées,
+trouvées par l'audit. `CartLine` ne portait pas le type de l'offre, et le panier était un état
+**client** que `page.tsx`, Server Component, ne pouvait pas lire. Les deux sont résolues par les
+specs 31 (identité anonyme) et 32 (panier en base, `cart_items.product_id` joint à
+`products.type`), livrées le 2026-09-10 — ce qui a débloqué cette tranche.
 
 **Out.** Les pages de listing et l'index de tags (spec 29) · les fiches (spec 30) · le tunnel · le
 compte · la recherche géographique, différée · les tokens du thème `vitrine` et les polices Geist.
@@ -268,7 +268,8 @@ Actées au cahier §2a et §2b.5 ou tranchées le 2026-09-07, non rouvertes ici 
 3. **Il clique une carte** — vers la fiche. L'URL de destination **ne porte pas les critères**
    (spec 27) ; le calendrier de la fiche se pré-remplit depuis la mémoire du navigateur.
 4. **Il clique « Ver más »** — vers `/es/<segmento>` **avec les critères**.
-5. *(Tranche 3)* **Il ajoute au panier depuis une fiche** — il revient ici, sections réordonnées.
+5. **Il ajoute au panier depuis une fiche** (Tranche 3) — redirection immédiate ici, critères
+   conservés, sections réordonnées selon le panier (§10sexies).
 
 ## 5. L'écran, bloc par bloc
 
@@ -622,6 +623,114 @@ l'e2e des paramètres invalides. Les deux sont **vérifiés par mutation** : ret
 du corps de la fonction fait rougir l'assertion 19 et elle seule, et fait rougir l'e2e sur
 `home.spec.ts:233` — l'assertion « l'écran n'est jamais l'état vide », c'est-à-dire le symptôme
 exact décrit ci-dessus.
+
+## 10sexies. Tranche 3 — retour à l'accueil réordonnée après un ajout au panier (2026-09-13)
+
+Entretien tenu (trois décisions, courtes — la règle de réordonnancement elle-même était déjà
+tranchée au cahier §2b.5, verbatim, non rouverte ici) :
+
+1. **Retour = redirection immédiate** (`router.push`), pas une invitation avec lien.
+2. **Toujours** rediriger après un ajout réussi, y compris un 2e/3e ajout depuis la même fiche
+   établissement ou des activités en série — aucun cas particulier pour un geste multi-ajouts.
+3. Le réordonnancement s'applique **seulement juste après un ajout**, jamais à une simple visite
+   de l'accueil dont le panier n'est pas vide (une relecture de l'URL le lendemain garde l'ordre
+   habituel).
+
+### La fonction pure
+
+`lib/catalog/ordenSecciones.ts` — `ordenarTipos(enCarrito: ReadonlySet<TipoOferta>): TipoOferta[]`,
+une partition stable de `ORDEN_SECCIONES` (absents d'abord, présents à la fin, chacun dans son
+ordre habituel). Zéro dépendance, testée sans base, **vérifiée par mutation** (inverser les deux
+prédicats `.filter` fait rougir 3 tests — 2 dans son propre fichier, 1 dans `buscar.test.ts` — puis
+restaurée). `buscarSecciones` prend un paramètre optionnel `tiposEnCarrito` et l'utilise à la place
+de `ORDEN_SECCIONES` quand il est fourni ; le filtre de section vide est inchangé.
+
+### Le flag « on vient d'ajouter », et pourquoi il ne rejoint jamais `Criterios`
+
+Même patron que `leerPagina` (déjà dans `criterios.ts`, « ne rejoint jamais `Criterios`, n'échoue
+jamais ») : `leerDesdeCarrito(params): boolean` et `hrefRetornoCarrito(criterios): string` (ajoute
+`desdeCarrito=1` à la suite d'`escribirCriterios`). `page.tsx` ne lit `getCartLines(locale)` (déjà
+existant, réutilisé tel quel) que quand ce flag est présent — sur une visite normale, zéro requête
+de plus, comportement strictement inchangé. C'est ce qui tient la décision ③ sans code conditionnel
+dans un composant.
+
+### « Critères conservés » — un mécanisme qui n'existait nulle part
+
+La fiche produit ne porte jamais les critères dans son URL (§4 ci-dessus), et **aucune mémoire de
+navigateur n'existait** pour ça avant ce lot — vérifié par grep (`sessionStorage`/`localStorage`) :
+un seul résultat dans tout `apps/web`, un commentaire Storybook disant explicitement que ce n'est
+pas fait. Nouveau fichier `lib/catalog/ultimosCriterios.ts` (séparé de `criterios.ts`, qui documente
+zéro dépendance — `sessionStorage` est une API navigateur) : `guardarUltimosCriterios(sufijo:
+string)` / `leerUltimosCriterios(): Criterios`, format de stockage = la sortie d'`escribirCriterios`
+elle-même, pas un format maison. `BuscadorInicio.tsx` écrit dans un `useEffect` sur `firmaUrl` (déjà
+suivie pour la resynchronisation §9) — **jamais sur l'objet `criteriosIniciales`**, reconstruit à
+chaque rendu, qui aurait forcé soit un effet qui se redéclenche sans rapport, soit un
+`eslint-disable` que ce dépôt ne pratique nulle part (vérifié par grep). `useAddToCart` lit au
+moment de rediriger.
+
+### `useAddToCart.ts` — où se branche LE geste de retour
+
+Sur succès : `toast.success(...)`, puis `startTransition(() => router.push(hrefRetornoCarrito(...)))`
+— jamais dans un formulaire, exactement pourquoi ce hook avait été extrait le 2026-09-10
+(`/simplify`). Les trois formulaires de réservation perdent leur bloc `justAdded` (message inline +
+lien `/pago`), devenu du code mort : le composant est sur le point de se démonter avant qu'il ne
+s'affiche.
+
+### Trouvaille non anticipée — `SiteToaster` n'était monté nulle part dans `apps/web`
+
+Confirmé par grep et par le commentaire d'en-tête de `SiteToaster.tsx` lui-même (écrit le
+2026-09-02, jamais suivi d'effet) : `toast.danger` sur échec d'ajout était **déjà invisible**
+aujourd'hui, indépendamment de ce lot. Monté en frère de `{children}` dans
+`app/[locale]/layout.tsx` — ce lot corrige donc deux défauts d'un coup.
+
+### Fichiers touchés
+
+**Créés** : `lib/catalog/ordenSecciones.ts` (+ test) · `lib/catalog/ultimosCriterios.ts` (+ test) ·
+`lib/cart/useAddToCart.test.tsx` (aucune couverture n'existait) ·
+`(vitrine)/BuscadorInicio.ultimosCriterios.test.tsx` · `packages/e2e-support/src/cart.ts`
+(`irAPagoTrasAgregar`, `esperarRetornoTrasAgregar`) · `e2e/reorder-secciones-tras-agregar.spec.ts`.
+**Modifiés** : `lib/catalog/criterios.ts`/`buscar.ts` (+ tests) · `lib/cart/useAddToCart.ts` ·
+`(vitrine)/BuscadorInicio.tsx` · `(vitrine)/page.tsx` · `app/[locale]/layout.tsx` · les trois
+formulaires de `productos/[slug]/` · `messages/{es,en}/ProductPage.json` (`goToCheckout` retiré,
+orphelin ; `addedToCart` réutilisé pour le toast).
+
+### Effet de bord non anticipé — 9 specs e2e dépendaient de l'UI supprimée
+
+`added-to-cart`/`go-to-checkout-link` servaient de simple étape de mise en place (jamais l'objet du
+test) dans `attribution`, `cart-multi-establishment`, `login`, `payment-return`,
+`reserve-concurrency`, `reserve-lodging-pms-availability`, `reserve-lodging-range`, `reserve`,
+`signup`. Toutes corrigées dans ce lot (`irAPagoTrasAgregar`/`esperarRetornoTrasAgregar`).
+`cart-multi-establishment.spec.ts` en particulier : son en-tête affirmait que le panier est « un
+état React en mémoire... se réinitialise sur toute navigation dure » — faux depuis la spec 32
+(panier en base) ; corrigé au passage, avec son clic « ← Volver al catálogo » devenu inutile.
+
+### Quatre défauts pré-existants trouvés en vérifiant, non corrigés ici (hors périmètre)
+
+Chacun reproduit à l'identique contre le code d'avant ce lot (vérifié par `git stash` + rejeu) —
+aucun n'est une régression de cette tranche :
+1. **`reserve-lodging-range.spec.ts`** : le total affiché sur `/pago` pour un séjour de plusieurs
+   nuits (400.000 attendu) ne montre que 200.000 — la logique d'estimation du formulaire (qui
+   multiplie par le nombre de nuits) et celle de `CartSummary`/le total du panier semblent diverger
+   pour un produit à plage de dates.
+2. **`reserve.spec.ts`** (« capacité épuisée... ») : après un refus de `create_order`, la ligne
+   fautive du panier ne porte pas `data-failed="true"` comme l'assertion l'attend.
+3. **`cart-multi-establishment.spec.ts`** (test 1) : `countOrdersByPhone` fait une comparaison
+   exacte de chaîne alors que `PhoneField` (2026-09-10) normalise en E.164 compact — un numéro de
+   test écrit avec des espaces ne retrouve jamais sa commande.
+4. **`reserve-lodging-pms-availability.spec.ts`** : timeout au clic d'une seconde date de plage sur
+   un calendrier PMS-backed, reproductible même isolé sur base fraîche — cause non investiguée plus
+   avant, hors périmètre de cette tranche.
+
+### Vérifié
+
+`npm run typecheck && npm run lint && npm run test` (713/713, dont les nouveaux fichiers) verts.
+Les six `scripts/check-*.sh` verts (le seul rouge, `check-timezone.sh` sur les deux migrations
+`lodging_default_availability` du 2026-09-13, est antérieur et sans rapport — jamais touché ici).
+`npm run build` vert. `ordenarTipos` vérifiée par mutation. Parcours réel via Playwright contre la
+stack locale (`reorder-secciones-tras-agregar.spec.ts`) : ajout depuis une fiche → redirection
+immédiate vers l'accueil → critères ET flag dans l'URL → toast de succès **visible pour la première
+fois** → sections réordonnées (activité tombée en dernier, logement passé devant). 19/23 tests e2e
+du périmètre touché verts, les 4 rouges restants pré-existants et documentés ci-dessus.
 
 ## 11. Annexe — traçabilité
 

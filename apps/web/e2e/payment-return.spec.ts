@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { resetAvailability, mockMercadoPagoCheckout, seedDate } from "@hifago/e2e-support";
+import {
+  resetAvailability,
+  mockMercadoPagoCheckout,
+  seedDate,
+  irAPagoTrasAgregar,
+} from "@hifago/e2e-support";
 
 // Spec 33 — LE SEGMENT QUE PERSONNE NE REGARDAIT.
 //
@@ -38,10 +43,7 @@ async function commanderJusquAuResultat(page: import("@playwright/test").Page, e
   await expect(page.getByTestId("product-name")).toBeVisible();
   await page.locator(`[data-date="${DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
-  await expect(page.getByTestId("added-to-cart")).toBeVisible();
-
-  await page.getByTestId("go-to-checkout-link").click();
-  await expect(page).toHaveURL(/\/es\/pago/);
+  await irAPagoTrasAgregar(page);
 
   await page.locator('input[name="holder-name"]').fill("Cliente E2E Retorno");
   await page.locator('input[name="holder-phone"]').fill("+57 300 444 5555");

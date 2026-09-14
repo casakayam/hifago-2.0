@@ -9,14 +9,18 @@ import {
   getOrderLinesForPhone,
   mockMercadoPagoCheckout,
   seedDate,
+  irAPagoTrasAgregar,
+  esperarRetornoTrasAgregar,
 } from "@hifago/e2e-support";
 
 // Feature 6 : "Client : composer un panier à plusieurs lignes sur une même commande
-// (multi-établissement)". Le panier (lib/cart/CartContext.tsx) est un état React en mémoire
-// monté au niveau du layout (public)/[locale] : il survit à une navigation CLIENT (composant
-// Link de @/i18n/navigation) entre deux fiches produit, mais se réinitialise sur toute
-// navigation "dure" (page.goto). Chaque étape qui doit préserver le panier clique donc un vrai
-// lien plutôt que d'appeler page.goto().
+// (multi-établissement)". Le panier vit en base (`cart_items`, spec 32) rattaché à l'identité du
+// visiteur — pas un état React en mémoire : il survit à N'IMPORTE QUELLE navigation, `page.goto()`
+// compris. ⚠️ Ce commentaire disait le contraire jusqu'au 2026-09-13 (« un état React en
+// mémoire... se réinitialise sur toute navigation dure ») — vrai avant la spec 32, faux depuis.
+// Chaque ajout au panier redirige désormais automatiquement vers l'accueil (spec 28 Tranche 3,
+// cahier §2b.5) : ce test enchaîne directement vers la fiche produit suivante par `page.goto()`,
+// sans plus avoir besoin de cliquer un lien de retour au catalogue.
 const TOUR_ID = "b0000000-0000-4000-8000-000000000001"; // tour-lancha-guatape (établissement A)
 const TOUR_SLUG = "tour-lancha-guatape";
 const TOUR_DATE = seedDate(7);
@@ -24,8 +28,6 @@ const TOUR_DATE = seedDate(7);
 const KAYAK_ID = "b0000000-0000-4000-8000-000000000006"; // kayak-embalse-guatape (établissement B)
 const KAYAK_SLUG = "kayak-embalse-guatape";
 const KAYAK_DATE = seedDate(5);
-
-const BACK_TO_CATALOG_LINK = "← Volver al catálogo";
 
 // Les 2 tests ciblent kayak-embalse-guatape/2026-09-05 (la seule date seedée pour ce produit,
 // cf. supabase/seed.sql) : jamais en parallèle l'un de l'autre.
@@ -43,20 +45,12 @@ test("panier avec une ligne par établissement → une seule commande, 2 lignes"
   await page.locator(`[data-date="${TOUR_DATE}"]`).click();
   await page.locator("#qty").fill("2");
   await page.getByTestId("add-to-cart-button").click();
-  await expect(page.getByTestId("added-to-cart")).toBeVisible();
+  await esperarRetornoTrasAgregar(page);
 
-  // Retour catalogue via un vrai lien (client-side) — un page.goto() direct vers la 2e fiche
-  // produit réinitialiserait le panier (comportement attendu, pas un bug).
-  await page.getByRole("link", { name: BACK_TO_CATALOG_LINK, exact: true }).click();
-  await expect(page).toHaveURL(/\/es\/?$/);
-
-  await page.getByTestId(`tarjeta-${KAYAK_SLUG}-link`).click();
+  await page.goto(`/es/productos/${KAYAK_SLUG}`);
   await page.locator(`[data-date="${KAYAK_DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
-  await expect(page.getByTestId("added-to-cart")).toBeVisible();
-
-  await page.getByTestId("go-to-checkout-link").click();
-  await expect(page).toHaveURL(/\/es\/pago/);
+  await irAPagoTrasAgregar(page);
   await expect(page.getByTestId(/^cart-line-/)).toHaveCount(2);
 
   const tourLine = page.locator('[data-testid^="cart-line-"]', { hasText: TOUR_DATE });
@@ -110,13 +104,12 @@ test("une ligne dépasse la capacité restante de sa ressource → erreur ciblé
   await page.getByTestId(`tarjeta-${TOUR_SLUG}-link`).click();
   await page.locator(`[data-date="${TOUR_DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
-  await expect(page.getByTestId("added-to-cart")).toBeVisible();
+  await esperarRetornoTrasAgregar(page);
 
-  await page.getByRole("link", { name: BACK_TO_CATALOG_LINK, exact: true }).click();
-  await page.getByTestId(`tarjeta-${KAYAK_SLUG}-link`).click();
+  await page.goto(`/es/productos/${KAYAK_SLUG}`);
   await page.locator(`[data-date="${KAYAK_DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
-  await expect(page.getByTestId("added-to-cart")).toBeVisible();
+  await esperarRetornoTrasAgregar(page);
 
   // Pré-sature directement la disponibilité de la ressource visée par la ligne tour-lancha, entre
   // l'ajout au panier (purement local) et la validation du panier — simule un autre acheteur qui
@@ -125,7 +118,7 @@ test("une ligne dépasse la capacité restante de sa ressource → erreur ciblé
   // seulement la ligne fautive.
   await setBooked(TOUR_ID, TOUR_DATE, 1);
 
-  await page.getByTestId("go-to-checkout-link").click();
+  await page.goto("/es/pago");
   await expect(page.getByTestId(/^cart-line-/)).toHaveCount(2);
 
   const phone = "+57 300 666 7777";

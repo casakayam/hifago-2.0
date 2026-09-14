@@ -1,5 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
-import { resetAvailability, mockMercadoPagoCheckout, seedDate } from "@hifago/e2e-support";
+import {
+  resetAvailability,
+  mockMercadoPagoCheckout,
+  seedDate,
+  irAPagoTrasAgregar,
+} from "@hifago/e2e-support";
 
 // Feature 7 (attribution) — portée honnête (cf. plan) : aucun écran admin de consultation des
 // commandes n'existe encore à ce stade du backlog (feature 9, plus loin) pour vérifier visuellement
@@ -38,10 +43,7 @@ test("un lien ?ref=<code> actif ne casse rien du parcours invité, et aucun cham
 
   await page.locator(`[data-date="${DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
-  await expect(page.getByTestId("added-to-cart")).toBeVisible();
-
-  await page.getByTestId("go-to-checkout-link").click();
-  await expect(page).toHaveURL(/\/es\/pago/);
+  await irAPagoTrasAgregar(page);
   await assertNoCodeField(page);
 
   // Parcours invité (correctif réservation invité) : aucune connexion, soumission directe — le
