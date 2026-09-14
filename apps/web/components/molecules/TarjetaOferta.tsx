@@ -124,7 +124,16 @@ export function TarjetaOferta({ oferta, variante, prioridad, locale }: TarjetaOf
         </span>
       </span>
     ) : (
-      contenido
+      // ⚠️ Une offre "vitrina" pure (external_booking_url sans price_cop ni price_label, ex. un
+      // cours réservé par WhatsApp) laisse `contenido` à `undefined` — `Card` n'ouvre alors AUCUN
+      // `Card.Content`, et sa carte devient plus basse qu'une carte voisine qui affiche un prix,
+      // dans la même ligne de grille. Un placeholder invisible réserve la même hauteur qu'une
+      // ligne de prix réelle, sans rien annoncer à l'assistance.
+      (contenido ?? (
+        <span className="invisible" aria-hidden="true">
+          &nbsp;
+        </span>
+      ))
     );
 
   return (

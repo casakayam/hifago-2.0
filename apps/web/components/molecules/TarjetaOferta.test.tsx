@@ -172,14 +172,18 @@ describe("TarjetaOferta", () => {
     expect(carte.querySelector("p")?.textContent).toBe("Casa Kayam Guatapé");
   });
 
-  it("sans prix : aucun bloc de prix, et AUCUN conteneur de contenu vide", () => {
-    // ⚠️ La deuxième moitié compte autant que la première : `Card` n'ouvre son `Card.Content` que
-    // si des enfants lui parviennent. Passer un `<span>` vide aurait laissé un écart sous le titre
-    // sur toutes les offres sans prix — un défaut visuel, donc invisible à un test qui ne
-    // regarderait que le testId du prix. Cas limite « Offre sans prix chiffré » de la spec 28 §0.
+  it("sans prix : aucun bloc de prix visible, mais un espace réservé invisible (hauteur de carte fixe)", () => {
+    // ⚠️ Constaté en réel (carte "Mezcla", produit vitrina sans price_cop ni price_label) : une
+    // offre sans prix était plus basse qu'une offre voisine avec prix, dans la même ligne de
+    // grille — `Card` n'ouvrait alors AUCUN `Card.Content`, faute d'enfants. Un `<span>` invisible
+    // (pas vide) réserve désormais la même hauteur qu'une ligne de prix réelle, sans rien annoncer
+    // à l'assistance (`aria-hidden`). Cas limite « Offre sans prix chiffré » de la spec 28 §0,
+    // révisé pour la hauteur fixe des cartes.
     const { carte, precio } = rendre({ precio: null, fotos: fotos("sin-precio", 1) });
     expect(precio).toBeNull();
-    expect(carte.querySelector("[data-slot='card-content']")).toBeNull();
+    const contenu = carte.querySelector("[data-slot='card-content']");
+    expect(contenu).not.toBeNull();
+    expect(contenu?.querySelector(".invisible")?.getAttribute("aria-hidden")).toBe("true");
   });
 
   it('prix "desde" : le libellé traduit ET le montant, dans un seul élément', () => {
