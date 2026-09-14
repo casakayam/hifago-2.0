@@ -1,4 +1,4 @@
-# mockData/ — données de test lisibles et rejouables
+#  mockData/ — données de test lisibles et rejouables
 
 Lu par `supabase/scripts/seed-mock-data.mjs` (`/hifago-mock-data`). **Différent de
 `supabase/seed.sql`** : pas de reset, pas de purge — chaque item est **créé s'il n'existe pas
@@ -227,9 +227,15 @@ fonctionne pour ce type (branche générique de `create_order`, prix par personn
   "capacity": 20,                 // participants par départ
   "duration_days": 7,             // requis pour camp (contrainte CHECK)
   "departures": ["2026-10-01", "2026-12-01"],  // requis, un par départ — jamais un tableau vide
+  "group_discount_threshold_qty": 16,  // optionnel — remise si le remplissage CUMULÉ du départ
+  "group_discount_pct": 0.20,          // optionnel — atteint ce seuil ; les deux ensemble ou aucun
   "tags": [], "photos": []
 }
 ```
+`group_discount_*` (migration `20260914130000`) est un mécanisme DIFFÉRENT de `price_tiers`
+ci-dessus : il porte sur le remplissage cumulé de TOUTES les réservations d'un même départ
+(`product_availability.booked`), pas la quantité d'UNE seule réservation — cf.
+`docs/specs/36-remise-remplissage-camp.md`.
 ⚠️ Chaque date de `departures` pose DEUX choses en base, pas une seule : une ligne
 `product_availability` (capacité du camp lui-même) ET `duration_days` lignes
 `provider_resource_calendar` sur l'établissement (ressource partagée, feature 20) — sans la seconde,

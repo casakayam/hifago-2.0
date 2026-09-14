@@ -142,9 +142,12 @@ describe("PhotoStrip", () => {
     expect(container.querySelectorAll('img[loading="eager"]').length).toBe(0);
   });
 
-  it("une seule photo : elle est prioritaire, et le carrousel n'affiche ni flèches ni points", () => {
+  it("une seule photo : elle est prioritaire, et le carrousel n'affiche ni flèches ni points RÉELS", () => {
     // Comportement legacy conservé, porté par le Carousel lui-même (spec §8) — vérifié ici parce
-    // que c'est le contrat rendu de PhotoStrip, pas pour le retester à sa place.
+    // que c'est le contrat rendu de PhotoStrip, pas pour le retester à sa place. Les points
+    // restent absents FONCTIONNELLEMENT (aucun bouton, rien à cliquer) — seule leur hauteur est
+    // désormais réservée en invisible, pour qu'une carte à une seule photo ait la même taille
+    // qu'une carte qui en a plusieurs (cf. carousel.tsx).
     const liste = photos("seule", 1);
     const container = rendre(liste);
 
@@ -154,7 +157,18 @@ describe("PhotoStrip", () => {
 
     expect(container.querySelector('[data-testid="carousel-prev"]')).toBeNull();
     expect(container.querySelector('[data-testid="carousel-next"]')).toBeNull();
+    expect(container.querySelector('[data-testid="carousel-dot"]')).toBeNull();
     expect(container.querySelector('[data-testid="carousel-dots"]')).toBeNull();
+  });
+
+  it("aucune photo : réserve quand même la hauteur de la rangée de points, invisible", () => {
+    // Même raisonnement que ci-dessus, côté substitut : sans ça, une offre sans photo serait plus
+    // basse qu'une offre qui en a une ou plusieurs.
+    const container = rendre([]);
+
+    const espaceReserve = container.querySelector('[aria-hidden="true"].invisible');
+    expect(espaceReserve).not.toBeNull();
+    expect(espaceReserve?.querySelector("span")?.className).toContain("rounded-full");
   });
 
   it('⚠️ loading="lazy" sur la BANDE : plus aucun slide prioritaire, pas même le premier', () => {

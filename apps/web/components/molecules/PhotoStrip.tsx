@@ -80,17 +80,25 @@ export function PhotoStrip({ photos, sizes, loading, testId }: PhotoStripProps) 
   return (
     <div data-testid={testId}>
       {photos.length === 0 ? (
-        // `alt=""` : le substitut de l'atome est `aria-hidden`, il ne rend aucune balise <img> et
-        // n'a donc rien à décrire. `loading` n'a lui non plus aucun effet sans source — il est
-        // relayé tel quel plutôt que forcé, pour que le contrat se lise pareil dans les deux
-        // branches.
-        <Image
-          src={null}
-          alt=""
-          sizes={sizes}
-          loading={loading}
-          testId={testId ? `${testId}-photo-0` : undefined}
-        />
+        <>
+          {/* `alt=""` : le substitut de l'atome est `aria-hidden`, il ne rend aucune balise <img>
+              et n'a donc rien à décrire. `loading` n'a lui non plus aucun effet sans source — il
+              est relayé tel quel plutôt que forcé, pour que le contrat se lise pareil dans les
+              deux branches. */}
+          <Image
+            src={null}
+            alt=""
+            sizes={sizes}
+            loading={loading}
+            testId={testId ? `${testId}-photo-0` : undefined}
+          />
+          {/* Même réservation de hauteur que la rangée de points du Carousel (invisible quand une
+              seule photo) : sans elle, une offre SANS photo serait plus basse qu'une offre qui en
+              a une ou plusieurs, dans la même grille de cartes. */}
+          <div className="invisible mt-2 flex justify-center gap-1.5" aria-hidden="true">
+            <span className="h-2 w-2 rounded-full" />
+          </div>
+        </>
       ) : (
         <Carousel
           slides={photos}

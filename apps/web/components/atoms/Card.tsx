@@ -235,7 +235,13 @@ export function Card({
       <HeroUICard.Header>
         {title ? (
           <HeroUICard.Title
-            className={TITLE_SIZE_CLASSES[titleSize]}
+            // `line-clamp-1` : une carte de grille (catalogue, listing) doit garder une hauteur
+            // fixe indépendamment de la longueur du titre — sans ça, un titre de deux mots et un
+            // titre de sept mots produisent deux cartes de hauteurs différentes sur la même ligne
+            // de grille (constaté sur les cartes d'activité). Les deux usages restants de cet
+            // atome (`OrderCard`) ont eux aussi des titres courts et déterministes (nom de
+            // produit) — aucun besoin réel d'un titre multi-ligne à ce jour.
+            className={`line-clamp-1 ${TITLE_SIZE_CLASSES[titleSize]}`.trim()}
             render={(props) => <BaliseTitre {...props} />}
           >
             {href ? (
@@ -255,8 +261,12 @@ export function Card({
             )}
           </HeroUICard.Title>
         ) : null}
-        {subtitle ? <p className="text-xs text-muted">{subtitle}</p> : null}
-        {description ? <HeroUICard.Description>{description}</HeroUICard.Description> : null}
+        {/* `line-clamp-2` sur subtitle ET description, même raison que le titre ci-dessus : une
+            carte de grille doit garder une hauteur fixe quelle que soit la longueur du texte. */}
+        {subtitle ? <p className="line-clamp-2 text-xs text-muted">{subtitle}</p> : null}
+        {description ? (
+          <HeroUICard.Description className="line-clamp-2">{description}</HeroUICard.Description>
+        ) : null}
       </HeroUICard.Header>
     ) : null;
 

@@ -129,22 +129,33 @@ export function Carousel<T extends CarouselSlide>({
         </>
       ) : null}
 
-      {hasMultiple && variant === "gallery" ? (
-        <div className="mt-2 flex justify-center gap-1.5" data-testid="carousel-dots">
-          {slides.map((slide, index) => (
-            <button
-              key={slide.id}
-              type="button"
-              aria-label={labels.irA(index + 1)}
-              onClick={() => emblaApi?.scrollTo(index)}
-              className={cn(
-                "h-2 w-2 rounded-full transition-colors",
-                index === selectedIndex ? "bg-primary" : "bg-muted"
-              )}
-              data-testid="carousel-dot"
-            />
-          ))}
-        </div>
+      {variant === "gallery" ? (
+        hasMultiple ? (
+          <div className="mt-2 flex justify-center gap-1.5" data-testid="carousel-dots">
+            {slides.map((slide, index) => (
+              <button
+                key={slide.id}
+                type="button"
+                aria-label={labels.irA(index + 1)}
+                onClick={() => emblaApi?.scrollTo(index)}
+                className={cn(
+                  "h-2 w-2 rounded-full transition-colors",
+                  index === selectedIndex ? "bg-primary" : "bg-muted"
+                )}
+                data-testid="carousel-dot"
+              />
+            ))}
+          </div>
+        ) : (
+          // Comportement legacy inchangé : une seule photo n'affiche jamais de points RÉELS
+          // (§8 du spec). Mais un espace réservé et invisible (mêmes classes/dimensions que la
+          // vraie rangée) évite qu'une carte à une seule photo soit plus basse qu'une carte qui
+          // en a plusieurs dans la même grille — c'est ce défaut, pas le point d'origine, qui a
+          // été signalé. `aria-hidden` : rien ici n'est interactif ni à annoncer.
+          <div className="invisible mt-2 flex justify-center gap-1.5" aria-hidden="true">
+            <span className="h-2 w-2 rounded-full" />
+          </div>
+        )
       ) : null}
     </div>
   );

@@ -58,8 +58,9 @@ describe("Card", () => {
     const petit = carte(<Card title="T" titleAs="h2"><p>x</p></Card>);
     const moyen = carte(<Card title="T" titleAs="h2" titleSize="md"><p>x</p></Card>);
     const grand = carte(<Card title="T" titleAs="h2" titleSize="lg"><p>x</p></Card>);
-    // `sm` = le `.card__title` de HeroUI, sans ajout.
-    expect(petit.querySelector("h2")?.className.trim()).toBe("card__title");
+    // `sm` = le `.card__title` de HeroUI, sans ajout de taille — `line-clamp-1` reste posé dans
+    // les trois tailles (hauteur de carte fixe, cf. son propre test dédié plus bas).
+    expect(petit.querySelector("h2")?.className.trim()).toBe("card__title line-clamp-1");
     expect(moyen.querySelector("h2")?.className).toContain("text-lg");
     expect(grand.querySelector("h2")?.className).toContain("text-2xl");
   });
@@ -283,5 +284,21 @@ describe("Card", () => {
     const enfants = Array.from(entete.children).map((n) => n.getAttribute("data-slot") ?? n.tagName);
     expect(enfants).toEqual(["card-title", "P", "card-description"]);
     expect(entete.children[1].textContent).toBe("3 habitaciones");
+  });
+
+  // ⚠️ Constaté sur les cartes d'activité de l'accueil/listings : un titre court et un titre long
+  // produisaient deux cartes de hauteurs différentes sur la même ligne de grille. `line-clamp-*`
+  // fige la hauteur du texte quelle que soit sa longueur, plutôt que de laisser un CSS `truncate`
+  // (une seule ligne partout) — un sous-titre/une description tiennent parfois sur deux lignes
+  // sans devenir illisibles, contrairement au titre.
+  it("fige la hauteur du texte — titre sur 1 ligne, sous-titre et description sur 2 lignes max", () => {
+    const el = carte(
+      <Card title={TITRE} titleAs="h2" subtitle="Un sous-titre plutôt long, sur deux lignes" description={DESCRIPTION}>
+        <p>x</p>
+      </Card>
+    );
+    expect(el.querySelector("h2")?.className).toContain("line-clamp-1");
+    expect(el.querySelector("[data-slot='card-header'] > p")?.className).toContain("line-clamp-2");
+    expect(el.querySelector("[data-slot='card-description']")?.className).toContain("line-clamp-2");
   });
 });
