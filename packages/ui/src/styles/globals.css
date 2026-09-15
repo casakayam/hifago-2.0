@@ -185,7 +185,7 @@
 }
 
 /* ============================================================================================
- * Thème `vitrine` (apps/web) — cinq pistes à comparer, en clair et en sombre
+ * Thème `vitrine` (apps/web) — six pistes à comparer, en clair et en sombre
  * ============================================================================================
  *
  * Écrit le 2026-09-01. Jusqu'ici le thème `vitrine` ne définissait AUCUN jeton : le commentaire en
@@ -200,14 +200,23 @@
  * (docs/specs/09-design-system-admin.md §10) : des pistes montées, comparées à l'œil dans un rendu
  * réel, une seule retenue. Ici le rendu réel est la story `Playground/Palette`.
  *
- * ⚠️ IL Y A CINQ PISTES (la cinquième, `chiva`, ajoutée le 2026-09-02), et la quatrième —
- * `hifago` — est la plus importante. La spec de ce lot
+ * ⚠️ IL Y A SIX PISTES (la cinquième, `chiva`, ajoutée le 2026-09-02 ; la sixième, `penol`, le
+ * 2026-09-14), et la quatrième — `hifago` — est la plus importante. La spec de ce lot
  * partait du principe que « Jérôme n'a pas donné de direction » pour la vitrine. Vérification faite,
  * c'est faux : le portail legacy /guatape, en production, porte une marque complète et versionnée —
  * orange #e63f0a, vert forêt #074242, papier #fffdf8, polices Anton/Allura/Akshar/DM Mono — et il a
  * déjà tranché la question du mode sombre, qui est SON DÉFAUT. Trois pistes inventées à côté d'une
  * marque existante auraient été trois propositions hors sujet. La piste « Hifago » porte donc cette
  * palette telle quelle ; les trois autres restent des alternatives, pas des concurrentes à égalité.
+ *
+ * ⚠️ `penol` N'EST PAS une variante de `hifago` : c'est une DEUXIÈME référence de marque, pas une
+ * alternative inventée. Jérôme a envoyé le 2026-09-14 un nouveau logo « hifaGO • Guatapé » — quatre
+ * fonds testés sur le même mot-marque (or, bleu ciel, bleu poudre, marine) — qui ne reprend AUCUNE
+ * couleur du legacy Kayam (zéro orange, zéro vert forêt). Les deux références de marque coexistent
+ * donc côte à côte le temps que Jérôme choisisse laquelle (ou aucune) devient la vitrine. Couleurs
+ * estimées À L'ŒIL depuis la capture collée dans la conversation — aucun fichier source dans le
+ * dépôt, donc aucune extraction programmatique possible ; à recaler si Jérôme fournit un export
+ * fidèle (Figma/Decli/PNG haute résolution).
  *
  * ADOPTER UNE PISTE — la recette complète, trois gestes :
  *   1. Remplacer son sélecteur `[data-theme="vitrine"][data-piste="<nom>"]` par
@@ -888,6 +897,127 @@
     --field-shadow: 2px 2px 0 0 var(--border);
     --overlay-shadow: 6px 6px 0 0 var(--border);
   }
+
+
+  /* ------------------------------------------------------------------------------------------
+   * Piste « Peñol » — le nouveau logo hifaGO
+   * ------------------------------------------------------------------------------------------
+   * Ajoutée le 2026-09-14, à partir d'un logo « hifaGO • Guatapé » envoyé par Jérôme (quatre fonds
+   * testés sur le même mot-marque : or, bleu ciel, bleu poudre, marine). Nom : la Piedra del Peñol,
+   * le rocher qui domine Guatapé — même registre que `embalse` (le lac) et `zocalo` (les frises
+   * peintes des maisons). Retouchée le même jour (retour de Jérôme après la première version) :
+   * bouton en or franc, bleu promu en deuxième couleur principale, cartes sans ombre à bordure
+   * marine — voir les trois points ci-dessous.
+   *
+   * ⚠️ Couleurs ESTIMÉES À L'ŒIL depuis une capture collée dans une conversation, pas des hex de
+   * charte : aucun fichier n'existe dans ce dépôt pour ce logo (vérifié — aucune image, aucun
+   * `docs/design/`), donc aucune extraction programmatique n'était possible. Point de départ visuel
+   * (avant tout ajustement de contraste ci-dessous) : marine `#1a2740`, or `#d9a62b`, bleu ciel
+   * `#5b93c6`, bleu poudre `#bfd6ec`. À RECALER si Jérôme fournit un export fidèle.
+   *
+   * ⚠️ TROIS CHOIX FAITS EN RÉPONSE AU RETOUR DE JÉRÔME, chacun mesuré :
+   *  1. **Le bouton retrouve l'or franc du logo** (`--accent`, 74 % de clarté en clair, ~`#d6a21e`)
+   *     — la version assombrie (54 %) de la première passe ne servait qu'à faire tenir l'or comme
+   *     COULEUR DE LIEN, ce qui n'était pas la demande. `--link`/`--focus` sont donc DÉCOUPLÉS de
+   *     `--accent` ici (contrairement à toutes les autres pistes, qui posent `--link: var(--accent)`)
+   *     et portent leur propre bleu (point 2) : le bouton peut être franchement or SANS que le texte
+   *     de lien hérite d'une couleur trop claire pour rester lisible. `--accent-foreground` passe au
+   *     marine (`#0a152a` clair, 7,78:1 sur l'or) plutôt qu'un blanc cassé générique — c'est le
+   *     COUPLE du logo lui-même (or + marine, cf. Q1/Q3 du fond envoyé par Jérôme), pas une couleur
+   *     de texte neutre.
+   *  2. **Le bleu devient une deuxième couleur PRINCIPALE**, pas seulement un ton discret : `--link`/
+   *     `--focus` (`#155c91` clair, 6,51:1 sur la page) et surtout `--default` — le bouton
+   *     secondaire — passent d'un gris à peine teinté (90,5 % de clarté, quasi blanc) à un bleu
+   *     franchement visible (`#a5c9ea` clair, 82 % de clarté ; `#364868` en sombre, un bleu marine
+   *     moyen). Les deux couleurs du logo sont donc VUES sur les boutons : or en primaire, bleu en
+   *     secondaire — `--muted`/`--field-border`/`--field-placeholder` gardent le bleu ciel plus
+   *     discret du premier jet.
+   *  3. **Cartes sans ombre, bordure bleu marine** : `--surface-shadow` neutralisé (`none`) — sans
+   *     cette piste, HeroUI applique une ombre douce partagée par les cinq autres (grise, ~4 %
+   *     d'opacité) sur `.card`. Une carte HeroUI n'a AUCUNE bordure par défaut (`card.css` : aucune
+   *     classe `border-*` sur `.card--default/secondary/tertiary`, seule l'ombre la détache de la
+   *     page) — il a donc fallu en ADOUTER une, pas seulement changer sa couleur : règle dédiée plus
+   *     bas (même technique que le trait noir de `chiva`), `border-color: var(--border)`. `--border`
+   *     passe du bleu ciel clair (78 %, à peine visible) à un marine réellement foncé en clair
+   *     (37 %, `#2e3f60`, 9,6:1 sur la page) — littéralement « bleu foncé ». ⚠️ En SOMBRE, un marine
+   *     aussi foncé se fondrait dans une carte déjà marine (27,5 % de clarté) : `--border` y remonte
+   *     à 66 % (`#6f97bb`) pour rester une bordure VISIBLE (5,5:1) — la fonction demandée (une
+   *     bordure qui se voit) prime sur la valeur littérale « foncé », qui ne fait sens qu'en clair.
+   *
+   * Teintes de statut toujours écartées de l'or (84°), inchangé depuis la première version : `danger`
+   * à 15°, `success` à 150°, `warning` au milieu à 50° (34°/35° d'écart, plus large que l'écart le
+   * plus serré de `hifago`, 21°).
+   *
+   * ⚠️ Contrastes vérifiés par un script OKLCH→sRGB hors navigateur (même formule WCAG que
+   * `Contrastes.stories.tsx`, pas relue dans un vrai navigateur, badges translucides approximés à la
+   * main puisque `color-mix` n'est pas simulé) : tous les couples testés par cette story passent leur
+   * seuil (4.5:1 texte, 3:1 élément identifiant), bordure de carte comprise bien qu'elle n'y soit pas
+   * mesurée (décorative pour les cinq autres pistes, mais un choix délibéré ici). À reconfirmer dans
+   * la story elle-même — c'est elle qui fait foi, jamais un chiffre recopié.
+   * ------------------------------------------------------------------------------------------ */
+  [data-theme="vitrine"][data-piste="penol"] {
+    color-scheme: light dark;
+
+    --radius: 0.25rem;
+    --border-width: 1px;
+
+    /* Base */
+    --background: light-dark(oklch(97% 0.01 247), oklch(23% 0.035 262));
+    --foreground: light-dark(oklch(0% 0 0), oklch(92% 0.012 247));
+
+    /* Surfaces — pas d'ombre sur cette piste (cf. commentaire ci-dessus), l'étagement + la bordure
+       dédiée aux cartes portent la profondeur */
+    --surface: light-dark(oklch(100% 0 0), oklch(27.5% 0.038 262));
+    --surface-secondary: light-dark(oklch(94% 0.016 247), oklch(32.5% 0.04 262));
+    --surface-tertiary: light-dark(oklch(89% 0.022 247), oklch(38% 0.042 262));
+    --overlay: light-dark(oklch(100% 0 0), oklch(29% 0.038 262));
+    --surface-shadow: none;
+
+    /* Texte discret — teinte bleu ciel du logo, pas un gris neutre */
+    --muted: light-dark(oklch(46% 0.075 247), oklch(75% 0.045 247));
+
+    /* Neutre / bouton secondaire — bleu FRANCHEMENT visible, pas un gris à peine teinté (cf. §2) */
+    --default: light-dark(oklch(82% 0.06 247), oklch(40% 0.06 262));
+
+    /* Accent / bouton primaire — l'or franc du logo (cf. §1), texte marine du logo dessus */
+    --accent: light-dark(oklch(74% 0.145 84), oklch(83% 0.135 86));
+    --accent-foreground: light-dark(oklch(20% 0.045 262), oklch(18% 0.04 262));
+
+    /* Lien / focus — DÉCOUPLÉS de l'accent ici, portent le bleu du logo (cf. §1-2) */
+    --link: light-dark(oklch(46% 0.11 247), oklch(76% 0.09 247));
+    --focus: var(--link);
+
+    /* Champs de formulaire */
+    --field-background: light-dark(oklch(100% 0 0), oklch(20.5% 0.033 262));
+    --field-placeholder: light-dark(oklch(46% 0.075 247), oklch(70% 0.04 247));
+    --field-border: light-dark(oklch(58% 0.07 247), oklch(56% 0.045 247));
+
+    /* Statuts — écartés de l'accent (84°), inchangé */
+    --success: light-dark(oklch(45% 0.12 150), oklch(78% 0.14 150));
+    --success-foreground: light-dark(oklch(99% 0.007 88.6), oklch(15.7% 0.03 150));
+    --warning: light-dark(oklch(54% 0.16 50), oklch(84% 0.14 50));
+    --warning-foreground: light-dark(oklch(99% 0.007 88.6), oklch(16% 0.03 50));
+    --danger: light-dark(oklch(46% 0.19 15), oklch(84% 0.12 15));
+    --danger-foreground: light-dark(oklch(99% 0.007 88.6), oklch(15.7% 0.03 15));
+
+    /* Divers — bordure de carte en bleu marine FONCÉ en clair, remontée en sombre pour rester
+       visible sur une carte déjà marine (cf. §3) */
+    --segment: light-dark(oklch(99% 0.006 247), oklch(31% 0.038 262));
+    --border: light-dark(oklch(37% 0.06 262), oklch(66% 0.07 247));
+    --separator: light-dark(oklch(89% 0.018 247), oklch(35% 0.04 262));
+    --surface-secondary-foreground: var(--surface-foreground);
+    --surface-tertiary-foreground: var(--surface-foreground);
+  }
+
+  /* Les cartes HeroUI n'ont AUCUNE bordure par défaut (card.css : seule l'ombre les détache de la
+     page) — l'ombre étant neutralisée ci-dessus pour cette piste, il faut poser la bordure
+     explicitement, même technique que le trait noir de `chiva` plus bas. `:not(.card--transparent)`
+     pour la même raison que chiva : une carte transparente n'a ni fond ni ombre, elle ne doit pas
+     avoir de trait non plus. */
+  [data-theme="vitrine"][data-piste="penol"] [data-slot="card"]:not(.card--transparent) {
+    border: var(--border-width) solid var(--border);
+  }
+
 
   /* ------------------------------------------------------------------------------------------
    * Rayon des angles à l'essai — 6 / 8 / 12 / 18 px

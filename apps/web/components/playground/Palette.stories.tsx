@@ -68,6 +68,20 @@ const PISTES = [
     sacrifice:
       "En mode clair, le jaune (1,38:1 sur blanc) et le vert (1,86:1) ne peuvent JAMAIS porter de texte : ce sont des aplats, avec du texte noir dessus. Le rouge et le bleu sont l’inverse — lisibles en texte (4,92 et 5,67) mais leurs aplats portent du BLANC, pas du noir. Deux règles de texte au lieu d’une. Et le rouge devient une couleur de marque autant qu’une couleur d’alerte : ce n’est plus lui seul qui signale une action destructrice.",
   },
+  {
+    // Ajoutée le 2026-09-14, à partir d'un nouveau logo « hifaGO • Guatapé » envoyé par Jérôme —
+    // une DEUXIÈME référence de marque, pas une variante de `hifago` : elle ne reprend aucune
+    // couleur du legacy Kayam (zéro orange, zéro vert forêt). Retouchée le même jour après retour
+    // de Jérôme : bouton en or franc, bleu promu en deuxième couleur principale (lien/focus ET
+    // bouton secondaire), cartes sans ombre à bordure marine.
+    cle: "penol",
+    titre: "Peñol",
+    sous_titre: "le nouveau logo hifaGO",
+    parti:
+      "Bouton en or franc du logo (texte marine dessus, comme sur le logo), bleu en deuxième couleur principale (lien, focus, bouton secondaire), cartes sans ombre à bordure bleu marine — repris du logo hifaGO envoyé par Jérôme (2026-09-14).",
+    sacrifice:
+      "Couleurs estimées à l’œil depuis une capture collée dans une conversation, pas des hex de charte — à recaler si Jérôme fournit un export fidèle. `--link`/`--focus` sont ici DÉCOUPLÉS de `--accent` (contrairement aux cinq autres pistes) pour que le bouton reste en or franc sans hériter une couleur trop claire pour du texte de lien — une piste qui compare mal terme à terme avec les autres sur ce point précis.",
+  },
 ] as const;
 
 type Mode = "clair" | "sombre";
