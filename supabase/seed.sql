@@ -217,7 +217,11 @@ from (values
   -- Spec 35 : réservée exclusivement à e2e/perfil.spec.ts (pré-remplissage du tunnel — la commande
   -- de setup y porte un nom délibérément différent du profil édité ensuite, pour prouver que
   -- /pago ne retombe jamais sur elle une fois le profil rempli).
-  (16, 5, 0)
+  (16, 5, 0),
+  -- Réservée exclusivement à e2e/cart-resume-pending-order.spec.ts (reprise d'une commande invitée
+  -- non payée depuis /carrito et /pago à panier vide). Même piège que le 17 ci-dessus : une date
+  -- NEUVE est nécessaire, `resetAvailability` ne fait qu'un UPDATE.
+  (18, 5, 0)
 ) as v(dia, capacity, booked);
 
 -- Feature 15 (Socio : soumettre une proposition d'édition) — profil dédié isolé. Constat en

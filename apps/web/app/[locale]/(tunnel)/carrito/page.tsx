@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { getCartLines } from "@/lib/cart/getCartLines";
+import { getPendingOrdersForViewer } from "@/lib/orders/getPendingOrdersForViewer";
 import { CartSummary } from "@/components/organisms/CartSummary";
 import { LinkButton } from "@/components/atoms/LinkButton";
+import { PendingOrdersNotice } from "../PendingOrdersNotice";
 import type { Locale } from "@/messages";
 
 // Spec 32 (panier en base) — route déjà prévue par la spec 27
@@ -24,6 +26,11 @@ export default async function CartPage({ params }: PageProps<"/[locale]/carrito"
   const t = await getTranslations("CartPage");
   const lines = await getCartLines(locale as Locale);
 
+  // create_order vide cart_items dès qu'elle réussit (spec 32) : un panier vide peut donc cacher
+  // une commande déjà réservée, pas encore payée. Lu SEULEMENT sur ce chemin déjà froid — jamais
+  // sur le chemin chaud d'un panier normal.
+  const pendingOrders = lines.length === 0 ? await getPendingOrdersForViewer() : [];
+
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-8">
       <h1 className="text-2xl font-semibold">{t("title")}</h1>
@@ -33,6 +40,11 @@ export default async function CartPage({ params }: PageProps<"/[locale]/carrito"
           {t("goToCheckout")}
         </LinkButton>
       ) : null}
+      <PendingOrdersNotice
+        orders={pendingOrders}
+        title={t("pendingOrdersTitle")}
+        linkLabel={(reference) => t("pendingOrderLink", { reference })}
+      />
     </main>
   );
 }

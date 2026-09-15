@@ -3,9 +3,11 @@ import { setRequestLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@hifago/supabase/server";
 import { isRealAccount } from "@hifago/supabase/identity";
 import { getCartLines } from "@/lib/cart/getCartLines";
+import { getPendingOrdersForViewer } from "@/lib/orders/getPendingOrdersForViewer";
 import { getPartnerAccountProfileFields } from "@/lib/account/getMyProfile";
 import { CartSummary } from "@/components/organisms/CartSummary";
 import { CheckoutForm } from "./CheckoutForm";
+import { PendingOrdersNotice } from "../PendingOrdersNotice";
 import type { Locale } from "@/messages";
 
 export async function generateMetadata(
@@ -74,6 +76,13 @@ export default async function CheckoutPage({
     }
   }
 
+  // create_order vide cart_items dès qu'elle réussit (spec 32) : un panier vide peut donc cacher
+  // une commande déjà réservée, pas encore payée. Lu SEULEMENT sur ce chemin déjà froid — jamais
+  // sur le chemin chaud d'un panier normal. Ne réutilise pas `user` déjà résolu ci-dessus : deux
+  // signatures différentes selon l'appelant auraient été la première divergence entre `/carrito`
+  // et `/pago`, qui n'a pas cet accès (cf. `getPendingOrdersForViewer.ts`).
+  const pendingOrders = lines.length === 0 ? await getPendingOrdersForViewer() : [];
+
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-8">
       <h1 className="text-2xl font-semibold">{t("title")}</h1>
@@ -89,6 +98,11 @@ export default async function CheckoutPage({
           initialHolderEmail={initialHolderEmail}
         />
       ) : null}
+      <PendingOrdersNotice
+        orders={pendingOrders}
+        title={t("pendingOrdersTitle")}
+        linkLabel={(reference) => t("pendingOrderLink", { reference })}
+      />
     </main>
   );
 }

@@ -8,6 +8,8 @@
   "submit": "Validar pedido",
   "submitting": "Procesando…",
   "loginLink": "Inicia sesión para encontrar tus reservas",
+  "pendingOrdersTitle": "Tienes reservas pendientes de pago:",
+  "pendingOrderLink": "Reserva {reference}",
   "errors": {
     "empty_cart": "Tu carrito está vacío.",
     "product_not_found": "Uno de los productos de tu carrito ya no existe.",

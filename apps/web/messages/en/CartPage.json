@@ -5,5 +5,7 @@
   "lineUnavailable": "This product is no longer available. You can remove it from your cart.",
   "total": "Total",
   "removeLine": "Remove",
-  "goToCheckout": "Go to checkout"
+  "goToCheckout": "Go to checkout",
+  "pendingOrdersTitle": "You have bookings pending payment:",
+  "pendingOrderLink": "Booking {reference}"
 }

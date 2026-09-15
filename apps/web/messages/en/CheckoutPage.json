@@ -8,6 +8,8 @@
   "submit": "Confirm order",
   "submitting": "Processing…",
   "loginLink": "Sign in to find your reservations",
+  "pendingOrdersTitle": "You have bookings pending payment:",
+  "pendingOrderLink": "Booking {reference}",
   "errors": {
     "empty_cart": "Your cart is empty.",
     "product_not_found": "One of the products in your cart no longer exists.",
