@@ -11,7 +11,7 @@
 --   Garde 3 — propriétaire actuel anonyme uniquement : ne vole jamais la commande d'un compte réel
 --             qui aurait saisi l'email d'un tiers dans le checkout.
 begin;
-select plan(15);
+select plan(18);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -49,9 +49,9 @@ update auth.users set is_anonymous = true
  where id in ('89340000-0000-4000-8000-000000000031', '89340000-0000-4000-8000-000000000035');
 
 -- A : la commande de l'invité, sous l'adresse que le compte 032 confirmera. À rattacher.
-insert into orders (id, account_id, holder_name, holder_email)
+insert into orders (id, account_id, holder_name, holder_email, holder_phone)
 values ('89340000-0000-4000-8000-000000000041', '89340000-0000-4000-8000-000000000031',
-        'Holder Attach', 'cliente@test.local');
+        'Holder Attach', 'cliente@test.local', '+573001112233');
 insert into order_lines (
   id, order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
@@ -135,6 +135,19 @@ select is(
   '89340000-0000-4000-8000-000000000032',
   'et SES LIGNES ont suivi (account_id dénormalisé, 20260813194515) — jamais l''un sans l''autre'
 );
+-- ⚠️ Trouvé en usage réel le 2026-09-14 : le compte fraîchement créé n'a JAMAIS eu l'occasion de
+-- saisir son nom/téléphone (ni à l'inscription, ni ailleurs) — seule la commande d'invité les
+-- porte. Sans ce pré-remplissage, le client se retrouve avec ses réservations mais un profil vide.
+select is(
+  (select full_name from partner_accounts where id = '89340000-0000-4000-8000-000000000032'),
+  'Holder Attach',
+  'le profil du compte reçoit le nom déjà saisi au checkout invité'
+);
+select is(
+  (select phone from partner_accounts where id = '89340000-0000-4000-8000-000000000032'),
+  '+573001112233',
+  'et son téléphone'
+);
 
 -- ── Garde 3 : la commande d'un compte réel n'est jamais volée ─────────────────────────────────
 select is(
@@ -171,6 +184,12 @@ values ('89340000-0000-4000-8000-000000000044', '89340000-0000-4000-8000-0000000
 select is(
   (public.attach_orders_to_account()->>'attached')::int, 1,
   'la comparaison d''adresse ignore la casse — un client qui tape son email en majuscules compte'
+);
+select is(
+  (select full_name from partner_accounts where id = '89340000-0000-4000-8000-000000000032'),
+  'Holder Attach',
+  'un profil déjà rempli n''est JAMAIS réécrit par un rattachement suivant (même logique que '
+  'update_my_account_profile, 20260819100000) — "Holder Casse" de la commande ci-dessus ne remplace pas'
 );
 
 -- ── Grants ────────────────────────────────────────────────────────────────────────────────────
