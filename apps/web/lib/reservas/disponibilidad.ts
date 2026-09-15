@@ -33,11 +33,13 @@ export function plazasRestantes(fila: FilaCapacidad, enCarrito: number): number 
  * discriminant, la page choisit la clé next-intl et lui passe `count`. Sans ça, un module
  * `server-only` finirait par importer `useTranslations`.
  */
-export type EstadoPlazas = "completo" | "ultima" | "quedan";
+// Pas d'état "dernière place" séparé (retiré le 2026-09-14) : sur un créneau à petite capacité,
+// le message d'urgence se déclenchait à chaque fois qu'il ne restait qu'une place — vrai pour un
+// lot de 10 comme pour un lot de 1, et pas ce que Jérôme voulait dans les deux cas. Rester neutre.
+export type EstadoPlazas = "completo" | "quedan";
 
 export function estadoDisponibilidad(restantes: number): EstadoPlazas {
   if (restantes <= 0) return "completo";
-  if (restantes === 1) return "ultima";
   return "quedan";
 }
 
@@ -76,8 +78,7 @@ export function agregarEnCarrito(
  * c'est ce qui permet UN seul site d'appel au lieu du ternaire imbriqué recopié à TROIS endroits
  * (spec 30 §7a, duplication n°3).
  */
-export const CLAVE_PLAZAS: Record<EstadoPlazas, "full" | "lastSpot" | "spotsLeft"> = {
+export const CLAVE_PLAZAS: Record<EstadoPlazas, "full" | "spotsLeft"> = {
   completo: "full",
-  ultima: "lastSpot",
   quedan: "spotsLeft",
 };

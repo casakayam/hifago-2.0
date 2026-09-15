@@ -9,7 +9,6 @@
   "lodgingUnitCount": "{count} en total",
   "availabilityTitle": "Disponibilidad",
   "spotsLeft": "{count, plural, one {# cupo disponible} other {# cupos disponibles}}",
-  "lastSpot": "¡Última plaza!",
   "full": "Completo",
   "selectDate": "Elige una fecha en el calendario para reservar.",
   "selectSlotDate": "Elige un día en el calendario para ver los horarios disponibles.",

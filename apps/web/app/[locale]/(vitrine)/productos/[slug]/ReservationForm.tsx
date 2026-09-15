@@ -98,17 +98,15 @@ export function ReservationForm({
     [lines, productId]
   );
 
-  const { fullDates, lastSpotDates } = useMemo(() => {
+  const fullDates = useMemo(() => {
     const full: Date[] = [];
-    const lastSpot: Date[] = [];
     for (const row of availability) {
       // Le MÊME seuil que le message affiché dessous — écrit une fois, dans `disponibilidad.ts`.
-      // Avant, le calendrier et la phrase portaient chacun leur propre `<= 0` / `=== 1`.
+      // Avant, le calendrier et la phrase portaient chacun leur propre `<= 0`.
       const estado = estadoDisponibilidad(plazasRestantes(row, inCartByDate.get(row.date) ?? 0));
       if (estado === "completo") full.push(parseISO(row.date));
-      else if (estado === "ultima") lastSpot.push(parseISO(row.date));
     }
-    return { fullDates: full, lastSpotDates: lastSpot };
+    return full;
   }, [availability, inCartByDate]);
 
   const selectedIso = isoDeFecha(selectedDate);
@@ -181,9 +179,8 @@ export function ReservationForm({
             { after: dernierJourReservable },
             (date) => !porJourDepart.has(format(date, "yyyy-MM-dd")),
           ]}
-          modifiers={{ lastSpot: lastSpotDates, full: fullDates, campWeek: diasSemanaSeleccionada }}
+          modifiers={{ full: fullDates, campWeek: diasSemanaSeleccionada }}
           modifiersClassNames={{
-            lastSpot: "ring-2 ring-accent",
             full: "line-through opacity-60",
             campWeek: "bg-accent/20",
           }}

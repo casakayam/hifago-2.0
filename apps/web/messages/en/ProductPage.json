@@ -9,7 +9,6 @@
   "lodgingUnitCount": "{count} in total",
   "availabilityTitle": "Availability",
   "spotsLeft": "{count, plural, one {# spot left} other {# spots left}}",
-  "lastSpot": "Last spot!",
   "full": "Full",
   "selectDate": "Pick a date on the calendar to reserve.",
   "selectSlotDate": "Pick a day on the calendar to see available time slots.",

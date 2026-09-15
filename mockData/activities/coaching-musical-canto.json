@@ -3,7 +3,14 @@
   "establishment": "kayam",
   "name": { "es": "Coaching musical canto 1h" },
   "duration_minutes": 60,
-  "external_booking_url": "https://wa.me/573001112233?text=Hola%2C%20quiero%20reservar%20Coaching%20Musical%20Canto%20en%20Kayam%20Lab",
+  "price_cop": 80000,
+  "unit": "per_person",
+  "min_qty": 1,
+  "max_qty": 1,
+  "slot_rules": [
+    { "weekdays": [1, 2, 3, 4, 5, 6, 7], "start_time": "10:00", "end_time": "18:00", "slot_duration_minutes": 60, "capacity": 1 }
+  ],
+  "external_booking_url": null,
   "tags": ["musica"],
   "photos": ["1.webp"],
   "_extra_columns": { "category": "musica", "qty_unit": "hours" }

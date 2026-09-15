@@ -2,7 +2,14 @@
   "partner": "kayam",
   "establishment": "kayam",
   "name": { "es": "Movilidad session" },
-  "external_booking_url": "https://wa.me/573001112233?text=Hola%2C%20quiero%20info%20sobre%20la%20sesi%C3%B3n%20de%20Movilidad%20en%20Casa%20Kayam",
+  "price_cop": 20000,
+  "unit": "per_person",
+  "min_qty": 1,
+  "max_qty": 10,
+  "slot_rules": [
+    { "weekdays": [2], "start_time": "08:00", "end_time": "09:00", "slot_duration_minutes": 60, "capacity": 10 }
+  ],
+  "external_booking_url": null,
   "tags": ["bienestar"],
   "photos": ["1.webp", "2.webp"],
   "_extra_columns": { "category": "bienestar" }

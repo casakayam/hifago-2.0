@@ -40,8 +40,8 @@ describe("estadoDisponibilidad", () => {
     expect(estadoDisponibilidad(-3)).toBe("completo");
   });
 
-  it("une seule place a son propre état — c'est ce qui déclenche « dernière place »", () => {
-    expect(estadoDisponibilidad(1)).toBe("ultima");
+  it("une seule place reste neutre — pas d'état « dernière place » (retiré le 2026-09-14)", () => {
+    expect(estadoDisponibilidad(1)).toBe("quedan");
   });
 
   it("au-delà, il reste des places", () => {
@@ -49,9 +49,9 @@ describe("estadoDisponibilidad", () => {
   });
 
   it("ne rend JAMAIS un libellé traduit — la couche ne traduit rien", () => {
-    // Le jour où quelqu'un fait rendre « Última plaza » à cette fonction, un module partagé se met
-    // à dépendre de next-intl. L'assertion porte donc sur le jeu fermé de valeurs.
-    expect(["completo", "ultima", "quedan"]).toContain(estadoDisponibilidad(5));
+    // Le jour où quelqu'un fait rendre un texte à cette fonction, un module partagé se met à
+    // dépendre de next-intl. L'assertion porte donc sur le jeu fermé de valeurs.
+    expect(["completo", "quedan"]).toContain(estadoDisponibilidad(5));
   });
 });
 
