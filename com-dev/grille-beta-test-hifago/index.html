@@ -1,0 +1,913 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Grille bêta-test Hifago 2.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F2F5F4; --surface:#FFFFFF; --sunk:#E8EEEC; --ink:#15252B; --muted:#56676C; --line:#D3DCDA; --line-soft:#E3E9E7;
+  --accent:#0B6B78; --accent-ink:#FFFFFF; --accent-soft:#DCEEF0;
+  --sev-r:#C4362C; --sev-o:#C9701A; --sev-y:#9C7C06; --sev-ok:#2C8356; --sev-plus:#3464AC; --sev-warn:#7A50AC;
+  --sev-r-bg:#FBE9E7; --sev-o-bg:#FCEFDF; --sev-y-bg:#F7F0D2; --sev-ok-bg:#E2F2E8; --sev-plus-bg:#E4ECF8; --sev-warn-bg:#EFE7F8;
+  --hc-ok:#2C8356; --hc-ko:#C4362C; --hc-rev:#B7790B;
+  --hc-ok-bg:#E6F3EB; --hc-ko-bg:#FBEAE8; --hc-rev-bg:#FBF1DC;
+  --focus:#0B6B78;
+  --f-display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0D1618; --surface:#142023; --sunk:#1A292D; --ink:#E2EBE9; --muted:#95A7AA; --line:#2A3A3E; --line-soft:#213034;
+    --accent:#55B6C2; --accent-ink:#082024; --accent-soft:#17343A;
+    --sev-r:#F0806F; --sev-o:#F0A35A; --sev-y:#DDC25A; --sev-ok:#6BC994; --sev-plus:#86AEEA; --sev-warn:#B89AE4;
+    --sev-r-bg:#3A1D1A; --sev-o-bg:#382615; --sev-y-bg:#322C12; --sev-ok-bg:#16301F; --sev-plus-bg:#1A2740; --sev-warn-bg:#291F3A;
+    --hc-ok:#6BC994; --hc-ko:#F0806F; --hc-rev:#E6B34F;
+    --hc-ok-bg:#15291D; --hc-ko-bg:#301A18; --hc-rev-bg:#2E2412;
+    --focus:#55B6C2;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0D1618; --surface:#142023; --sunk:#1A292D; --ink:#E2EBE9; --muted:#95A7AA; --line:#2A3A3E; --line-soft:#213034;
+  --accent:#55B6C2; --accent-ink:#082024; --accent-soft:#17343A;
+  --sev-r:#F0806F; --sev-o:#F0A35A; --sev-y:#DDC25A; --sev-ok:#6BC994; --sev-plus:#86AEEA; --sev-warn:#B89AE4;
+  --sev-r-bg:#3A1D1A; --sev-o-bg:#382615; --sev-y-bg:#322C12; --sev-ok-bg:#16301F; --sev-plus-bg:#1A2740; --sev-warn-bg:#291F3A;
+  --hc-ok:#6BC994; --hc-ko:#F0806F; --hc-rev:#E6B34F;
+  --hc-ok-bg:#15291D; --hc-ko-bg:#301A18; --hc-rev-bg:#2E2412;
+  --focus:#55B6C2;
+}
+
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5;padding-inline:clamp(16px,3vw,40px);padding-block:0 64px}
+code{font-family:var(--f-mono);font-size:.86em;background:var(--sunk);padding:.05em .35em;border-radius:3px;word-break:break-word}
+a{color:var(--accent)}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.wrap{max-width:1480px;margin-inline:auto}
+
+/* En-tête */
+.masthead{padding-block:36px 20px;display:grid;gap:18px;grid-template-columns:minmax(0,1fr) minmax(0,420px);align-items:end}
+.kicker{font-family:var(--f-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin:0 0 8px}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(28px,4vw,44px);line-height:1.02;letter-spacing:-.02em;margin:0;text-wrap:balance}
+h1 em{font-style:normal;color:var(--muted);font-weight:500}
+.lede{margin:12px 0 0;max-width:62ch;color:var(--muted);font-size:15px}
+.meta-box{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;font-size:13px}
+.meta-box summary{cursor:pointer;font-weight:600;list-style:none;display:flex;justify-content:space-between;gap:8px}
+.meta-box summary::-webkit-details-marker{display:none}
+.meta-box summary::after{content:"+";font-family:var(--f-mono);color:var(--muted)}
+.meta-box[open] summary::after{content:"–"}
+.meta-box dl{margin:10px 0 0;display:grid;gap:8px}
+.meta-box dt{font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.meta-box dd{margin:0}
+
+/* Barre d'outils collante */
+.toolbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--ground);border-bottom:1px solid var(--line);margin-inline:calc(-1 * clamp(16px,3vw,40px));padding:10px clamp(16px,3vw,40px)}
+.toolbar-inner{max-width:1480px;margin-inline:auto;display:grid;gap:10px}
+.progress-line{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px}
+.meter{flex:1 1 260px;height:10px;border-radius:5px;background:var(--sunk);display:flex;overflow:hidden;min-width:0}
+.meter span{display:block;height:100%;transition:width .3s ease}
+.meter .m-ok{background:var(--hc-ok)} .meter .m-ko{background:var(--hc-ko)} .meter .m-rev{background:var(--hc-rev)}
+.tally{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;font-variant-numeric:tabular-nums}
+.tally b{font-family:var(--f-mono);font-weight:500}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px}
+.save{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+.save-state{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.save-state::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.save-state[data-s="saved"]::before{background:var(--hc-ok)}
+.save-state[data-s="pending"]::before,.save-state[data-s="saving"]::before{background:var(--hc-rev)}
+.save-state[data-s="local"]::before,.save-state[data-s="error"]::before{background:var(--hc-ko)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:5px;padding:5px 11px;cursor:pointer;font-size:13px;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn-primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.filters{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+.fgroup{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.fgroup-label{font-family:var(--f-mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-right:4px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:2px 10px;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.chip .n{font-family:var(--f-mono);font-size:11px;opacity:.7}
+.search{flex:1 1 200px;max-width:320px;border:1px solid var(--line);background:var(--surface);border-radius:5px;padding:5px 10px;font-size:13px;min-width:0}
+
+/* Mise en page */
+.layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:28px;padding-top:22px}
+.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 118px);align-self:start;max-height:calc(100vh - 140px);overflow:auto;font-size:13px}
+.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:1px}
+.toc a{display:grid;grid-template-columns:2.2em minmax(0,1fr) auto;gap:6px;align-items:baseline;padding:5px 8px;border-radius:4px;color:var(--ink);text-decoration:none}
+.toc a:hover{background:var(--sunk)}
+.toc .tn{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.toc .tp{font-family:var(--f-mono);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.toc .tp.done{color:var(--hc-ok)}
+.legend{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);display:grid;gap:6px;font-size:12px;color:var(--muted)}
+
+/* Sections */
+.section{margin-bottom:36px;scroll-margin-top:130px}
+.section-head{display:flex;align-items:baseline;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.section-num{font-family:var(--f-mono);font-size:12px;color:var(--accent);border:1px solid var(--accent);border-radius:3px;padding:0 6px;line-height:1.6}
+h2{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:-.01em;margin:0;text-wrap:balance}
+.section-count{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
+.grid{background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) minmax(0,.95fr) minmax(250px,.95fr);border-top:1px solid var(--line-soft)}
+.row.single{grid-template-columns:minmax(0,2.15fr) minmax(0,.95fr) minmax(250px,.95fr)}
+.row.head{border-top:0;background:var(--sunk);font-family:var(--f-mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.row.head > div{padding:7px 14px}
+.row > .cell{padding:12px 14px;min-width:0}
+.cell + .cell{border-left:1px solid var(--line-soft)}
+.cell-label{display:none}
+.verdicts{display:grid;gap:6px;align-content:start}
+.v{display:grid;grid-template-columns:auto minmax(0,1fr);gap:7px;align-items:start;font-size:13px;line-height:1.4}
+.tag{font-family:var(--f-mono);font-size:10.5px;font-weight:500;letter-spacing:.03em;text-transform:uppercase;padding:1px 6px;border-radius:3px;white-space:nowrap;margin-top:1px}
+.tag.r{color:var(--sev-r);background:var(--sev-r-bg)} .tag.o{color:var(--sev-o);background:var(--sev-o-bg)}
+.tag.y{color:var(--sev-y);background:var(--sev-y-bg)} .tag.ok{color:var(--sev-ok);background:var(--sev-ok-bg)}
+.tag.plus{color:var(--sev-plus);background:var(--sev-plus-bg)} .tag.warn{color:var(--sev-warn);background:var(--sev-warn-bg)}
+
+/* Colonne Human check */
+.human{background:var(--sunk);display:grid;gap:8px;align-content:start;transition:background .2s}
+.row[data-hc="ok"] .human{background:var(--hc-ok-bg)}
+.row[data-hc="ko"] .human{background:var(--hc-ko-bg)}
+.row[data-hc="rev"] .human{background:var(--hc-rev-bg)}
+.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;padding:5px 4px;font-size:12.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button svg{width:12px;height:12px;flex:none}
+.seg button:hover{background:var(--sunk)}
+.seg button[data-s="ok"][aria-pressed="true"]{background:var(--hc-ok);color:#fff}
+.seg button[data-s="ko"][aria-pressed="true"]{background:var(--hc-ko);color:#fff}
+.seg button[data-s="rev"][aria-pressed="true"]{background:var(--hc-rev);color:#fff}
+:root[data-theme="dark"] .seg button[aria-pressed="true"]{color:#0D1618}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .seg button[aria-pressed="true"]{color:#0D1618}}
+.comment{width:100%;min-height:54px;resize:vertical;border:1px solid var(--line);background:var(--surface);border-radius:5px;padding:6px 8px;font-size:13px;line-height:1.4}
+.comment::placeholder{color:var(--muted)}
+.stamp{font-family:var(--f-mono);font-size:10.5px;color:var(--muted);min-height:1em}
+.empty{padding:28px;text-align:center;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:6px}
+
+/* Export */
+dialog{border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0;width:min(760px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(8,20,24,.45)}
+.dlg{padding:18px;display:grid;gap:12px}
+.dlg h3{font-family:var(--f-display);font-size:19px;margin:0}
+.dlg p{margin:0;color:var(--muted);font-size:13px}
+.dlg textarea{width:100%;height:50vh;font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border-radius:5px;background:var(--sunk);padding:10px}
+.dlg-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+
+@media (max-width:1100px){
+  .layout{grid-template-columns:minmax(0,1fr)}
+  .toc{display:none}
+  .masthead{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:860px){
+  .row.head{display:none}
+  .row,.row.single{grid-template-columns:minmax(0,1fr)}
+  .cell + .cell{border-left:0;border-top:1px dashed var(--line-soft)}
+  .cell-label{display:block;font-family:var(--f-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px}
+  .row{border-top:2px solid var(--line)}
+  .save{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div>
+      <p class="kicker">Bêta-test · 15 sept. 2026 · main 9711c01</p>
+      <h1>Hifago 2.0 face au prototype mobile v2 <em>— écarts par thème</em></h1>
+      <p class="lede">Chaque ligne compare le prototype (36 écrans) au comportement réel de l'app. Dans la colonne <strong>Human check</strong>, valide, invalide ou marque « à revoir », puis commente ce que tu observes en préprod.</p>
+    </div>
+    <details class="meta-box" id="methode" open>
+      <summary>Méthode et limites</summary>
+      <dl>
+        <div><dt>Référence</dt><dd><code>Prototype-Hifago-Mobile-v2-wireframe.html</code> — 36 écrans, 6 groupes, variantes d'accueil « Catégories » / « Carrousels ».</dd></div>
+        <div><dt>Réalité testée</dt><dd>Code <code>apps/web</code> sur main (9711c01), libellés ES, specs/backlog/journal, rendu HTML de la préprod Vercel.</dd></div>
+        <div><dt>Limite</dt><dd>Ni Docker, ni .env, ni navigateur piloté : toasts, popovers, calendriers, panier et paiement sont établis par lecture du code et des tests e2e. Rendu 390 px non observé.</dd></div>
+      </dl>
+    </details>
+  </header>
+
+  <div class="toolbar">
+    <div class="toolbar-inner">
+      <div class="progress-line">
+        <div class="meter" role="img" id="meter" aria-label="Avancement du check"><span class="m-ok" id="m-ok"></span><span class="m-ko" id="m-ko"></span><span class="m-rev" id="m-rev"></span></div>
+        <div class="tally" id="tally"></div>
+        <div class="save">
+          <span class="save-state" id="save-state" data-s="idle">Chargement…</span>
+          <button class="btn" id="btn-export" type="button">Exporter</button>
+        </div>
+      </div>
+      <div class="filters">
+        <div class="fgroup" id="f-human" role="group" aria-label="Filtrer par Human check"><span class="fgroup-label">Check</span></div>
+        <div class="fgroup" id="f-sev" role="group" aria-label="Filtrer par verdict"><span class="fgroup-label">Verdict</span></div>
+        <input class="search" id="f-q" type="search" placeholder="Chercher un mot, un écran, un fichier…" aria-label="Chercher dans la grille">
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Sections">
+      <ol id="toc"></ol>
+      <div class="legend" id="legend"></div>
+    </nav>
+    <main id="main"></main>
+  </div>
+</div>
+
+<dialog id="dlg-export">
+  <div class="dlg">
+    <h3>Exporter le check</h3>
+    <p>Rapport Markdown des lignes vérifiées, avec tes statuts et commentaires. Copie-le dans un ticket ou colle-le à Claude.</p>
+    <textarea id="export-text" readonly aria-label="Rapport Markdown"></textarea>
+    <div class="dlg-actions">
+      <label class="chip"><input type="checkbox" id="export-all"> Inclure les lignes non testées</label>
+      <button class="btn" type="button" id="btn-close">Fermer</button>
+      <button class="btn btn-primary" type="button" id="btn-copy">Copier</button>
+    </div>
+  </div>
+</dialog>
+
+<script>window.REVIEW_SNAPSHOT = {"updatedAt":"2026-09-15T13:04:16.262Z","rows":{"nav-1":{"s":"ko","c":"","t":1789461548454},"nav-2":{"s":"rev","c":"lorsque l'on descent dans de la page surtout sur mobile aucun moyen rapide de revenir. Doute sur la decision de remove la barre. Trouver unee solution alternative ou la remetre","t":1789461658165},"nav-4":{"s":"ok","c":"le footer existe. on voit plus tard ce qu'on met dedans","t":1789461578573},"acc-2":{"s":"ok","c":"on garde pour plus tard","t":1789474902366},"nav-3":{"s":"","c":"si option pas coché c'est que j'ai pas compris","t":1789461714763},"acc-3":{"s":"rev","c":"ninos... on as dis plus tard mais texte intro si","t":1789461900459},"acc-4":{"s":"ok","c":"","t":1789475590327},"acc-5":{"s":"ok","c":"","t":1789461944836},"acc-6":{"s":"ko","c":"","t":1789461987649},"acc-7":{"s":"rev","c":"ok pour afichage meme si 1 camp","t":1789462098530},"acc-8":{"s":"ok","c":"","t":1789462157215},"acc-9":{"s":"ok","c":"cool","t":1789462182053},"rech-1":{"s":"ok","c":"","t":1789462391112},"cat-1":{"s":"ko","c":"je veux les onglets sur mobile","t":1789462438854},"cat-2":{"s":"ko","c":"","t":1789462507569},"cat-3":{"s":"ko","c":"","t":1789462674868},"cat-4":{"s":"ko","c":"Trié par date ","t":1789476619810},"cat-5":{"s":"ko","c":"dates num de personnes preremplis si noté dans home","t":1789463372242},"fic-1":{"s":"ok","c":"","t":1789463539875},"fic-2":{"s":"ok","c":"","t":1789464020711},"fic-3":{"s":"ok","c":"","t":1789464055971},"fic-4":{"s":"ko","c":"ma version ne consulte pas lobby pour la disponibilité. peut etre due au ip fixe.","t":1789464461237},"fic-5":{"s":"rev","c":"ida y vuelta doivent etre selectionable separement","t":1789464584548},"ajo-1":{"s":"ok","c":"pour le moment ","t":1789464797338},"ajo-2":{"s":"ok","c":"","t":1789464747479},"cmp-1":{"s":"ko","c":"","t":1789465158091},"cmp-2":{"s":"ko","c":"si plusieurs camps ouvert alors listes. si pas de camp dejas avec resa. Le camp s'ouvre grace a la 1ere resa dependant du calendrier du presta","t":1789465436704},"cmp-3":{"s":"ko","c":"","t":1789465341208},"cmp-4":{"s":"ko","c":"","t":1789465357355},"cmp-5":{"s":"ko","c":"","t":1789465365312},"evt-1":{"s":"ko","c":"c'est une des resons qui fait que le panier s'appell mi viaje et non panier","t":1789465568443},"evt-2":{"s":"rev","c":"","t":1789465626426},"evt-3":{"s":"ko","c":"","t":1789465662863},"evt-4":{"s":"ko","c":"","t":1789465668668},"mv-1":{"s":"ko","c":"","t":1789465678069},"mv-2":{"s":"ko","c":"","t":1789465683503},"mv-3":{"s":"ko","c":"","t":1789465688159},"mv-4":{"s":"ko","c":"Reprise des commandes impayées . Pas testé mais je pense que c'est cool","t":1789465761563},"mv-5":{"s":"rev","c":"","t":1789465775020},"pay-1":{"s":"ko","c":"La loi dis au final que le client a 5 jours de retractation","t":1789465897536},"pay-2":{"s":"ok","c":"","t":1789465950355},"pay-3":{"s":"ok","c":"","t":1789466171039},"aut-1":{"s":"ko","c":"pas sur de l'utilité du lien magique. recuperation mot de passe oublié obligatoire ","t":1789477453246},"aut-2":{"s":"ok","c":"","t":1789466363981},"aut-3":{"s":"ok","c":"","t":1789466373691},"apv-1":{"s":"rev","c":"Itineraire avec contact whats app des diferents prestataire de la resa","t":1789466604157},"apv-2":{"s":"ok","c":"","t":1789466824547},"apv-3":{"s":"rev","c":"","t":1789466859664},"apv-4":{"s":"ko","c":"le client ne reserve pas un panier mais un voyage sur mesure","t":1789466915258},"apv-5":{"s":"rev","c":"loi des 5 jours de retractation","t":1789466943089},"apv-6":{"s":"rev","c":"","t":1789466951398},"txt-1":{"s":"ok","c":"","t":1789467034765},"txt-2":{"s":"ok","c":"","t":1789467047211},"txt-3":{"s":"ko","c":"","t":1789467054494},"txt-4":{"s":"ko","c":"","t":1789467120226},"txt-5":{"s":"ok","c":"ne pas tenir compte","t":1789467148908},"plus-1":{"s":"ok","c":"","t":1789467162126},"plus-2":{"s":"ok","c":"","t":1789467165366},"plus-3":{"s":"ok","c":"","t":1789467167925},"plus-4":{"s":"ok","c":"","t":1789467169202},"plus-5":{"s":"ok","c":"","t":1789467172409},"plus-6":{"s":"ok","c":"","t":1789467175386},"plus-7":{"s":"ok","c":"","t":1789467178701},"plus-8":{"s":"ok","c":"","t":1789467180254},"plus-9":{"s":"ok","c":"","t":1789467183494},"plus-10":{"s":"ok","c":"","t":1789467186564},"plus-11":{"s":"ok","c":"","t":1789467190637},"plus-12":{"s":"ok","c":"","t":1789467192523},"plus-13":{"s":"ok","c":"","t":1789467195658},"plus-14":{"s":"ok","c":"","t":1789467197924}}};</script>
+<script>
+/* Grille bêta-test Hifago 2.0 vs prototype mobile v2.
+   Verdicts : r = manque structurant, o = écart notable, y = détail,
+   ok = équivalent, plus = l'app fait plus, warn = divergence à arbitrer.
+   Ligne à 3 colonnes : {id, a (prototype), b (réel), v}.
+   Ligne à texte unique : {id, t, v}. */
+window.GRILLE = [
+{ id: "nav", n: "1", title: "Squelette de navigation", rows: [
+  { id: "nav-1",
+    a: "App bar : « ← Volver » global + HIFAGO + bouton « Mi viaje (N) »",
+    b: "Header sticky : logo, icône panier (pastille = nb de lignes, « 99+ »), menu ☰ sur mobile contenant « Iniciar sesión »/« Mi cuenta » + langue",
+    v: ["o|Pas de « Volver » global (retour navigateur seulement). Sur une fiche, « ← Volver al catálogo » renvoie toujours à l'accueil, jamais au listing d'origine (`FichaProducto.tsx:98`)"] },
+  { id: "nav-2",
+    a: "Nav basse 4 onglets Descubrir / Mi viaje / Reservas / Cuenta, toujours visible",
+    b: "Aucune nav basse. « Reservas » n'est atteignable que par ☰ → Mi cuenta → « Ver mis reservas » (3 taps)",
+    v: ["r|Pas de nav basse"] },
+  { id: "nav-3",
+    a: "Pas de fil d'Ariane (logique app)",
+    b: "Fil « Inicio › Camps › X » + sélecteur de type (onglets ≥768 px, menu déroulant « Tipos de oferta » en dessous)",
+    v: ["plus|Fil d'Ariane et sélecteur de type", "o|Le fil est en liens natifs → rechargement complet à chaque clic (dette connue, `dette-technique.md`)"] },
+  { id: "nav-4",
+    a: "Pas de footer",
+    b: "Footer WhatsApp Hifago + langue + identité ; liens légaux volontairement vides",
+    v: ["ok|Footer présent", "y|Liens légaux vides"] }
+]},
+{ id: "accueil", n: "2", title: "Accueil (« Descubrir »)", rows: [
+  { id: "acc-1",
+    a: "Kicker « Guatapé, a tu manera » + titre « Todo Guatapé en un solo lugar » + accroche",
+    b: "<h1> masqué (sr-only) ; la page commence par le fil + la barre de recherche, aucun texte d'accueil visible",
+    v: ["y|Décision cahier §2a « rien au-dessus de la recherche »"] },
+  { id: "acc-2",
+    a: "Bouton « Hazme soñar » → compose un voyage de 3 jours dans Mi viaje",
+    b: "Inexistant (ni code, ni cahier)",
+    v: ["r|« Hazme soñar » absent"] },
+  { id: "acc-3",
+    a: "Cartes « Fechas » / « Viajeros » = contexte de voyage dépliable en place (Llegada/Salida, Adultos 13+/Niños 2-12, Salida desde) appliqué partout : totaux des fiches, nuits, titre de Mi viaje, dates du camp",
+    b: "« Fechas » (popover, calendrier 1 mois, plage) et « Personas » (popover, nombre unique ±) = filtres de recherche uniquement (dates = chevauchement, personas = capacité déclarée). Pas d'adultes/enfants, pas de « Salida desde ». Les fiches ne se pré-remplissent pas avec ces dates/personnes : les 3 formulaires démarrent vides (`ReservationForm.tsx:69`, `LodgingReservationForm.tsx:106`) alors que le cahier §2a le promet",
+    v: ["r|Pas de contexte de voyage", "o|Filtres non propagés (écart code ↔ cahier)"] },
+  { id: "acc-4",
+    a: "Variante B : un carrousel horizontal par catégorie avec lien « Ver todo » ; variante A : grille 3 colonnes de 6 catégories + « Explorar toda la oferta · Ver todo »",
+    b: "5 sections verticales en grille (1 col mobile / 2 / 3), jusqu'à 8 cartes chacune. Lien « Ver más » (activités : « Ver todas las categorías ») rendu seulement si la section a plus d'offres qu'elle n'en montre (`page.tsx:180`) — en préprod, Alojamientos/Transportes/Camps/Eventos n'ont donc aucun lien vers leur listing depuis la section",
+    v: ["r|Pas de carrousels (jusqu'à 40 cartes empilées sur mobile)", "o|« Ver todo » absent sur les sections courtes"] },
+  { id: "acc-5",
+    a: "6 catégories dont Tours",
+    b: "5 types ; le type tour a été retiré (spec 17)",
+    v: ["o|Tours absent"] },
+  { id: "acc-6",
+    a: "Bloc « Próximamente en Guatapé » (événements + camps datés, calendrier) → « Qué hacer en tus fechas » quand des dates sont posées",
+    b: "Inexistant",
+    v: ["o|« Próximamente » absent"] },
+  { id: "acc-7",
+    a: "Camps visibles seulement à partir de 3 camps ; Eventos seulement s'il y a un événement actif ; accroche adaptée",
+    b: "Section masquée uniquement si 0 offre (Camps s'affiche avec 2 camps en préprod)",
+    v: ["y|Seuil d'affichage différent"] },
+  { id: "acc-8",
+    a: "Carte : photo, titre, meta horaire/durée (« Sáb. 10:00 · 2 h », « 12–15 sept. · 4 días »), prix, badge (« Camp », « 6 cupos »)",
+    b: "Carte : carrousel photos, nom, établissement, prix (montant / « Desde X » / libellé libre). Aucune date, durée, horaire ni badge",
+    v: ["o|Cartes sans date, durée, horaire ni badge"] },
+  { id: "acc-9",
+    a: "—",
+    b: "Après un ajout au panier, les sections des types déjà au panier passent en dernier",
+    v: ["plus|Réordonnancement après ajout"] }
+]},
+{ id: "recherche", n: "3", title: "Recherche", rows: [
+  { id: "rech-1",
+    a: "La frappe remplace le corps de page sans changer d'écran ; chips « Todo / Con fechas / Disponible hoy » ; liste mixte « Resultados para «…» · Sugeridos » ; « Borrar la búsqueda » ; grille « Por categoría » dessous",
+    b: "Barre pilule (ComboBox) sur l'accueil et tous les listings ; suggestions déroulantes (raccourcis par type, puis offres/établissements) ; validation (Entrée / bouton « Buscar » masqué < 768 px) → rendu serveur, résultats groupés par section, critères dans l'URL ; état vide « No encontramos ofertas… »",
+    v: ["ok|Principe équivalent", "o|Pas de chips, pas de « Borrar la búsqueda » (vider le champ + revalider), pas de « Sugeridos »", "y|Sur mobile, aucun bouton de recherche visible (touche clavier seulement)", "plus|Suggestions"] }
+]},
+{ id: "catalogues", n: "4", title: "Catalogues par type", rows: [
+  { id: "cat-1",
+    a: "Onglets « Actividades / Alojamientos / Transporte / Más ▾ (Camps, Eventos, Tours) »",
+    b: "5 onglets colorés (desktop) / menu déroulant (mobile)",
+    v: ["ok|Équivalent (Tours absent)"] },
+  { id: "cat-2",
+    a: "Un carrousel par sous-catégorie avec titre + aside : Alojamientos par tranche de prix (« Económico · Hasta $200.000 », « Precio medio », « Alta gama »), Actividades (« En el agua · Embalse », « Deportes extremos »…)",
+    b: "Index par catégorie éditoriale (tags : « Música », « Fiesta »…) : une section-grille par catégorie (6 cartes max) + « Ver más » → page /type/categorie à défilement infini ; « Otras … » en dernier",
+    v: ["o|Pas de tranches de prix pour les hébergements, pas de carrousels ; photo/texte de catégorie visibles seulement sur la page dédiée (backlog)"] },
+  { id: "cat-3",
+    a: "Camps : chips « Próximos / Aventura / Bienestar », badge « 6 cupos », meta « 12–15 sept. · 4 días » ; état vide « Aún no hay camps abiertos a reserva… cuando al menos 3 estén listos » + CTA « Ver actividades disponibles »",
+    b: "Grille « Música » : « Campamento de Música · Casa Kayam · 700.000 COP », « Campamento 1 · 1.000.000 COP » — sans date, sans durée, sans cupos ; état vide générique sans CTA",
+    v: ["r|Un camp n'affiche pas ses dates avant d'ouvrir la fiche", "o|Pas de CTA de repli"] },
+  { id: "cat-4",
+    a: "Eventos : « Calendario » trié par date, chips « Todos / Este mes / Gratis », badges « Reserva externa » / « Reserva Hifago », meta « 12 oct. · 16:00–23:00 »",
+    b: "Grille « Fiesta » : 5 cartes nom / établissement / libellé prix (« Gratis », « Entrada libre », « 5K y 10K $120.000 · 21K $130.000 ») — sans date, sans badge, sans tri chronologique",
+    v: ["r|Événements sans date, badge ni tri chronologique"] },
+  { id: "cat-5",
+    a: "Alojamientos : une carte par couchage",
+    b: "Cartes groupées par établissement (« Casa Kayam · 2 alojamientos · Desde 42.000 COP ») → fiche établissement → chambres (« Hasta 6 personas », prix) → fiche chambre",
+    v: ["o|Un clic de plus avant le calendrier (conforme au cahier §2b.4)"] }
+]},
+{ id: "fiches", n: "5", title: "Fiches produit (hors camp / événement)", rows: [
+  { id: "fic-1",
+    a: "Hero + badge horaire (« Sábado · 10:00 ») + sous-titre (« 2 horas · guía local · equipo incluido »)",
+    b: "Titre, description libre, carrousel, prix + suffixe (« por persona »)",
+    v: ["y|Pas de badge horaire/durée ; les horaires n'apparaissent qu'après choix d'une date (chips « 10:00–12:00 »)"] },
+  { id: "fic-2",
+    a: "Bloc prix calculé sur les voyageurs : « 2 adultos · $90.000 total », « $45.000 /pers. », « 4 cupos »",
+    b: "Prix unitaire ; « Cantidad » à saisir (défaut 1) ; « N cupos disponibles / ¡Última plaza! / Completo » après la date ; « Total estimado » uniquement sur un hébergement — activité, transport et camp n'affichent aucun total avant le panier",
+    v: ["o|Pas de total avant le panier (hors hébergement)"] },
+  { id: "fic-3",
+    a: "« Añadir a Mi viaje » + « Ver otras actividades » ; « No se cruza con tu itinerario actual »",
+    b: "« Añadir al carrito » ; pas de lien « Ver otros… » ; aucune vérification de conflit d'horaires entre lignes du panier",
+    v: ["o|Pas de « Ver otros », pas de contrôle de conflit d'horaires"] },
+  { id: "fic-4",
+    a: "Hébergement : « $420.000 · 3 noches / $140.000/noche », liste « Incluye »",
+    b: "Calendrier plage (dispo PMS en direct pour Casa Kayam, nuits barrées selon la quantité), « N noches », « Total estimado », quantité « Camas / Habitaciones / Alojamientos »",
+    v: ["ok|Prix et nuits", "y|Pas de bloc « Incluye »"] },
+  { id: "fic-5",
+    a: "Transport : « Ida y vuelta flexible », timeline Ida / Regreso avec lieux, horaires et dates",
+    b: "Formulaire générique 1 date + quantité (ou créneau) : pas d'aller/retour, pas de lieux ni d'horaires",
+    v: ["o|Transport sans aller/retour, lieux ni horaires"] },
+  { id: "fic-6",
+    a: "—",
+    b: "Fiche vitrine : bouton « Reservar » externe à la place du calendrier ; politique d'annulation affichée sur chaque fiche",
+    v: ["plus|Mode vitrine + politique d'annulation", "warn|Un événement sans URL = cul-de-sac connu"] }
+]},
+{ id: "ajout", n: "6", title: "Ajout au panier et feedback", rows: [
+  { id: "ajo-1",
+    a: "1er ajout : écran pédagogique « Añadido · Ya aparece en tu calendario de Mi viaje… » + « Ver Mi viaje » / « Seguir explorando »",
+    b: "Toast « Añadido al carrito. » + redirection immédiate vers l'accueil (critères conservés, sections réordonnées) (`useAddToCart.ts:37-41`)",
+    v: ["o|Pas de pédagogie ; la fiche disparaît (retour accueil, pas au listing)"] },
+  { id: "ajo-2",
+    a: "Ajouts suivants : retour au catalogue d'origine + toast avec action contextuelle (« Añadir una noche » si pas d'hébergement, « Ver Mi viaje », « Añadir actividades »)",
+    b: "Toast sans action",
+    v: ["o|Toast sans action contextuelle"] }
+]},
+{ id: "camps", n: "7", title: "Camps — le parcours le plus divergent", rows: [
+  { id: "cmp-1",
+    a: "Fiche camp : stepper « 1 Programa — 2 Alojamiento », hero « Camp · 12–15 sept. », « Total para 2 adultos · $960.000 / $480.000 /pers. », note « El alojamiento se elige en el paso 2, para las 3 noches obligatorias », programme par jour, « Elegir este camp » / « Ver programa completo »",
+    b: "Fiche produit standard : description libre, « 700.000 COP », calendrier des départs (n'importe quel jour de la semaine sélectionne le départ, semaine surlignée), « Cantidad », remise de groupe (« A partir de 10 personas anotadas… baja un 15% »), « Añadir al carrito », bloc établissement. Aucune mention d'hébergement, aucune étape, aucune durée écrite (« 4 días » n'apparaît nulle part : `duration_days` ne sert qu'au surlignage), aucun programme",
+    v: ["r|Fiche camp sans étapes, durée, hébergement ni programme"] },
+  { id: "cmp-2",
+    a: "Choix de l'édition : liste « 12–15 septiembre · 3 noches obligatorias · $960.000 · 6 cupos » ; les dates du camp remplacent celles du voyage",
+    b: "Choix par calendrier, pas de liste d'éditions, pas de contexte de dates à remplacer",
+    v: ["o|Pas de liste d'éditions"] },
+  { id: "cmp-3",
+    a: "Après « Elegir » : écran « Paso 2 de 2 — Ahora elige dónde dormir » → « Ver alojamientos compatibles » (liste filtrée sur les nuits du camp, stepper, fiche hébergement « Elegir para el camp · Cubre las 3 noches ») / « Elegir más tarde · no podrás pagar aún »",
+    b: "Toast + accueil. Rien n'oriente vers un hébergement, aucun filtre « compatible avec le camp », rien ne lie une nuit à un camp",
+    v: ["r|Exemple n°1 : étape hébergement absente de bout en bout"] },
+  { id: "cmp-4",
+    a: "Mi viaje : ligne rouge « Alojamiento obligatorio del camp · Pendiente · Falta », note « El camp está incompleto », suggestion « Obligatorio » ; « Reservar » → écran Conflit bloquant (« No se realiza ninguna reserva parcial ») avec « Elegir alojamiento » / « Retirar el camp »",
+    b: "Panier : ligne ordinaire ; « Ir a pagar » toujours actif ; `create_order` n'a aucune règle camp ⇒ hébergement (vérifié dans la dernière définition, `20260824110000…sql`) → un camp seul se paie sans hébergement",
+    v: ["r|Exemple n°2 : aucun blocage, ni UI ni serveur"] },
+  { id: "cmp-5",
+    a: "—",
+    b: "Le cahier client (§1, §3a, §3d) ne mentionne pas non plus d'hébergement obligatoire : la règle n'existe que dans le prototype",
+    v: ["warn|À écrire en spec avant tout code"] }
+]},
+{ id: "evenements", n: "8", title: "Événements", rows: [
+  { id: "evt-1",
+    a: "Fiche : avis « Tus fechas actuales no cubren la noche del evento », « Añadir a mi viaje » → écran « Adapter les dates » (voyage actuel vs proposition « Recomendado », « Prolongar hasta el 13 » / « Mantener mis fechas »), « Más opciones ▾ » (guardar sin cambiar fechas / ver qué hacer alrededor / reservar con el organizador ↗)",
+    b: "Fiche : date (« 27 de septiembre de 2026 »), libellé prix, bouton « Reservar » qui ouvre directement le lien externe (WhatsApp) dans un nouvel onglet. Un événement ne peut jamais être ajouté au panier : evento ⇒ toujours mode vitrine (`producto.ts:254`)",
+    v: ["r|Événement jamais ajoutable au voyage"] },
+  { id: "evt-2",
+    a: "Interstitiel « Vas a salir de Hifago » + « Ya reservé · guardar evento »",
+    b: "Sortie directe, sans mémorisation",
+    v: ["o|Pas d'interstitiel de sortie"] },
+  { id: "evt-3",
+    a: "Événement réservable Hifago (« Cine bajo las estrellas », entrées × voyageurs, 12 cupos)",
+    b: "Aucun chemin sur la vitrine (le cahier prévoit « réservable en ligne si l'admin l'active », non câblé côté `apps/web`)",
+    v: ["r|Réservation en ligne d'événement non câblée"] },
+  { id: "evt-4",
+    a: "« Alrededor del evento » (dormir la nuit du 12, kayak avant, retour dimanche)",
+    b: "Inexistant",
+    v: ["o|« Alrededor del evento » absent"] }
+]},
+{ id: "miviaje", n: "9", title: "« Mi viaje » vs « Tu carrito »", rows: [
+  { id: "mv-1",
+    a: "Titre = dates du voyage ou « Tu estancia se construye aquí »",
+    b: "« Tu carrito »",
+    v: ["y|Titre générique"] },
+  { id: "mv-2",
+    a: "Timeline chronologique ; chaque ligne : vignette, date lisible (« Sáb. 13 · 10:00 », « 12–15 sept. »), titre, meta (« 2 h · 2 adultos »), badge Obligatorio/Falta, lien « Más opciones » vers le catalogue de sa catégorie",
+    b: "Liste dans l'ordre d'ajout : nom, « Établissement · 2026-11-01 → 2026-11-03 · Cantidad: 2 », prix de ligne, « Quitar » ; ligne indisponible en rouge « Este producto ya no está disponible… »",
+    v: ["o|Pas de tri par date, pas de photo, dates ISO brutes (dette connue), pas de « Más opciones »", "plus|Indisponibilité signalée"] },
+  { id: "mv-3",
+    a: "« Sugerencias para tu viaje » (max 3, contextuelles : nuit manquante, journées vides, transport, autour de l'événement)",
+    b: "Aucune",
+    v: ["o|Pas de suggestions"] },
+  { id: "mv-4",
+    a: "« Reservar » (vide → toast « Tu viaje está vacío · Explorar » ; camp incomplet → conflit) + « Añadir algo más »",
+    b: "« Ir a pagar » (masqué si vide) ; vide : « Tu carrito está vacío. » sans CTA ; « Tienes reservas pendientes de pago »",
+    v: ["y|Panier vide sans CTA", "plus|Reprise des commandes impayées"] },
+  { id: "mv-5",
+    a: "Total",
+    b: "« Total: X COP » — bug connu : pour un hébergement multi-nuits le total ignore le nombre de nuits (`dette-technique.md`, 2026-09-13)",
+    v: ["o|À vérifier en manuel", "warn|Bug connu sur le total multi-nuits"] }
+]},
+{ id: "paiement", n: "10", title: "Résumé, conditions, paiement", rows: [
+  { id: "pay-1",
+    a: "Écran « Resumen · Todo listo para reservar » : lignes, « Precio total », carte « Pagas hoy · 17% : X / Saldo con los prestadores : Y », 3 conditions clés + « Ver condiciones completas »",
+    b: "/pago « Finalizar compra » : liste lecture seule + total, formulaire Nombre / WhatsApp (indicatif) / Correo / case marketing, une phrase d'annulation, « Validar pedido »",
+    v: ["o|L'acompte de 17 % et le solde ne sont pas annoncés avant de valider : le client les découvre sur /reserva/<jeton>, une fois la commande créée", "y|Conditions réduites à une phrase"] },
+  { id: "pay-2",
+    a: "Paiement par formulaire carte intégré ; échec → « Pago rechazado · No se realizó ningún cobro · Tu viaje… siguen guardados » + « Intentar de nuevo »",
+    b: "Deux temps : « Validar pedido » (crée la commande, réserve chez LobbyPMS, vide le panier, tient 30 min) → /reserva/<jeton> « Tu reserva aún no está pagada · Guardamos tu reserva 30 minutos » → « Pagar el anticipo » → Mercado Pago → retour ; rejet → « No pudimos cobrar el anticipo · Tu reserva sigue guardada » + « Reintentar pago »",
+    v: ["ok|Échec géré", "o|Le second temps n'est annoncé nulle part avant de cliquer « Validar pedido »", "warn|Régression connue : refus PMS après validation ⇒ panier déjà vidé, tout à ressaisir"] },
+  { id: "pay-3",
+    a: "Connexion exigée avant paiement (bottom-sheet « Tu viaje está guardado · Conéctate para reservar », Google / lien par courriel)",
+    b: "Jamais exigée : paiement invité complet, lien discret « Inicia sesión para encontrar tus reservas », pré-remplissage si connecté",
+    v: ["warn|Divergence de principe (cahier §1 : compte optionnel)"] }
+]},
+{ id: "auth", n: "11", title: "Authentification et compte", rows: [
+  { id: "aut-1",
+    a: "Google + « Recibir un enlace por correo » (lien magique)",
+    b: "Google + email/mot de passe (inscription avec confirmation par email) ; pas de lien magique ; pas de « mot de passe oublié » sur la vitrine (existe côté admin — backlog)",
+    v: ["o|Pas de mot de passe oublié", "y|Pas de lien magique"] },
+  { id: "aut-2",
+    a: "Cuenta : « Hola, Jérôme », Mis reservas / Datos personales / Métodos de pago / Cerrar sesión",
+    b: "/cuenta/perfil : nom + WhatsApp, « Ver mis reservas », « Cerrar sesión », « Eliminar mi cuenta »",
+    v: ["ok|Équivalent (« Métodos de pago » sans objet avec Mercado Pago)", "plus|Suppression de compte"] },
+  { id: "aut-3",
+    a: "—",
+    b: "Panier anonyme fusionné à la connexion (mot de passe et Google)",
+    v: ["plus|Fusion du panier"] }
+]},
+{ id: "apresvente", n: "12", title: "Confirmation et après-vente", rows: [
+  { id: "apv-1",
+    a: "« Reserva HFG-2841 · Tu viaje está confirmado · Pagaste $X » → « Ver el viaje día por día » / « Ver la reserva »",
+    b: "/reserva/<jeton> : « ¡Pago confirmado! », lignes (statut, lien établissement, « Escribir a Casa Kayam » WhatsApp pré-rempli), Total / Anticipo / A pagar en el establecimiento, contact, « Guarda este enlace… », « Crear una cuenta » ou « Ver mis reservas »",
+    v: ["ok|Confirmation équivalente", "o|Pas d'itinéraire jour par jour"] },
+  { id: "apv-2",
+    a: "Reservas : cartes « Guatapé · 11–16 septiembre · Reserva HFG-2841 · 5 prestaciones · Confirmada »",
+    b: "/cuenta/reservas : « Próximas » / « Pasadas », carte par commande « Reserva HFG-… · statut », toutes les lignes dépliées (Pagado / Precio total), « Anular » par ligne, « Ver detalle »",
+    v: ["y|Pas de synthèse dates / nb de prestations"] },
+  { id: "apv-3",
+    a: "Détail : « Pagado a Hifago / Saldo total pendiente » + Ver itinerario / Modificar líneas / Cancelar toda la reserva",
+    b: "Détail = /reserva/<jeton> : aucun bouton d'annulation dessus, même connecté (l'annulation ne vit que sur la liste) ; pas de modification (cible future, backlog)",
+    v: ["o|Pas d'annulation depuis le détail, pas de modification"] },
+  { id: "apv-4",
+    a: "Itinéraire réservé (timeline avec solde par ligne, « Modificar mi viaje »)",
+    b: "Inexistant",
+    v: ["o|Itinéraire réservé absent"] },
+  { id: "apv-5",
+    a: "Annulation de toute la commande, saisie « CANCELAR », écran « Reserva cancelada »",
+    b: "Annulation par prestation, confirmation en place « ¿Anular « X » del 2026-11-01? · El anticipo pagado no se devuelve. » ; invité : « escribe al establecimiento »",
+    v: ["warn|Tranché le 2026-09-11 (spec 34) — granularité différente, à confirmer"] },
+  { id: "apv-6",
+    a: "Voucher / QR",
+    b: "Ni l'un ni l'autre",
+    v: ["ok|Ouvert des deux côtés"] }
+]},
+{ id: "textes", n: "13", title: "Textes, formats, détails", rows: [
+  { id: "txt-1", t: "Dates : « Sáb. 13 · 10:00 » / « 12–15 sept. » (proto) vs 2026-11-01 → 2026-11-03 (panier, résultat, compte — `formatLineSchedule.ts`)", v: ["o|Dates ISO brutes"] },
+  { id: "txt-2", t: "Prix « $90.000 » vs « 90.000 COP »", v: ["y|Format de prix"] },
+  { id: "txt-3", t: "Vocabulaire : Mi viaje / Reservar / Añadir a Mi viaje / Descubrir vs Tu carrito / Ir a pagar / Añadir al carrito / Inicio", v: ["y|Vocabulaire"] },
+  { id: "txt-4", t: "Chaque écran du proto a kicker + accroche ; l'app a des titres nus (« Camps », « Tu carrito », « Finalizar compra »)", v: ["y|Titres nus"] },
+  { id: "txt-5", t: "Compteur de places : proto et app l'affichent (« 4 cupos » / « N cupos disponibles »), mais le cahier §2b.5 l'a retiré — incohérence doc ↔ code, pas proto ↔ code", v: ["warn|Incohérence doc ↔ code"] }
+]},
+{ id: "aconserver", n: "14", title: "Ce que l'app fait en plus (à ne pas perdre)", rows: [
+  { id: "plus-1", t: "Suggestions de recherche", v: ["plus|À conserver"] },
+  { id: "plus-2", t: "Recherche sur tous les listings", v: ["plus|À conserver"] },
+  { id: "plus-3", t: "Pages catégorie indexables", v: ["plus|À conserver"] },
+  { id: "plus-4", t: "ES/EN", v: ["plus|À conserver"] },
+  { id: "plus-5", t: "Fiche établissement avec chambres", v: ["plus|À conserver"] },
+  { id: "plus-6", t: "Disponibilité PMS en direct et nuits barrées selon la quantité", v: ["plus|À conserver"] },
+  { id: "plus-7", t: "Remise de groupe camp", v: ["plus|À conserver"] },
+  { id: "plus-8", t: "Consentement marketing", v: ["plus|À conserver"] },
+  { id: "plus-9", t: "Reprise des commandes impayées", v: ["plus|À conserver"] },
+  { id: "plus-10", t: "Indisponibilité signalée dans le panier", v: ["plus|À conserver"] },
+  { id: "plus-11", t: "Fusion du panier à la connexion", v: ["plus|À conserver"] },
+  { id: "plus-12", t: "Suppression de compte", v: ["plus|À conserver"] },
+  { id: "plus-13", t: "Annulation par ligne", v: ["plus|À conserver"] },
+  { id: "plus-14", t: "WhatsApp établissement pré-rempli avec le n° de réservation", v: ["plus|À conserver"] }
+]},
+{ id: "synthese", n: "S", title: "Synthèse — les 10 écarts à trancher en priorité", rows: [
+  { id: "syn-1", t: "Parcours camp : étape 2 hébergement, liste filtrée « compatible », blocage du checkout — absent en UI, en serveur et dans le cahier", v: ["r|Priorité"] },
+  { id: "syn-2", t: "Contexte de voyage (dates + adultes/enfants) partagé entre recherche, fiches, panier — inexistant ; les filtres ne se propagent même pas aux calendriers", v: ["r|Priorité"] },
+  { id: "syn-3", t: "Accueil : carrousels par catégorie + « Ver todo » systématique ; « Próximamente en Guatapé » ; « Hazme soñar »", v: ["r|Priorité"] },
+  { id: "syn-4", t: "Événements : ajout au voyage, adaptation des dates, réservation en ligne, interstitiel de sortie", v: ["r|Priorité"] },
+  { id: "syn-5", t: "Cartes sans date / durée / horaire (camps, événements, activités)", v: ["o|Priorité"] },
+  { id: "syn-6", t: "Mi viaje : timeline chronologique, suggestions contextuelles, « Más opciones » par ligne", v: ["o|Priorité"] },
+  { id: "syn-7", t: "Acompte 17 % et solde annoncés avant « Validar pedido » ; expliquer les deux temps et les 30 minutes", v: ["o|Priorité"] },
+  { id: "syn-8", t: "Nav basse Descubrir / Mi viaje / Reservas / Cuenta + « Volver » contextuel", v: ["r|Priorité"] },
+  { id: "syn-9", t: "Après-vente : itinéraire jour par jour, annulation depuis le détail, modification", v: ["o|Priorité"] },
+  { id: "syn-10", t: "Formats et types : dates lisibles, total sur fiche pour la quantité choisie, transport aller/retour, catégorie Tours", v: ["o|Priorité"] }
+]},
+{ id: "bugs", n: "B", title: "Bugs et dettes connus à croiser pendant le check", rows: [
+  { id: "bug-1", t: "Total du panier faux pour un hébergement de plusieurs nuits", v: ["warn|Bug connu"] },
+  { id: "bug-2", t: "Refus LobbyPMS après « Validar pedido » ⇒ panier vidé", v: ["warn|Bug connu"] },
+  { id: "bug-3", t: "Fil d'Ariane = rechargement complet de page", v: ["warn|Dette connue"] },
+  { id: "bug-4", t: "Événement sans URL externe = fiche sans aucune action", v: ["warn|Dette connue"] },
+  { id: "bug-5", t: "`alojamiento-pms-backed-demo` vendable en préprod mais invendable ; `caminata-mirador-penon` sans date ouverte — utiliser `kayak-embalse-guatape`", v: ["warn|Données préprod"] }
+]},
+{ id: "checklist", n: "C", title: "Checklist du check manuel (préprod)", rows: [
+  { id: "chk-1", t: "Accueil : https://hifago-web-env-staging-hifago.vercel.app/es — carrousels ? « Ver más » sur Alojamientos/Camps ? nav basse ? à 390 px", v: ["o|À observer"] },
+  { id: "chk-2", t: "Camp : `/es/productos/campamento-de-musica` — durée écrite ? mention hébergement ? total pour N personnes ? puis `/es/carrito` → « Ir a pagar » sans nuit", v: ["o|À observer"] },
+  { id: "chk-3", t: "Événement : `/es/productos/media-maraton-de-guatape-3-version` — « Reservar » sort direct ? ajout au panier possible ?", v: ["o|À observer"] },
+  { id: "chk-4", t: "Listings : `/es/camps`, `/es/eventos` — dates sur les cartes ? tri ?", v: ["o|À observer"] },
+  { id: "chk-5", t: "Hébergement : `/es/establecimientos/casa-kayam` → `/es/productos/audo` — dates de la recherche pré-remplies ? total 2 nuits sur `/es/carrito` ?", v: ["o|À observer"] },
+  { id: "chk-6", t: "Tunnel : `/es/pago` — acompte visible avant « Validar pedido » ? puis `/es/reserva/<jeton>` → « Pagar el anticipo » → simulateur → rejet", v: ["o|À observer"] },
+  { id: "chk-7", t: "Compte : `/es/cuenta/reservas` — « Anular » par ligne ; `/es/reserva/<jeton>` — pas d'annulation ; `/es/entrar` — pas de mot de passe oublié", v: ["o|À observer"] }
+]},
+{ id: "nonverifie", n: "N", title: "Non vérifié par l'analyse (à observer toi-même)", rows: [
+  { id: "nv-1", t: "Rendu réel à 390×844", v: ["warn|Non observé"] },
+  { id: "nv-2", t: "Popovers Fechas / Personas", v: ["warn|Non observé"] },
+  { id: "nv-3", t: "Toasts et calendriers (PMS compris)", v: ["warn|Non observé"] },
+  { id: "nv-4", t: "Paiement réel Mercado Pago", v: ["warn|Non observé"] },
+  { id: "nv-5", t: "Comportement du menu compact de types", v: ["warn|Non observé"] },
+  { id: "nv-6", t: "Fusion du panier à la connexion Google", v: ["warn|Non observé"] }
+]}
+];
+</script>
+<script>
+(function () {
+  "use strict";
+
+  var SEV = {
+    r: "Structurant", o: "Notable", y: "Détail",
+    ok: "Équivalent", plus: "En plus", warn: "À arbitrer"
+  };
+  var SEV_ORDER = ["r", "o", "y", "ok", "plus", "warn"];
+  var HC = { ok: "Validé", ko: "Invalidé", rev: "À revoir" };
+  var ICON = {
+    ok: '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.3l2.6 2.6L10 3.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    ko: '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    rev: '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M9.6 4.6A4 4 0 1 0 10 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M10.2 1.8v3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+  };
+  var DRAFT_KEY = "hifago-grille-draft-v1";
+  var SAVE_DELAY = 3000;
+
+  var sections = window.GRILLE || [];
+  var allRows = [];
+  sections.forEach(function (s) { s.rows.forEach(function (r) { r.section = s; allRows.push(r); }); });
+
+  // État partagé : { id: { s: "ok"|"ko"|"rev"|"", c: "commentaire", t: horodatage } }
+  var marks = {};
+  var dirty = false, saving = false, saveTimer = null, retried = false;
+  var mode = "boot"; // boot | shared | local | readonly
+  var artifactNs = null, sharedLoaded = false;
+  var filters = { human: "all", sev: "all", q: "" };
+  var els = {};
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function fmt(s) {
+    var parts = String(s).split("`");
+    return parts.map(function (p, i) {
+      if (i % 2) return "<code>" + esc(p) + "</code>";
+      return esc(p).replace(/(https:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+    }).join("");
+  }
+  function plain(s) { return String(s).replace(/`/g, ""); }
+  function parseV(v) { var i = v.indexOf("|"); return { k: v.slice(0, i), txt: v.slice(i + 1) }; }
+  function mark(id) { return marks[id] || { s: "", c: "", t: 0 }; }
+  function stampText(t) {
+    if (!t) return "";
+    try {
+      return "Modifié le " + new Date(t).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    } catch (e) { return ""; }
+  }
+
+  /* ---------- Stockage local (filet de sécurité) ---------- */
+  function readDraft() {
+    try { var d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "{}"); return d && d.rows ? d.rows : {}; }
+    catch (e) { return {}; }
+  }
+  function writeDraft() {
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ rows: marks })); } catch (e) { /* stockage indisponible */ }
+  }
+  function clearDraft() {
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* ignore */ }
+  }
+  function mergeInto(target, src) {
+    var changed = false;
+    Object.keys(src || {}).forEach(function (id) {
+      var m = src[id];
+      if (!m || typeof m !== "object") return;
+      if (!target[id] || (m.t || 0) > (target[id].t || 0)) { target[id] = { s: m.s || "", c: m.c || "", t: m.t || 0 }; changed = true; }
+    });
+    return changed;
+  }
+
+  /* ---------- Rendu ---------- */
+  function renderRow(r) {
+    var m = mark(r.id);
+    var verdicts = r.v.map(function (v) {
+      var p = parseV(v);
+      return '<div class="v"><span class="tag ' + p.k + '">' + SEV[p.k] + '</span><span>' + fmt(p.txt) + "</span></div>";
+    }).join("");
+    var human =
+      '<div class="cell human"><span class="cell-label">Human check</span>' +
+      '<div class="seg" role="group" aria-label="Statut du check">' +
+      ["ok", "ko", "rev"].map(function (s) {
+        return '<button type="button" data-s="' + s + '" aria-pressed="' + (m.s === s) + '">' + ICON[s] + HC[s] + "</button>";
+      }).join("") +
+      "</div>" +
+      '<textarea class="comment" id="c-' + r.id + '" rows="2" placeholder="Ce que tu observes en préprod…" aria-label="Commentaire">' + esc(m.c) + "</textarea>" +
+      '<div class="stamp">' + stampText(m.t) + "</div></div>";
+    var body = r.t != null
+      ? '<div class="cell"><span class="cell-label">Point</span>' + fmt(r.t) + "</div>"
+      : '<div class="cell"><span class="cell-label">Prototype</span>' + fmt(r.a) + '</div><div class="cell"><span class="cell-label">Hifago 2.0 (réel)</span>' + fmt(r.b) + "</div>";
+    return '<div class="row' + (r.t != null ? " single" : "") + '" data-row="' + r.id + '" data-hc="' + (m.s || "none") + '">' +
+      body + '<div class="cell verdicts"><span class="cell-label">Verdict</span>' + verdicts + "</div>" + human + "</div>";
+  }
+
+  function renderAll() {
+    els.main.innerHTML = sections.map(function (s) {
+      var single = s.rows.every(function (r) { return r.t != null; });
+      var head = single
+        ? '<div class="row single head"><div>Point</div><div>Verdict</div><div>Human check</div></div>'
+        : '<div class="row head"><div>Prototype</div><div>Hifago 2.0 (réel)</div><div>Verdict</div><div>Human check</div></div>';
+      return '<section class="section" id="s-' + s.id + '" aria-labelledby="h-' + s.id + '">' +
+        '<div class="section-head"><span class="section-num">' + esc(s.n) + '</span><h2 id="h-' + s.id + '">' + esc(s.title) + '</h2><span class="section-count" id="sc-' + s.id + '"></span></div>' +
+        '<div class="grid">' + head + s.rows.map(renderRow).join("") + "</div></section>";
+    }).join("") + '<div class="empty" id="empty" hidden>Aucune ligne ne correspond à ces filtres.</div>';
+
+    els.toc.innerHTML = sections.map(function (s) {
+      return '<li><a href="#s-' + s.id + '"><span class="tn">' + esc(s.n) + "</span><span>" + esc(s.title) + '</span><span class="tp" id="tp-' + s.id + '"></span></a></li>';
+    }).join("");
+
+    els.legend.innerHTML = SEV_ORDER.map(function (k) {
+      return '<div><span class="tag ' + k + '">' + SEV[k] + "</span></div>";
+    }).join("");
+
+    renderFilterChips();
+  }
+
+  function renderFilterChips() {
+    var hOpts = [["all", "Tout"], ["todo", "À tester"], ["ok", "Validé"], ["ko", "Invalidé"], ["rev", "À revoir"], ["note", "Commenté"]];
+    els.fHuman.innerHTML = '<span class="fgroup-label">Check</span>' + hOpts.map(function (o) {
+      return '<button type="button" class="chip" data-f="human" data-v="' + o[0] + '" aria-pressed="' + (filters.human === o[0]) + '">' + o[1] + ' <span class="n" data-count="h-' + o[0] + '"></span></button>';
+    }).join("");
+    els.fSev.innerHTML = '<span class="fgroup-label">Verdict</span>' +
+      '<button type="button" class="chip" data-f="sev" data-v="all" aria-pressed="' + (filters.sev === "all") + '">Tous</button>' +
+      SEV_ORDER.map(function (k) {
+        return '<button type="button" class="chip" data-f="sev" data-v="' + k + '" aria-pressed="' + (filters.sev === k) + '"><span class="dot" style="background:var(--sev-' + k + ')"></span>' + SEV[k] + ' <span class="n">' + allRows.filter(function (r) { return hasSev(r, k); }).length + "</span></button>";
+      }).join("");
+  }
+
+  function hasSev(r, k) { return r.v.some(function (v) { return parseV(v).k === k; }); }
+  function humanMatch(r, f) {
+    var m = mark(r.id);
+    if (f === "all") return true;
+    if (f === "todo") return !m.s;
+    if (f === "note") return !!(m.c && m.c.trim());
+    return m.s === f;
+  }
+
+  /* ---------- Compteurs ---------- */
+  function refreshCounts() {
+    var total = allRows.length, c = { ok: 0, ko: 0, rev: 0, note: 0 };
+    allRows.forEach(function (r) {
+      var m = mark(r.id);
+      if (c[m.s] != null) c[m.s]++;
+      if (m.c && m.c.trim()) c.note++;
+    });
+    var done = c.ok + c.ko + c.rev;
+    $("m-ok").style.width = (c.ok / total * 100) + "%";
+    $("m-ko").style.width = (c.ko / total * 100) + "%";
+    $("m-rev").style.width = (c.rev / total * 100) + "%";
+    els.meter.setAttribute("aria-label", done + " lignes vérifiées sur " + total);
+    els.tally.innerHTML =
+      "<span><b>" + done + "</b>/" + total + " vérifiées</span>" +
+      '<span><span class="dot" style="background:var(--hc-ok)"></span>' + HC.ok + " <b>" + c.ok + "</b></span>" +
+      '<span><span class="dot" style="background:var(--hc-ko)"></span>' + HC.ko + " <b>" + c.ko + "</b></span>" +
+      '<span><span class="dot" style="background:var(--hc-rev)"></span>' + HC.rev + " <b>" + c.rev + "</b></span>";
+    var counts = { all: total, todo: total - done, ok: c.ok, ko: c.ko, rev: c.rev, note: c.note };
+    Object.keys(counts).forEach(function (k) {
+      var n = els.fHuman.querySelector('[data-count="h-' + k + '"]');
+      if (n) n.textContent = counts[k];
+    });
+    sections.forEach(function (s) {
+      var d = s.rows.filter(function (r) { return mark(r.id).s; }).length;
+      var txt = d + "/" + s.rows.length;
+      var tp = $("tp-" + s.id), sc = $("sc-" + s.id);
+      if (tp) { tp.textContent = txt; tp.classList.toggle("done", d === s.rows.length); }
+      if (sc) sc.textContent = txt + " vérifiées";
+    });
+  }
+
+  function applyFilters() {
+    var q = filters.q.trim().toLowerCase(), any = false;
+    sections.forEach(function (s) {
+      var visible = 0;
+      s.rows.forEach(function (r) {
+        var m = mark(r.id);
+        var hay = [r.a, r.b, r.t, r.v.join(" "), m.c, s.title].join(" ").toLowerCase();
+        var ok = humanMatch(r, filters.human) && (filters.sev === "all" || hasSev(r, filters.sev)) && (!q || hay.indexOf(q) !== -1);
+        var el = els.main.querySelector('.row[data-row="' + r.id + '"]');
+        if (el) el.hidden = !ok;
+        if (ok) visible++;
+      });
+      $("s-" + s.id).hidden = visible === 0;
+      if (visible) any = true;
+    });
+    $("empty").hidden = any;
+  }
+
+  function syncRowView(id) {
+    var el = els.main.querySelector('.row[data-row="' + id + '"]');
+    if (!el) return;
+    var m = mark(id);
+    el.setAttribute("data-hc", m.s || "none");
+    el.querySelectorAll(".seg button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-s") === m.s)); });
+    var ta = el.querySelector(".comment");
+    if (ta && document.activeElement !== ta && ta.value !== m.c) ta.value = m.c;
+    el.querySelector(".stamp").textContent = stampText(m.t);
+  }
+
+  /* ---------- Enregistrement ---------- */
+  function setSave(state, text) { els.save.setAttribute("data-s", state); els.save.textContent = text; }
+
+  function describeMode() {
+    if (mode === "shared") setSave(dirty ? "pending" : "saved", dirty ? "Modifications en attente…" : "Enregistré pour tous");
+    else if (mode === "readonly") setSave("local", "Lecture seule — tes notes restent dans ce navigateur");
+    else if (mode === "local") setSave("local", "Enregistré dans ce navigateur uniquement");
+  }
+
+  function touch(id, patch) {
+    var m = Object.assign({}, mark(id), patch, { t: Date.now() });
+    marks[id] = m;
+    writeDraft();
+    syncRowView(id);
+    refreshCounts();
+    if (mode === "shared") { dirty = true; describeMode(); scheduleSave(SAVE_DELAY); }
+  }
+
+  function scheduleSave(delay) {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, delay);
+  }
+
+  function save() {
+    if (mode !== "shared" || !dirty) return;
+    if (saving) { scheduleSave(1500); return; }
+    saving = true; dirty = false;
+    setSave("saving", "Enregistrement…");
+    var payload = JSON.stringify({ updatedAt: new Date().toISOString(), rows: marks }, null, 1);
+    artifactNs.publish({ "review.json": { content: payload, contentType: "application/json" } }).then(function () {
+      saving = false; retried = false;
+      if (!dirty) clearDraft();
+      describeMode();
+    }, function (err) {
+      saving = false;
+      var code = err && err.code;
+      if (code === "conflict") {
+        // La vue se recharge sur la version gagnante ; le brouillon local est fusionné au rechargement.
+        setSave("pending", "Version plus récente trouvée — rechargement…");
+        return;
+      }
+      if (code === "not_writer" || code === "not_granted" || code === "not_declared" || code === "consent_required" || code === "capability_disabled" || code === "capability_removed") {
+        mode = "readonly"; describeMode(); return;
+      }
+      dirty = true;
+      if (code === "rate_limited") { setSave("pending", "Trop d'enregistrements — nouvel essai dans 20 s"); scheduleSave(20000); return; }
+      if (!retried) { retried = true; scheduleSave(1500 + Math.random() * 2000); setSave("pending", "Nouvel essai…"); return; }
+      setSave("error", "Échec d'enregistrement — tes notes sont gardées dans ce navigateur");
+      retried = false;
+    });
+  }
+
+  window.addEventListener("beforeunload", function (e) {
+    if (mode === "shared" && (dirty || saving)) { e.preventDefault(); e.returnValue = ""; }
+  });
+
+  /* ---------- Export ---------- */
+  function buildExport(includeAll) {
+    var lines = ["# Human check — Hifago 2.0 vs prototype mobile v2", ""];
+    var c = { ok: 0, ko: 0, rev: 0 };
+    allRows.forEach(function (r) { var s = mark(r.id).s; if (c[s] != null) c[s]++; });
+    lines.push("Validé : " + c.ok + " · Invalidé : " + c.ko + " · À revoir : " + c.rev + " · Total : " + allRows.length, "");
+    sections.forEach(function (s) {
+      var rows = s.rows.filter(function (r) { var m = mark(r.id); return includeAll || m.s || (m.c && m.c.trim()); });
+      if (!rows.length) return;
+      lines.push("## " + s.n + ". " + s.title, "");
+      rows.forEach(function (r) {
+        var m = mark(r.id);
+        var label = r.t != null ? plain(r.t) : plain(r.a === "—" ? r.b : r.a);
+        if (label.length > 140) label = label.slice(0, 137) + "…";
+        var status = m.s ? HC[m.s] : "Non testé";
+        lines.push("- [" + status + "] `" + r.id + "` " + label);
+        lines.push("  - Verdict : " + r.v.map(function (v) { var p = parseV(v); return SEV[p.k] + " — " + plain(p.txt); }).join(" ; "));
+        if (m.c && m.c.trim()) lines.push("  - Commentaire : " + m.c.trim().replace(/\n+/g, " / "));
+      });
+      lines.push("");
+    });
+    return lines.join("\n");
+  }
+
+  /* ---------- Événements ---------- */
+  function bind() {
+    els.main.addEventListener("click", function (e) {
+      var b = e.target.closest(".seg button");
+      if (!b) return;
+      var id = b.closest(".row").getAttribute("data-row");
+      var s = b.getAttribute("data-s");
+      touch(id, { s: mark(id).s === s ? "" : s });
+    });
+    els.main.addEventListener("input", function (e) {
+      if (!e.target.classList.contains("comment")) return;
+      var id = e.target.closest(".row").getAttribute("data-row");
+      touch(id, { c: e.target.value });
+    });
+    document.querySelector(".filters").addEventListener("click", function (e) {
+      var chip = e.target.closest(".chip[data-f]");
+      if (!chip) return;
+      filters[chip.getAttribute("data-f")] = chip.getAttribute("data-v");
+      chip.parentNode.querySelectorAll(".chip[data-f]").forEach(function (c) { c.setAttribute("aria-pressed", String(c === chip)); });
+      applyFilters();
+    });
+    var qTimer;
+    $("f-q").addEventListener("input", function (e) {
+      clearTimeout(qTimer);
+      qTimer = setTimeout(function () { filters.q = e.target.value; applyFilters(); }, 150);
+    });
+    var dlg = $("dlg-export"), txt = $("export-text"), all = $("export-all");
+    function fill() { txt.value = buildExport(all.checked); }
+    $("btn-export").addEventListener("click", function () {
+      fill();
+      if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
+      txt.focus(); txt.select();
+    });
+    all.addEventListener("change", fill);
+    $("btn-close").addEventListener("click", function () { dlg.close ? dlg.close() : dlg.removeAttribute("open"); });
+    $("btn-copy").addEventListener("click", function () {
+      var btn = this;
+      function done(ok) { btn.textContent = ok ? "Copié" : "Sélectionné — Ctrl+C"; setTimeout(function () { btn.textContent = "Copier"; }, 2000); }
+      txt.focus(); txt.select();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt.value).then(function () { done(true); }, function () { done(document.execCommand && document.execCommand("copy")); });
+      } else {
+        done(document.execCommand && document.execCommand("copy"));
+      }
+    });
+  }
+
+  /* ---------- Démarrage ---------- */
+  function start() {
+    els = {
+      main: $("main"), toc: $("toc"), legend: $("legend"), tally: $("tally"),
+      meter: $("meter"), save: $("save-state"), fHuman: $("f-human"), fSev: $("f-sev")
+    };
+    marks = readDraft();
+    renderAll();
+    refreshCounts();
+    applyFilters();
+    bind();
+    setSave("pending", "Chargement des checks partagés…");
+
+    var loadShared = fetch("review.json", { cache: "no-store" }).then(function (res) {
+      // 404 : aucun check encore enregistré, le fichier sera créé au premier enregistrement.
+      if (res.status === 404) return { rows: {} };
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    }).then(function (data) {
+      var shared = (data && data.rows) || {};
+      var local = marks;
+      marks = {};
+      mergeInto(marks, shared);
+      var localNewer = mergeInto(marks, local);
+      sharedLoaded = true;
+      return localNewer;
+    }, function () {
+      // Copie hors claude.ai : on affiche l'instantané des checks embarqué dans la page.
+      var snap = window.REVIEW_SNAPSHOT;
+      if (!snap || !snap.rows) return null;
+      var local = marks; marks = {}; mergeInto(marks, snap.rows); mergeInto(marks, local);
+      return false;
+    });
+
+    var getNs = (window.claude && window.claude.use) ? window.claude.use("artifact").catch(function () { return null; }) : Promise.resolve(null);
+
+    Promise.all([loadShared, getNs]).then(function (res) {
+      var localNewer = res[0];
+      artifactNs = res[1];
+      allRows.forEach(function (r) { syncRowView(r.id); });
+      refreshCounts();
+      applyFilters();
+      if (artifactNs && sharedLoaded) {
+        mode = "shared";
+        if (localNewer) { dirty = true; scheduleSave(1200); }
+        describeMode();
+      } else {
+        mode = "local";
+        describeMode();
+      }
+    });
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+})();
+</script>
+
+</body></html>

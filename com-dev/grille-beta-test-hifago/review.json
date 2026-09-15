@@ -1,0 +1,355 @@
+{
+ "updatedAt": "2026-09-15T13:04:16.262Z",
+ "rows": {
+  "nav-1": {
+   "s": "ko",
+   "c": "",
+   "t": 1789461548454
+  },
+  "nav-2": {
+   "s": "rev",
+   "c": "lorsque l'on descent dans de la page surtout sur mobile aucun moyen rapide de revenir. Doute sur la decision de remove la barre. Trouver unee solution alternative ou la remetre",
+   "t": 1789461658165
+  },
+  "nav-4": {
+   "s": "ok",
+   "c": "le footer existe. on voit plus tard ce qu'on met dedans",
+   "t": 1789461578573
+  },
+  "acc-2": {
+   "s": "ok",
+   "c": "on garde pour plus tard",
+   "t": 1789474902366
+  },
+  "nav-3": {
+   "s": "",
+   "c": "si option pas coché c'est que j'ai pas compris",
+   "t": 1789461714763
+  },
+  "acc-3": {
+   "s": "rev",
+   "c": "ninos... on as dis plus tard mais texte intro si",
+   "t": 1789461900459
+  },
+  "acc-4": {
+   "s": "ok",
+   "c": "",
+   "t": 1789475590327
+  },
+  "acc-5": {
+   "s": "ok",
+   "c": "",
+   "t": 1789461944836
+  },
+  "acc-6": {
+   "s": "ko",
+   "c": "",
+   "t": 1789461987649
+  },
+  "acc-7": {
+   "s": "rev",
+   "c": "ok pour afichage meme si 1 camp",
+   "t": 1789462098530
+  },
+  "acc-8": {
+   "s": "ok",
+   "c": "",
+   "t": 1789462157215
+  },
+  "acc-9": {
+   "s": "ok",
+   "c": "cool",
+   "t": 1789462182053
+  },
+  "rech-1": {
+   "s": "ok",
+   "c": "",
+   "t": 1789462391112
+  },
+  "cat-1": {
+   "s": "ko",
+   "c": "je veux les onglets sur mobile",
+   "t": 1789462438854
+  },
+  "cat-2": {
+   "s": "ko",
+   "c": "",
+   "t": 1789462507569
+  },
+  "cat-3": {
+   "s": "ko",
+   "c": "",
+   "t": 1789462674868
+  },
+  "cat-4": {
+   "s": "ko",
+   "c": "Trié par date ",
+   "t": 1789476619810
+  },
+  "cat-5": {
+   "s": "ko",
+   "c": "dates num de personnes preremplis si noté dans home",
+   "t": 1789463372242
+  },
+  "fic-1": {
+   "s": "ok",
+   "c": "",
+   "t": 1789463539875
+  },
+  "fic-2": {
+   "s": "ok",
+   "c": "",
+   "t": 1789464020711
+  },
+  "fic-3": {
+   "s": "ok",
+   "c": "",
+   "t": 1789464055971
+  },
+  "fic-4": {
+   "s": "ko",
+   "c": "ma version ne consulte pas lobby pour la disponibilité. peut etre due au ip fixe.",
+   "t": 1789464461237
+  },
+  "fic-5": {
+   "s": "rev",
+   "c": "ida y vuelta doivent etre selectionable separement",
+   "t": 1789464584548
+  },
+  "ajo-1": {
+   "s": "ok",
+   "c": "pour le moment ",
+   "t": 1789464797338
+  },
+  "ajo-2": {
+   "s": "ok",
+   "c": "",
+   "t": 1789464747479
+  },
+  "cmp-1": {
+   "s": "ko",
+   "c": "",
+   "t": 1789465158091
+  },
+  "cmp-2": {
+   "s": "ko",
+   "c": "si plusieurs camps ouvert alors listes. si pas de camp dejas avec resa. Le camp s'ouvre grace a la 1ere resa dependant du calendrier du presta",
+   "t": 1789465436704
+  },
+  "cmp-3": {
+   "s": "ko",
+   "c": "",
+   "t": 1789465341208
+  },
+  "cmp-4": {
+   "s": "ko",
+   "c": "",
+   "t": 1789465357355
+  },
+  "cmp-5": {
+   "s": "ko",
+   "c": "",
+   "t": 1789465365312
+  },
+  "evt-1": {
+   "s": "ko",
+   "c": "c'est une des resons qui fait que le panier s'appell mi viaje et non panier",
+   "t": 1789465568443
+  },
+  "evt-2": {
+   "s": "rev",
+   "c": "",
+   "t": 1789465626426
+  },
+  "evt-3": {
+   "s": "ko",
+   "c": "",
+   "t": 1789465662863
+  },
+  "evt-4": {
+   "s": "ko",
+   "c": "",
+   "t": 1789465668668
+  },
+  "mv-1": {
+   "s": "ko",
+   "c": "",
+   "t": 1789465678069
+  },
+  "mv-2": {
+   "s": "ko",
+   "c": "",
+   "t": 1789465683503
+  },
+  "mv-3": {
+   "s": "ko",
+   "c": "",
+   "t": 1789465688159
+  },
+  "mv-4": {
+   "s": "ko",
+   "c": "Reprise des commandes impayées . Pas testé mais je pense que c'est cool",
+   "t": 1789465761563
+  },
+  "mv-5": {
+   "s": "rev",
+   "c": "",
+   "t": 1789465775020
+  },
+  "pay-1": {
+   "s": "ko",
+   "c": "La loi dis au final que le client a 5 jours de retractation",
+   "t": 1789465897536
+  },
+  "pay-2": {
+   "s": "ok",
+   "c": "",
+   "t": 1789465950355
+  },
+  "pay-3": {
+   "s": "ok",
+   "c": "",
+   "t": 1789466171039
+  },
+  "aut-1": {
+   "s": "ko",
+   "c": "pas sur de l'utilité du lien magique. recuperation mot de passe oublié obligatoire ",
+   "t": 1789477453246
+  },
+  "aut-2": {
+   "s": "ok",
+   "c": "",
+   "t": 1789466363981
+  },
+  "aut-3": {
+   "s": "ok",
+   "c": "",
+   "t": 1789466373691
+  },
+  "apv-1": {
+   "s": "rev",
+   "c": "Itineraire avec contact whats app des diferents prestataire de la resa",
+   "t": 1789466604157
+  },
+  "apv-2": {
+   "s": "ok",
+   "c": "",
+   "t": 1789466824547
+  },
+  "apv-3": {
+   "s": "rev",
+   "c": "",
+   "t": 1789466859664
+  },
+  "apv-4": {
+   "s": "ko",
+   "c": "le client ne reserve pas un panier mais un voyage sur mesure",
+   "t": 1789466915258
+  },
+  "apv-5": {
+   "s": "rev",
+   "c": "loi des 5 jours de retractation",
+   "t": 1789466943089
+  },
+  "apv-6": {
+   "s": "rev",
+   "c": "",
+   "t": 1789466951398
+  },
+  "txt-1": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467034765
+  },
+  "txt-2": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467047211
+  },
+  "txt-3": {
+   "s": "ko",
+   "c": "",
+   "t": 1789467054494
+  },
+  "txt-4": {
+   "s": "ko",
+   "c": "",
+   "t": 1789467120226
+  },
+  "txt-5": {
+   "s": "ok",
+   "c": "ne pas tenir compte",
+   "t": 1789467148908
+  },
+  "plus-1": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467162126
+  },
+  "plus-2": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467165366
+  },
+  "plus-3": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467167925
+  },
+  "plus-4": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467169202
+  },
+  "plus-5": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467172409
+  },
+  "plus-6": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467175386
+  },
+  "plus-7": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467178701
+  },
+  "plus-8": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467180254
+  },
+  "plus-9": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467183494
+  },
+  "plus-10": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467186564
+  },
+  "plus-11": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467190637
+  },
+  "plus-12": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467192523
+  },
+  "plus-13": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467195658
+  },
+  "plus-14": {
+   "s": "ok",
+   "c": "",
+   "t": 1789467197924
+  }
+ }
+}
