@@ -46,6 +46,8 @@ export type SearchPanelLabels = {
     label: string;
     placeholder: string;
     submitLabel: string;
+    /** Libellé du bouton pendant une recherche en cours, déjà traduit — cf. `SearchBar.pendingLabel`. */
+    pendingLabel?: string;
     emptyLabel: string;
   };
   dates: {
@@ -72,6 +74,8 @@ export type SearchPanelProps = {
   onCriteriaChange: (criteria: SearchCriteria) => void;
   /** Reçoit TOUS les critères, pas seulement le texte. */
   onSubmit: (criteria: SearchCriteria) => void;
+  /** Une recherche est en cours (`useTransition` de `BuscadorInicio`) — répercuté sur `SearchBar`. */
+  isPending?: boolean;
   suggestions: SearchSuggestion[];
   onSuggestionSelect: (suggestion: SearchSuggestion) => void;
   /** REQUIS. `todayInBogota()`, jamais l'heure du navigateur — descend jusqu'à `Calendar`. */
@@ -86,6 +90,7 @@ export function SearchPanel({
   criteria,
   onCriteriaChange,
   onSubmit,
+  isPending,
   suggestions,
   onSuggestionSelect,
   aujourdIso,
@@ -107,9 +112,11 @@ export function SearchPanel({
         // puisque l'état est contrôlé, mais c'est celui que la barre soumet qui fait foi. Lire
         // l'état ici rendrait ce composant dépendant du moment où le parent le repropage.
         onSubmit={(query) => onSubmit({ ...criteria, query })}
+        isPending={isPending}
         label={labels.search.label}
         placeholder={labels.search.placeholder}
         submitLabel={labels.search.submitLabel}
+        pendingLabel={labels.search.pendingLabel}
         emptyLabel={labels.search.emptyLabel}
         testId={sousId("bar")}
       />

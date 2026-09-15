@@ -270,6 +270,7 @@ export function BuscadorInicio({
         criteria={criterios}
         onCriteriaChange={setCriterios}
         onSubmit={buscar}
+        isPending={navegando}
         suggestions={sugerenciasMostradas}
         onSuggestionSelect={elegirSugerencia}
         aujourdIso={aujourdIso}
@@ -283,6 +284,12 @@ export function BuscadorInicio({
         // seul là où le visiteur attend « 3 personas ».
         labels={{
           ...labels,
+          search: {
+            ...labels.search,
+            // Même texte que la région `role="status"` ci-dessous — un seul message, qu'il soit lu
+            // sur le bouton ou annoncé par un lecteur d'écran.
+            pendingLabel: t("buscando"),
+          },
           people: {
             ...labels.people,
             valueLabel:

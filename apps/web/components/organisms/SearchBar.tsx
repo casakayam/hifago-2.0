@@ -1,6 +1,6 @@
 "use client";
 
-import { ComboBox, InputGroup, ListBox } from "@hifago/ui";
+import { ComboBox, InputGroup, ListBox, Spinner } from "@hifago/ui";
 import { Button } from "@/components/atoms/Button";
 import { sousId } from "@/components/atoms/Field";
 
@@ -127,6 +127,10 @@ export type SearchBarProps = {
   placeholder: string;
   /** Libellé du bouton de soumission, déjà traduit. */
   submitLabel: string;
+  /** Une recherche est en cours : loupe → `Spinner`, bouton "Buscar" → `isPending`. */
+  isPending?: boolean;
+  /** Libellé du bouton pendant `isPending`, déjà traduit. Sans lui, `submitLabel` est conservé. */
+  pendingLabel?: string;
   /** Ce qu'affiche la liste quand elle est vide, déjà traduit. */
   emptyLabel: string;
   /** Texte d'aide sous la barre, déjà traduit. Même vocabulaire que l'atome `Field`. */
@@ -162,6 +166,8 @@ export function SearchBar({
   label,
   placeholder,
   submitLabel,
+  isPending = false,
+  pendingLabel,
   emptyLabel,
   hint,
   error,
@@ -254,7 +260,14 @@ export function SearchBar({
               PILULE qu'on garde : lui seul entoure aussi le bouton. */}
           <InputGroup className="flex w-full items-center gap-3 !h-auto !border-0 !bg-transparent !shadow-none !ring-0 pl-3">
             <InputGroup.Prefix>
-              <LoupeIcone />
+              {/* `aria-hidden`, comme dans l'atome `Button` : `Spinner` publie son propre
+                  `role="status" aria-label="Loading"` (anglais, non traduit) — la seule annonce
+                  vivante reste la région `role="status"` de `BuscadorInicio`. */}
+              {isPending ? (
+                <Spinner size="sm" color="current" aria-hidden="true" className="text-muted" />
+              ) : (
+                <LoupeIcone />
+              )}
             </InputGroup.Prefix>
             <InputGroup.Input
               className="min-w-0 flex-1 text-lg md:text-xl"
@@ -339,6 +352,8 @@ export function SearchBar({
             size="md"
             shape="pill"
             onPress={() => onSubmit(value)}
+            isPending={isPending}
+            pendingLabel={pendingLabel}
             testId={sousId(testId, "submit")}
           >
             {submitLabel}
