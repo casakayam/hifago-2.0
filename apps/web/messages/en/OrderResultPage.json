@@ -45,7 +45,8 @@
     "nothing_to_pay": "There is nothing left to pay for this order.",
     "order_not_found": "We could not find the order to start the payment.",
     "mercadopago_unavailable": "We could not reach Mercado Pago. Please try again in a moment.",
-    "unknown": "The payment could not be started. Please try again."
+    "unknown": "The payment could not be started. Please try again.",
+    "payment_rejected": "Your payment method was rejected. You can try again or use a different method."
   },
   "contactWhatsApp": "Message {establishment}",
   "contactMessage": "Hi, I'm {name}, booking {reference}",

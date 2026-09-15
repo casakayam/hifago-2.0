@@ -61,5 +61,8 @@ export async function POST(request: Request) {
     return new Response("Internal error", { status: 500 });
   }
 
+  // Même paramètre `?payment=` que les trois back_urls du vrai Mercado Pago (create/route.ts) —
+  // ici posé au moment du clic plutôt qu'à la création de la préférence, faute d'issue connue avant.
+  target.searchParams.set("payment", outcome);
   return Response.redirect(target.toString(), 303);
 }

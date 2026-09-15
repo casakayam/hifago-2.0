@@ -38,7 +38,10 @@ export async function generateMetadata(
   return { title: t("metaTitle") };
 }
 
-export default async function OrderResultPage({ params }: PageProps<"/[locale]/reserva/[token]">) {
+export default async function OrderResultPage({
+  params,
+  searchParams,
+}: PageProps<"/[locale]/reserva/[token]">) {
   const { locale, token } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("OrderResultPage");
@@ -57,10 +60,26 @@ export default async function OrderResultPage({ params }: PageProps<"/[locale]/r
   // écran non plus — 404, sans message qui trahirait laquelle des trois situations est la bonne.
   if (!order) notFound();
 
+  // `?payment=` posé par les back_urls Mercado Pago (create/route.ts) ou par le simulateur de dev
+  // (mock-confirm/route.ts) — jamais consulté pour DÉCIDER de l'état de la commande (dérivé de la
+  // base par `deriveOrderState`), seulement pour dire à `OrderResult` qu'il vient d'être redirigé
+  // depuis un paiement rejeté, un aller-retour qu'un simple rechargement de page ne reproduit pas.
+  const resolvedSearchParams = await searchParams;
+  const paymentParam = resolvedSearchParams?.payment;
+  const paymentOutcome =
+    paymentParam === "approved" || paymentParam === "pending" || paymentParam === "rejected"
+      ? paymentParam
+      : null;
+
   return (
     <PageShell variant="narrow" testId="order-result-page">
       <Title as="h1">{t("title", { reference: order.reference })}</Title>
-      <OrderResult order={order} locale={locale as Locale} isRealAccount={isRealAccount} />
+      <OrderResult
+        order={order}
+        locale={locale as Locale}
+        isRealAccount={isRealAccount}
+        paymentOutcome={paymentOutcome}
+      />
     </PageShell>
   );
 }

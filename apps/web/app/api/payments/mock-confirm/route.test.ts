@@ -69,12 +69,18 @@ describe("POST /api/payments/mock-confirm", () => {
     });
     expect(String(rpcArgs?.args.p_mp_payment_id)).toMatch(/^mock_/);
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe(RETURN_URL);
+    expect(response.headers.get("location")).toBe(`${RETURN_URL}?payment=approved`);
   });
 
-  it("« Rechazar » appelle apply_payment_webhook avec p_status=rejected", async () => {
-    await POST(requete({ paymentId: PAYMENT_ID, returnUrl: RETURN_URL, outcome: "rejected" }));
+  // `?payment=rejected` — même paramètre que les trois back_urls du vrai Mercado Pago
+  // (create/route.test.ts) : c'est lui qui permet à `/reserva/<jeton>` d'afficher un message de
+  // rejet, faute de quoi le client revenait sans aucune indication (cf. OrderResult.tsx).
+  it("« Rechazar » appelle apply_payment_webhook avec p_status=rejected et redirige avec ?payment=rejected", async () => {
+    const response = await POST(
+      requete({ paymentId: PAYMENT_ID, returnUrl: RETURN_URL, outcome: "rejected" })
+    );
     expect(rpcArgs?.args).toMatchObject({ p_status: "rejected" });
+    expect(response.headers.get("location")).toBe(`${RETURN_URL}?payment=rejected`);
   });
 
   it("rejette un returnUrl pointant vers une autre origine — anti open-redirect", async () => {

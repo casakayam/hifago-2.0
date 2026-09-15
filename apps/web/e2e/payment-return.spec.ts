@@ -122,6 +122,47 @@ test("le lien s'ouvre SANS session — le cas du client qui clique depuis son em
   await contexteVierge.close();
 });
 
+test("paiement rejeté (simulé) → l'écran le dit, jamais un retour silencieux vers « à payer »", async ({
+  page,
+}) => {
+  // Constaté en manipulant l'écran réel (Jérôme, 2026-09-14) : le rejet ramenait sur
+  // `/reserva/<jeton>` sans un mot — visuellement identique à une commande qui n'a jamais tenté de
+  // payer, `apply_payment_webhook` remettant `payment_status` à `'unpaid'` dans les deux cas.
+  //
+  // ⚠️ PAS de `mockMercadoPagoCheckout` ici, à la différence des tests ci-dessus : ce helper
+  // intercepte `/api/payments/create` et court-circuite tout le reste. Celui-ci veut au contraire
+  // EXERCER le vrai Route Handler jusqu'au simulateur HTML (`MERCADOPAGO_MOCK_MODE=true` en local,
+  // `.env.local`) — c'est exactement le chemin où le rejet passait inaperçu.
+  await resetAvailability(PRODUCT_ID, DATE, { capacity: 5, booked: 0 });
+
+  await page.goto("/es/productos/tour-lancha-guatape");
+  await expect(page.getByTestId("product-name")).toBeVisible();
+  await page.locator(`[data-date="${DATE}"]`).click();
+  await page.getByTestId("add-to-cart-button").click();
+  await irAPagoTrasAgregar(page);
+
+  await page.locator('input[name="holder-name"]').fill("Cliente E2E Rechazo");
+  await page.locator('input[name="holder-phone"]').fill("+57 300 444 5556");
+  await page.locator('input[name="holder-email"]').fill("rechazo.uno@example.com");
+  await page.getByTestId("submit-order-button").click();
+  await page.waitForURL(/\/reserva\//);
+
+  await page.getByTestId("pay-button").click();
+  await page.waitForURL(/\/api\/payments\/mock-checkout/);
+  await page.getByRole("button", { name: "Rechazar (simulado)" }).click();
+  await page.waitForURL(/\/reserva\//);
+
+  await expect(page.getByTestId("order-state-failed")).toBeVisible();
+  await expect(page.getByTestId("payment-error")).toBeVisible();
+  // La commande, elle, reste vivante — jamais un retour au panier vide (cf. `.claude/rules/apps.md`,
+  // « un paiement qui échoue APRÈS une réservation réussie garde la réservation »).
+  await expect(page.getByTestId("retry-payment-button")).toBeVisible();
+
+  // `?payment=rejected` est un aller ponctuel, jamais un état permanent de l'adresse : un simple
+  // rechargement ne doit pas rejouer indéfiniment le même message.
+  expect(page.url()).not.toContain("payment=");
+});
+
 test("un jeton inconnu rend 404, jamais une page à moitié rendue", async ({ page }) => {
   const response = await page.goto(`/es/reserva/${"a".repeat(32)}`);
   expect(response?.status()).toBe(404);

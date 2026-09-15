@@ -135,7 +135,7 @@ export function PhoneField({
 
   return (
     <div className={`flex flex-col gap-1 ${FIELD_WIDTH_CLASSES[width]}`} data-testid={testId}>
-      <Label htmlFor={inputId}>{label}</Label>
+      <Label htmlFor={inputId} isRequired={isRequired}>{label}</Label>
       <PhoneInput
         name={name}
         value={value || undefined}

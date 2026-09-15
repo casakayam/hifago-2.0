@@ -96,14 +96,25 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, init_point: mockUrl.toString() });
   }
 
+  // Les trois back_urls pointaient jusqu'ici vers la MÊME adresse, quelle que soit l'issue — Mercado
+  // Pago redirige vers celle qui correspond au résultat réel, donc les distinguer par un paramètre
+  // suffit à le savoir à l'arrivée sur `/reserva/<jeton>` (`OrderResult.tsx` lit `?payment=`, jamais
+  // pour DÉCIDER de l'état de la commande — dérivé de la base, cf. `orderState.ts` — seulement pour
+  // superposer le message "paiement rejeté" au bon moment).
+  const withPaymentOutcome = (outcome: "approved" | "pending" | "rejected") => {
+    const url = new URL(returnUrl);
+    url.searchParams.set("payment", outcome);
+    return url.toString();
+  };
+
   try {
     const { initPoint } = await createCheckoutPreference({
       paymentId: payment.id,
       amountCop: payment.amount_cop,
       payerEmail: payment.payer_email,
-      successUrl: returnUrl,
-      pendingUrl: returnUrl,
-      failureUrl: returnUrl,
+      successUrl: withPaymentOutcome("approved"),
+      pendingUrl: withPaymentOutcome("pending"),
+      failureUrl: withPaymentOutcome("rejected"),
       notificationUrl: `${origin}/api/payments/webhook`,
     });
     return Response.json({ ok: true, init_point: initPoint });

@@ -71,15 +71,22 @@ describe("POST /api/payments/create — la back_url de retour", () => {
   it("renvoie le client sur l'adresse propre à sa commande, jamais sur /pago", async () => {
     const response = await POST(requete());
     expect(response.status).toBe(200);
-    expect(preferenceInput?.successUrl).toBe(`https://hifago.test/reserva/${ACCESS_TOKEN}`);
+    expect(preferenceInput?.successUrl).toBe(
+      `https://hifago.test/reserva/${ACCESS_TOKEN}?payment=approved`
+    );
   });
 
-  it("utilise la MÊME adresse pour les trois issues — succès, attente et échec", async () => {
+  // Corrigé — les trois back_urls pointaient jusqu'ici vers la MÊME adresse : le client revenait
+  // sur `/reserva/<jeton>` sans distinction, et un paiement rejeté n'affichait donc jamais rien
+  // (OrderResult.tsx dérive l'état de la commande de la base, jamais de l'issue Mercado Pago elle-
+  // même — seul `?payment=` lui dit qu'il vient d'un rejet). Les trois adresses restent la MÊME
+  // page (`/reserva/<jeton>`), seul le paramètre `payment` les distingue désormais.
+  it("distingue les trois issues par `?payment=`, même page sinon", async () => {
     await POST(requete());
-    const attendu = `https://hifago.test/reserva/${ACCESS_TOKEN}`;
-    expect(preferenceInput?.successUrl).toBe(attendu);
-    expect(preferenceInput?.pendingUrl).toBe(attendu);
-    expect(preferenceInput?.failureUrl).toBe(attendu);
+    const base = `https://hifago.test/reserva/${ACCESS_TOKEN}`;
+    expect(preferenceInput?.successUrl).toBe(`${base}?payment=approved`);
+    expect(preferenceInput?.pendingUrl).toBe(`${base}?payment=pending`);
+    expect(preferenceInput?.failureUrl).toBe(`${base}?payment=rejected`);
   });
 
   it("NE PRÉFIXE PAS la locale : c'est le /es en dur qui faisait basculer la session en espagnol", async () => {
@@ -114,7 +121,9 @@ describe("POST /api/payments/create — la back_url de retour", () => {
       body: JSON.stringify({ paymentId: PAYMENT_ID }),
     });
     await POST(request);
-    expect(preferenceInput?.successUrl).toBe(`https://hifago.co/reserva/${ACCESS_TOKEN}`);
+    expect(preferenceInput?.successUrl).toBe(
+      `https://hifago.co/reserva/${ACCESS_TOKEN}?payment=approved`
+    );
   });
 });
 

@@ -55,13 +55,33 @@ export type OrderResultProps = {
   locale: Locale;
   /** Un compte RÉEL, jamais une identité anonyme (spec 33 invariant 8, résolu par la page). */
   isRealAccount: boolean;
+  /** `?payment=` de la page — lu là-bas (searchParams serveur), jamais ici (cf. son en-tête). */
+  paymentOutcome: "approved" | "pending" | "rejected" | null;
 };
 
-export function OrderResult({ order, locale, isRealAccount }: OrderResultProps) {
+export function OrderResult({ order, locale, isRealAccount, paymentOutcome }: OrderResultProps) {
   const t = useTranslations("OrderResultPage");
   const router = useRouter();
-  const [paymentError, setPaymentError] = useState<string | null>(null);
+  // Retour de Mercado Pago (réel ou simulé) avec un paiement rejeté : la page s'est entièrement
+  // remontée depuis le serveur (spec 33, adresse rechargeable), donc rien du `useState` local de
+  // `startPayment` n'a survécu — c'est `?payment=rejected` qui porte l'information jusqu'ici, lue en
+  // initialiseur (jamais posée depuis un effet : `react-hooks/set-state-in-effect` l'interdit, et ça
+  // évite de toute façon un rendu intermédiaire sans le message). Elle superpose le même état d'écran
+  // `failed` qu'un échec détecté avant le départ (cf. en-tête du fichier).
+  const [paymentError, setPaymentError] = useState<string | null>(() =>
+    paymentOutcome === "rejected" ? t("errors.payment_rejected") : null
+  );
   const [isPaying, setIsPaying] = useState(false);
+
+  // Efface `?payment=` une fois lu, pour qu'un simple rechargement de cette page n'affiche pas
+  // indéfiniment un rejet déjà vu. Ne pose aucun état — seulement l'URL — donc pas concerné par
+  // `react-hooks/set-state-in-effect`.
+  useEffect(() => {
+    if (paymentOutcome !== "rejected") return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("payment");
+    window.history.replaceState(null, "", url);
+  }, [paymentOutcome]);
 
   // L'état de la COMMANDE et l'incident de PAIEMENT sont deux choses distinctes : les mélanger
   // faisait réécrire trois fois les mêmes conditions (et rendait `isPayable` vrai sur une commande
