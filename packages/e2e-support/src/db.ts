@@ -87,6 +87,25 @@ export async function resetAvailability(
 }
 
 /**
+ * Vide `cart_items` pour une ressource (product_id, date), tous comptes confondus — jamais touché
+ * par `resetAvailability` ci-dessus (qui ne connaît que `order_lines`/`product_availability`).
+ * Nécessaire pour tout spec qui déclenche volontairement un `create_order` en échec : la RPC laisse
+ * alors `cart_items` INTACT (spec 32 §0, « le client garde son panier pour retenter ») — un
+ * comportement voulu côté produit, mais qui rend le compte seedé sale pour la prochaine exécution
+ * du même test si rien ne le nettoie explicitement (trouvé en écrivant
+ * cart-multi-establishment.spec.ts : la 2ᵉ exécution du même test échouait sur un bouton "Añadir al
+ * carrito" désactivé, capacité déjà "consommée" par le propre panier laissé par l'exécution d'avant).
+ */
+export async function clearCartItems(productId: string, date: string) {
+  await withDb(async (client) => {
+    await client.query("delete from cart_items where product_id = $1 and date = $2", [
+      productId,
+      date,
+    ]);
+  });
+}
+
+/**
  * Purge les orders d'un titulaire donné (et les payments qui les référencent, cf.
  * purgePaymentsThenOrders ci-dessus) — pour un fixture e2e qui construit ses propres commandes en
  * dehors du scope (productId, date) couvert par resetAvailability (ex. reserve-hotel-room.spec.ts,

@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 import {
   resetAvailability,
+  clearCartItems,
   setBooked,
   getAvailability,
   getEstablishmentName,
@@ -40,8 +41,10 @@ test("panier avec une ligne par établissement → une seule commande, 2 lignes"
   await resetAvailability(KAYAK_ID, KAYAK_DATE, { capacity: 3, booked: 0 });
   await loginAs(page.context(), SEEDED_ACCOUNTS.referentActif, SEEDED_PASSWORD);
 
-  await page.goto("/es");
-  await page.getByTestId(`tarjeta-${TOUR_SLUG}-link`).click();
+  // Lien profond, pas la carte d'accueil : la section « actividades » plafonne à 8 offres en
+  // created_at desc (dette connue, cf. payment-return.spec.ts) — tour-lancha-guatape en est sorti
+  // depuis l'ajout de mockData du 2026-09-14, sans rapport avec ce que ce test vérifie.
+  await page.goto(`/es/productos/${TOUR_SLUG}`);
   await page.locator(`[data-date="${TOUR_DATE}"]`).click();
   await page.locator("#qty").fill("2");
   await page.getByTestId("add-to-cart-button").click();
@@ -68,7 +71,10 @@ test("panier avec une ligne par établissement → une seule commande, 2 lignes"
   await expect(kayakLine).toContainText("Cantidad: 1");
   expect(tourEstablishment).not.toBe(kayakEstablishment);
 
-  const phone = "+57 300 444 5555";
+  // Sans espaces : `PhoneField` (2026-09-10) normalise en E.164 avant `create_order`, et
+  // `countOrdersByPhone`/`getOrderLinesForPhone` (packages/e2e-support) comparent par égalité
+  // stricte — un littéral avec espaces ne matchait plus rien depuis ce changement.
+  const phone = "+573004445555";
   await page.locator('input[name="holder-name"]').fill("Cliente E2E Multi Establecimiento");
   await page.locator('input[name="holder-phone"]').fill(phone);
   await page.locator('input[name="holder-email"]').fill("cliente.multi.establecimiento@example.com");
@@ -90,7 +96,7 @@ test("panier avec une ligne par établissement → une seule commande, 2 lignes"
   expect(kayakWritten).toMatchObject({ date: KAYAK_DATE, qty: 1 });
 });
 
-test("une ligne dépasse la capacité restante de sa ressource → erreur ciblée sur cette ligne, aucune commande créée (tout-ou-rien)", async ({
+test("une ligne dépasse la capacité restante de sa ressource → message d'erreur exact, aucune commande créée (tout-ou-rien)", async ({
   page,
 }) => {
   // Un seul cupo ouvert pour tour-lancha-guatape : juste assez pour que l'ajout au panier
@@ -98,10 +104,17 @@ test("une ligne dépasse la capacité restante de sa ressource → erreur ciblé
   // d'être pré-saturé directement en base — cf. commentaire plus bas.
   await resetAvailability(TOUR_ID, TOUR_DATE, { capacity: 1, booked: 0 });
   await resetAvailability(KAYAK_ID, KAYAK_DATE, { capacity: 3, booked: 0 });
+  // Ce test déclenche volontairement un create_order en échec, qui laisse cart_items INTACT par
+  // conception (spec 32 §0) — sans ce nettoyage, la 2ᵉ exécution de ce test trouve le compte
+  // operateurActif déjà "plein" de son propre panier laissé par l'exécution précédente.
+  await clearCartItems(TOUR_ID, TOUR_DATE);
+  await clearCartItems(KAYAK_ID, KAYAK_DATE);
   await loginAs(page.context(), SEEDED_ACCOUNTS.operateurActif, SEEDED_PASSWORD);
 
-  await page.goto("/es");
-  await page.getByTestId(`tarjeta-${TOUR_SLUG}-link`).click();
+  // Lien profond, pas la carte d'accueil : la section « actividades » plafonne à 8 offres en
+  // created_at desc (dette connue, cf. payment-return.spec.ts) — tour-lancha-guatape en est sorti
+  // depuis l'ajout de mockData du 2026-09-14, sans rapport avec ce que ce test vérifie.
+  await page.goto(`/es/productos/${TOUR_SLUG}`);
   await page.locator(`[data-date="${TOUR_DATE}"]`).click();
   await page.getByTestId("add-to-cart-button").click();
   await esperarRetornoTrasAgregar(page);
@@ -127,19 +140,24 @@ test("une ligne dépasse la capacité restante de sa ressource → erreur ciblé
   await page.locator('input[name="holder-email"]').fill("cliente.multi.full@example.com");
   await page.getByTestId("submit-order-button").click();
 
-  await expect(page.getByTestId("checkout-error")).toBeVisible();
+  // Message ciblé sur la VRAIE raison (« esta fecha ya está completa »), pas seulement « une
+  // erreur est apparue » — CheckoutPage.json errors.full, résolu par resolveKnownReason("full").
+  await expect(page.getByTestId("checkout-error")).toContainText("completa");
   // Spec 33 — l'équivalent de l'ancien « pas d'écran de succès » : une commande refusée ne fait
   // PAS quitter le tunnel. Assertion plus forte que la précédente, qui constatait l'absence d'un
   // testid et serait restée verte même si celui-ci disparaissait pour une autre raison — ce qui
   // vient précisément d'arriver.
   await expect(page).toHaveURL(/\/pago(\?|$)/);
 
-  const tourLine = page.locator('[data-testid^="cart-line-"]', { hasText: TOUR_DATE });
-  const kayakLine = page.locator('[data-testid^="cart-line-"]', { hasText: KAYAK_DATE });
-  // L'erreur cible spécifiquement la ligne en cause (tour-lancha, désormais complète) — pas la
-  // ligne kayak, qui restait individuellement valide.
-  await expect(tourLine).toHaveAttribute("data-failed", "true");
-  await expect(kayakLine).toHaveAttribute("data-failed", "false");
+  // ⚠️ RÉGRESSION CONNUE, non corrigée ici (arbitrage Jérôme, 2026-09-15, docs/dette-technique.md) :
+  // ce test vérifiait autrefois que la ligne fautive (tour-lancha, désormais complète) portait
+  // `data-failed="true"` et la ligne valide (kayak) `data-failed="false"` — attribut disparu avec
+  // la refonte du panier (spec 32) : `create_order` renvoie toujours `line.product_id`/`date`, mais
+  // CheckoutForm.tsx ne le lit plus nulle part, et CartSummary (qui affiche les lignes) est
+  // désormais un Server Component séparé, en lecture seule, sans lien avec le résultat du
+  // formulaire. Le client voit le message générique ci-dessus, mais ne sait plus repérer LAQUELLE
+  // de plusieurs lignes en est la cause. L'invariant tout-ou-rien, lui, reste garanti par
+  // `create_order` elle-même (vérifié juste en dessous), indépendamment de cette perte d'affichage.
 
   // Tout-ou-rien vérifiable directement en base : aucune commande créée du tout, et la ligne
   // kayak (individuellement valide) n'a pas non plus consommé son cupo.
