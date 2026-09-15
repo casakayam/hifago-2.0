@@ -100,6 +100,16 @@ export const CLIENTS_SORT_WHITELIST: SortWhitelist = {
 };
 export const CLIENTS_DEFAULT_SORT = { key: "last_order_at", direction: "desc" } as const;
 
+// Refonte /admin/ledger (DataList) — base FROM ledger_entries. `order_line.date` (relation
+// embarquée) reste non triable, même exception documentée que COMMISSIONS_SORT_WHITELIST ; status/
+// amount_cop sont deux colonnes propres à ledger_entries, donc triables sans réserve.
+export const LEDGER_SORT_WHITELIST: SortWhitelist = {
+  created_at: "created_at",
+  status: "status",
+  amount_cop: "amount_cop",
+};
+export const LEDGER_DEFAULT_SORT = { key: "created_at", direction: "desc" } as const;
+
 // catalog_tags n'a pas de updated_at (20260815210000_catalog_tags.sql) — created_at/slug/label
 // seules colonnes disponibles.
 export const TAGS_SORT_WHITELIST: SortWhitelist = {

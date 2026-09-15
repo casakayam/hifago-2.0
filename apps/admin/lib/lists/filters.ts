@@ -5,6 +5,7 @@ import { STATUS_LABELS, STATUS_CHIP_COLOR } from "@/app/admin/orders/statusLabel
 import { AUDIENCE_LABELS, CAMPAIGN_STATUS_LABELS, CHANNEL_LABELS } from "@/app/admin/campaigns/campaignLabels";
 import { INVITATION_STATUS_LABELS, ONBOARDING_PATH_LABELS } from "@/app/admin/invitations/invitationLabels";
 import { COMMISSION_STATE_LABELS } from "@/app/partner/(app)/commissions/commissionStateLabels";
+import { LEDGER_STATUS_LABELS } from "@/app/admin/ledger/ledgerStatusLabels";
 
 // docs/specs/10-listes-standardisees-admin-socio.md §5.3 — deux jeux de définitions par liste,
 // volontairement séparés : `*_FILTER_DEFINITIONS` (packages/domain, kind text|enum|date) sert
@@ -42,7 +43,7 @@ export const ORDERS_FILTERS: DataListFilter[] = [
 // §0 Tranche 0). Pas de traduction ES établie dans le projet pour ces 6 valeurs (la colonne "Tipo"
 // de la liste affiche déjà la valeur brute telle quelle, cf. ProductsList.tsx) — le filtre reprend
 // la même convention plutôt que d'inventer une traduction non tranchée.
-const PRODUCT_TYPES = ["lodging", "activity", "transport", "camp", "evento"] as const;
+export const PRODUCT_TYPES = ["lodging", "activity", "transport", "camp", "evento"] as const;
 
 // Revue admin catalogo (Jérôme, 2026-08-19) — labels/couleur extraits en constantes partagées
 // (déjà utilisés en texte brut dans ProductsList.tsx: product.sellable ? "Publicado" : "Borrador")
@@ -318,6 +319,20 @@ export const CLIENTS_FILTER_DEFINITIONS: FilterDefinition[] = [
 
 // Champ "email" séparé retiré (Jérôme, 2026-08-19) : q cherche déjà nom ET email (list_clients),
 // la demande explicite était un seul champ combiné — le second champ était redondant.
+// Refonte /admin/ledger (DataList) — pas de LEDGER_FILTERS déclaratif (ServerFilters générique) :
+// toolbar entièrement custom (LedgerFilterBar.tsx), même raison que RESERVATIONS_FILTER_DEFINITIONS
+// ci-dessus (Referente/Establecimiento sont des combobox recherchables, état React, jamais un
+// <select> natif). referrer_partner_id/establishment_id restent en `text` (un uuid, pas une liste
+// fermée) — même convention que establishment_id sur PRODUCTS_FILTER_DEFINITIONS.
+export const LEDGER_FILTER_DEFINITIONS: FilterDefinition[] = [
+  { kind: "date", name: "date_from" },
+  { kind: "date", name: "date_to" },
+  { kind: "enum", name: "status", allowed: Object.keys(LEDGER_STATUS_LABELS) },
+  { kind: "enum", name: "type", allowed: PRODUCT_TYPES },
+  { kind: "text", name: "referrer_partner_id" },
+  { kind: "text", name: "establishment_id" },
+];
+
 export const CLIENTS_FILTERS: DataListFilter[] = [
   { kind: "text", name: "q", label: "Buscar por nombre o email", placeholder: "Nombre o email" },
   {

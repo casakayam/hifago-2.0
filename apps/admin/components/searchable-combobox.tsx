@@ -32,15 +32,29 @@ export function SearchableCombobox<T extends object>({
   renderItem?: (item: T) => React.ReactNode;
   emptyMessage?: string;
 }) {
-  // Initialiseur paresseux (pas useEffect) : ne resynchronise jamais après le montage — une
-  // valeur initiale préremplie (docs/specs/05-invitations-onboarding-dashboard-partenaire.md §5.6)
-  // doit afficher le libellé correspondant sans empêcher l'utilisateur de retaper librement
-  // ensuite (selectedKey seul ne suffit pas : inputValue est contrôlé ici, pas dérivé par ComboBox).
-  const [query, setQuery] = useState(() => {
-    if (!value) return "";
-    const selected = items.find((item) => getKey(item) === value);
+  function labelForValue(v: string | null) {
+    if (!v) return "";
+    const selected = items.find((item) => getKey(item) === v);
     return selected ? getLabel(selected) : "";
-  });
+  }
+
+  const [query, setQuery] = useState(() => labelForValue(value));
+
+  // Reflète TOUJOURS la sélection réelle (value), jamais seulement la frappe — pattern "ajuster un
+  // state pendant le rendu" (react.dev), pas un useEffect : un effect + setState synchrone ajoute
+  // un rendu évitable et est bloqué par la règle eslint react-hooks/set-state-in-effect. Ne se
+  // déclenche que quand `value` change réellement (une sélection commitée, ou remise à null),
+  // jamais pendant la frappe elle-même (query change sans que value change) — donc ne gêne pas la
+  // retype libre. Corrige deux symptômes constatés avec le seul état local `query` : cliquer une
+  // option sans avoir tapé ne remplissait pas le champ (rien ne synchronisait query après une
+  // sélection), et vider le texte au clavier laissait `value` sur l'ancienne sélection, qui
+  // revenait au blur (ComboBox restaure l'affichage depuis `selectedKey` quand `inputValue` ne
+  // correspond à rien).
+  const [syncedValue, setSyncedValue] = useState(value);
+  if (value !== syncedValue) {
+    setSyncedValue(value);
+    setQuery(labelForValue(value));
+  }
 
   const filtered = useMemo(() => {
     const needle = slugify(query);
@@ -53,7 +67,15 @@ export function SearchableCombobox<T extends object>({
       selectedKey={value}
       onSelectionChange={(key) => onChange(key ? String(key) : null)}
       inputValue={query}
-      onInputChange={setQuery}
+      onInputChange={(newQuery) => {
+        setQuery(newQuery);
+        // Vider le champ doit vider le filtre : sans ce reset, `selectedKey` reste sur l'ancienne
+        // sélection pendant que `inputValue` est vide (deux props contrôlées désynchronisées) — au
+        // blur, ComboBox restaure le texte de l'ancienne sélection au lieu de rester vide.
+        if (newQuery === "" && value !== null) {
+          onChange(null);
+        }
+      }}
     >
       <Label>{label}</Label>
       <ComboBox.InputGroup>

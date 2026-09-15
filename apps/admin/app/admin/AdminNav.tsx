@@ -1,6 +1,7 @@
 "use client";
 
 import { AppNavShell } from "@hifago/ui";
+import { LogoutButton } from "@/components/LogoutButton";
 import { getAdminNavItems } from "./nav-items";
 
 // Wrapper local autour d'AppNavShell (packages/ui) — jamais importer "@hifago/ui" directement
@@ -21,6 +22,8 @@ export function AdminNav({ pendingProposalsCount }: { pendingProposalsCount: num
         mobileTitle: "admin-mobile-nav-title",
         mobileLinkPrefix: "admin-mobile-nav-link",
       }}
+      desktopFooter={<LogoutButton className="w-full" data-testid="logout-button-nav" />}
+      mobileFooter={<LogoutButton className="w-full" data-testid="logout-button-mobile-nav" />}
     />
   );
 }

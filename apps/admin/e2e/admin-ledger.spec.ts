@@ -23,7 +23,7 @@ import { slugify } from "../lib/utils";
 // exactement le chemin réel (jamais un insert direct : ledger_entries est RPC-only).
 const ESTABLISHMENT_ID = "b0000000-0000-4000-8000-000000000002";
 
-test("admin marque une créance référent payée depuis /admin/ledger avec un motif, elle rejoint l'historique", async ({
+test("admin marque une créance référent payée depuis /admin/ledger avec un motif", async ({
   page,
 }) => {
   const stamp = Date.now();
@@ -105,25 +105,37 @@ test("admin marque une créance référent payée depuis /admin/ledger avec un m
     );
   }
 
+  // Refonte DataList (docs/specs/10-listes-standardisees-admin-socio.md) — plus de holderName
+  // affiché en colonne (colonnes désormais : Referente/Establecimiento/Tipo/Fecha/Estado/Monto),
+  // donc plus de sélection de ligne par texte du titulaire : on cible directement la ligne par
+  // l'id réel de la ledger_entries créée par la transition fulfilled ci-dessus.
+  const { data: ledgerEntry } = await adminClient
+    .from("ledger_entries")
+    .select("id")
+    .eq("order_line_id", orderLine.id)
+    .eq("beneficiary_type", "referrer")
+    .single();
+  if (!ledgerEntry) {
+    throw new Error("e2e setup: ledger_entries introuvable pour cette ligne");
+  }
+
   // --- Parcours écran réel -------------------------------------------------------------------
   await loginAs(page.context(), SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
   await page.goto("/admin/ledger");
 
-  const dueGroup = page.getByTestId("ledger-due-group");
-  const entry = dueGroup.getByTestId("ledger-entry").filter({ hasText: holderName });
-  await expect(entry).toBeVisible();
-  await expect(entry).toContainText("Referente: Référent Actif Org");
+  const row = page.getByTestId(`ledger-entry-row-${ledgerEntry.id}`);
+  await expect(row).toBeVisible();
+  await expect(row).toContainText("Référent Actif Org");
 
-  await entry.getByTestId("mark-paid-button").click();
+  await row.getByTestId(`mark-paid-button-${ledgerEntry.id}`).click();
   await page.waitForSelector('[data-testid="mark-paid-note-input"]');
   await page.getByTestId("mark-paid-comprobante-input").fill("comprobantes/e2e-test.pdf");
   await page.getByTestId("mark-paid-note-input").fill("Transferencia Bancolombia confirmada (e2e).");
   await page.getByTestId("confirm-mark-paid-button").click();
 
-  // Mise à jour d'état local (pas de router.refresh(), cf. LedgerList.tsx) : l'entrée disparaît de
-  // "Por pagar" et rejoint "Historial".
-  await expect(dueGroup.getByTestId("ledger-entry").filter({ hasText: holderName })).toHaveCount(0);
-  await expect(
-    page.getByTestId("ledger-history-group").getByTestId("ledger-entry").filter({ hasText: holderName })
-  ).toBeVisible();
+  // router.refresh() (pas de mutation d'état local, cf. LedgerTable.tsx — nécessaire dès qu'un
+  // filtre serveur est actif) : la ligne reste visible (aucun filtre par défaut), son statut passe
+  // à "Pagada" et l'action "Marcar pagado" disparaît (isVisible: status === "due").
+  await expect(page.getByTestId(`ledger-status-${ledgerEntry.id}`)).toContainText("Pagada");
+  await expect(row.getByTestId(`mark-paid-button-${ledgerEntry.id}`)).toHaveCount(0);
 });
