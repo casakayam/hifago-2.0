@@ -1,4 +1,4 @@
-import { format, parseISO } from "date-fns";
+import { addDays, format, parseISO } from "date-fns";
 import {
   addDaysIso,
   isoDateToLocalMidnight,
@@ -6,6 +6,7 @@ import {
   startOfTodayInBogota,
   type LobbyNightRestrictions,
 } from "@hifago/domain";
+import type { Locale } from "@/messages";
 import type { ReachableWindow } from "./reservationRange";
 
 // Ce que les trois calendriers de réservation partagent. Extrait par la spec 30 §7a (lot B3) : le
@@ -48,6 +49,25 @@ export function mesPorDefecto(primeraFechaIso: string | undefined): Date {
 /** Une date de calendrier en ISO `yyyy-MM-dd`, ou `null` quand rien n'est sélectionné. */
 export function isoDeFecha(fecha: Date | undefined): string | null {
   return fecha ? format(fecha, "yyyy-MM-dd") : null;
+}
+
+/**
+ * La plage affichée par une carte d'édition (camp) : "12–15 sept" (même mois) ou "29 sept – 2 oct"
+ * (à cheval sur deux mois). `startIso` est la date de DÉPART seule (`product_availability.date`) ;
+ * le dernier jour se déduit de `durationDays` avec la MÊME borne que `diasSemanaSeleccionada` dans
+ * `ReservationForm.tsx` (dernier jour = départ + durationDays-1).
+ *
+ * ⚠️ `Intl.DateTimeFormat.formatRange`, jamais une bifurcation même-mois/mois-différents écrite à la
+ * main — même choix et mêmes raisons que `formatPlage` (`components/molecules/DateRangeField.tsx`) :
+ * « l'ordre des éléments, le séparateur et l'abréviation du mois changent avec la langue, et c'est
+ * exactement ce que cette API sait faire ». La version manuelle qui a précédé le prouvait par
+ * l'absurde : bâtie sur `d MMMM` de date-fns, elle rendait « 12–15 September » en anglais, où
+ * l'ordre correct est « Sep 12 – 15 ». Le cas jour unique s'effondre tout seul, sans branche.
+ */
+export function formatEditionDateRange(startIso: string, durationDays: number, locale: Locale): string {
+  const formateur = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" });
+  const start = parseISO(startIso);
+  return formateur.formatRange(start, addDays(start, Math.max(durationDays, 1) - 1));
 }
 
 /**

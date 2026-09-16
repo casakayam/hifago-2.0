@@ -149,6 +149,7 @@ h2{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:-.
 .done-btn[aria-pressed="true"]{background:var(--hc-ok);color:#fff;border-color:var(--hc-ok)}
 :root[data-theme="dark"] .done-btn[aria-pressed="true"]{color:#0D1618}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .done-btn[aria-pressed="true"]{color:#0D1618}}
+.row-id{font-family:var(--f-mono);font-size:10px;color:var(--muted);letter-spacing:.02em;user-select:all}
 
 /* Export */
 dialog{border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0;width:min(760px,calc(100vw - 32px))}
@@ -538,6 +539,9 @@ window.GRILLE = [
   { id: "nv-4", t: "Paiement réel Mercado Pago", v: ["warn|Non observé"] },
   { id: "nv-5", t: "Comportement du menu compact de types", v: ["warn|Non observé"] },
   { id: "nv-6", t: "Fusion du panier à la connexion Google", v: ["warn|Non observé"] }
+]},
+{ id: "ajoutees", n: "A", title: "Tâches ajoutées après coup", rows: [
+  { id: "add-1", t: "Recadrage carrito→Mi viaje sur toute la vitrine : verbatim ES/EN (CartPage/CheckoutPage/ProductPage/Chrome), URL /carrito→/mi-viaje, icône caddie→valise dans le header — scope visible utilisateur seulement, aucun changement fonctionnel (voir journal 2026-09-15 suite 5)", v: [] }
 ]}
 ];
 </script>
@@ -642,6 +646,7 @@ window.GRILLE = [
       '<div class="stamp">' + stampText(m.t) + "</div></div>";
     var tache =
       '<div class="cell tache"><span class="cell-label">Tâche</span>' +
+      '<span class="row-id" title="Id de cette ligne — à donner à Claude pour la marquer sans qu\'il relise toute la grille">' + esc(r.id) + '</span>' +
       '<button type="button" class="done-btn" aria-pressed="' + tk.done + '">' + (tk.done ? "☑ Fait" : "☐ À faire") + "</button>" +
       '<div class="seg seg-owner" role="group" aria-label="Attribué à">' +
       [["", "—"], ["gabriel", WHO.gabriel], ["jerome", WHO.jerome]].map(function (o) {

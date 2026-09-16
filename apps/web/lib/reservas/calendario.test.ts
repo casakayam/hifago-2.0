@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { format } from "date-fns";
 import type { LobbyNightRestrictions } from "@hifago/domain";
 import {
+  formatEditionDateRange,
   isoDeFecha,
   mesPorDefecto,
   nocheDeshabilitada,
@@ -34,6 +35,35 @@ describe("mesPorDefecto", () => {
     const mes = mesPorDefecto(undefined);
     expect(mes).toBeInstanceOf(Date);
     expect(Number.isNaN(mes.getTime())).toBe(false);
+  });
+});
+
+// ⚠️ Les séparateurs sont écrits en ÉCHAPPEMENTS explicites, jamais collés depuis une sortie :
+// `Intl.formatRange` pose un tiret demi-cadratin (U+2013) entouré d'espaces FINES (U+2009) dès que
+// les deux bornes diffèrent, et rien à l'écran ne distingue une espace fine d'une espace ordinaire.
+// Écrire l'espace ordinaire ici donnait un échec « expected 'Sep 12 – 15' to be 'Sep 12 – 15' ».
+const FINE = " ";
+const TIRET = "–";
+
+describe("formatEditionDateRange", () => {
+  it("même mois : le mois n'est écrit qu'une fois, sans espace autour du tiret", () => {
+    // Départ 12/09 + 4 jours (durationDays) = dernier jour le 15/09.
+    expect(formatEditionDateRange("2026-09-12", 4, "es")).toBe(`12${TIRET}15 sept`);
+  });
+
+  it("mois différents : jour+mois abrégé de chaque côté", () => {
+    // Départ 29/09 + 4 jours = dernier jour le 2/10.
+    expect(formatEditionDateRange("2026-09-29", 4, "es")).toBe(`29 sept${FINE}${TIRET}${FINE}2 oct`);
+  });
+
+  it("durationDays à 1 (ou absent) : un seul jour, pas de plage", () => {
+    expect(formatEditionDateRange("2026-09-12", 1, "es")).toBe("12 sept");
+  });
+
+  it("respecte l'ORDRE de la locale, pas seulement ses mots — ce que la version manuelle ratait", () => {
+    // « 12–15 September » (ce que rendait `d MMMM` de date-fns) n'est pas de l'anglais : le mois
+    // précède le jour. `Intl.formatRange` le sait, une concaténation maison non.
+    expect(formatEditionDateRange("2026-09-12", 4, "en")).toBe(`Sep 12${FINE}${TIRET}${FINE}15`);
   });
 });
 

@@ -14,12 +14,21 @@ import {
   Input,
   Label,
   TextField,
+  cn,
   dateTaggedDayButtonComponents,
 } from "@hifago/ui";
 import { startOfTodayInBogota } from "@hifago/domain";
+import { Price } from "@/components/atoms/Price";
+import { hrefAlojamientosCompatibles } from "@/lib/catalog/criterios";
+import { ultimoDiaCampIso } from "@/lib/cart/campMissingLodging";
 import { useCart } from "@/lib/cart/CartContext";
 import { useAddToCart } from "@/lib/cart/useAddToCart";
-import { isoDeFecha, mesPorDefecto, ultimoDiaReservable } from "@/lib/reservas/calendario";
+import {
+  formatEditionDateRange,
+  isoDeFecha,
+  mesPorDefecto,
+  ultimoDiaReservable,
+} from "@/lib/reservas/calendario";
 import { limitarCantidad, pisoCantidad, topeCantidad } from "@/lib/reservas/cantidad";
 import {
   CLAVE_PLAZAS,
@@ -27,6 +36,8 @@ import {
   estadoDisponibilidad,
   plazasRestantes,
 } from "@/lib/reservas/disponibilidad";
+import type { PrecioTarjeta } from "@/lib/catalog/tipos";
+import type { Locale } from "@/messages";
 
 type AvailabilityRow = { date: string; capacity: number; booked: number };
 
@@ -36,6 +47,9 @@ export function ReservationForm({
   durationDays = 1,
   minQty = 1,
   groupDiscount,
+  precio = null,
+  unidad = null,
+  locale = "es",
 }: {
   productId: string;
   availability: AvailabilityRow[];
@@ -58,6 +72,12 @@ export function ReservationForm({
    * engageant reste révélé uniquement par `create_order` au checkout.
    */
   groupDiscount?: { umbralPersonas: number; porcentaje: number };
+  /** `ficha.precio` — repliée à `null` : les formulaires de test/produits sans prix connu existent. */
+  precio?: PrecioTarjeta;
+  /** `ficha.unidad` (`per_person`/`per_two`/`per_house`) — suffixe la ligne de prix d'une carte. */
+  unidad?: string | null;
+  /** Nécessaire pour `<Price>` et pour le nom des mois de `formatEditionDateRange`. */
+  locale?: Locale;
 }) {
   const t = useTranslations("ProductPage");
   const { lines } = useCart();
@@ -109,6 +129,23 @@ export function ReservationForm({
     return full;
   }, [availability, inCartByDate]);
 
+  // Liste d'éditions sous l'agenda (retour Jérôme, 2026-09-15) : seulement pour un camp
+  // multi-jours, jamais pour une activité/un transport à date simple passant par ce même
+  // formulaire — `durationDays > 1` est déjà, plus haut, le signal qui distingue les deux
+  // (`diasSemanaSeleccionada`/surlignage `campWeek` ne s'activent que dans ce cas).
+  const afficherEditions = durationDays > 1 && availability.length > 0;
+
+  // Ne dépend d'AUCUNE ligne : calculé une fois, pas une fois par édition affichée (il l'était, avec
+  // son lookup ICU, à chaque tour de la boucle, pour un résultat identique).
+  const unidadSuffix =
+    unidad === "per_person"
+      ? t("perPerson")
+      : unidad === "per_house"
+        ? t("perHouse")
+        : unidad === "per_two"
+          ? t("editionPriceForTwo", { count: 2 })
+          : null;
+
   const selectedIso = isoDeFecha(selectedDate);
   const selectedRow = selectedIso ? byDate.get(selectedIso) : undefined;
   const remaining = selectedRow
@@ -146,12 +183,28 @@ export function ReservationForm({
     setQty(minQty);
   }
 
-  // Spec 28 Tranche 3 : sur succès, `useAddToCart` redirige déjà vers l'accueil — il n'y a plus
-  // rien à faire ici avec la valeur de retour (ni toast, ni reset local : le composant est sur le
-  // point de se démonter).
+  // Spec 28 Tranche 3 : sur succès, `useAddToCart` redirige vers l'accueil — SAUF pour un camp de
+  // plus d'un jour (2026-09-15), qui redirige vers `/alojamientos` avec les dates et le nombre de
+  // personnes du départ choisi déjà en filtre : on ne peut plus prendre un camp sans réserver un
+  // hébergement pour ses nuits. `durationDays > 1` est le même signal qu'`afficherEditions` plus
+  // haut (seul un camp multi-jours le porte) ; un camp d'une seule journée (duration_days = 1)
+  // n'exige aucune nuitée et ne redirige pas. L'obligation RÉELLE reste `create_order` (raison
+  // `camp_missing_lodging`) — ceci n'est qu'un guidage, jamais la garantie.
+  // `hasta` reste LOCAL à ce handler, jamais injecté dans l'objet passé à `addToCart` : la donnée
+  // envoyée au panier reste la date de départ seule (cf. commentaire de `durationDays` ci-dessus).
+  // La formule vient de `campMissingLodging.ts`, le module qui est déjà le miroir désigné de
+  // `create_order` pour cette règle — jamais recopiée ici, sans quoi elle vivrait à trois endroits.
   async function handleAddToCart() {
     if (!selectedIso || remaining < 1) return;
-    await addToCart({ productId, date: selectedIso, qty });
+    const hrefRetorno =
+      durationDays > 1
+        ? hrefAlojamientosCompatibles({
+            desde: selectedIso,
+            hasta: ultimoDiaCampIso(selectedIso, durationDays),
+            personas: qty,
+          })
+        : undefined;
+    await addToCart({ productId, date: selectedIso, qty }, hrefRetorno ? { hrefRetorno } : undefined);
   }
 
   return (
@@ -190,6 +243,63 @@ export function ReservationForm({
           components={dateTaggedDayButtonComponents}
         />
       </div>
+
+      {afficherEditions ? (
+        <div>
+          <h2 className="text-sm font-medium">{t("chooseEditionTitle")}</h2>
+          <p className="mb-2 text-xs text-muted">{t("chooseEditionSubtitle")}</p>
+          <div className="flex flex-col gap-2" data-testid="edition-cards">
+            {availability.map((row) => {
+              const isSelected = row.date === selectedIso;
+              const remainingRow = plazasRestantes(row, inCartByDate.get(row.date) ?? 0);
+              const isFull = estadoDisponibilidad(remainingRow) === "completo";
+              const dateLabel = formatEditionDateRange(row.date, durationDays, locale);
+
+              return (
+                <button
+                  key={row.date}
+                  type="button"
+                  data-testid={`edition-card-${row.date}`}
+                  aria-pressed={isSelected}
+                  disabled={isFull}
+                  // Même chemin de code qu'un clic calendrier — un seul état (`selectedDate`),
+                  // jamais deux à réconcilier : `porJourDepart.get(row.date)` vaut toujours
+                  // `row.date` lui-même (la boucle qui le construit pose `i=0 → map.set(row.date,
+                  // row.date)`), donc `handleSelectDate` retrouve exactement ce départ.
+                  onClick={() => handleSelectDate(parseISO(row.date))}
+                  className={cn(
+                    "flex flex-col items-start gap-1 rounded-md border p-3 text-left transition-colors",
+                    isFull
+                      ? "cursor-not-allowed border-border opacity-50 line-through"
+                      : isSelected
+                        ? "border-accent bg-surface-secondary"
+                        : "border-border hover:bg-surface-secondary"
+                  )}
+                >
+                  <span className="text-xs font-medium text-muted">
+                    {isFull ? t("full") : t("editionSpotsBadge", { count: remainingRow })}
+                  </span>
+                  <span className="text-sm font-semibold">{dateLabel}</span>
+                  <span className="text-xs text-muted">
+                    {t("editionNights", { count: durationDays })}
+                    {precio ? (
+                      <>
+                        {" · "}
+                        {precio.tipo === "texto" ? (
+                          precio.label
+                        ) : (
+                          <Price amountCop={precio.cop} locale={locale} />
+                        )}
+                      </>
+                    ) : null}
+                    {unidadSuffix ? <> {unidadSuffix}</> : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {groupDiscount ? (
         <p className="text-sm text-muted" data-testid="group-discount-hint">

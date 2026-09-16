@@ -3,7 +3,7 @@ import { resolveLocalizedField, asLocalizedField } from "@hifago/domain";
 import type { Locale } from "@/messages";
 
 // Spec 32 (panier en base) — lecture JOINTE du panier de l'appelant, réservée aux Server
-// Components (`/carrito`, `/pago`) : `cart_items` ne stocke que `product_id` (décision ②, jamais
+// Components (`/mi-viaje`, `/pago`) : `cart_items` ne stocke que `product_id` (décision ②, jamais
 // de type/nom/photo/établissement dénormalisés) — c'est cette fonction qui fait la jointure vers
 // `products`/`establishments` au moment de l'affichage, jamais côté client (aucun précédent dans
 // ce dépôt d'une requête `.from()` jointe depuis un composant client — cf. `lib/catalog/`, qui ne
@@ -24,6 +24,13 @@ export type CartLineForDisplay = {
   // Vérification minimale (products.sellable) — le mécanisme complet de revérification de
   // disponibilité à la reprise du panier reste un point ouvert (spec 32 §10), pas réinventé ici.
   unavailable: boolean;
+  /**
+   * `products.duration_days` — non nul seulement pour `camp`. Ajouté le 2026-09-15 pour
+   * `findCampMissingLodging` (`lib/cart/campMissingLodging.ts`) : le seul champ qui manquait ici
+   * pour reproduire côté front, sans requête supplémentaire, la même formule que `create_order`
+   * (nuits requises = duration_days - 1).
+   */
+  durationDays: number | null;
 };
 
 export async function getCartLines(locale: Locale): Promise<CartLineForDisplay[]> {
@@ -31,7 +38,7 @@ export async function getCartLines(locale: Locale): Promise<CartLineForDisplay[]
   const { data, error } = await supabase
     .from("cart_items")
     .select(
-      "id, product_id, date, end_date, slot_start_time, qty, created_at, products(name, type, slug, price_cop, sellable, establishment_id, establishment:establishments(id, name))"
+      "id, product_id, date, end_date, slot_start_time, qty, created_at, products(name, type, slug, price_cop, sellable, establishment_id, duration_days, establishment:establishments(id, name))"
     )
     .order("created_at", { ascending: true });
 
@@ -54,6 +61,7 @@ export async function getCartLines(locale: Locale): Promise<CartLineForDisplay[]
       qty: row.qty,
       priceCop: product?.price_cop ?? 0,
       unavailable: !product?.sellable,
+      durationDays: product?.duration_days ?? null,
     };
   });
 }

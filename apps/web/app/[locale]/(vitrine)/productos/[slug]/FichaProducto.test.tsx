@@ -52,6 +52,7 @@ function renderView(overrides: {
     modoReserva: "lodging",
     urlExterna: null,
     ocurrencia: null,
+    eventoReservable: null,
     duracionDias: null,
     descuentoGrupo: null,
     alojamiento: {

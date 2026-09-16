@@ -157,8 +157,11 @@ conséquence : `unit_count` réservations concurrentes par nuit pour `private`/`
 
 ## `events/<clé>.json` (`products.type='evento'`)
 
-Vitrine éditoriale, jamais réservable (`availabilityScreenFor` renvoie `'none'` pour ce type — pas de
-`product_availability`, pas de cupo). Même RPC générique que les autres dossiers.
+Par défaut vitrine éditoriale, jamais réservable (`availabilityScreenFor` renvoie `'none'` — pas de
+`product_availability`, pas de cupo). Depuis la migration `20260915120000_evento_online_bookable.sql`,
+un evento peut aussi être **réservable en ligne** (`online_bookable: true`) — deux axes indépendants,
+capacité et paiement, posés via `_extra_columns` (voir plus bas, ces 5 colonnes n'existent pas dans
+le payload du RPC générique).
 
 ```jsonc
 {
@@ -166,7 +169,7 @@ Vitrine éditoriale, jamais réservable (`availabilityScreenFor` renvoie `'none'
   "establishment": "hifago",
   "name": { "es": "Jam Session" },
   "description": { "es": "..." },
-  "price_label": "Gratis",              // texte libre, PAS price_cop (nullable pour evento)
+  "price_label": "Gratis",              // texte libre, PAS price_cop (nullable pour evento) — vitrine seulement
   "occurrence_type": "recurring",       // "once" | "recurring"
   "occurrence_date": "2026-09-17",      // "once" : la date ; "recurring" : la date d'ancrage
   "recurrence_frequency_days": 7,       // requis si "recurring"
@@ -184,6 +187,31 @@ Vitrine éditoriale, jamais réservable (`availabilityScreenFor` renvoie `'none'
 `create_product_from_proposal` (utilisé ici en direct, pas via le formulaire) écrit `tag_ids` sans
 condition de type. Un tag posé par ce script sur un `evento` mock est donc réel en base, juste
 invisible/non éditable depuis l'admin pour l'instant.
+
+### Evento réservable en ligne — `_extra_columns`
+
+Ces 5 colonnes n'existent pas dans `create_product_from_proposal` (whitelist RPC, jamais mise à jour
+pour ce lot) : le script applique `_extra_columns` par un `UPDATE products ... service_role` **après**
+la création (`seed-mock-data.mjs:508-511`), même mécanisme générique que le `category` des
+`activities/`. Aucune validation de clé côté script — une valeur qui viole une contrainte `CHECK` fait
+échouer tout le seed avec le nom du fichier en cause.
+
+```jsonc
+"_extra_columns": {
+  "online_bookable": true,              // requis pour activer les 4 champs suivants
+  "evento_capacity_mode": "metered",     // "unlimited" (aucun compteur, jamais bloquant) | "metered" (cupo dur, décompte réel, bloque à zéro) | "rsvp" (compteur affiché via get_evento_rsvp_counts, JAMAIS bloquant — default_capacity y est un dénominateur informatif)
+  "is_free": false,                     // statut INDÉPENDANT, jamais déduit d'un price_cop à 0 — si true, price_cop DOIT être absent/null
+  "evento_payment_mode": "on_site",      // "online" (Mercado Pago) | "on_site" (acompte forcé à 0) — DOIT être absent/null si is_free
+  "evento_occupies_resource": true       // défaut true : verrouille provider_resource_calendar comme un camp d'1 jour — axe INDÉPENDANT du mode de capacité, poser à false pour un evento léger qui ne doit pas bloquer les camps du même établissement ce jour-là
+}
+```
+`default_capacity` (colonne déjà existante, réutilisée) est **requis** dès que `evento_capacity_mode`
+vaut `"metered"` ou `"rsvp"`, absent/ignoré pour `"unlimited"`. Si `evento_capacity_mode: "metered"`,
+le script appelle en plus la RPC `provision_evento_availability` pour matérialiser 12 mois de
+`product_availability` — jamais pour `"unlimited"`/`"rsvp"`, qui n'ont aucune ligne de disponibilité.
+9 exemples couvrant toute la matrice `evento_capacity_mode × (is_free | evento_payment_mode)`, plus 2
+variantes `evento_occupies_resource: false`, sont dans `mockData/events/evento-*.json` (noms de
+fichier explicites sur le cas testé — pas les événements "vitrine" comme `jamsession.json`).
 
 ## `transport/<clé>.json` (`products.type='transport'`)
 

@@ -3,13 +3,13 @@ import { resetAvailability, seedDate, irAPagoTrasAgregar } from "@hifago/e2e-sup
 
 // Un guest crée une commande (create_order vide cart_items dès qu'elle réussit, spec 32 — la
 // réservation existe déjà, cupo décrémenté) et ferme l'onglet avant de payer. S'il revient sur
-// /carrito ou /pago avec LA MÊME session anonyme, ces deux écrans affichaient jusqu'ici « ton
+// /mi-viaje ou /pago avec LA MÊME session anonyme, ces deux écrans affichaient jusqu'ici « ton
 // panier est vide » sans aucun moyen de retrouver sa commande (constaté en testant en réel,
 // 2026-09-14).
 const PRODUCT_ID = "b0000000-0000-4000-8000-000000000001"; // tour-lancha-guatape
 const DATE = seedDate(18); // dédiée à ce spec, disjointe de 5/7/10/12/13/14/15/16/17/20 (autres specs).
 
-test("commande créée sans payer → réapparaît sur /carrito et /pago, même session", async ({
+test("commande créée sans payer → réapparaît sur /mi-viaje et /pago, même session", async ({
   page,
 }) => {
   await resetAvailability(PRODUCT_ID, DATE, { capacity: 5, booked: 0 });
@@ -31,7 +31,7 @@ test("commande créée sans payer → réapparaît sur /carrito et /pago, même 
 
   // Retour au panier — MÊME onglet, donc même cookie de session anonyme. getCartLines rend une
   // liste vide (create_order a vidé cart_items) : exactement le cas que ce lot corrige.
-  await page.goto("/es/carrito");
+  await page.goto("/es/mi-viaje");
   await expect(page.getByTestId("empty-cart")).toBeVisible();
   await expect(page.getByTestId("pending-orders")).toBeVisible();
   const link = page.getByTestId(/^pending-order-link-/);
@@ -55,7 +55,7 @@ test("visiteur qui n'a jamais touché le panier → aucune session, aucun crash,
   const contexteVierge = await browser.newContext();
   const pageVierge = await contexteVierge.newPage();
 
-  await pageVierge.goto("/es/carrito");
+  await pageVierge.goto("/es/mi-viaje");
   await expect(pageVierge.getByTestId("empty-cart")).toBeVisible();
   await expect(pageVierge.getByTestId("pending-orders")).toHaveCount(0);
 

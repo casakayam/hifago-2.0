@@ -1,11 +1,13 @@
 {
-  "title": "Your cart",
-  "emptyCart": "Your cart is empty.",
+  "title": "My trip",
+  "emptyCart": "Your trip is empty.",
   "lineQty": "Quantity: {count}",
-  "lineUnavailable": "This product is no longer available. You can remove it from your cart.",
+  "lineUnavailable": "This service is no longer available. You can remove it from your trip.",
   "total": "Total",
   "removeLine": "Remove",
-  "goToCheckout": "Go to checkout",
+  "goToCheckout": "Book now",
+  "lodgingRequiredNotice": "Your camp requires lodging in your trip that covers its {count, plural, one {# night} other {# nights}} before you book.",
+  "chooseLodging": "Choose your accommodation",
   "pendingOrdersTitle": "You have bookings pending payment:",
   "pendingOrderLink": "Booking {reference}"
 }

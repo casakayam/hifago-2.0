@@ -22,7 +22,7 @@ import type { Locale } from "@/messages";
 // veut ici, c'est empêcher le CRAWL : un robot ne doit jamais CHARGER une page qui porte le nom, le
 // téléphone et l'email d'un client. Un noindex exigerait au contraire qu'il la charge pour lire la
 // balise. D'où `/es/reserva/`, `/en/reserva/` dans le Disallow de `app/robots.ts` — et rien ici.
-// C'est l'inverse de `/pago` et `/carrito`, qui ont raison de faire l'inverse : rien de personnel
+// C'est l'inverse de `/pago` et `/mi-viaje`, qui ont raison de faire l'inverse : rien de personnel
 // n'y est rendu.
 //
 // Cette route n'appelle pas Supabase elle-même (`scripts/check-data-layer.sh`) : `lib/orders/` lit

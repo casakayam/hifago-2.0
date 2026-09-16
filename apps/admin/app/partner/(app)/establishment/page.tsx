@@ -15,6 +15,7 @@ type ProductQueryRow = {
   establishment_id: string;
   sellable: boolean;
   lobby_category_id: number | null;
+  evento_capacity_mode: "unlimited" | "metered" | "rsvp" | null;
   product_tag_assignments: { catalog_tags: { id: string; label: unknown } | null }[];
 };
 
@@ -89,7 +90,7 @@ export default async function PartnerEstablishmentPage() {
       ? supabase
           .from("products")
           .select(
-            "id, type, name, price_cop, establishment_id, sellable, lobby_category_id, product_tag_assignments(catalog_tags(id, label))",
+            "id, type, name, price_cop, establishment_id, sellable, lobby_category_id, evento_capacity_mode, product_tag_assignments(catalog_tags(id, label))",
           )
           .eq("partner_id", partnerId)
           .order("created_at", { ascending: false })
@@ -195,6 +196,7 @@ export default async function PartnerEstablishmentPage() {
       hasSlotRules: slotRulesProductIds.has(product.id),
       // Même règle que packages/domain isPmsBacked : lodging + lobby_category_id renseigné.
       isPmsBacked: product.type === "lodging" && product.lobby_category_id != null,
+      eventoCapacityMode: product.evento_capacity_mode,
     };
     const list = productsByEstablishment.get(product.establishment_id) ?? [];
     list.push(row);

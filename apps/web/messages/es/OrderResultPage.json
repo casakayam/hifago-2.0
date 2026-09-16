@@ -9,6 +9,8 @@
     "awaitingDetail": "Puede tardar unos instantes. Esta página se actualiza sola.",
     "unpaid": "Tu reserva aún no está pagada",
     "unpaidDetail": "Guardamos tu reserva 30 minutos. Paga el anticipo para confirmarla.",
+    "confirmed": "¡Tu reserva está confirmada!",
+    "confirmedDetail": "No hay ningún pago pendiente en línea. Te enviamos los detalles por correo electrónico.",
     "failed": "No pudimos cobrar el anticipo",
     "failedDetail": "Tu reserva sigue guardada. Puedes intentar el pago de nuevo.",
     "expired": "Esta reserva expiró",

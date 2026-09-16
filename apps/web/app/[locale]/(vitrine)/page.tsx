@@ -5,7 +5,7 @@ import { JsonLd } from "@/components/seo/JsonLd";
 import { PageShell } from "@/components/atoms/PageShell";
 import { Title } from "@/components/atoms/Title";
 import { EstadoVacio } from "@/components/molecules/EstadoVacio";
-import { BarraNavegacion } from "@/components/organisms/BarraNavegacion";
+import { SelectorTipo } from "@/components/organisms/SelectorTipo";
 import { SeccionOfertas } from "@/components/organisms/SeccionOfertas";
 import { buscarSecciones, hrefSeccion } from "@/lib/catalog/buscar";
 import { escribirCriterios, leerCriterios, leerDesdeCarrito } from "@/lib/catalog/criterios";
@@ -115,16 +115,21 @@ export default async function HomePage({ params, searchParams }: PageProps<"/[lo
         <Title as="h1">{t("h1")}</Title>
       </div>
 
-      {/* Barre de navigation combinée (2026-09-14) : sur la home, un seul "Inicio" (page courante,
-          pas de fil réel à afficher) accolé aux 5 onglets de type — validée en Storybook avant ce
-          branchement (décision de Jérôme). Aucun tipoActivo : la home n'est le sujet d'aucun type
-          précis. */}
-      <BarraNavegacion
-        migas={[{ nombre: tCommon("breadcrumbHome") }]}
-        migasEtiqueta={t("migasEtiqueta")}
-        locale={locale as Locale}
+      {/* SelectorTipo REMPLACE le fil d'Ariane ici (2026-09-15, retour de Jérôme — annule
+          l'itération précédente qui le plaçait sous `BuscadorInicio`) : la home n'affichait qu'un
+          "Inicio" seul via `Migas`, sans lien réel, donc aucune valeur de navigation perdue à le
+          retirer. `SelectorTipo` devient ici la navigation PRINCIPALE de la page — plus une simple
+          rangée sous des filtres — d'où sa place à l'ancien emplacement du fil, juste avant
+          `BuscadorInicio`. Aucun `tipoActivo` : la home n'est le sujet d'aucun type précis. Sur les
+          4 autres écrans qui montraient ce même sélecteur (index de catégories, listings, fiches),
+          c'est l'inverse : `SelectorTipo` a disparu, `Migas` (le vrai fil, "Inicio > X") reste seul
+          — voir ces fichiers, `BarraNavegacion.tsx` qui les combinait a été supprimé avec ce lot. */}
+      <SelectorTipo
         tipos={tiposBarra}
-        tiposEtiqueta={tCommon("selectorTipoEtiqueta")}
+        etiqueta={tCommon("selectorTipoEtiqueta")}
+        masEtiqueta={tCommon("selectorMasEtiqueta")}
+        menosEtiqueta={tCommon("selectorMenosEtiqueta")}
+        testId="selector-tipos"
       />
 
       {/* ⚠️ Hôte CLIENT obligatoire : toutes les props de `SearchPanel` sont des fonctions, qu'un
@@ -159,15 +164,20 @@ export default async function HomePage({ params, searchParams }: PageProps<"/[lo
             // sous-catégories (`/es/actividades`, spec 29) : son libellé doit le dire, sinon le
             // lien promet une chose et en donne une autre.
             labelVerMas={seccion.tipo === "activity" ? t("verMasTags") : t("verMas")}
-            // ⚠️ Toutes les sections en grille depuis le 2026-09-14 (retour explicite de Jérôme) :
-            // les activités utilisaient `Card layout="row"` (`variante="lista"`) depuis la spec 28
-            // §5, mais c'était un choix esthétique de Jérôme lui-même, jamais une contrainte
-            // fonctionnelle (même contenu de carte dans les deux variantes) — et il portait un
-            // défaut non résolu (carrousel écrasé dans la vignette de 64px, spec 28 §10bis). Il
-            // avait déjà inversé ce même choix pour les chambres d'établissement le 2026-09-08
+            // ⚠️ Toutes les sections dans la même carte (photo pleine largeur) depuis le 2026-09-14
+            // (retour explicite de Jérôme) : les activités utilisaient `Card layout="row"`
+            // (`variante="lista"`) depuis la spec 28 §5, mais c'était un choix esthétique de Jérôme
+            // lui-même, jamais une contrainte fonctionnelle (même contenu de carte dans les deux
+            // variantes) — et il portait un défaut non résolu (carrousel PHOTO écrasé dans la
+            // vignette de 64px, spec 28 §10bis, sans rapport avec la ligne scrollable ci-dessous).
+            // Il avait déjà inversé ce même choix pour les chambres d'établissement le 2026-09-08
             // (spec 30 §3.9 : « la photo est ce qui décide », cf. journal) ; ce changement aligne
             // les activités sur cette même logique déjà actée ailleurs.
-            variante="grilla"
+            //
+            // `variante="carrusel"` (et non plus "grilla") : ligne scrollable horizontalement au
+            // lieu d'une grille empilée sur mobile — écart accueil vs prototype mobile v2 objectivé
+            // dans `com-dev/grille-beta-test-hifago/index.html` (acc-4/syn-3).
+            variante="carrusel"
             tarjetas={seccion.tarjetas}
             locale={locale as Locale}
             // ⚠️ « L'accueil a toujours plus d'offres du type qu'il n'en montre » n'est vrai QUE

@@ -59,9 +59,11 @@ async function connectBuyer(i, cartLines) {
     `concurrency-camp-buyer-${i}@hifago.test`,
   ]);
   for (const line of cartLines) {
+    // end_date optionnel (2026-09-15, camp_missing_lodging) : les lignes lodging des scénarios 1/2
+    // en ont besoin, les lignes camp continuent de le laisser null comme avant.
     await client.query(
-      "insert into cart_items (account_id, product_id, date, qty) values ($1, $2, $3, $4)",
-      [accountId, line.product_id, line.date, line.qty]
+      "insert into cart_items (account_id, product_id, date, end_date, qty) values ($1, $2, $3, $4, $5)",
+      [accountId, line.product_id, line.date, line.end_date ?? null, line.qty]
     );
   }
   await client.query("select set_config('request.jwt.claims', $1, false)", [
@@ -145,6 +147,12 @@ const SCENARIO_1_N = 20;
 const SCENARIO_1_CAMP_ID = "70000000-0000-4000-8000-000000000010";
 const SCENARIO_1_START = "2029-01-01";
 const SCENARIO_1_DAYS = 5;
+// 2026-09-15 (camp_missing_lodging) : produit et plage dédiés à la ligne lodging que CHAQUE
+// acheteur doit désormais porter dans son propre panier pour que create_order dépasse la nouvelle
+// validation — sans rapport avec le sujet du scénario (la course sur la ressource partagée),
+// capacité volontairement large (100) sur chaque nuit requise pour ne jamais l'interférer.
+const SCENARIO_1_LODGING_ID = "70000000-0000-4000-8000-000000000011";
+const SCENARIO_1_LODGING_END = "2029-01-05"; // date_depart + duration_days - 1
 
 async function seedScenario1(seedClient) {
   await seedClient.query(
@@ -163,6 +171,16 @@ async function seedScenario1(seedClient) {
      select $1, $2::date + n, 1, 0 from generate_series(0, $3 - 1) as n`,
     [ESTABLISHMENT_ID, SCENARIO_1_START, SCENARIO_1_DAYS]
   );
+  await seedClient.query(
+    `insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug)
+     values ($1, $2, $3, 'lodging', jsonb_build_object('es', 'Lodging concurrency regression'), 50000, true, $4)`,
+    [SCENARIO_1_LODGING_ID, PARTNER_ID, ESTABLISHMENT_ID, "lodging-concurrency-regression"]
+  );
+  await seedClient.query(
+    `insert into product_availability (product_id, date, capacity, booked)
+     select $1, $2::date + n, 100, 0 from generate_series(0, $3 - 2) as n`,
+    [SCENARIO_1_LODGING_ID, SCENARIO_1_START, SCENARIO_1_DAYS]
+  );
 }
 
 async function runScenario1Once(run) {
@@ -171,7 +189,15 @@ async function runScenario1Once(run) {
   await resetAll(seedClient);
   await seedScenario1(seedClient);
 
-  const cart = [{ product_id: SCENARIO_1_CAMP_ID, date: SCENARIO_1_START, qty: 1 }];
+  const cart = [
+    { product_id: SCENARIO_1_CAMP_ID, date: SCENARIO_1_START, qty: 1 },
+    {
+      product_id: SCENARIO_1_LODGING_ID,
+      date: SCENARIO_1_START,
+      end_date: SCENARIO_1_LODGING_END,
+      qty: 1,
+    },
+  ];
   const clients = await Promise.all(
     Array.from({ length: SCENARIO_1_N }, (_, i) => connectBuyer(i, cart))
   );
@@ -248,6 +274,12 @@ const SCENARIO_2_DAY_1 = "2029-02-01";
 const SCENARIO_2_CAMP_A_START = "2029-02-01"; // jours 1-5
 const SCENARIO_2_CAMP_B_START = "2029-02-03"; // jours 3-7
 const SCENARIO_2_CAMP_DAYS = 5;
+// 2026-09-15 (camp_missing_lodging) : UN lodging partagé par les deux groupes, capacité large sur
+// l'union des nuits requises (02-01..02-06) — sans rapport avec le sujet du scénario (le
+// chevauchement disputé porte sur provider_resource_calendar, jamais sur ce produit).
+const SCENARIO_2_LODGING_ID = "70000000-0000-4000-8000-000000000022";
+const SCENARIO_2_CAMP_A_END = "2029-02-05"; // date_depart + duration_days - 1
+const SCENARIO_2_CAMP_B_END = "2029-02-07";
 
 async function seedScenario2(seedClient) {
   await seedClient.query(
@@ -276,6 +308,17 @@ async function seedScenario2(seedClient) {
      select $1, $2::date + n, 1, 0 from generate_series(0, $3 - 1) as n`,
     [ESTABLISHMENT_ID, SCENARIO_2_DAY_1, SCENARIO_2_TOTAL_DAYS]
   );
+  await seedClient.query(
+    `insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug)
+     values ($1, $2, $3, 'lodging', jsonb_build_object('es', 'Lodging concurrency overlap'), 50000, true, $4)`,
+    [SCENARIO_2_LODGING_ID, PARTNER_ID, ESTABLISHMENT_ID, "lodging-concurrency-overlap"]
+  );
+  // Union des nuits requises par A (02-01..02-04) et B (02-03..02-06) : 02-01..02-06, 6 jours.
+  await seedClient.query(
+    `insert into product_availability (product_id, date, capacity, booked)
+     select $1, $2::date + n, 100, 0 from generate_series(0, 5) as n`,
+    [SCENARIO_2_LODGING_ID, SCENARIO_2_CAMP_A_START]
+  );
 }
 
 async function runScenario2Once(run) {
@@ -284,8 +327,24 @@ async function runScenario2Once(run) {
   await resetAll(seedClient);
   await seedScenario2(seedClient);
 
-  const cartA = [{ product_id: SCENARIO_2_CAMP_A_ID, date: SCENARIO_2_CAMP_A_START, qty: 1 }];
-  const cartB = [{ product_id: SCENARIO_2_CAMP_B_ID, date: SCENARIO_2_CAMP_B_START, qty: 1 }];
+  const cartA = [
+    { product_id: SCENARIO_2_CAMP_A_ID, date: SCENARIO_2_CAMP_A_START, qty: 1 },
+    {
+      product_id: SCENARIO_2_LODGING_ID,
+      date: SCENARIO_2_CAMP_A_START,
+      end_date: SCENARIO_2_CAMP_A_END,
+      qty: 1,
+    },
+  ];
+  const cartB = [
+    { product_id: SCENARIO_2_CAMP_B_ID, date: SCENARIO_2_CAMP_B_START, qty: 1 },
+    {
+      product_id: SCENARIO_2_LODGING_ID,
+      date: SCENARIO_2_CAMP_B_START,
+      end_date: SCENARIO_2_CAMP_B_END,
+      qty: 1,
+    },
+  ];
   // Indices 0..PAIRS-1 = groupe camp A, PAIRS..2*PAIRS-1 = groupe camp B — deux plages d'indices
   // disjointes du même segment BUYER_ID_SEGMENT, aucun conflit d'identité entre les deux groupes.
   const campAClients = await Promise.all(

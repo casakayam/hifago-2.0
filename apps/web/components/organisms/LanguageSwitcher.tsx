@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { Chevron } from "@/components/atoms/Chevron";
 import { Link, usePathname } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import type { Locale } from "@/messages";
@@ -71,22 +72,6 @@ const DRAPEAUX: Record<Locale, () => React.ReactElement> = {
   es: DrapeauColombie,
   en: DrapeauRoyaumeUni,
 };
-
-function Chevron({ ouvert }: { ouvert: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      className={`size-4 shrink-0 transition-transform ${ouvert ? "rotate-180" : ""}`}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <path d="M3.5 6l4.5 4.5L12.5 6" />
-    </svg>
-  );
-}
 
 export function LanguageSwitcher({ testId }: LanguageSwitcherProps) {
   const t = useTranslations("Chrome");

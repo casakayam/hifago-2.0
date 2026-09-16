@@ -18,20 +18,22 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const Panier = () => (
+const Viaje = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.4a2 2 0 0 0 2-1.55L20.5 8H6" />
-    <circle cx="10" cy="20" r="1.4" />
-    <circle cx="17.5" cy="20" r="1.4" />
+    <path d="M6 20a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2" />
+    <path d="M8 18V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v14" />
+    <path d="M10 20h4" />
+    <circle cx="16" cy="20" r="2" />
+    <circle cx="8" cy="20" r="2" />
   </svg>
 );
 
 export const Defaut: Story = {
-  args: { icon: <Panier />, label: "Carrito, 2 artículos", href: "/pago" },
+  args: { icon: <Viaje />, label: "Mi viaje, 2 servicios", href: "/pago" },
 };
 
 export const Formes: Story = {
-  args: { icon: <Panier />, label: "Carrito", href: "/pago" },
+  args: { icon: <Viaje />, label: "Mi viaje", href: "/pago" },
   render: (args) => (
     <div className="flex items-end gap-3">
       <IconLink {...args} />
@@ -42,7 +44,7 @@ export const Formes: Story = {
 };
 
 export const Couleurs: Story = {
-  args: { icon: <Panier />, label: "Carrito", href: "/pago" },
+  args: { icon: <Viaje />, label: "Mi viaje", href: "/pago" },
   render: (args) => (
     <div className="flex flex-col gap-4">
       {(["solid", "soft", "outline", "ghost"] as const).map((variant) => (
@@ -60,12 +62,12 @@ export const Couleurs: Story = {
 // ⚠️ Côte à côte avec `IconButton` : à l'œil ils sont identiques (même table de couleurs, même
 // rayon, même taille), à l'oreille et à l'usage ils ne le sont pas.
 export const CompareAIconButton: Story = {
-  args: { icon: <Panier />, label: "Carrito", href: "/pago" },
+  args: { icon: <Viaje />, label: "Mi viaje", href: "/pago" },
   render: (args) => (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
         <IconLink {...args} variant="solid" color="accent" />
-        <IconButton icon={<Panier />} label="Carrito" variant="solid" color="accent" />
+        <IconButton icon={<Viaje />} label="Mi viaje" variant="solid" color="accent" />
         <Legende>IconLink (annoncé « lien ») · IconButton (annoncé « bouton »)</Legende>
       </div>
       <Legende>

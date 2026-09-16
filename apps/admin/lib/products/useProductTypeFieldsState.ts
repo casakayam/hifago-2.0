@@ -73,6 +73,14 @@ export type ProductTypeFieldsInit = {
   // l'écran de modération doit pouvoir les prérremplir pour la revue admin.
   lobbyCategoryId?: number | null;
   lobbyProductId?: number | null;
+  // Evento réservable en ligne (2026-09-15) — contrairement aux autres champs evento ci-dessus,
+  // ceux-ci sont chargés ET réécrits en édition (cf. product-form.tsx) : pas le même gap
+  // "création seulement".
+  onlineBookable?: boolean;
+  eventoCapacityMode?: "unlimited" | "metered" | "rsvp" | null;
+  isFree?: boolean;
+  eventoPaymentMode?: "online" | "on_site" | null;
+  eventoOccupiesResource?: boolean;
 };
 
 // Extrait de ProductForm (spec 15) pour être consommé par deux rendus distincts du même gating par
@@ -149,6 +157,18 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
     init.lobbyCategoryId != null || init.lobbyProductId != null ? "picker" : "none",
   );
 
+  const [onlineBookable, setOnlineBookable] = useState(init.onlineBookable ?? false);
+  const [eventoCapacityMode, setEventoCapacityMode] = useState<"unlimited" | "metered" | "rsvp" | "">(
+    init.eventoCapacityMode ?? "",
+  );
+  const [isFree, setIsFree] = useState(init.isFree ?? false);
+  const [eventoPaymentMode, setEventoPaymentMode] = useState<"online" | "on_site" | "">(
+    init.eventoPaymentMode ?? "",
+  );
+  // Défaut à true, cohérent avec la colonne DB (not null default true) : un evento réservable
+  // bloque par défaut le calendrier partagé du prestataire, désactivable au cas par cas.
+  const [eventoOccupiesResource, setEventoOccupiesResource] = useState(init.eventoOccupiesResource ?? true);
+
   return {
     address, setAddress, lat, setLat, lon, setLon,
     selectedTagIds, setSelectedTagIds,
@@ -173,6 +193,11 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
     externalBookingUrl, setExternalBookingUrl,
     lobbyCategoryId, setLobbyCategoryId, lobbyProductId, setLobbyProductId,
     lobbyLinkMode, setLobbyLinkMode,
+    onlineBookable, setOnlineBookable,
+    eventoCapacityMode, setEventoCapacityMode,
+    isFree, setIsFree,
+    eventoPaymentMode, setEventoPaymentMode,
+    eventoOccupiesResource, setEventoOccupiesResource,
   };
 }
 

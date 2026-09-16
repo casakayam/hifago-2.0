@@ -168,3 +168,34 @@ export function hrefRetornoCarrito(criterios: Criterios): string {
   const sufijo = escribirCriterios(criterios);
   return `/${sufijo}${sufijo ? "&" : "?"}desdeCarrito=1`;
 }
+
+/**
+ * Le lien vers l'écran d'hébergement pour un camp — dates et nombre de personnes déjà en filtre.
+ * `BuscadorInicio` (déjà câblé sur `/alojamientos` via `IndiceCategoriasConOfertas`) les pré-remplit
+ * depuis `criteriosIniciales` : aucun composant neuf n'est nécessaire pour que le visiteur les
+ * voie déjà posés. Trois appelants (2026-09-15) : `ReservationForm.tsx` juste après l'ajout du camp
+ * au panier, le bandeau contextuel de `/alojamientos` lui-même (« pourquoi je suis ici »), et le
+ * bloc « hébergement obligatoire » de `/mi-viaje` (bouton « Elige tu alojamiento », qui bloque au
+ * moment de payer) — même lien, même calcul de dates/personas, jamais deux formules.
+ *
+ * `alojamientoParaCamp=1` — même traitement que `desdeCarrito` : pas un critère (ne rejoint jamais
+ * `Criterios`, jamais écrit dans un canonical/Ver más), seulement « pourquoi on est arrivé ici ».
+ * Retour Jérôme (2026-09-15) : un visiteur qui atterrit sur `/alojamientos` juste après avoir
+ * choisi un camp n'a sinon aucune indication de pourquoi il y est — `IndiceCategoriasConOfertas`
+ * affiche un bandeau contextuel quand ce drapeau est présent. Complémentaire, pas un remplacement,
+ * du bloc de `/mi-viaje` : celui-ci guide dès l'arrivée, celui-là bloque au moment de payer.
+ */
+export function hrefAlojamientosCompatibles(
+  criterios: Pick<Criterios, "desde" | "hasta" | "personas">
+): string {
+  const sufijo = escribirCriterios(criterios);
+  return `/alojamientos${sufijo}${sufijo ? "&" : "?"}alojamientoParaCamp=1`;
+}
+
+/**
+ * Vrai si l'écran d'hébergement est atteint juste après l'ajout d'un camp au panier — même
+ * raisonnement que `leerDesdeCarrito` (le paramètre décrit d'où on vient, jamais un critère).
+ */
+export function leerAlojamientoParaCamp(params: ParamsBrutos): boolean {
+  return primero(params.alojamientoParaCamp) === "1";
+}

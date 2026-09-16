@@ -3,7 +3,9 @@ import {
   MAX_PAGINAS,
   escribirCriterios,
   hayCriterios,
+  hrefAlojamientosCompatibles,
   hrefRetornoCarrito,
+  leerAlojamientoParaCamp,
   leerCriterios,
   leerDesdeCarrito,
   leerPagina,
@@ -155,5 +157,26 @@ describe("hrefRetornoCarrito", () => {
 
   it("ajoute le flag à la suite des critères existants", () => {
     expect(hrefRetornoCarrito({ q: "kayak" })).toBe("/?q=kayak&desdeCarrito=1");
+  });
+});
+
+describe("hrefAlojamientosCompatibles — redirection camp → hébergement (2026-09-15)", () => {
+  it("construit /alojamientos avec desde/hasta/personas et le drapeau contextuel", () => {
+    expect(
+      hrefAlojamientosCompatibles({ desde: "2026-10-05", hasta: "2026-10-09", personas: 2 })
+    ).toBe("/alojamientos?personas=2&desde=2026-10-05&hasta=2026-10-09&alojamientoParaCamp=1");
+  });
+});
+
+describe("leerAlojamientoParaCamp", () => {
+  it("répond vrai uniquement sur la valeur exacte \"1\"", () => {
+    expect(leerAlojamientoParaCamp({ alojamientoParaCamp: "1" })).toBe(true);
+    expect(leerAlojamientoParaCamp({})).toBe(false);
+    expect(leerAlojamientoParaCamp({ alojamientoParaCamp: "0" })).toBe(false);
+  });
+
+  it("ne fuit jamais dans les critères : escribirCriterios ne l'écrit pas", () => {
+    const criterios = leerCriterios({ q: "kayak", alojamientoParaCamp: "1" });
+    expect(escribirCriterios(criterios)).toBe("?q=kayak");
   });
 });

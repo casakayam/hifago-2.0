@@ -9,6 +9,8 @@
     "awaitingDetail": "This may take a moment. This page updates on its own.",
     "unpaid": "Your booking is not paid yet",
     "unpaidDetail": "We hold your booking for 30 minutes. Pay the deposit to confirm it.",
+    "confirmed": "Your booking is confirmed!",
+    "confirmedDetail": "There is no pending payment online. We sent the details to your email.",
     "failed": "We could not take the deposit",
     "failedDetail": "Your booking is still held. You can try paying again.",
     "expired": "This booking has expired",

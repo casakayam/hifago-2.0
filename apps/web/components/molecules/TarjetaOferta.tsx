@@ -50,8 +50,12 @@ import type { TarjetaOferta as OfertaTarjeta } from "@/lib/catalog/tipos";
 
 export type TarjetaOfertaProps = {
   oferta: OfertaTarjeta;
-  /** "grilla" = carte empilée (photos à fleur de carte) ; "lista" = Card layout="row". */
-  variante: "grilla" | "lista";
+  /**
+   * "grilla" = carte empilée (photos à fleur de carte) ; "lista" = Card layout="row" ; "carrusel" =
+   * même carte qu'en "grilla", mais à largeur fixe dans une ligne qui défile horizontalement
+   * (`SeccionOfertas.tsx`).
+   */
+  variante: "grilla" | "lista" | "carrusel";
   /** UNE SEULE carte de la page la reçoit : la première de la première section (le LCP). */
   prioridad?: boolean;
   locale: Locale;
@@ -66,6 +70,19 @@ export type TarjetaOfertaProps = {
 // variante `row` est agrandi par le lot d'arbitrage, cette valeur doit bouger avec lui.
 const SIZES_GRILLA = "(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw";
 const SIZES_LISTA = "64px";
+// ⚠️ Doit rester synchronisé avec `CLASE_CARTA_CARRUSEL` (`w-64`) de `SeccionOfertas.tsx` : une
+// carte de carrusel a une largeur FIXE, pas une fraction du viewport — lui servir `SIZES_GRILLA`
+// téléchargerait une image bien trop grande sur desktop.
+const SIZES_CARRUSEL = "256px";
+
+// Une table plutôt qu'une cascade de ternaires : c'est ce qui fait qu'ajouter une variante casse la
+// COMPILATION ici (le Record doit être exhaustif) au lieu de retomber silencieusement sur la
+// branche `grilla` par défaut.
+const SIZES_POR_VARIANTE: Record<TarjetaOfertaProps["variante"], string> = {
+  grilla: SIZES_GRILLA,
+  lista: SIZES_LISTA,
+  carrusel: SIZES_CARRUSEL,
+};
 
 export function TarjetaOferta({ oferta, variante, prioridad, locale }: TarjetaOfertaProps) {
   const t = useTranslations("HomePage");
@@ -164,7 +181,7 @@ export function TarjetaOferta({ oferta, variante, prioridad, locale }: TarjetaOf
         <PhotoStrip
           photos={fotos}
           loading={prioridad ? "priority" : "lazy"}
-          sizes={variante === "lista" ? SIZES_LISTA : SIZES_GRILLA}
+          sizes={SIZES_POR_VARIANTE[variante]}
           testId={`${oferta.testId}-fotos`}
         />
       }

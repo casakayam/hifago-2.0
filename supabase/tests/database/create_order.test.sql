@@ -52,7 +52,7 @@
 -- pour self_referral/direct (referrer_pct=0). 3 assertions ajoutées juste après le cas 16b/16c
 -- ci-dessous, mêmes fixtures, aucune nouvelle commande.
 begin;
-select plan(99);
+select plan(106);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -293,9 +293,25 @@ values
    jsonb_build_object('es', 'Campamento Recurso Indisponible'), 90000, true,
    'order-test-camp-unavailable', 3);
 
+-- Produit 055 (lodging) — 2026-09-15, migration 20260915100000_camp_requires_compatible_lodging :
+-- un camp de plus d'un jour exige désormais une ligne lodging compatible dans le MÊME panier
+-- (cf. cas 23 plus bas). Les camps 044/045 ci-dessus (duration_days=3) sont couverts par CETTE
+-- migration : chaque cas 17x ci-dessous ajoute donc une ligne 055 couvrant ses nuits requises,
+-- sans quoi l'appel serait désormais rejeté par camp_missing_lodging AVANT d'atteindre ce que ces
+-- cas testent réellement (succès/resource_unavailable/not_sellable). 055 n'a aucun rapport
+-- fonctionnel avec ces cas : sa seule raison d'être est de satisfaire la nouvelle obligation.
+insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug)
+values (
+  '88880000-0000-4000-8000-000000000055', '88880000-0000-4000-8000-000000000001',
+  '88880000-0000-4000-8000-000000000011', 'lodging',
+  jsonb_build_object('es', 'Alojamiento Order Test Camp'), 50000, true, 'order-test-lodging-camp'
+);
+
 -- cas 17a : plage 2028-12-10..12 entièrement disponible (capacité propre ET ressource partagée).
 insert into product_availability (product_id, date, capacity, booked) values
-  ('88880000-0000-4000-8000-000000000044', '2028-12-10', 5, 0);
+  ('88880000-0000-4000-8000-000000000044', '2028-12-10', 5, 0),
+  ('88880000-0000-4000-8000-000000000055', '2028-12-10', 5, 0),
+  ('88880000-0000-4000-8000-000000000055', '2028-12-11', 5, 0);
 insert into provider_resource_calendar (establishment_id, slot_date, capacity, booked) values
   ('88880000-0000-4000-8000-000000000011', '2028-12-10', 5, 0),
   ('88880000-0000-4000-8000-000000000011', '2028-12-11', 5, 0),
@@ -306,7 +322,9 @@ insert into provider_resource_calendar (establishment_id, slot_date, capacity, b
 -- (elle ne porte qu'UNE ligne, à la date de départ) : preuve que resource_unavailable vient bien de
 -- provider_resource_calendar, pas d'une confusion avec la capacité propre.
 insert into product_availability (product_id, date, capacity, booked) values
-  ('88880000-0000-4000-8000-000000000045', '2028-12-20', 5, 0);
+  ('88880000-0000-4000-8000-000000000045', '2028-12-20', 5, 0),
+  ('88880000-0000-4000-8000-000000000055', '2028-12-20', 5, 0),
+  ('88880000-0000-4000-8000-000000000055', '2028-12-21', 5, 0);
 insert into provider_resource_calendar (establishment_id, slot_date, capacity, booked) values
   ('88880000-0000-4000-8000-000000000011', '2028-12-20', 5, 0),
   ('88880000-0000-4000-8000-000000000011', '2028-12-21', 1, 1),  -- déjà plein : booked=capacity=1
@@ -316,7 +334,9 @@ insert into provider_resource_calendar (establishment_id, slot_date, capacity, b
 -- déjà fixturé plus haut, sellable=false) — plage 2028-12-15..17 du camp 044 entièrement
 -- disponible isolément (nouvelle date de départ, sans rapport avec le cas 17a).
 insert into product_availability (product_id, date, capacity, booked) values
-  ('88880000-0000-4000-8000-000000000044', '2028-12-15', 5, 0);
+  ('88880000-0000-4000-8000-000000000044', '2028-12-15', 5, 0),
+  ('88880000-0000-4000-8000-000000000055', '2028-12-15', 5, 0),
+  ('88880000-0000-4000-8000-000000000055', '2028-12-16', 5, 0);
 insert into provider_resource_calendar (establishment_id, slot_date, capacity, booked) values
   ('88880000-0000-4000-8000-000000000011', '2028-12-15', 5, 0),
   ('88880000-0000-4000-8000-000000000011', '2028-12-16', 5, 0),
@@ -1131,10 +1151,14 @@ set local role authenticated;
 select test_login('88880000-0000-4000-8000-000000000021');
 
 -- Cas 17a : plage entièrement disponible → succès, booked incrémenté sur CHAQUE jour de la plage
--- (pas seulement la date de départ), un availability_blocks créé avec la bonne plage.
-select test_set_cart(jsonb_build_array(jsonb_build_object(
-  'product_id', '88880000-0000-4000-8000-000000000044', 'date', '2028-12-10', 'qty', 2
-)));
+-- (pas seulement la date de départ), un availability_blocks créé avec la bonne plage. Ligne 055
+-- (lodging, 2026-09-15) ajoutée pour satisfaire camp_missing_lodging — sans rapport avec le sujet
+-- de ce cas, cf. commentaire à sa fixture.
+select test_set_cart(jsonb_build_array(
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000044', 'date', '2028-12-10', 'qty', 2),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000055',
+    'date', '2028-12-10', 'end_date', '2028-12-12', 'qty', 1)
+));
 create temp table tmp_camp_success as
   select create_order(
     'Holder Camp Success',
@@ -1179,9 +1203,13 @@ drop table tmp_camp_success;
 -- resource_unavailable, AUCUNE écriture — y compris sur les jours par ailleurs disponibles de la
 -- même plage et sur la capacité PROPRE du camp (product_availability), qui elle est entièrement
 -- disponible isolément.
-select test_set_cart(jsonb_build_array(jsonb_build_object(
-  'product_id', '88880000-0000-4000-8000-000000000045', 'date', '2028-12-20', 'qty', 1
-)));
+-- Ligne 055 (lodging, 2026-09-15) ajoutée pour satisfaire camp_missing_lodging — sans elle, cet
+-- appel serait désormais rejeté avant même d'atteindre la vérification de ressource partagée.
+select test_set_cart(jsonb_build_array(
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000045', 'date', '2028-12-20', 'qty', 1),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000055',
+    'date', '2028-12-20', 'end_date', '2028-12-22', 'qty', 1)
+));
 select is(
   (select create_order(
      'Holder Camp Unavailable',
@@ -1213,9 +1241,13 @@ select is(
 -- sellable=false) dans le MÊME panier → aucune écriture, y compris sur la ressource partagée du
 -- camp qui aurait pourtant réussi seule (même invariant tout-ou-rien que la feature 6, étendu à
 -- deux types de ressources dans le même panier).
+-- Ligne 055 (lodging, 2026-09-15) ajoutée pour satisfaire camp_missing_lodging — sans elle, cet
+-- appel serait désormais rejeté avant même d'atteindre la prestation not_sellable testée ici.
 select test_set_cart(jsonb_build_array(
   jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000044', 'date', '2028-12-15', 'qty', 1),
-  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000033', 'date', '2028-12-15', 'qty', 1)
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000033', 'date', '2028-12-15', 'qty', 1),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000055',
+    'date', '2028-12-15', 'end_date', '2028-12-17', 'qty', 1)
 ));
 select is(
   (select create_order(
@@ -1620,16 +1652,22 @@ drop table tmp_camp_discount_at;
 -- (2028-12-30), sans rapport avec les cas 17a/c sur ce même produit.
 reset role;
 insert into product_availability (product_id, date, capacity, booked) values
-  ('88880000-0000-4000-8000-000000000044', '2028-12-30', 20, 15);
+  ('88880000-0000-4000-8000-000000000044', '2028-12-30', 20, 15),
+  ('88880000-0000-4000-8000-000000000055', '2028-12-30', 5, 0),
+  ('88880000-0000-4000-8000-000000000055', '2028-12-31', 5, 0);
 insert into provider_resource_calendar (establishment_id, slot_date, capacity, booked) values
   ('88880000-0000-4000-8000-000000000011', '2028-12-30', 20, 0),
   ('88880000-0000-4000-8000-000000000011', '2028-12-31', 20, 0),
   ('88880000-0000-4000-8000-000000000011', '2029-01-01', 20, 0);
 set local role authenticated;
 select test_login('88880000-0000-4000-8000-000000000021');
-select test_set_cart(jsonb_build_array(jsonb_build_object(
-  'product_id', '88880000-0000-4000-8000-000000000044', 'date', '2028-12-30', 'qty', 3
-)));
+-- Ligne 055 (lodging, 2026-09-15) ajoutée pour satisfaire camp_missing_lodging — sans rapport avec
+-- le sujet de ce cas (non-régression de la remise de groupe).
+select test_set_cart(jsonb_build_array(
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000044', 'date', '2028-12-30', 'qty', 3),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000055',
+    'date', '2028-12-30', 'end_date', '2029-01-01', 'qty', 1)
+));
 create temp table tmp_camp_no_discount as
   select create_order('Holder Camp No Discount', p_holder_email => 'buyer-fixture@hifago.test') as result;
 select is(
@@ -1643,6 +1681,200 @@ select is(
   'cas 22c : total_cop = 90000*3, comportement inchangé sans configuration (non-régression)'
 );
 drop table tmp_camp_no_discount;
+
+-- Cas 23 (camp exige un hébergement compatible dans le même panier — migration
+-- 20260915100000_camp_requires_compatible_lodging.sql, retour Jérôme du 2026-09-15). Produits
+-- dédiés : 051 (camp, duration_days=5), 053 (camp, duration_days=3), 054 (camp, duration_days=1 —
+-- day trip, preuve de l'exception "0 nuit requise"), 052 (lodging, établissement B/012 —
+-- DÉLIBÉRÉMENT différent de l'établissement du camp, 011/partenaire A, pour prouver l'absence de
+-- filtre géographique/établissement). reset role avant chaque insert de fixture, même patron que
+-- les cas 18/20/22 ci-dessus.
+reset role;
+insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug, duration_days)
+values
+  ('88880000-0000-4000-8000-000000000051', '88880000-0000-4000-8000-000000000001',
+   '88880000-0000-4000-8000-000000000011', 'camp',
+   jsonb_build_object('es', 'Campamento Exige Alojamiento'), 90000, true,
+   'order-test-camp-needs-lodging', 5),
+  ('88880000-0000-4000-8000-000000000053', '88880000-0000-4000-8000-000000000001',
+   '88880000-0000-4000-8000-000000000011', 'camp',
+   jsonb_build_object('es', 'Campamento Exige Alojamiento B'), 90000, true,
+   'order-test-camp-needs-lodging-b', 3),
+  ('88880000-0000-4000-8000-000000000054', '88880000-0000-4000-8000-000000000001',
+   '88880000-0000-4000-8000-000000000011', 'camp',
+   jsonb_build_object('es', 'Campamento Un Dia'), 90000, true,
+   'order-test-camp-one-day', 1);
+insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug)
+values (
+  '88880000-0000-4000-8000-000000000052', '88880000-0000-4000-8000-000000000002',
+  '88880000-0000-4000-8000-000000000012', 'lodging',
+  jsonb_build_object('es', 'Alojamiento Compatible'), 50000, true, 'order-test-lodging-compat'
+);
+
+-- Cas 23a : camp seul, aucune ligne lodging dans le panier → camp_missing_lodging. Rejeté AVANT
+-- tout verrou (aucune fixture de disponibilité nécessaire — même raison que empty_cart, cas 2).
+set local role authenticated;
+select test_login('88880000-0000-4000-8000-000000000021');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000051', 'date', '2029-03-05', 'qty', 2
+)));
+select is(
+  (select create_order('Holder Camp Solo', p_holder_email => 'buyer-fixture@hifago.test')->>'reason'),
+  'camp_missing_lodging',
+  'cas 23a : camp seul, aucune ligne lodging dans le panier → camp_missing_lodging'
+);
+
+-- Cas 23b : camp (051, duration_days=5, départ 2029-03-05, dernier jour 2029-03-09) + lodging (052)
+-- couvrant EXACTEMENT les 4 nuits requises (03-05→03-09) → succès. Fixtures réelles nécessaires
+-- pour aller jusqu'en Phase 3 : capacité propre du camp, ressource partagée de l'établissement 011
+-- sur les 5 jours de la plage, capacité du lodging sur ses 4 nuits.
+reset role;
+insert into product_availability (product_id, date, capacity, booked) values
+  ('88880000-0000-4000-8000-000000000051', '2029-03-05', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-03-05', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-03-06', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-03-07', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-03-08', 5, 0);
+insert into provider_resource_calendar (establishment_id, slot_date, capacity, booked) values
+  ('88880000-0000-4000-8000-000000000011', '2029-03-05', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-03-06', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-03-07', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-03-08', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-03-09', 5, 0);
+set local role authenticated;
+select test_login('88880000-0000-4000-8000-000000000021');
+select test_set_cart(jsonb_build_array(
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000051', 'date', '2029-03-05', 'qty', 2),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000052',
+    'date', '2029-03-05', 'end_date', '2029-03-09', 'qty', 1)
+));
+select is(
+  (select create_order('Holder Camp Exact', p_holder_email => 'buyer-fixture@hifago.test')->>'ok'),
+  'true',
+  'cas 23b : camp + lodging couvrant EXACTEMENT les 4 nuits requises → succès'
+);
+
+-- Cas 23c : lodging PLUS LARGE que les nuits requises (arrivée avant, départ après) → succès.
+-- Camp 051, départ 2029-04-10 (dernier jour 04-14) ; lodging 052 du 04-09 au 04-15 (une nuit de
+-- marge de chaque côté).
+reset role;
+insert into product_availability (product_id, date, capacity, booked) values
+  ('88880000-0000-4000-8000-000000000051', '2029-04-10', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-04-09', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-04-10', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-04-11', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-04-12', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-04-13', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-04-14', 5, 0);
+insert into provider_resource_calendar (establishment_id, slot_date, capacity, booked) values
+  ('88880000-0000-4000-8000-000000000011', '2029-04-10', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-04-11', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-04-12', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-04-13', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-04-14', 5, 0);
+set local role authenticated;
+select test_login('88880000-0000-4000-8000-000000000021');
+select test_set_cart(jsonb_build_array(
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000051', 'date', '2029-04-10', 'qty', 2),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000052',
+    'date', '2029-04-09', 'end_date', '2029-04-15', 'qty', 1)
+));
+select is(
+  (select create_order('Holder Camp Wide', p_holder_email => 'buyer-fixture@hifago.test')->>'ok'),
+  'true',
+  'cas 23c : lodging plus large que les nuits requises (arrivée avant, départ après) → succès'
+);
+
+-- Cas 23d : hébergement avec un TROU au milieu des nuits requises — deux lignes lodging
+-- contiguës, mais AUCUNE ne couvre seule toute la plage (limite assumée : jamais une somme de
+-- plusieurs lignes, cf. en-tête de la migration) → camp_missing_lodging. Camp 051, départ
+-- 2029-06-01 (dernier jour 06-05, nuits requises 06-01..06-04) ; lodging A 06-01→06-03 (nuits
+-- 01,02), lodging B 06-04→06-06 (nuits 04,05) : la nuit du 06-03 n'est couverte par aucune des
+-- deux prises isolément. Rejeté avant tout verrou, aucune fixture de disponibilité nécessaire
+-- (même raison que 23a) — rôle déjà `authenticated` depuis le cas 23c.
+select test_login('88880000-0000-4000-8000-000000000021');
+select test_set_cart(jsonb_build_array(
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000051', 'date', '2029-06-01', 'qty', 2),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000052',
+    'date', '2029-06-01', 'end_date', '2029-06-03', 'qty', 1),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000052',
+    'date', '2029-06-04', 'end_date', '2029-06-06', 'qty', 1)
+));
+select is(
+  (select create_order('Holder Camp Gap', p_holder_email => 'buyer-fixture@hifago.test')->>'reason'),
+  'camp_missing_lodging',
+  'cas 23d : deux lignes lodging contiguës mais aucune ne couvre seule toute la plage → camp_missing_lodging'
+);
+
+-- Cas 23e : deux camps dans le même panier, chacun sa propre lodging compatible → succès, preuve
+-- que l'exists() par ligne camp fonctionne indépendamment pour chacune, sans exclusivité entre
+-- elles (limite assumée, cf. en-tête de la migration). Camp 051 (2029-07-01, dernier jour 07-05)
+-- + lodging 052 (07-01→07-05) ; camp 053 (duration_days=3, 2029-07-10, dernier jour 07-12) +
+-- lodging 052 réutilisé sur une plage disjointe (07-10→07-12).
+reset role;
+insert into product_availability (product_id, date, capacity, booked) values
+  ('88880000-0000-4000-8000-000000000051', '2029-07-01', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-07-01', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-07-02', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-07-03', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-07-04', 5, 0),
+  ('88880000-0000-4000-8000-000000000053', '2029-07-10', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-07-10', 5, 0),
+  ('88880000-0000-4000-8000-000000000052', '2029-07-11', 5, 0);
+insert into provider_resource_calendar (establishment_id, slot_date, capacity, booked) values
+  ('88880000-0000-4000-8000-000000000011', '2029-07-01', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-07-02', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-07-03', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-07-04', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-07-05', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-07-10', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-07-11', 5, 0),
+  ('88880000-0000-4000-8000-000000000011', '2029-07-12', 5, 0);
+set local role authenticated;
+select test_login('88880000-0000-4000-8000-000000000021');
+select test_set_cart(jsonb_build_array(
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000051', 'date', '2029-07-01', 'qty', 2),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000052',
+    'date', '2029-07-01', 'end_date', '2029-07-05', 'qty', 1),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000053', 'date', '2029-07-10', 'qty', 2),
+  jsonb_build_object('product_id', '88880000-0000-4000-8000-000000000052',
+    'date', '2029-07-10', 'end_date', '2029-07-12', 'qty', 1)
+));
+create temp table tmp_two_camps_two_lodgings as
+  select create_order('Holder Two Camps', p_holder_email => 'buyer-fixture@hifago.test') as result;
+select is(
+  (select result->>'ok' from tmp_two_camps_two_lodgings), 'true',
+  'cas 23e : deux camps, chacun sa propre lodging compatible → succès'
+);
+select is(
+  (select count(*)::int from order_lines
+    where product_id in (
+      '88880000-0000-4000-8000-000000000051', '88880000-0000-4000-8000-000000000052',
+      '88880000-0000-4000-8000-000000000053'
+    ) and date in ('2029-07-01', '2029-07-10')),
+  4,
+  'cas 23e : les 4 lignes (2 camps + 2 lodgings) sont bien écrites'
+);
+drop table tmp_two_camps_two_lodgings;
+
+-- Cas 23f : camp duration_days=1 (0 nuit requise, day trip) sans aucune ligne lodging → succès —
+-- preuve de l'exception nécessaire (sans elle, un camp d'une seule journée légitime serait refusé
+-- à tort, régression sur tout futur camp "day trip").
+reset role;
+insert into product_availability (product_id, date, capacity, booked) values
+  ('88880000-0000-4000-8000-000000000054', '2029-08-01', 5, 0);
+insert into provider_resource_calendar (establishment_id, slot_date, capacity, booked) values
+  ('88880000-0000-4000-8000-000000000011', '2029-08-01', 5, 0);
+set local role authenticated;
+select test_login('88880000-0000-4000-8000-000000000021');
+select test_set_cart(jsonb_build_array(jsonb_build_object(
+  'product_id', '88880000-0000-4000-8000-000000000054', 'date', '2029-08-01', 'qty', 2
+)));
+select is(
+  (select create_order('Holder Day Camp', p_holder_email => 'buyer-fixture@hifago.test')->>'ok'),
+  'true',
+  'cas 23f : camp duration_days=1 (0 nuit requise) sans aucune lodging → succès'
+);
 
 select * from finish();
 rollback;

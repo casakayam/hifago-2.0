@@ -1,27 +1,29 @@
+import { parseISO } from "date-fns";
 import { getTranslations } from "next-intl/server";
 import { todayInBogota } from "@hifago/domain";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { PageShell } from "@/components/atoms/PageShell";
 import { Title } from "@/components/atoms/Title";
+import { Migas } from "@/components/molecules/Migas";
 import { EstadoVacio } from "@/components/molecules/EstadoVacio";
-import { BarraNavegacion } from "@/components/organisms/BarraNavegacion";
 import { SeccionOfertas } from "@/components/organisms/SeccionOfertas";
 import { buscarCategorias, hrefCategoria } from "@/lib/catalog/buscar";
 import {
   escribirCriterios,
   hayCriterios,
+  leerAlojamientoParaCamp,
   leerCriterios,
   type ParamsBrutos,
 } from "@/lib/catalog/criterios";
 import { segmentoDeTipo } from "@/lib/catalog/segmentos";
 import type { TipoOferta } from "@/lib/catalog/tipos";
+import { nightsInRange } from "@/lib/reservas/reservationRange";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/jsonld/breadcrumb";
 import { migasParaJsonLd } from "@/lib/seo/migas";
 import { getSiteUrl } from "@/lib/seo/siteUrl";
 import type { Locale } from "@/messages";
 import { BuscadorInicio } from "./BuscadorInicio";
 import { labelsBuscador } from "./labelsBuscador";
-import { tiposDeBarra } from "./tiposDeBarra";
 
 // L'INDEX DE CATÉGORIES D'UN TYPE (généralisé 2026-09-14 — remplace, pour les cinq types, deux
 // écrans distincts : les quatre listings plats (`ListadoTipo` sans `categoria`) et l'ancien index
@@ -53,7 +55,6 @@ async function libelles(tipo: TipoOferta, locale: Locale) {
     seccion: tHome(`secciones.${tipo}`),
     verMas: tHome("verMas"),
     inicio: tCommon("breadcrumbHome"),
-    tiposEtiqueta: tCommon("selectorTipoEtiqueta"),
   };
 }
 
@@ -67,10 +68,23 @@ export async function IndiceCategoriasConOfertas({
   searchParams: ParamsBrutos;
 }) {
   const t = await getTranslations({ locale, namespace: "ListadoPage" });
-  const { seccion, verMas, inicio, tiposEtiqueta } = await libelles(tipo, locale);
+  const { seccion, verMas, inicio } = await libelles(tipo, locale);
 
   const criterios = leerCriterios(searchParams);
   const sufijoCriterios = escribirCriterios(criterios);
+
+  // Retour Jérôme (2026-09-15) : un visiteur qui atterrit ici juste après avoir choisi un camp
+  // n'a sinon aucune indication de pourquoi il y est. Bandeau purement informatif — complémentaire
+  // du bloc bloquant de `/mi-viaje` (`findCampMissingLodging`), jamais un remplacement. Scopé à
+  // `lodging` : le drapeau ne doit rien afficher sur les quatre autres types, qui ne peuvent pas
+  // être atteints par ce chemin (`hrefAlojamientosCompatibles` ne cible que `/alojamientos`).
+  const alojamientoParaCamp =
+    tipo === "lodging" &&
+    leerAlojamientoParaCamp(searchParams) &&
+    Boolean(criterios.desde && criterios.hasta);
+  const nochesCamp = alojamientoParaCamp
+    ? nightsInRange({ from: parseISO(criterios.desde!), to: parseISO(criterios.hasta!) }).length
+    : 0;
 
   // LA seule requête de la page, et elle ne part pas d'ici : `lib/catalog/` la porte. Elle rend
   // les catégories DÉJÀ triées (`Intl.Collator` de la locale), chacune avec ses offres plafonnées
@@ -91,14 +105,7 @@ export async function IndiceCategoriasConOfertas({
         )}
       />
 
-      <BarraNavegacion
-        migas={migas}
-        migasEtiqueta={t("migasEtiqueta")}
-        locale={locale}
-        tipos={await tiposDeBarra(locale)}
-        tipoActivo={tipo}
-        tiposEtiqueta={tiposEtiqueta}
-      />
+      <Migas items={migas} etiqueta={t("migasEtiqueta")} locale={locale} testId="migas" />
 
       {/* VISIBLE, contrairement au `<h1>` masqué de l'accueil (décision 5, spec 29) : un titre
           masqué laisserait le visiteur deviner où il a atterri. */}
@@ -114,6 +121,18 @@ export async function IndiceCategoriasConOfertas({
         labels={labels}
         atajosTipo={[]}
       />
+
+      {alojamientoParaCamp ? (
+        // Même habillage que le bloc bloquant de `/mi-viaje` (`lodging-required-notice`) — un
+        // visiteur doit reconnaître le même message aux deux endroits, pas une simple phrase grise
+        // noyée sous la barre de recherche (retour Jérôme : « il faut que ce soit plus visible »).
+        <div
+          className="rounded-lg border border-border bg-surface-secondary p-4 text-sm"
+          data-testid="camp-lodging-hint"
+        >
+          {t("campLodgingHint", { count: nochesCamp })}
+        </div>
+      ) : null}
 
       {categorias.length === 0 ? (
         // Deux états vides distincts : « ta recherche ne donne rien » n'est pas « il n'y a pas
@@ -133,12 +152,15 @@ export async function IndiceCategoriasConOfertas({
             tituloAs="h2"
             hrefVerMas={hrefCategoria(tipo, categoria.slug, sufijoCriterios)}
             labelVerMas={verMas}
-            // ⚠️ Toutes les sections en grille (2026-09-14, retour explicite de Jérôme) — cf.
-            // `page.tsx` pour le raisonnement complet : les activités utilisaient `variante="lista"`
-            // par choix esthétique de Jérôme (spec 28 §5), jamais une contrainte fonctionnelle,
-            // avec un défaut visuel non résolu (spec 28 §10bis). Cohérent avec toutes les autres
-            // catégories, qui étaient déjà en grille.
-            variante="grilla"
+            // ⚠️ Toutes les catégories dans la même carte (photo pleine largeur, 2026-09-14, retour
+            // explicite de Jérôme) — cf. `page.tsx` pour le raisonnement complet : les activités
+            // utilisaient `variante="lista"` par choix esthétique de Jérôme (spec 28 §5), jamais une
+            // contrainte fonctionnelle, avec un défaut visuel non résolu (spec 28 §10bis). Cohérent
+            // avec toutes les autres catégories.
+            //
+            // `variante="carrusel"` (et non plus "grilla") : même changement que `page.tsx` — ligne
+            // scrollable horizontalement plutôt qu'une grille empilée sur mobile.
+            variante="carrusel"
             tarjetas={categoria.tarjetas}
             locale={locale}
             prioridad={indice === 0}

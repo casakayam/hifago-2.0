@@ -42,7 +42,7 @@ const BUCKET_MEDIA = "catalog-media";
 //
 // `establishment(...)` ne demande JAMAIS `photo_urls` : la colonne est hors du GRANT SELECT public
 // (20260819110000), et la demander ferait échouer la requête ENTIÈRE — pas seulement ce champ.
-const COLUMNAS_PRODUCTO = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, capacity, unit_count, lodging_kind, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, duration_days, group_discount_threshold_qty, group_discount_pct, lobby_category_id, establishment:establishments(id, slug, name, description, address)`;
+const COLUMNAS_PRODUCTO = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, capacity, unit_count, lodging_kind, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, duration_days, group_discount_threshold_qty, group_discount_pct, lobby_category_id, online_bookable, evento_capacity_mode, is_free, evento_payment_mode, establishment:establishments(id, slug, name, description, address)`;
 
 /**
  * ⚠️ Mémoïsé par `cache` de React, et ce n'est pas une optimisation : `generateMetadata` et le
@@ -65,6 +65,7 @@ export const getProductoPorSlug = cache(
     if (!producto) return null;
 
     const esEvento = producto.type === "evento";
+    const esEventoReservable = esEvento && Boolean(producto.online_bookable);
     const esAlojamiento = producto.type === "lodging";
     const esPmsBacked = isPmsBacked({
       type: producto.type,
@@ -109,12 +110,36 @@ export const getProductoPorSlug = cache(
             .gte("date", hoyIso)
         : { data: [] };
 
+    // Evento réservable en ligne (2026-09-15) — deux lectures indépendantes de plus, même patron
+    // que les helpers ci-dessus : un evento non activé (le cas courant aujourd'hui) ne coûte rien
+    // de plus que la fiche d'avant. get_evento_rsvp_counts n'a de sens qu'en mode 'rsvp' (compteur
+    // affiché, décision actée — jamais silencieux) ; les 3 autres modes n'ont aucun compteur.
+    const leerOcurrenciasEvento = async () =>
+      esEventoReservable
+        ? await supabase.rpc("get_event_occurrence_availability", {
+            p_product_id: producto.id,
+            p_from: hoyIso,
+            p_to: lastBookableDateIso(hoyIso),
+          })
+        : { data: [] };
+
+    const leerRsvpEvento = async () =>
+      esEventoReservable && producto.evento_capacity_mode === "rsvp"
+        ? await supabase.rpc("get_evento_rsvp_counts", {
+            p_product_id: producto.id,
+            p_from: hoyIso,
+            p_to: lastBookableDateIso(hoyIso),
+          })
+        : { data: [] };
+
     const [
       { data: disponibilidad },
       { count: nbReglasFranja },
       { data: tarifas },
       { data: fotosProducto },
       { data: fotosEstablecimiento },
+      { data: ocurrenciasEvento },
+      { data: rsvpEvento },
     ] = await Promise.all([
       leerDisponibilidad(),
       contarReglasDeFranja(),
@@ -129,10 +154,13 @@ export const getProductoPorSlug = cache(
         .select("storage_path")
         .eq("establishment_id", producto.establishment?.id ?? "")
         .order("sort", { ascending: true }),
+      leerOcurrenciasEvento(),
+      leerRsvpEvento(),
     ]);
 
     const modoReserva = resolverModoReserva({
       esEvento,
+      esEventoReservable,
       urlExterna: producto.external_booking_url,
       esAlojamiento,
       tieneFranjas: (nbReglasFranja ?? 0) > 0,
@@ -149,6 +177,13 @@ export const getProductoPorSlug = cache(
             p_to: lastBookableDateIso(hoyIso),
           })
         : { data: [] };
+
+    // Une Map construite UNE fois, jamais un `.find()` par occurrence : l'horizon evento va jusqu'à
+    // six mois, soit ~180 occurrences pour un evento quotidien, et la jointure linéaire refaisait
+    // alors des milliers de comparaisons à chaque rendu de la fiche pour le même résultat.
+    const rsvpPorFecha = new Map(
+      (rsvpEvento ?? []).map((fila) => [fila.occurrence_date, fila.registered_qty])
+    );
 
     const urlPublica = (ruta: string) =>
       supabase.storage.from(BUCKET_MEDIA).getPublicUrl(ruta).data.publicUrl;
@@ -181,6 +216,20 @@ export const getProductoPorSlug = cache(
             finFecha: producto.recurrence_end_date,
             finConteo: producto.recurrence_end_count,
             hora: producto.start_time,
+          }
+        : null,
+      eventoReservable: esEventoReservable
+        ? {
+            capacityMode: producto.evento_capacity_mode as "unlimited" | "metered" | "rsvp",
+            isFree: producto.is_free,
+            paymentMode: producto.evento_payment_mode as "online" | "on_site" | null,
+            occurrences: (ocurrenciasEvento ?? []).map((fila) => ({
+              date: fila.occurrence_date,
+              capacity: fila.capacity,
+              booked: fila.booked,
+              registeredQty: rsvpPorFecha.get(fila.occurrence_date) ?? null,
+            })),
+            maxQty: producto.max_qty ?? 20,
           }
         : null,
       alojamiento: esAlojamiento
@@ -233,24 +282,35 @@ export const getProductoPorSlug = cache(
 /**
  * Ce qui décide du bloc affiché sous le prix.
  *
- * ⚠️ `evento` reste EN TÊTE, délibérément. Le retirer rendrait tout evento sans URL réservable en
- * ligne — un changement de comportement produit que personne n'a demandé. Ce que la spec 30
- * corrige est l'inverse : que la vitrine ne soit plus RÉSERVÉE aux eventos (cahier §2e, « ce n'est
- * pas réservé aux eventos »). Un evento sans URL reste donc un cul-de-sac, nommé au §10.5.
+ * ⚠️ `evento`/`evento_bookable` restent EN TÊTE, délibérément. Le retirer rendrait tout evento sans
+ * URL réservable en ligne — un changement de comportement produit que personne n'a demandé. Ce que
+ * la spec 30 corrige est l'inverse : que la vitrine ne soit plus RÉSERVÉE aux eventos (cahier §2e,
+ * « ce n'est pas réservé aux eventos »). Un evento sans URL ET non réservable en ligne reste donc un
+ * cul-de-sac, nommé au §10.5.
+ *
+ * `evento_bookable` (2026-09-15, evento réservable en ligne) précède `evento` dans le if/else — un
+ * evento activé (`online_bookable`) sort du mode vitrine, quel que soit `external_booking_url`
+ * (jamais les deux en même temps côté admin, cf. product-type-fields.tsx, mais l'ordre le garantit
+ * même si les deux étaient posés).
  *
  * Exporté pour être testable seul : c'est la règle la plus facile à casser par inadvertance.
  */
 export function resolverModoReserva({
   esEvento,
+  esEventoReservable,
   urlExterna,
   esAlojamiento,
   tieneFranjas,
 }: {
   esEvento: boolean;
+  esEventoReservable: boolean;
   urlExterna: string | null;
   esAlojamiento: boolean;
   tieneFranjas: boolean;
 }): ModoReserva {
+  // `esEventoReservable` implique déjà `esEvento` chez son unique producteur
+  // (`esEvento && Boolean(online_bookable)`) — retester le premier laissait croire à deux conditions.
+  if (esEventoReservable) return "evento_bookable";
   if (esEvento) return "evento";
   if (urlExterna !== null) return "vitrina";
   if (esAlojamiento) return "lodging";

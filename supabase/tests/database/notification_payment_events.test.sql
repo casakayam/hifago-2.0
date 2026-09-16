@@ -174,6 +174,18 @@ insert into provider_resource_calendar (establishment_id, slot_date, capacity, b
 -- tests/concurrency/create_order_camp.concurrency.mjs.
 insert into product_availability (product_id, date, capacity, booked) values
   ('99992000-0000-4000-8000-000000000014', '2028-12-20', 5, 0);
+-- Produit 015 (lodging, 2026-09-15) — migration 20260915100000_camp_requires_compatible_lodging :
+-- un camp de plus d'un jour (duration_days=2 ici) exige désormais une ligne lodging compatible
+-- dans le même panier, sans quoi cet appel serait rejeté (camp_missing_lodging) avant même
+-- d'atteindre le sujet de ce cas (déclenchement de la notification prestataire).
+insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug)
+values (
+  '99992000-0000-4000-8000-000000000015', '99992000-0000-4000-8000-000000000003',
+  '99992000-0000-4000-8000-000000000013', 'lodging',
+  jsonb_build_object('es', 'Alojamiento Notif Camp'), 50000, true, 'notif-camp-lodging'
+);
+insert into product_availability (product_id, date, capacity, booked) values
+  ('99992000-0000-4000-8000-000000000015', '2028-12-20', 5, 0);
 insert into auth.users (id, email) values ('99992000-0000-4000-8000-000000000023', 'notif-camp-owner@test.local');
 update partner_accounts set partner_id = '99992000-0000-4000-8000-000000000003'
  where id = '99992000-0000-4000-8000-000000000023';
@@ -214,6 +226,9 @@ select test_login('99992000-0000-4000-8000-000000000023');
 -- auth.uid(), plus un paramètre.
 insert into cart_items (account_id, product_id, date, qty) values
   ('99992000-0000-4000-8000-000000000023', '99992000-0000-4000-8000-000000000014', '2028-12-20', 1);
+insert into cart_items (account_id, product_id, date, end_date, qty) values
+  ('99992000-0000-4000-8000-000000000023', '99992000-0000-4000-8000-000000000015',
+   '2028-12-20', '2028-12-21', 1);
 select create_order(
   'Notif Camp Holder', 'notif-camp-holder@test.local'
 ) as v_create_order_result \gset

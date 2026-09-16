@@ -17,7 +17,7 @@ import type { Locale } from "@/messages";
 // ⚠️ SERVER COMPONENT, et il le reste. Il n'importe rien de `@hifago/ui` — le barrel casserait
 // `next build` par transitivité (`.claude/rules/apps.md`) — seulement les atomes de la vitrine, qui
 // portent eux-mêmes `"use client"` quand il le faut. C'est le montage déjà en place dans
-// `(tunnel)/carrito/page.tsx`. Le seul enfant client est `CancelLineButton`, qui a un état.
+// `(tunnel)/mi-viaje/page.tsx`. Le seul enfant client est `CancelLineButton`, qui a un état.
 //
 // ⚠️ AUCUN TOTAL DE COMMANDE ICI, et c'est une décision (④) : avec l'annulation par prestation, un
 // total global baisserait à chaque annulation alors que rien n'est remboursé (§7/A3) — le client
@@ -37,6 +37,9 @@ export async function OrderCard({ order, locale }: OrderCardProps) {
   // (spec 34 §10 pt 6) — il toucherait deux fichiers partagés avec un autre chantier en cours.
   const tEtat = await getTranslations("OrderResultPage");
 
+  // `order.acompteCop` vient de la RPC (`order_for_client_jsonb` : sum filter (where vivante)) —
+  // jamais resommé ici. Le resommer ferait vivre « ligne vivante » une seconde fois, en TypeScript,
+  // en face de `DEAD_LINE_STATUSES` : c'est exactement ce que la spec 34 a centralisé.
   const state = deriveOrderState(order);
   const activeLines = order.lines.filter((line) => line.status === "reserved");
 

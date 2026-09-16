@@ -3,6 +3,7 @@ import type { StagedPhoto } from "@/components/product-photos-staged";
 import { lowestTierPrice, toPriceTiersColumn } from "@/lib/products/priceTiers";
 import { toStayRatesColumn } from "@/lib/products/stayRates";
 import { toGroupDiscountColumns } from "@/lib/products/groupDiscount";
+import { toEventoBookableColumns } from "@/lib/products/eventoBookable";
 import { toSlotRuleRows } from "@/lib/products/slotRules";
 import { productTypeGating, type ProductType, type ProductTypeFieldsState } from "@/lib/products/useProductTypeFieldsState";
 
@@ -119,7 +120,21 @@ export function buildProductCreationPayload(
         }),
     ...(isEvento
       ? {
-          price_label: fields.priceLabel.trim(),
+          // online_bookable (2026-09-15) : bascule vitrine/réservable. Décision « admin
+          // uniquement » — ce champ vaut toujours `false` par défaut dans l'état, jamais affiché
+          // ni positionnable côté formulaire socio (allowOnlineBookableConfig, product-type-
+          // fields.tsx), donc structurellement inerte ici pour une proposition. Rempart réel côté
+          // RPC : submit_product_creation_proposal/create_product_from_proposal whitelistent leurs
+          // colonnes et jettent silencieusement toute clé absente de leur liste — ces 5 nouvelles
+          // clés n'y figurent pas.
+          //
+          // Les 7 colonnes viennent de `toEventoBookableColumns`, PARTAGÉE avec le chemin d'édition
+          // (`product-form.tsx`) : les écrire ici à la main avait déjà fait diverger `price_label`
+          // entre les deux, exactement ce que l'en-tête de ce fichier raconte.
+          ...toEventoBookableColumns(fields),
+          // Prix chiffré (evento réservable payant) — jamais posé pour un evento vitrine (price_label
+          // fait foi) ni pour un evento gratuit (contrainte DB products_evento_is_free_price_null).
+          price_cop: fields.onlineBookable && !fields.isFree ? priceCopOuNull : null,
           occurrence_type: fields.occurrenceType,
           // Ancre nécessaire pour les deux modes désormais (cf. product-type-fields.tsx) — plus
           // seulement "once" : sans elle, un evento récurrent ne peut jamais dire sur quel jour de
@@ -137,7 +152,7 @@ export function buildProductCreationPayload(
               : null,
           start_time: fields.startTime || null,
           duration_minutes: fields.durationMinutes ? Number(fields.durationMinutes) : null,
-          external_booking_url: fields.externalBookingUrl.trim() || null,
+          external_booking_url: fields.onlineBookable ? null : fields.externalBookingUrl.trim() || null,
         }
       : {}),
   };

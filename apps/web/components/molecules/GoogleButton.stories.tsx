@@ -28,7 +28,7 @@ export const Defaut: Story = {
 };
 
 export const AvecUnNextATransporter: Story = {
-  args: { next: "/carrito" },
+  args: { next: "/mi-viaje" },
   decorators: Defaut.decorators,
 };
 
@@ -36,7 +36,7 @@ export const AvecUnNextATransporter: Story = {
 export const BlocAuDessusDuFormulaire: StoryObj = {
   render: () => (
     <div className="flex w-full max-w-sm flex-col gap-4">
-      <OAuthSection next="/carrito" />
+      <OAuthSection next="/mi-viaje" />
       {/* Silhouette du formulaire email/mot de passe, pas les vrais champs : ce qu'on vient
           regarder ici, c'est l'équilibre entre le bouton et ce qui le suit. */}
       <div className="flex flex-col gap-4" aria-hidden="true">

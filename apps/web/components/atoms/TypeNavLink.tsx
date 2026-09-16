@@ -1,11 +1,8 @@
-"use client";
-
-import { chipVariants } from "@hifago/ui";
 import { Link } from "@/i18n/navigation";
-import { STYLES_PAR_TYPE, STYLE_INCONNU } from "./TypeBadge";
-import type { TipoOferta } from "@/lib/catalog/tipos";
 
-// Un onglet de navigation par type d'offre (activité/hébergement/transport/camp/evento) — 2026-09-14.
+// Un onglet de navigation par type d'offre (activité/hébergement/transport/camp/evento) — 2026-09-14,
+// restylé en texte simple le 2026-09-15 (voir `SelectorTipo.tsx` : capture de l'app legacy montrée
+// par Jérôme, ligne `cat-1` de la grille de suivi bêta — "je veux les onglets sur mobile").
 //
 // ⚠️ CE N'EST PAS `Migas`, et la différence est intentionnelle, pas un oubli. `Migas` (fil
 // d'Ariane) ne pose jamais de `href` sur le DERNIER élément parce qu'il représente la page
@@ -25,12 +22,15 @@ import type { TipoOferta } from "@/lib/catalog/tipos";
 // mémoire. Passer par le `Link` de `@/i18n/navigation` (comme tout lien interne du dépôt) navigue
 // côté client nativement et évite le bug par construction, sans dépendre d'un `RouterProvider`.
 //
-// ⚠️ LE STYLE VIENT DE `TypeBadge`, PAS D'UNE TABLE PARALLÈLE : `STYLES_PAR_TYPE`/`STYLE_INCONNU`
-// y sont mesurés au contraste WCAG (voir son en-tête) — les recopier ici les ferait diverger au
-// premier ajout de type. Le signal actif/inactif ne touche JAMAIS ce couple (color, variant) : il
-// s'ajoute par-dessus (soulignement), voir plus bas.
+// ⚠️ PLUS DE COULEUR PAR TYPE (retirée avec `chipVariants`/`TypeBadge`) : le seul signal actif est
+// le soulignement, déjà additif avant ce changement — il ne s'ajoute plus par-dessus une couleur,
+// il reste simplement seul. `TypeBadge.tsx` garde ses couleurs pour les cartes de catalogue, un
+// contexte où le type n'est pas déjà répété par le libellé d'une nav.
+//
+// ⚠️ PAS DE `"use client"` ICI : ce fichier n'importe plus que `Link` (déjà client lui-même) —
+// même principe que `Migas`, importable tel quel par un Server Component. `TypeNavLink` vit
+// aujourd'hui sous `SelectorTipo` (client), mais rien ne l'y oblige structurellement.
 export type TypeNavLinkProps = {
-  tipo: TipoOferta;
   /** Déjà traduit — un atome ne traduit rien. */
   label: string;
   /** Chemin SANS préfixe de langue, comme tout appelant de `@/i18n/navigation`. */
@@ -40,19 +40,17 @@ export type TypeNavLinkProps = {
   testId?: string;
 };
 
-export function TypeNavLink({ tipo, label, href, activo, testId }: TypeNavLinkProps) {
-  const style = STYLES_PAR_TYPE[tipo] ?? STYLE_INCONNU;
-  const slots = chipVariants({ color: style.color, variant: style.variant });
-  // ⚠️ Signal ADDITIF, jamais un changement de `color`/`variant` — voir l'en-tête.
-  const classes = [slots.base(), activo ? "underline decoration-2 underline-offset-4" : ""]
+export function TypeNavLink({ label, href, activo, testId }: TypeNavLinkProps) {
+  const classes = [
+    "inline-flex min-h-11 items-center px-1 text-sm font-medium hover:underline focus-visible:status-focused",
+    activo ? "underline decoration-2 underline-offset-4" : "",
+  ]
     .filter(Boolean)
     .join(" ");
 
   return (
     <Link href={href} aria-current={activo ? "page" : undefined} className={classes} data-testid={testId}>
-      <span className={slots.label()} data-slot="chip-label">
-        {label}
-      </span>
+      {label}
     </Link>
   );
 }

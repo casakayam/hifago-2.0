@@ -192,7 +192,7 @@ export type FilaFranja = {
 };
 
 /** Ce qui décide du bloc affiché sous le prix. Voir `FichaProducto.modoReserva`. */
-export type ModoReserva = "evento" | "vitrina" | "lodging" | "slot" | "date";
+export type ModoReserva = "evento" | "evento_bookable" | "vitrina" | "lodging" | "slot" | "date";
 
 /** Les données d'occurrence d'un evento — le LIBELLÉ est composé par la page (il se traduit). */
 export type DatosOcurrencia = {
@@ -203,6 +203,38 @@ export type DatosOcurrencia = {
   finConteo: number | null;
   /** `products.start_time` — l'heure de l'occurrence, requise par le JSON-LD `Event`. */
   hora: string | null;
+};
+
+/**
+ * Ce que seul un evento réservable en ligne porte (`products.online_bookable = true`) — `null` sur
+ * tout autre evento (vitrine) et sur tout autre type. Voir `ModoReserva`.
+ *
+ * `capacityMode`/`isFree`/`paymentMode` pilotent l'UI de `EventoReservationForm` (badge gratuit,
+ * note « à régler sur place », compteur RSVP) ; ils ne sont jamais une barrière — `create_order`
+ * seul décide (`CLAUDE.md` §4).
+ */
+export type DatosEventoReservable = {
+  capacityMode: "unlimited" | "metered" | "rsvp";
+  isFree: boolean;
+  paymentMode: "online" | "on_site" | null;
+  /**
+   * Une entrée par occurrence dans l'horizon réservable. `capacity`/`booked` non null seulement en
+   * mode 'metered' (`get_event_occurrence_availability`) ; `registeredQty` non null seulement en
+   * mode 'rsvp' (`get_evento_rsvp_counts`, compteur affiché — décision actée, jamais silencieux).
+   */
+  occurrences: {
+    date: string;
+    capacity: number | null;
+    booked: number | null;
+    registeredQty: number | null;
+  }[];
+  /**
+   * `products.max_qty`, replié à 20 — MÊME repli que `DatosAlojamiento.maxQty` et que le
+   * `coalesce(max_qty, 20)` de `create_order`. Porté ici plutôt qu'inventé côté formulaire : une
+   * constante locale (99 dans la première version) prétendait un plafond que la base ne connaît
+   * pas, et contredisait le 20 appliqué partout ailleurs sans le dire.
+   */
+  maxQty: number;
 };
 
 /** Ce que seul un hébergement porte. `null` sur tout autre type. */
@@ -250,6 +282,8 @@ export type FichaProducto = {
   urlExterna: string | null;
   /** Renseigné pour un evento, quel que soit son `modoReserva` : la date est une propriété du TYPE. */
   ocurrencia: DatosOcurrencia | null;
+  /** Non nul ⟺ `modoReserva === "evento_bookable"`. */
+  eventoReservable: DatosEventoReservable | null;
   alojamiento: DatosAlojamiento | null;
   /**
    * `products.duration_days` — non nul seulement pour `camp` (contrainte CHECK). Une ligne de

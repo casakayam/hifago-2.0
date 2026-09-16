@@ -70,7 +70,13 @@ select is(
         -- assumé PAR ÉCRIT au cahier client §2b.9 comme la contrepartie d'une adresse sans limite
         -- de temps ; get_order_by_token.test.sql le vérifie explicitement plutôt que de le laisser
         -- à la discipline d'un SELECT applicatif.
-        'get_order_by_token'
+        'get_order_by_token',
+        -- Evento online bookable (20260915120000) : SECURITY DEFINER requis pour lire order_lines
+        -- (sous RLS propriétaire) au-delà de ce qu'un visiteur anonyme peut voir directement, mais
+        -- elle n'expose qu'un AGRÉGAT (sum(qty) groupé par date) — jamais une ligne individuelle,
+        -- jamais de PII. Publique par conception : le compteur RSVP doit être visible sur la fiche
+        -- evento par n'importe quel visiteur, pas seulement un compte connecté.
+        'get_evento_rsvp_counts'
       )
   ),
   '',

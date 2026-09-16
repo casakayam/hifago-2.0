@@ -18,7 +18,7 @@
 -- geste que les policies `_select_public` laissent bien passer ce qu'il faut.
 
 begin;
-select plan(29);
+select plan(33);
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────────────────────────
 insert into partners (id, display_name) values
@@ -79,6 +79,44 @@ values
   ('aaaa1111-0000-0000-0000-000000000203', 'aaaa1111-0000-0000-0000-000000000001',
    'aaaa1111-0000-0000-0000-00000000000b', 'activity', 'sc-cerrada',
    '{"es":"Cerrada"}'::jsonb, 40000, true, 20, null, 'date');
+
+-- Événements (2026-09-15, retour Jérôme : trier les evento par prochaine occurrence, du plus
+-- proche au plus éloigné — migration 20260915110000_search_catalog_evento_next_occurrence.sql).
+-- Toutes les dates relatives à `today_in_bogota()`, jamais en dur (ce fichier doit rester vrai
+-- indéfiniment). Assertions plus bas en ORDRE RELATIF entre CES fixtures (jamais un rango_seccion
+-- absolu, qui dépendrait des evento déjà présents ailleurs dans la base — même discipline que le
+-- reste de ce fichier, cf. en-tête).
+insert into products (
+  id, partner_id, establishment_id, type, slug, name, price_cop, sellable,
+  occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count
+) values
+  -- E1 : ponctuel, dans 30 jours — le plus ÉLOIGNÉ des événements « à venir » de ce lot.
+  ('aaaa1111-0000-0000-0000-000000000401', 'aaaa1111-0000-0000-0000-000000000001',
+   'aaaa1111-0000-0000-0000-00000000000b', 'evento', 'sc-evento-loin',
+   '{"es":"Evento Lejano"}'::jsonb, 50000, true,
+   'once', today_in_bogota() + 30, null, null, null),
+  -- E2 : ponctuel, dans 10 jours — plus PROCHE que E1.
+  ('aaaa1111-0000-0000-0000-000000000402', 'aaaa1111-0000-0000-0000-000000000001',
+   'aaaa1111-0000-0000-0000-00000000000b', 'evento', 'sc-evento-cerca',
+   '{"es":"Evento Cercano"}'::jsonb, 50000, true,
+   'once', today_in_bogota() + 10, null, null, null),
+  -- E3 : ponctuel, déjà PASSÉ — aucune occurrence à venir, doit finir après E1/E2.
+  ('aaaa1111-0000-0000-0000-000000000403', 'aaaa1111-0000-0000-0000-000000000001',
+   'aaaa1111-0000-0000-0000-00000000000b', 'evento', 'sc-evento-pasado',
+   '{"es":"Evento Pasado"}'::jsonb, 50000, true,
+   'once', today_in_bogota() - 5, null, null, null),
+  -- E4 : récurrent tous les 7 jours, ancre lointaine dans le passé, SANS fin — sa prochaine
+  -- occurrence tombe forcément dans les 6 prochains jours, donc avant E2 (+10j).
+  ('aaaa1111-0000-0000-0000-000000000404', 'aaaa1111-0000-0000-0000-000000000001',
+   'aaaa1111-0000-0000-0000-00000000000b', 'evento', 'sc-evento-recurrente',
+   '{"es":"Evento Recurrente"}'::jsonb, 50000, true,
+   'recurring', today_in_bogota() - 100, 7, null, null),
+  -- E5 : récurrent, mais la série s'est terminée (recurrence_end_date déjà dépassée) — même
+  -- traitement que E3, doit finir après tous les événements à venir.
+  ('aaaa1111-0000-0000-0000-000000000405', 'aaaa1111-0000-0000-0000-000000000001',
+   'aaaa1111-0000-0000-0000-00000000000b', 'evento', 'sc-evento-termine',
+   '{"es":"Evento Terminado"}'::jsonb, 50000, true,
+   'recurring', today_in_bogota() - 100, 10, today_in_bogota() - 50, null);
 
 -- L'activité `sc-cerrada` est explicitement fermée sur toute une plage (calendrier CREUX :
 -- l'absence de ligne vaut `calendar_default_open`, `true` par défaut).
@@ -321,6 +359,45 @@ select is(
   (select count(*)::int from search_catalog(p_limite => 100000, p_sin_tag => true)
    where id = 'aaaa1111-0000-0000-0000-00000000000a' and es_establecimiento),
   0, '…et écarte une carte groupée dont l''établissement porte un tag'
+);
+
+-- ── Tri des evento par prochaine occurrence (2026-09-15) ────────────────────────────────────────
+-- En ORDRE RELATIF entre les fixtures E1-E5 ci-dessus, jamais un rango_seccion absolu (d'autres
+-- evento peuvent exister ailleurs dans la base, cf. discipline de ce fichier en en-tête).
+select ok(
+  (select rango_seccion from search_catalog(p_limite => 100000, p_tipos => array['evento'])
+    where id = 'aaaa1111-0000-0000-0000-000000000402') -- E2, +10j
+  <
+  (select rango_seccion from search_catalog(p_limite => 100000, p_tipos => array['evento'])
+    where id = 'aaaa1111-0000-0000-0000-000000000401'), -- E1, +30j
+  'evento ponctuel le plus proche (+10j) est classé avant celui le plus éloigné (+30j)'
+);
+
+select ok(
+  (select rango_seccion from search_catalog(p_limite => 100000, p_tipos => array['evento'])
+    where id = 'aaaa1111-0000-0000-0000-000000000404') -- E4, recurring, prochaine occurrence < 7j
+  <
+  (select rango_seccion from search_catalog(p_limite => 100000, p_tipos => array['evento'])
+    where id = 'aaaa1111-0000-0000-0000-000000000402'), -- E2, +10j
+  'evento récurrent dont la prochaine occurrence est plus proche (<7j) qu''un ponctuel à +10j est classé avant'
+);
+
+select ok(
+  (select rango_seccion from search_catalog(p_limite => 100000, p_tipos => array['evento'])
+    where id = 'aaaa1111-0000-0000-0000-000000000403') -- E3, ponctuel déjà passé
+  >
+  (select rango_seccion from search_catalog(p_limite => 100000, p_tipos => array['evento'])
+    where id = 'aaaa1111-0000-0000-0000-000000000401'), -- E1, à venir
+  'evento ponctuel déjà passé (aucune occurrence à venir) est classé après tous ceux à venir'
+);
+
+select ok(
+  (select rango_seccion from search_catalog(p_limite => 100000, p_tipos => array['evento'])
+    where id = 'aaaa1111-0000-0000-0000-000000000405') -- E5, série récurrente terminée
+  >
+  (select rango_seccion from search_catalog(p_limite => 100000, p_tipos => array['evento'])
+    where id = 'aaaa1111-0000-0000-0000-000000000401'), -- E1, à venir
+  'evento récurrent dont la série est terminée (recurrence_end_date passée) est classé après ceux à venir'
 );
 
 select * from finish();

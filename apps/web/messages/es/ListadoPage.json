@@ -9,6 +9,7 @@
   "reintentar": "Reintentar",
   "errorCarga": "No pudimos cargar más ofertas. Vuelve a intentarlo.",
   "conteo": "{cargadas} de {total, plural, one {# oferta} other {# ofertas}}",
+  "campLodgingHint": "Elige un alojamiento para las {count, plural, one {# noche} other {# noches}} de tu campamento.",
   "emptyState": {
     "titulo": "No encontramos ofertas con esos criterios.",
     "descripcion": "Prueba con otras fechas, con menos personas o con una búsqueda más amplia."

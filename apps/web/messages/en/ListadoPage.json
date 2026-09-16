@@ -9,6 +9,7 @@
   "reintentar": "Try again",
   "errorCarga": "We couldn't load more offers. Please try again.",
   "conteo": "{cargadas} of {total, plural, one {# offer} other {# offers}}",
+  "campLodgingHint": "Choose an accommodation for the {count, plural, one {# night} other {# nights}} of your camp.",
   "emptyState": {
     "titulo": "We found no offers matching those criteria.",
     "descripcion": "Try other dates, fewer people, or a broader search."

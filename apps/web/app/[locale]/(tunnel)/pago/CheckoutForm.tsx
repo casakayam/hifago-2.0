@@ -21,6 +21,10 @@ import { PhoneField } from "@/components/atoms/PhoneField";
 // room_type_required/room_type_mismatch/room_type_not_found/end_date_required ont disparu avec
 // l'étage hôtel (T3 étape 2, 20260827220000) : create_order ne les produit plus. Les garder ici
 // aurait promis une traduction pour une réponse impossible.
+// camp_missing_lodging (2026-09-15) : un camp sans hébergement compatible dans le panier —
+// l'écran réel (ReservationForm.tsx) guide déjà vers /alojamientos après l'ajout d'un camp, mais
+// cette raison reste atteignable si le client revient au checkout sans avoir ajouté d'hébergement,
+// ou via un appel direct à la RPC.
 const LINE_SCOPED_REASONS = [
   "product_not_found",
   "not_sellable",
@@ -28,6 +32,7 @@ const LINE_SCOPED_REASONS = [
   "slot_not_found",
   "full",
   "resource_unavailable",
+  "camp_missing_lodging",
   "invalid_date_range",
   "unsupported_date_range",
   "slot_required",

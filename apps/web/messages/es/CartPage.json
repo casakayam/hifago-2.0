@@ -1,11 +1,13 @@
 {
-  "title": "Tu carrito",
-  "emptyCart": "Tu carrito está vacío.",
+  "title": "Mi viaje",
+  "emptyCart": "Tu viaje está vacío.",
   "lineQty": "Cantidad: {count}",
-  "lineUnavailable": "Este producto ya no está disponible. Puedes quitarlo del carrito.",
+  "lineUnavailable": "Este servicio ya no está disponible. Puedes quitarlo de tu viaje.",
   "total": "Total",
   "removeLine": "Quitar",
-  "goToCheckout": "Ir a pagar",
+  "goToCheckout": "Reservar",
+  "lodgingRequiredNotice": "Tu campamento requiere un alojamiento en tu viaje que cubra sus {count, plural, one {# noche} other {# noches}} antes de reservar.",
+  "chooseLodging": "Elige tu alojamiento",
   "pendingOrdersTitle": "Tienes reservas pendientes de pago:",
   "pendingOrderLink": "Reserva {reference}"
 }

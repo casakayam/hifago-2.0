@@ -5,20 +5,34 @@ import { deriveOrderState, isDeadLine, DEAD_LINE_STATUSES } from "./orderState";
 describe("deriveOrderState", () => {
   it("rend « paid » dès que le paiement est encaissé, quels que soient les statuts de ligne", () => {
     expect(
-      deriveOrderState({ paymentStatus: "paid", lines: [{ status: "cancelled_by_client" }] })
+      deriveOrderState({
+        paymentStatus: "paid",
+        lines: [{ status: "cancelled_by_client" }],
+        acompteCop: 0,
+      })
     ).toBe("paid");
   });
 
   it("rend « awaiting » pendant que le webhook Mercado Pago n'est pas arrivé", () => {
-    expect(deriveOrderState({ paymentStatus: "pending", lines: [{ status: "reserved" }] })).toBe(
-      "awaiting"
-    );
+    expect(
+      deriveOrderState({ paymentStatus: "pending", lines: [{ status: "reserved" }], acompteCop: 0 })
+    ).toBe("awaiting");
   });
 
-  it("rend « unpaid » tant qu'une prestation est encore vivante", () => {
-    expect(deriveOrderState({ paymentStatus: "unpaid", lines: [{ status: "reserved" }] })).toBe(
-      "unpaid"
-    );
+  it("rend « unpaid » tant qu'une prestation est encore vivante ET qu'un acompte est réellement dû en ligne", () => {
+    expect(
+      deriveOrderState({ paymentStatus: "unpaid", lines: [{ status: "reserved" }], acompteCop: 17000 })
+    ).toBe("unpaid");
+  });
+
+  // Evento réservable en ligne (2026-09-15) — gratuit ou payable sur place : une prestation reste
+  // vivante, mais aucun acompte n'est dû EN LIGNE (create_order force acompte_pct=0 pour ces
+  // lignes, ou total_cop=0 si gratuit). Sans cette distinction, l'écran affichait un bouton
+  // « Pagar » qui échouait au clic (create_payment_intent → nothing_to_pay).
+  it("rend « confirmed » quand une prestation est vivante mais qu'aucun acompte n'est dû en ligne", () => {
+    expect(
+      deriveOrderState({ paymentStatus: "unpaid", lines: [{ status: "reserved" }], acompteCop: 0 })
+    ).toBe("confirmed");
   });
 
   // ⚠️ Le cas qui distingue les deux fins : toutes les lignes sont mortes, et c'est l'expiration
@@ -29,6 +43,7 @@ describe("deriveOrderState", () => {
       deriveOrderState({
         paymentStatus: "unpaid",
         lines: [{ status: "expired" }, { status: "cancelled_by_client" }],
+        acompteCop: 0,
       })
     ).toBe("expired");
   });
@@ -38,22 +53,23 @@ describe("deriveOrderState", () => {
       deriveOrderState({
         paymentStatus: "unpaid",
         lines: [{ status: "cancelled_by_client" }, { status: "cancelled_by_provider" }],
+        acompteCop: 0,
       })
     ).toBe("cancelled");
   });
 
   // Une commande sans aucune ligne ne doit pas être annoncée « à payer » : il n'y a rien à payer.
   it("rend « cancelled » pour une commande sans aucune ligne", () => {
-    expect(deriveOrderState({ paymentStatus: "unpaid", lines: [] })).toBe("cancelled");
+    expect(deriveOrderState({ paymentStatus: "unpaid", lines: [], acompteCop: 0 })).toBe("cancelled");
   });
 
   // Le piège nommé dans l'en-tête d'OrderResult : un paiement de trop qui échoue ne doit pas
   // rendre payable une commande déjà payée. Ce module ne connaît pas l'incident — il rend « paid »,
   // et c'est l'écran qui superpose « failed » sans jamais rouvrir le bouton de paiement.
   it("ne connaît pas l'incident de paiement : une commande payée reste « paid »", () => {
-    expect(deriveOrderState({ paymentStatus: "paid", lines: [{ status: "reserved" }] })).toBe(
-      "paid"
-    );
+    expect(
+      deriveOrderState({ paymentStatus: "paid", lines: [{ status: "reserved" }], acompteCop: 0 })
+    ).toBe("paid");
   });
 });
 

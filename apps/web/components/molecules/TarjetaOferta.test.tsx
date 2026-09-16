@@ -98,7 +98,7 @@ function oferta(patch: Partial<OfertaTarjeta> = {}): OfertaTarjeta {
 
 function rendre(
   patch: Partial<OfertaTarjeta> = {},
-  opciones: { variante?: "grilla" | "lista"; prioridad?: boolean } = {}
+  opciones: { variante?: "grilla" | "lista" | "carrusel"; prioridad?: boolean } = {}
 ) {
   const datos = oferta(patch);
   const { container } = render(
@@ -259,5 +259,11 @@ describe("TarjetaOferta", () => {
     // `flex-row` est la classe que `Card` pose pour `layout="row"` : sans cette assertion, une
     // carte qui resterait en `stack` passerait tous les autres tests au vert.
     expect(liste.carte.className).toContain("flex-row");
+
+    // Carrusel : largeur FIXE (256px), pas une fraction du viewport — et le même layout `stack`
+    // que la grille (photo pleine largeur de carte), pas la vignette 64px de `lista`.
+    const carrusel = rendre({ fotos: fotos("sizes-carrusel", 1) }, { variante: "carrusel" });
+    expect(carrusel.images[0].getAttribute("sizes")).toBe("256px");
+    expect(carrusel.carte.className).not.toContain("flex-row");
   });
 });

@@ -1838,10 +1838,14 @@ export type Database = {
           duration_days: number | null
           duration_minutes: number | null
           establishment_id: string
+          evento_capacity_mode: string | null
+          evento_occupies_resource: boolean
+          evento_payment_mode: string | null
           external_booking_url: string | null
           group_discount_pct: number | null
           group_discount_threshold_qty: number | null
           id: string
+          is_free: boolean
           lat: number | null
           lobby_category_id: number | null
           lobby_product_id: number | null
@@ -1853,6 +1857,7 @@ export type Database = {
           name: Json
           occurrence_date: string | null
           occurrence_type: string | null
+          online_bookable: boolean
           partner_id: string
           price_cop: number | null
           price_label: string | null
@@ -1887,10 +1892,14 @@ export type Database = {
           duration_days?: number | null
           duration_minutes?: number | null
           establishment_id: string
+          evento_capacity_mode?: string | null
+          evento_occupies_resource?: boolean
+          evento_payment_mode?: string | null
           external_booking_url?: string | null
           group_discount_pct?: number | null
           group_discount_threshold_qty?: number | null
           id?: string
+          is_free?: boolean
           lat?: number | null
           lobby_category_id?: number | null
           lobby_product_id?: number | null
@@ -1902,6 +1911,7 @@ export type Database = {
           name: Json
           occurrence_date?: string | null
           occurrence_type?: string | null
+          online_bookable?: boolean
           partner_id: string
           price_cop?: number | null
           price_label?: string | null
@@ -1936,10 +1946,14 @@ export type Database = {
           duration_days?: number | null
           duration_minutes?: number | null
           establishment_id?: string
+          evento_capacity_mode?: string | null
+          evento_occupies_resource?: boolean
+          evento_payment_mode?: string | null
           external_booking_url?: string | null
           group_discount_pct?: number | null
           group_discount_threshold_qty?: number | null
           id?: string
+          is_free?: boolean
           lat?: number | null
           lobby_category_id?: number | null
           lobby_product_id?: number | null
@@ -1951,6 +1965,7 @@ export type Database = {
           name?: Json
           occurrence_date?: string | null
           occurrence_type?: string | null
+          online_bookable?: boolean
           partner_id?: string
           price_cop?: number | null
           price_label?: string | null
@@ -2276,6 +2291,10 @@ export type Database = {
         Args: { p_exclude?: string; p_name: Json }
         Returns: string
       }
+      expand_event_occurrences: {
+        Args: { p_from: string; p_product_id: string; p_to: string }
+        Returns: string[]
+      }
       expand_product_slots: {
         Args: { p_date: string; p_product_id: string }
         Returns: {
@@ -2285,6 +2304,21 @@ export type Database = {
         }[]
       }
       expire_stale_payment_orders: { Args: never; Returns: undefined }
+      get_event_occurrence_availability: {
+        Args: { p_from: string; p_product_id: string; p_to: string }
+        Returns: {
+          booked: number
+          capacity: number
+          occurrence_date: string
+        }[]
+      }
+      get_evento_rsvp_counts: {
+        Args: { p_from: string; p_product_id: string; p_to: string }
+        Returns: {
+          occurrence_date: string
+          registered_qty: number
+        }[]
+      }
       get_order_by_token: { Args: { p_token: string }; Returns: Json }
       get_product_slots: {
         Args: { p_from: string; p_product_id: string; p_to: string }
@@ -2464,6 +2498,16 @@ export type Database = {
         }
         Returns: Json
       }
+      next_event_occurrence: {
+        Args: {
+          p_occurrence_date: string
+          p_occurrence_type: string
+          p_recurrence_end_count: number
+          p_recurrence_end_date: string
+          p_recurrence_frequency_days: number
+        }
+        Returns: string
+      }
       normalize_price_tiers: { Args: { p_price_tiers: Json }; Returns: Json }
       notify_all_admins: {
         Args: {
@@ -2499,6 +2543,10 @@ export type Database = {
       process_campaign_batch: {
         Args: { p_batch_size?: number; p_campaign_id: string }
         Returns: Json
+      }
+      provision_evento_availability: {
+        Args: { p_horizon?: string; p_product_id: string }
+        Returns: undefined
       }
       purge_expired_anonymous_identities: { Args: never; Returns: Json }
       release_order_after_pms_refusal: {

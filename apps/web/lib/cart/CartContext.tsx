@@ -11,7 +11,7 @@ import { createClient } from "@hifago/supabase/client";
 // et `reservationRange.ts` ont besoin pour marquer une date/un créneau déjà présent dans le panier
 // en cours (jamais la vraie barrière, qui reste `create_order`). L'affichage RICHE d'une ligne
 // (nom, établissement, prix) est désormais une jointure côté serveur (`lib/cart/getCartLines.ts`),
-// consommée par `/carrito` et `/pago` — jamais recalculée ici.
+// consommée par `/mi-viaje` et `/pago` — jamais recalculée ici.
 export type CartLine = {
   id: string;
   productId: string;

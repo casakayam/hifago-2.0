@@ -69,19 +69,23 @@ select cmp_ok(
   'TÉMOIN — Bogota diffère toujours d''au moins un des deux extrêmes (jamais égal aux deux)'
 );
 
--- 1bis ── today_in_bogota() n'est pas sur la Data API -------------------------------------------
--- Elle n'a aucun appelant client : son seul appelant en base est list_clients, SECURITY DEFINER,
--- qui s'exécute avec les droits de son propriétaire. La révoquer ne casse donc rien (prouvé par les
--- assertions 4-6 ci-dessous, qui l'appellent à travers list_clients), et l'exposer serait de
--- l'inventaire à réauditer pour zéro bénéfice. Ces deux assertions rendent le revoke de la
--- migration 20260828150000 permanent : un re-grant, même accidentel, les fait tomber.
+-- 1bis ── today_in_bogota() EST redevenue exécutable par anon/authenticated (2026-09-15) ---------
+-- ⚠️ RÉVISÉ — le revoke de la migration 20260828150000 (« aucun appelant PostgREST n'existe ») a
+-- cessé d'être vrai le 2026-09-15 (migration 20260915110000_search_catalog_evento_next_occurrence) :
+-- `search_catalog` (SECURITY INVOKER, délibéré — les policies _select_public s'appliquent
+-- d'elles-mêmes) appelle désormais `next_event_occurrence`, qui appelle `today_in_bogota()` pour
+-- trier les evento par prochaine occurrence. En SECURITY INVOKER, l'appel imbriqué s'exécute avec
+-- les PROPRES privilèges de l'appelant (anon pour un visiteur non connecté) — sans ce grant, toute
+-- visite anonyme du catalogue échouerait purement et simplement (permission denied), pas seulement
+-- le tri des evento. `list_clients` (SECURITY DEFINER, ci-dessous) n'a jamais eu besoin de ce
+-- grant — il reste vrai qu'il n'en dépend pas, la raison du grant est ailleurs désormais.
 select ok(
-  not has_function_privilege('anon', 'public.today_in_bogota()', 'EXECUTE'),
-  'today_in_bogota() n''est pas exécutable par anon (revoke de 20260828150000)'
+  has_function_privilege('anon', 'public.today_in_bogota()', 'EXECUTE'),
+  'today_in_bogota() est exécutable par anon depuis le 2026-09-15 (search_catalog en a besoin)'
 );
 select ok(
-  not has_function_privilege('authenticated', 'public.today_in_bogota()', 'EXECUTE'),
-  'today_in_bogota() n''est pas exécutable par authenticated'
+  has_function_privilege('authenticated', 'public.today_in_bogota()', 'EXECUTE'),
+  'today_in_bogota() est exécutable par authenticated, même raison'
 );
 
 -- 2 ── list_clients : l'état d'un client calé sur la journée en cours à Guatapé -------------------

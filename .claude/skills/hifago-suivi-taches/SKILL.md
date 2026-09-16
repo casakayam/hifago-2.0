@@ -1,14 +1,17 @@
 ---
 name: hifago-suivi-taches
-description: Ajoute une tâche à la grille de suivi partagée Gabriel/Jérôme (com-dev/suivi-taches-beta-hifago/) — l'artifact Claude.ai publié où l'on coche Fait et où l'on attribue chaque ligne. Usage — /hifago-suivi-taches "<texte de la tâche>" [section]
+description: Ajoute une tâche, ou marque une ligne existante comme faite/attribuée, sur la grille de suivi partagée Gabriel/Jérôme (com-dev/suivi-taches-beta-hifago/) — l'artifact Claude.ai publié. Usage — /hifago-suivi-taches "<texte>" (ajouter) ou /hifago-suivi-taches fait <id> [gabriel|jerome] (marquer)
 ---
 
-# /hifago-suivi-taches — ajouter une tâche à la grille de suivi
+# /hifago-suivi-taches — grille de suivi partagée
 
 La grille (`com-dev/suivi-taches-beta-hifago/index.html`) est un artifact Claude.ai publié que
-Gabriel et Jérôme éditent eux-mêmes en direct (Fait, Attribué, Human check) — ce skill ne sert
-qu'à ajouter une NOUVELLE LIGNE, ce que l'interface ne permet pas de faire seule. Contexte complet
-et URL de l'artifact : `com-dev/suivi-taches-beta-hifago/README.md`.
+Gabriel et Jérôme éditent eux-mêmes en direct (Fait, Attribué, Human check) — ce skill sert à ce
+que l'interface ne permet PAS de faire seule : ajouter une ligne, ou la marquer depuis Claude Code
+sans relire toute la grille (~2500 lignes). Contexte complet et URL de l'artifact :
+`com-dev/suivi-taches-beta-hifago/README.md`.
+
+**Deux procédures distinctes selon la demande — lire celle qui correspond, pas les deux.**
 
 ## Ce qui ne doit JAMAIS arriver
 
@@ -24,7 +27,7 @@ côté serveur (« files you leave out are kept »).
 Si cette conversation n'a pas encore lu ou publié cet artifact, l'outil refuse le publish tant
 qu'on ne l'a pas lu (`action: "read"`) au moins une fois avant — le faire d'abord.
 
-## Procédure
+## Procédure A — Ajouter une tâche (texte libre, pas encore dans la grille)
 
 1. Lire `com-dev/suivi-taches-beta-hifago/README.md` pour l'URL de l'artifact publié, puis
    `Artifact(action: "read", url: <cette URL>)` pour confirmer l'accès (obligatoire avant tout
@@ -46,6 +49,33 @@ qu'on ne l'a pas lu (`action: "read"`) au moins une fois avant — le faire d'ab
    `capabilities`, sans `favicon` (tout est conservé tel quel par défaut sur une mise à jour).
 7. Committer la modification locale d'`index.html` si Gabriel le demande (jamais par défaut,
    comme pour tout commit dans ce dépôt).
+
+## Procédure B — Marquer une ligne comme faite/attribuée (id déjà connu)
+
+Chaque ligne affiche son id (petit tag mono, ex. `cmp-4`) sous la colonne Tâche — si on te donne
+un id directement, ne relis NI `index.html` NI la grille en entier : ce serait ~2500 lignes pour
+changer deux champs.
+
+1. Lire `com-dev/suivi-taches-beta-hifago/README.md` pour l'URL de l'artifact, puis
+   `Artifact(action: "read", url: <cette URL>)` si cette conversation ne l'a pas déjà en contexte
+   (même obligation qu'en Procédure A).
+2. Lecture CIBLÉE, jamais la page entière : `Artifact(action: "read_file", url: <URL>, path:
+   "taches.json")` — quelques Ko, contient uniquement `{ rows: { <id>: { done, who, t } } }`.
+3. Dans l'objet lu, fusionner sur l'id donné : `done: true` si "fait"/"résolu"/"corrigé" ;
+   `who: "gabriel"` ou `"jerome"` si précisé (sinon laisser tel quel) ; `t: <horodatage ms>`.
+   Aucun `Date.now()` disponible ? Utiliser `date +%s%3N` en Bash pour l'horodatage.
+4. Republier UNIQUEMENT ce fichier, jamais `index.html` ni `review.json` :
+   `Artifact(file_path: <chemin local index.html, INCHANGÉ>, url: <URL de l'artifact>, files:
+   {"taches.json": {content: <JSON mis à jour>, contentType: "application/json"}})`. `file_path`
+   reste obligatoire pour l'outil mais son contenu ne doit pas bouger — seul `taches.json` change.
+5. Si l'id donné n'existe dans aucune ligne (faute de frappe probable), le dire à Gabriel plutôt
+   que de deviner ou de créer une entrée orpheline.
+6. Pas de commit git nécessaire ici : `taches.json` local reste un seed volontairement figé (même
+   logique qu'en Procédure A) — rien à committer pour une donnée qui ne vit que côté artifact.
+
+⚠️ Risque rare mais réel : si Gabriel/Jérôme cochent la MÊME ligne dans le navigateur pile au même
+moment, la publication peut recevoir `conflict` — relire `taches.json` et refaire l'étape 3-4 une
+fois, jamais forcer.
 
 ## Ce qui n'est délibérément PAS fait
 

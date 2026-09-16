@@ -161,7 +161,7 @@ describe("GoogleButton", () => {
 
 describe("OAuthSection", () => {
   it("rend le bouton et son séparateur traduit", async () => {
-    const container = rendre(<OAuthSection next="/carrito" />);
+    const container = rendre(<OAuthSection next="/mi-viaje" />);
 
     expect(container.querySelector('[data-testid="google-signin-button"]')).not.toBeNull();
     expect(container.textContent).toContain(loadMessages("es").Common.oauth.separator);
@@ -183,8 +183,8 @@ describe("OAuthSection", () => {
   });
 
   it("transmet le next au bouton", async () => {
-    await presser(rendre(<OAuthSection next="/carrito" />, "en"));
+    await presser(rendre(<OAuthSection next="/mi-viaje" />, "en"));
 
-    expect(nextTransmis().searchParams.get("next")).toBe("/en/carrito");
+    expect(nextTransmis().searchParams.get("next")).toBe("/en/mi-viaje");
   });
 });

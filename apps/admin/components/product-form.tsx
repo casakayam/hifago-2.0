@@ -18,6 +18,7 @@ import type { LobbyRoomOption } from "@/components/lobby-option-picker";
 import { StagedProductPhotos, type StagedPhoto } from "@/components/product-photos-staged";
 import { lowestTierPrice, toPriceTiersColumn, validatePriceTiers } from "@/lib/products/priceTiers";
 import { validateGroupDiscount } from "@/lib/products/groupDiscount";
+import { toEventoBookableColumns } from "@/lib/products/eventoBookable";
 import { validateSlotRules, toSlotRuleRows } from "@/lib/products/slotRules";
 import { toStayRatesColumn, validateStayRates } from "@/lib/products/stayRates";
 import { buildProductCreationPayload } from "@/lib/products/productCreationPayload";
@@ -64,6 +65,14 @@ export type EditableProduct = {
   // parent, nécessaire en édition pour savoir si le picker (vs saisie manuelle) doit s'afficher.
   lobby_connector_active?: boolean | null;
   lobby_has_token?: boolean | null;
+  // Evento réservable en ligne (2026-09-15) — contrairement aux autres champs evento (price_label,
+  // occurrence_*…, "gap préexistant, création seulement" ci-dessus), ceux-ci sont réellement
+  // éditables : chargés ici ET réécrits dans l'update() plus bas.
+  online_bookable: boolean;
+  evento_capacity_mode: string | null;
+  is_free: boolean;
+  evento_payment_mode: string | null;
+  evento_occupies_resource: boolean;
 };
 
 // Spec 15 — variant "socio-proposal" : un socio ne peut jamais écrire products directement (RLS
@@ -146,6 +155,11 @@ export function ProductForm({
           stayRates: product.stay_rates,
           lobbyCategoryId: product.lobby_category_id,
           lobbyProductId: product.lobby_product_id,
+          onlineBookable: product.online_bookable,
+          eventoCapacityMode: product.evento_capacity_mode as "unlimited" | "metered" | "rsvp" | null,
+          isFree: product.is_free,
+          eventoPaymentMode: product.evento_payment_mode as "online" | "on_site" | null,
+          eventoOccupiesResource: product.evento_occupies_resource,
         }
       : undefined,
   );
@@ -251,7 +265,11 @@ export function ProductForm({
     // ⚠️ Si cette expression et la contrainte SQL divergent, l'écart est SILENCIEUX dans un sens
     // (le formulaire refuse ce que la base accepterait) et un 400 illisible dans l'autre.
     const enVitrina = Boolean(fields.externalBookingUrl.trim());
-    const needsOwnPrice = !isEvento && !enVitrina;
+    // Evento réservable en ligne, payant (2026-09-15) : rejoint les types qui exigent un prix
+    // chiffré propre — miroir du bypass price_missing de create_order (is_free dispense, comme un
+    // evento vitrine/gratuit ; on_site reste payant et exige donc bien price_cop).
+    const eventoOnlinePaid = isEvento && fields.onlineBookable && !fields.isFree;
+    const needsOwnPrice = (!isEvento && !enVitrina) || eventoOnlinePaid;
 
     if (!isEditing) {
       // partner_id n'est jamais saisi indépendamment — dérivé de l'établissement choisi.
@@ -264,7 +282,7 @@ export function ProductForm({
         toast.danger("El precio es obligatorio para este tipo de producto.");
         return;
       }
-      if (isEvento && !fields.priceLabel.trim()) {
+      if (isEvento && !fields.onlineBookable && !fields.priceLabel.trim()) {
         toast.danger("El precio en texto libre es obligatorio para un evento.");
         return;
       }
@@ -304,6 +322,28 @@ export function ProductForm({
     } else if (needsOwnPrice && !usesTiers && (!Number.isFinite(price) || price <= 0)) {
       toast.danger("El precio es obligatorio para este tipo de producto.");
       return;
+    }
+
+    // Evento réservable en ligne (2026-09-15) — contrairement aux validations evento ci-dessus,
+    // gardées création-only (`!isEditing`) pour rester exactement le comportement préexistant,
+    // celles-ci courent dans LES DEUX modes : ces 5 champs sont réellement réécrits par l'update()
+    // ci-dessous, pas seulement à la création (cf. EditableProduct).
+    if (isEvento && fields.onlineBookable) {
+      if (!fields.eventoCapacityMode) {
+        toast.danger("El modo de capacidad es obligatorio para un evento reservable en línea.");
+        return;
+      }
+      if (
+        (fields.eventoCapacityMode === "metered" || fields.eventoCapacityMode === "rsvp") &&
+        !fields.defaultCapacity.trim()
+      ) {
+        toast.danger("El aforo es obligatorio para este modo de capacidad.");
+        return;
+      }
+      if (!fields.isFree && !fields.eventoPaymentMode) {
+        toast.danger("El modo de pago es obligatorio para un evento reservable de pago.");
+        return;
+      }
     }
 
     if (usesTiers) {
@@ -357,11 +397,14 @@ export function ProductForm({
           // précédente laissait donc passer un champ prix VIDE, qui partait à 0 et se faisait
           // refuser par `products_price_cop_positive` — passer un produit existant en vitrine en
           // effaçant son prix était impossible (même défaut que la création, mesuré le 2026-09-09).
-          price_cop: usesTiers
-            ? lowestTierPrice(fields.priceTiers)
-            : Number.isFinite(price) && price > 0
-              ? price
-              : null,
+          price_cop:
+            isEvento && fields.isFree
+              ? null
+              : usesTiers
+                ? lowestTierPrice(fields.priceTiers)
+                : Number.isFinite(price) && price > 0
+                  ? price
+                  : null,
           price_tiers: usesTiers ? toPriceTiersColumn(fields.priceTiers) : null,
           // La vitrine reste MODIFIABLE après création. Sans ces deux clés, poser une URL puis la
           // corriger était impossible : l'update ne les portait pas, donc la valeur d'origine
@@ -372,6 +415,12 @@ export function ProductForm({
                 external_booking_url: fields.externalBookingUrl.trim() || null,
                 price_label: enVitrina ? fields.priceLabel.trim() || null : null,
               }),
+          // Evento réservable en ligne (2026-09-15) — contrairement au reste des champs evento,
+          // réellement réécrits en édition (cf. commentaire d'EditableProduct). price_label est
+          // porté par ce bloc-ci et non par celui du dessus (isEvento ? {} : {...price_label}) : un
+          // evento online_bookable n'a jamais de libellé libre, `toEventoBookableColumns` pose le
+          // null. MÊME fonction que le chemin de création — jamais un second miroir manuel.
+          ...(isEvento ? toEventoBookableColumns(fields) : {}),
           ...(hasPriceQtyFields
             ? {
                 min_qty: fields.minQty.trim() ? Number(fields.minQty) : null,
@@ -404,6 +453,19 @@ export function ProductForm({
         toast.danger("No se pudo guardar la actividad.");
         setIsSubmitting(false);
         return;
+      }
+
+      // Evento réservable en ligne, mode 'metered' (2026-09-15) — même discipline non bloquante
+      // qu'à la création : un échec ne remet jamais en cause la sauvegarde déjà confirmée ci-dessus.
+      // on conflict do nothing côté RPC : rappeler ici à chaque édition (même si déjà provisionné)
+      // reste idempotent, jamais une double écriture.
+      if (isEvento && fields.onlineBookable && fields.eventoCapacityMode === "metered") {
+        const { error: provisionError } = await supabase.rpc("provision_evento_availability", {
+          p_product_id: product.id,
+        });
+        if (provisionError) {
+          toast.danger("Los cambios se guardaron, pero el calendario de cupos no se pudo actualizar.");
+        }
       }
 
       toast.success("Cambios guardados.");
@@ -530,6 +592,19 @@ export function ProductForm({
         const { error: slotRulesError } = await supabase.from("product_slot_rules").insert(rows);
         if (slotRulesError) {
           toast.danger("El producto se creó, pero los horarios no se pudieron guardar.");
+        }
+      })(),
+      (async () => {
+        // Evento réservable en ligne, mode 'metered' (2026-09-15) — matérialise product_availability
+        // pour les occurrences des 12 prochains mois (défaut de la RPC). Non bloquant, même
+        // discipline que tags/photos/horarios ci-dessus : un échec laisse le produit créé sans
+        // calendrier de cupos, corrigible depuis l'édition en rouvrant/resauvegardant la fiche.
+        if (!isEvento || !fields.onlineBookable || fields.eventoCapacityMode !== "metered") return;
+        const { error: provisionError } = await supabase.rpc("provision_evento_availability", {
+          p_product_id: newProduct.id,
+        });
+        if (provisionError) {
+          toast.danger("El evento se creó, pero el calendario de cupos no se pudo generar.");
         }
       })(),
     ]);
@@ -660,6 +735,7 @@ export function ProductForm({
         establishmentId={activeEstablishmentId}
         establishmentLobbyConnected={establishmentLobbyConnected}
         allowManualLobbyEntry={variant === "admin"}
+        allowOnlineBookableConfig={variant === "admin"}
         onApplyLobbyRoomData={applyLobbyRoomData}
         // Retour Jérôme (2026-08-18) : les chambres/dortoires doivent pouvoir avoir des photos
         // aussi côté socio — les masquer ici était la seule raison pour laquelle elles ne

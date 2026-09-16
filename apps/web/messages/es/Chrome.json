@@ -1,7 +1,7 @@
 {
   "homeLabel": "Hifago, ir al inicio",
-  "navLabel": "Cuenta y carrito",
-  "cartLabel": "{count, plural, =0 {Carrito, vacío} one {Carrito, # artículo} other {Carrito, # artículos}}",
+  "navLabel": "Cuenta y viaje",
+  "cartLabel": "{count, plural, =0 {Mi viaje, vacío} one {Mi viaje, # servicio} other {Mi viaje, # servicios}}",
   "accountLabel": "Mi cuenta",
   "loginLabel": "Iniciar sesión",
   "menuOpenLabel": "Abrir el menú",

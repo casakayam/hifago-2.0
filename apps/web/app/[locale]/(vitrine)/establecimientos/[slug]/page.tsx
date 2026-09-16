@@ -3,8 +3,7 @@ import { notFound } from "next/navigation";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { getEstablecimientoPorSlug } from "@/lib/catalog/establecimiento";
 import { PageShell } from "@/components/atoms/PageShell";
-import type { MigaItem } from "@/components/molecules/Migas";
-import { BarraNavegacion } from "@/components/organisms/BarraNavegacion";
+import { Migas, type MigaItem } from "@/components/molecules/Migas";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { buildPageMetadata } from "@/lib/seo/pageMetadata";
 import { getSiteUrl } from "@/lib/seo/siteUrl";
@@ -13,7 +12,6 @@ import { buildBreadcrumbJsonLd } from "@/lib/seo/jsonld/breadcrumb";
 import { segmentoDeTipo } from "@/lib/catalog/segmentos";
 import { migasParaJsonLd } from "@/lib/seo/migas";
 import type { Locale } from "@/messages";
-import { tiposDeBarra } from "../../tiposDeBarra";
 import { FichaEstablecimiento } from "./FichaEstablecimiento";
 
 // LA FICHE D'UN LIEU (spec 30 §5d) — le dernier écran hérité de la vitrine.
@@ -92,14 +90,7 @@ export default async function EstablecimientoPage({
           `BreadcrumbList` de deux entrées sans afficher le moindre fil. */}
       <JsonLd data={buildBreadcrumbJsonLd(getSiteUrl(), migasParaJsonLd(migas, locale, rutaCanonica))} />
 
-      <BarraNavegacion
-        migas={migas}
-        migasEtiqueta={t("migasEtiqueta")}
-        locale={locale as Locale}
-        tipos={await tiposDeBarra(locale as Locale)}
-        tipoActivo="lodging"
-        tiposEtiqueta={tCommon("selectorTipoEtiqueta")}
-      />
+      <Migas items={migas} etiqueta={t("migasEtiqueta")} locale={locale as Locale} testId="migas" />
 
       <FichaEstablecimiento ficha={ficha} locale={locale as Locale} />
     </PageShell>

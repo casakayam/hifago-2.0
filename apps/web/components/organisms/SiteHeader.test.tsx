@@ -154,17 +154,17 @@ describe("SiteHeader", () => {
     // langue (ICU de next-intl), jamais concaténé.
     it("annonce le compte en toutes lettres, avec le bon pluriel", async () => {
       const vide = (await rendu()).querySelector('[data-testid="header-cart"]') as HTMLElement;
-      expect(vide.getAttribute("aria-label")).toBe("Carrito, vacío");
+      expect(vide.getAttribute("aria-label")).toBe("Mi viaje, vacío");
 
       const un = (await rendu({ lignes: [ligne("a")] })).querySelector(
         '[data-testid="header-cart"]'
       ) as HTMLElement;
-      expect(un.getAttribute("aria-label")).toBe("Carrito, 1 artículo");
+      expect(un.getAttribute("aria-label")).toBe("Mi viaje, 1 servicio");
 
       const deux = (await rendu({ lignes: [ligne("a"), ligne("b")] })).querySelector(
         '[data-testid="header-cart"]'
       ) as HTMLElement;
-      expect(deux.getAttribute("aria-label")).toBe("Carrito, 2 artículos");
+      expect(deux.getAttribute("aria-label")).toBe("Mi viaje, 2 servicios");
     });
 
     it("n'affiche aucune pastille quand le panier est vide", async () => {
@@ -178,14 +178,14 @@ describe("SiteHeader", () => {
       expect((container.querySelector(".badge__label") as HTMLElement).textContent).toBe("99+");
       expect(
         (container.querySelector('[data-testid="header-cart"]') as HTMLElement).getAttribute("aria-label")
-      ).toBe("Carrito, 100 artículos");
+      ).toBe("Mi viaje, 100 servicios");
     });
 
     // Un lien, pas un bouton : le panier s'ouvre au clic du milieu, se copie, se met en favori.
     it("est un LIEN vers la page du panier", async () => {
       const panier = (await rendu()).querySelector('[data-testid="header-cart"]') as HTMLAnchorElement;
       expect(panier.tagName).toBe("A");
-      expect(panier.getAttribute("href")).toBe("/carrito");
+      expect(panier.getAttribute("href")).toBe("/mi-viaje");
     });
   });
 
@@ -263,7 +263,7 @@ describe("SiteHeader", () => {
   it("traduit tout ce qu'il affiche, dans les deux langues", async () => {
     const en = await rendu({ locale: "en", lignes: [ligne("a")] });
     expect((en.querySelector('[data-testid="header-cart"]') as HTMLElement).getAttribute("aria-label")).toBe(
-      "Cart, 1 item"
+      "My trip, 1 item"
     );
     expect((en.querySelector('[data-testid="header-home"]') as HTMLElement).getAttribute("aria-label")).toBe(
       "Hifago, go to home"
@@ -283,11 +283,11 @@ describe("SiteHeader", () => {
       </NextIntlClientProvider>
     );
     const client = await rendu();
-    const panierServeur = serveur.match(/aria-label="([^"]*Carrito[^"]*)"/)?.[1];
+    const panierServeur = serveur.match(/aria-label="([^"]*Mi viaje[^"]*)"/)?.[1];
     const panierClient = (client.querySelector('[data-testid="header-cart"]') as HTMLElement).getAttribute(
       "aria-label"
     );
     expect(panierServeur).toBe(panierClient);
-    expect(panierServeur).toBe("Carrito, vacío");
+    expect(panierServeur).toBe("Mi viaje, vacío");
   });
 });

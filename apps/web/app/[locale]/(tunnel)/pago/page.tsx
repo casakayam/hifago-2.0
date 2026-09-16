@@ -79,7 +79,7 @@ export default async function CheckoutPage({
   // create_order vide cart_items dès qu'elle réussit (spec 32) : un panier vide peut donc cacher
   // une commande déjà réservée, pas encore payée. Lu SEULEMENT sur ce chemin déjà froid — jamais
   // sur le chemin chaud d'un panier normal. Ne réutilise pas `user` déjà résolu ci-dessus : deux
-  // signatures différentes selon l'appelant auraient été la première divergence entre `/carrito`
+  // signatures différentes selon l'appelant auraient été la première divergence entre `/mi-viaje`
   // et `/pago`, qui n'a pas cet accès (cf. `getPendingOrdersForViewer.ts`).
   const pendingOrders = lines.length === 0 ? await getPendingOrdersForViewer() : [];
 

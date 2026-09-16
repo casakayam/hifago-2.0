@@ -34,7 +34,7 @@ vi.mock("@/components/molecules/TarjetaOferta", () => ({
     prioridad,
   }: {
     oferta: OfertaTarjeta;
-    variante: "grilla" | "lista";
+    variante: "grilla" | "lista" | "carrusel";
     locale: string;
     prioridad?: boolean;
   }) => (
@@ -46,6 +46,16 @@ vi.mock("@/components/molecules/TarjetaOferta", () => ({
     >
       {oferta.nombre}
     </article>
+  ),
+}));
+
+// ⚠️ Même raison que pour `TarjetaOferta` ci-dessus : `CarruselConSombra` a son propre test dédié
+// (mesure de `scrollWidth`/`clientWidth`, `ResizeObserver`) — le garder ici coupleraient ces tests
+// de SECTION à son comportement interne, sans rien vérifier de plus sur `SeccionOfertas` elle-même.
+// La doublure se contente de rendre ses enfants dans un conteneur identifiable par `testId`.
+vi.mock("@/components/molecules/CarruselConSombra", () => ({
+  CarruselConSombra: ({ children, testId }: { children: React.ReactNode; testId?: string }) => (
+    <div data-testid={testId}>{children}</div>
   ),
 }));
 
@@ -179,6 +189,53 @@ describe("SeccionOfertas", () => {
     expect(lista.className).not.toContain("grid");
     expect(lista.className).toContain("flex");
     expect(lista.className).toContain("flex-col");
+  });
+
+  it("en variante « carrusel », délègue le défilement à CarruselConSombra et pose une rangée flex, chaque carte à largeur fixe", () => {
+    const { lista, container } = rendu({ variante: "carrusel" });
+    // Le défilement (`overflow-x-auto`, `snap-*`) vit dans `CarruselConSombra` (testé à part), pas
+    // sur le `<ul>` — cette section vérifie seulement qu'elle délègue bien à ce composant.
+    expect(container.querySelector('[data-testid="seccion-carrusel"]')).not.toBeNull();
+    expect(lista.className).not.toContain("grid");
+    expect(lista.className).toContain("flex");
+    const items = lista.querySelectorAll("li");
+    // Une carte par tarjeta, PLUS la carte « voir más » en dernière position (mostrarVerMas par défaut).
+    expect(items.length).toBe(TARJETAS.length + 1);
+    for (const item of items) {
+      expect(item.className).toContain("w-64");
+      expect(item.className).toContain("shrink-0");
+    }
+  });
+
+  it("en carrusel, la carte « voir más » est la DERNIÈRE de la ligne, prend tout le volume d'une carte et le lien historique après la liste disparaît", () => {
+    const { lista, container } = rendu({ variante: "carrusel" });
+    const items = lista.querySelectorAll("li");
+    const derniere = items[items.length - 1] as HTMLElement;
+    // Les cartes d'offre sont des doublures `<article>` (mock ci-dessus) : la dernière `<li>` n'en
+    // contient PAS, c'est la carte « voir más ».
+    expect(derniere.querySelector("article")).toBeNull();
+    const lien = derniere.querySelector('[data-testid="seccion-ver-mas-link"]') as HTMLAnchorElement;
+    expect(lien).not.toBeNull();
+    expect(lien.tagName).toBe("A");
+    expect(lien.getAttribute("href")).toBe("/actividades?personas=2");
+    expect(lien.textContent).toBe("Ver todas las actividades");
+    // Titre centré (retour de Jérôme) : hérité de `text-center` posé sur l'en-tête de la carte.
+    const carte = container.querySelector('[data-testid="seccion-ver-mas"]') as HTMLElement;
+    expect(carte.querySelector('[data-slot="card-header"]')?.className).toContain("text-center");
+    // `fullHeight` : la carte s'étire à la hauteur de ses voisines (`align-items: stretch` du
+    // `<ul>` flex) au lieu de s'arrêter à son propre contenu, plus court sans sous-titre.
+    expect(carte.className).toContain("h-full");
+    // Une icône remplace la photo, sans fond ni ratio imposé (juste un `+` fait main).
+    expect(carte.querySelector("svg")).not.toBeNull();
+    // Pas de double affordance : le lien après la liste (motif grilla/lista) ne se rend pas ici.
+    expect(container.querySelector('a[data-testid="seccion-ver-mas"]')).toBeNull();
+  });
+
+  it("en carrusel, `mostrarVerMas` à faux retire la carte « voir más » — exactement une carte par tarjeta", () => {
+    const { lista } = rendu({ variante: "carrusel", mostrarVerMas: false });
+    const items = lista.querySelectorAll("li");
+    expect(items.length).toBe(TARJETAS.length);
+    expect(lista.querySelector('[data-testid="seccion-ver-mas"]')).toBeNull();
   });
 
   it("transmet la variante et la locale à chacune de ses cartes", () => {

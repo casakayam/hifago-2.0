@@ -1,7 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import type { PendingOrderForViewer } from "@/lib/orders/getPendingOrdersForViewer";
 
-// Partagé entre `/carrito` et `/pago` : les deux affichent ce bloc dans les mêmes conditions
+// Partagé entre `/mi-viaje` et `/pago` : les deux affichent ce bloc dans les mêmes conditions
 // (panier vide ET au moins une commande encore ouverte pour la même identité). Colocalisé à la
 // racine de `(tunnel)/` plutôt que remonté dans `components/organisms/` — même précédent que
 // `CoquillaTunel.tsx`, déjà ici, consommé par les deux écrans du dossier.

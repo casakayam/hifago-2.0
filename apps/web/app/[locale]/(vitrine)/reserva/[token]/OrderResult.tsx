@@ -20,7 +20,7 @@ import type { Locale } from "@/messages";
 //
 // Colocalisé avec sa route, jamais dans `components/organisms/` : il ne sert qu'ici, et
 // `components/README.md` réserve `components/` à ce qui est prouvé consommé par au moins deux
-// endroits (`CartSummary` y est parce qu'il sert `/carrito` ET `/pago`). Mêmes précédents :
+// endroits (`CartSummary` y est parce qu'il sert `/mi-viaje` ET `/pago`). Mêmes précédents :
 // `pago/CheckoutForm.tsx`, `cuenta/reservas/OrdersList.tsx`.
 //
 // ⚠️ CE N'EST PAS `CartSummary`, et la tentation de fusionner est réelle : mêmes lignes, même mise

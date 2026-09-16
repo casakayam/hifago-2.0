@@ -47,6 +47,13 @@ export type MyOrder = {
   accessToken: string;
   /** `unpaid` | `pending` | `paid` | `partially_refunded` | `refunded` */
   paymentStatus: string;
+  /**
+   * Somme des acomptes des lignes VIVANTES, telle que `order_for_client_jsonb` la rend déjà
+   * (`sum(ligne_acompte_cop) filter (where vivante)`). Porté ici parce qu'il a un lecteur —
+   * `deriveOrderState` — exactement le critère posé par le commentaire ci-dessous : la resommer en
+   * TypeScript ferait vivre « ligne vivante » une seconde fois, en face de `DEAD_LINE_STATUSES`.
+   */
+  acompteCop: number;
   lines: MyOrderLine[];
 };
 
@@ -86,6 +93,7 @@ type RpcOrder = {
   reference: string;
   access_token: string;
   payment_status: string;
+  acompte_cop: number;
   group: "upcoming" | "past";
   lines: RpcLine[];
 };
@@ -109,6 +117,7 @@ export async function getMyOrders(locale: Locale): Promise<MyOrders | null> {
     reference: order.reference,
     accessToken: order.access_token,
     paymentStatus: order.payment_status,
+    acompteCop: order.acompte_cop,
     group: order.group,
     lines: (order.lines ?? []).map((line) => ({
       id: line.id,

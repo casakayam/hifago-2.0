@@ -84,6 +84,15 @@ export function availabilityScreenFor(
   type: ProductType,
   hasSlotRules: boolean,
   isPmsBacked: boolean,
+  // Evento réservable en ligne (2026-09-15) : un evento en mode 'metered' matérialise désormais
+  // product_availability comme activity/camp — même écran générique. Les modes 'unlimited'/'rsvp'
+  // et un evento non activé restent 'none' (rien à décompter, aucun calendrier de cupos à ouvrir).
+  //
+  // REQUIS lui aussi, pour la raison écrite juste en dessous pour `isPmsBacked` : posé d'abord avec
+  // un `= null`, il avait laissé le portail socio compiler à trois arguments, donc afficher 'none'
+  // là où l'admin affichait 'generic' pour le MÊME produit — la divergence exacte que ce défaut
+  // était censé rendre impossible.
+  eventoCapacityMode: "unlimited" | "metered" | "rsvp" | null,
 ): "generic" | "slot" | "none" | "pms" {
   // Ajouté le 2026-08-26. Un logement PMS-backed (lodging + lobby_category_id) ne décrémente
   // JAMAIS product_availability : create_order saute explicitement verrou et décrément pour lui,
@@ -97,7 +106,7 @@ export function availabilityScreenFor(
   // seule définition de ce gating et elle a deux appelants (admin et socio). Un défaut aurait
   // laissé le portail socio compiler en gardant l'ancien comportement, sans que rien ne le signale.
   if (isPmsBacked) return "pms";
-  if (type === "evento") return "none";
+  if (type === "evento") return eventoCapacityMode === "metered" ? "generic" : "none";
   if (type === "activity" && hasSlotRules) return "slot";
   return "generic";
 }

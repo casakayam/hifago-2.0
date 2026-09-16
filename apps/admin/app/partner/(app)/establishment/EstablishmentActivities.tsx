@@ -23,6 +23,10 @@ export type ProductCardRow = {
   // qu'un logement est adossé à LobbyPMS, sinon il continue de proposer un calendrier de cupos
   // structurellement vide (create_order ne décrémente jamais product_availability pour ces lignes).
   isPmsBacked: boolean;
+  // Ajouté le 2026-09-15 avec availabilityScreenFor(…, eventoCapacityMode) : sans lui, un evento
+  // 'metered' n'affichait aucun lien « Calendario & cupos » côté socio alors que l'admin en
+  // affichait un, pour le même produit.
+  eventoCapacityMode: "unlimited" | "metered" | "rsvp" | null;
 };
 
 export type PendingProductCreationRow = {
@@ -161,6 +165,7 @@ export function EstablishmentActivities({
           product.type as ProductType,
           product.hasSlotRules,
           product.isPmsBacked,
+          product.eventoCapacityMode,
         );
 
         return (

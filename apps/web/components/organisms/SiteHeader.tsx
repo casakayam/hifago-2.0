@@ -45,9 +45,10 @@ import { SiteMenu } from "./SiteMenu";
 //
 // Les routes de compte vivent dans `SiteMenu`, où sont leurs liens.
 //
-// `/carrito` (spec 27) — le panier — est né le 2026-09-10 avec la spec 32 (panier en base) :
-// bascule de `/pago` (le tunnel de paiement, qui ne porte plus la liste du panier) vers `/carrito`.
-const ROUTE_PANIER = "/carrito";
+// `/mi-viaje` (spec 27, renommé le 2026-09-15 depuis `/carrito` — recadrage "Mi viaje") est né le
+// 2026-09-10 avec la spec 32 (panier en base) : bascule de `/pago` (le tunnel de paiement, qui ne
+// porte plus la liste du panier) vers cette page.
+const ROUTE_VIAJE = "/mi-viaje";
 
 export type SiteHeaderProps = {
   /**
@@ -63,12 +64,14 @@ export type SiteHeaderProps = {
 // `apps/web` — l'importer créerait la dépendance fantôme qui a cassé le build Vercel le
 // 2026-08-23. Les glyphes héritent de la couleur par `currentColor` et sont décoratifs : le nom
 // accessible est porté par le lien.
-function IconePanier() {
+function IconeViaje() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.4a2 2 0 0 0 2-1.55L20.5 8H6" />
-      <circle cx="10" cy="20" r="1.4" />
-      <circle cx="17.5" cy="20" r="1.4" />
+      <path d="M6 20a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2" />
+      <path d="M8 18V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v14" />
+      <path d="M10 20h4" />
+      <circle cx="16" cy="20" r="2" />
+      <circle cx="8" cy="20" r="2" />
     </svg>
   );
 }
@@ -147,8 +150,8 @@ export function SiteHeader({ isAuthenticated, testId }: SiteHeaderProps) {
 
   const lienPanier = (
     <IconLink
-      href={ROUTE_PANIER}
-      icon={<IconePanier />}
+      href={ROUTE_VIAJE}
+      icon={<IconeViaje />}
       // ⚠️ Le compte est DANS le nom accessible, en toutes lettres et au pluriel de la langue : un
       // « 3 » posé à côté du mot « panier » s'annonce n'importe comment. La pluralisation est celle
       // de next-intl (ICU), pas une concaténation — « 1 artículo » / « 2 artículos ».
@@ -192,7 +195,7 @@ export function SiteHeader({ isAuthenticated, testId }: SiteHeaderProps) {
             </Badge.Anchor>
           ) : (
             // Panier vide : pas de pastille « 0 ». Un zéro permanent est du bruit, et le nom
-            // accessible dit déjà « Carrito, vacío ».
+            // accessible dit déjà « Mi viaje, vacío ».
             lienPanier
           )}
 

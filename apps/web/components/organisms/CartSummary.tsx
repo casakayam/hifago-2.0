@@ -17,7 +17,7 @@ import type { Locale } from "@/messages";
 
 // Spec 32 (panier en base) — remplace le rendu de lignes autrefois porté par `CheckoutForm.tsx`.
 // Déjà cité comme exemple d'organism dans `apps/web/components/README.md` avant même d'exister :
-// utilisé en mode ÉDITABLE sur `/carrito` (retrait de ligne) et en LECTURE SEULE sur `/pago`
+// utilisé en mode ÉDITABLE sur `/mi-viaje` (retrait de ligne) et en LECTURE SEULE sur `/pago`
 // (`create_order` revalidera de toute façon tout au checkout — aucun bouton de retrait là-bas).
 //
 // Les lignes arrivent déjà jointes en props (`getCartLines`, Server Component) : ce composant ne

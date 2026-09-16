@@ -510,6 +510,17 @@ async function creerProduits(admin, svc, produits, { dossier, type }, idPartenai
       if (error) throw new Error(`${item._fichier} : update _extra_columns : ${error.message}`);
     }
 
+    // Evento réservable en ligne, mode 'metered' (2026-09-15) — matérialise product_availability
+    // pour les occurrences des 12 prochains mois (défaut de la RPC), même geste que l'admin après
+    // création (product-form.tsx). Idempotent côté RPC (on conflict do nothing) : sans effet sur un
+    // rerun, même si ce bloc est déjà après le `continue` d'existence plus haut.
+    if (type === "evento" && item._extra_columns?.evento_capacity_mode === "metered") {
+      const { error: erreurProvision } = await admin.rpc("provision_evento_availability", {
+        p_product_id: idProduit,
+      });
+      if (erreurProvision) throw new Error(`${item._fichier} : provision_evento_availability : ${erreurProvision.message}`);
+    }
+
     // Un camp n'a AUCUN repli automatique (contrairement à lodging/activity/transport) : ses
     // départs sont un calendrier fixe, pas une fenêtre glissante — `default_capacity` resterait
     // null. Chaque départ déclaré ici pose sa propre ligne `product_availability` (capacité du

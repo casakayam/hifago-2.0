@@ -64,7 +64,7 @@ test("après un ajout au panier, l'accueil revient réordonnée et garde les cri
   // Le succès est enfin visible — `SiteToaster` n'était monté nulle part dans `apps/web` avant ce
   // lot (`toast.danger` de `useAddToCart` était donc lui aussi invisible jusqu'ici).
   await expect(
-    page.getByRole("alertdialog").filter({ hasText: "Añadido al carrito." })
+    page.getByRole("alertdialog").filter({ hasText: "Añadido a Mi viaje." })
   ).toBeVisible();
 
   await page.waitForLoadState("networkidle");

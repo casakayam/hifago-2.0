@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Input, Label, ListBox, Select, TextField } from "@hifago/ui";
+import { Checkbox, Input, Label, ListBox, Select, Switch, TextField } from "@hifago/ui";
 import { TagsMultiSelect, type TagOption } from "@/components/tags-multiselect";
 import { LobbyOptionPicker, type LobbyRoomOption } from "@/components/lobby-option-picker";
 import { SlotRulesEditor } from "@/components/slot-rules-editor";
@@ -82,6 +82,7 @@ export function ProductTypeFields({
   allowManualLobbyEntry,
   onApplyLobbyRoomData,
   lobbyLinkReadOnly = false,
+  allowOnlineBookableConfig = false,
 }: {
   type: ProductType;
   state: ProductTypeFieldsState;
@@ -114,11 +115,24 @@ export function ProductTypeFields({
   // Arbitrage Jérôme du 2026-08-26 : le socio VOIT le lien, ne le modifie pas (cf. le commentaire
   // de `readOnly` dans lobby-option-picker.tsx).
   lobbyLinkReadOnly?: boolean;
+  // Evento réservable en ligne (2026-09-15) — décision produit « admin uniquement » : un socio ne
+  // doit jamais pouvoir rendre un evento réservable-payant via le circuit de proposition. Même
+  // patron que `allowManualLobbyEntry` (`variant === "admin"`, jamais passé par les 3 consommateurs
+  // socio/modération). Le blocage réel vit côté RPC (whitelist de `submit_product_creation_proposal`/
+  // `create_product_from_proposal`, qui ignorent silencieusement ces 5 colonnes) — cette prop
+  // n'est qu'une défense en profondeur côté écran, pas le vrai rempart.
+  allowOnlineBookableConfig?: boolean;
 }) {
   const {
     isEvento, isCamp, isActivity, isLodging, isTransport,
     hasLocationAndTags, hasTags, hasPriceQtyFields, hasCheckInOut, hasDefaultCapacity, hasGroupDiscount,
   } = productTypeGating(type);
+
+  // Le vrai discriminant des champs evento : configurable ICI (admin) ET effectivement basculé.
+  // Nommé une fois plutôt que réécrit deux fois — dont une NIÉE plus bas pour le libellé de prix
+  // vitrine, où la négation d'une conjonction recopiée est la façon la plus discrète de faire
+  // apparaître les deux blocs à la fois.
+  const eventoReservableEnLinea = allowOnlineBookableConfig && state.onlineBookable;
 
   // Le déclencheur est "une valeur existe", pas "quel mode du sélecteur est actif" — vrai que l'ID
   // vienne du picker ou d'une saisie admin manuelle. Reste correct depuis que le mode par défaut
@@ -546,19 +560,153 @@ export function ProductTypeFields({
 
       {isEvento ? (
         <>
-          <TextField
-            fullWidth
-            name="price-label"
-            value={state.priceLabel}
-            onChange={state.setPriceLabel}
-            isRequired
-          >
-            <Label>Precio (texto libre)</Label>
-            <Input
-              placeholder="Ej. Desde $50.000 COP, entrada gratuita…"
-              data-testid="price-label-input"
-            />
-          </TextField>
+          {allowOnlineBookableConfig ? (
+            <Switch
+              isSelected={state.onlineBookable}
+              onChange={state.setOnlineBookable}
+              data-testid="online-bookable-switch"
+            >
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+                {state.onlineBookable ? "Reservable en línea" : "Vitrina (no reservable en línea)"}
+              </Switch.Content>
+            </Switch>
+          ) : null}
+
+          {eventoReservableEnLinea ? (
+            <>
+              <Select
+                fullWidth
+                value={state.eventoCapacityMode}
+                onChange={(value) =>
+                  value && state.setEventoCapacityMode(value as "unlimited" | "metered" | "rsvp")
+                }
+              >
+                <Label>Modo de capacidad</Label>
+                <Select.Trigger data-testid="evento-capacity-mode-select">
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    <ListBox.Item id="unlimited" textValue="Plazas ilimitadas">
+                      Plazas ilimitadas — nunca bloquea, sin contador
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                    <ListBox.Item id="metered" textValue="Cupo con descuento automático">
+                      Cupo con descuento automático — bloquea al llenarse
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                    <ListBox.Item id="rsvp" textValue="Aforo informativo con contador">
+                      Aforo informativo con contador — nunca bloquea
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+
+              {state.eventoCapacityMode === "metered" || state.eventoCapacityMode === "rsvp" ? (
+                <TextField
+                  fullWidth
+                  name="evento-default-capacity"
+                  value={state.defaultCapacity}
+                  onChange={state.setDefaultCapacity}
+                  isRequired
+                >
+                  <Label>
+                    {state.eventoCapacityMode === "metered"
+                      ? "Cupo máximo — bloquea nuevas reservas al llenarse"
+                      : "Aforo informativo — nunca bloquea, solo se muestra como contador"}
+                  </Label>
+                  <Input type="number" min={1} data-testid="evento-default-capacity-input" />
+                </TextField>
+              ) : null}
+
+              <Checkbox
+                isSelected={state.isFree}
+                onChange={state.setIsFree}
+                data-testid="evento-is-free-checkbox"
+              >
+                <Checkbox.Content>
+                  <Checkbox.Control>
+                    <Checkbox.Indicator />
+                  </Checkbox.Control>
+                  Evento gratuito
+                </Checkbox.Content>
+              </Checkbox>
+
+              {!state.isFree ? (
+                <>
+                  <TextField
+                    fullWidth
+                    name="evento-price"
+                    value={state.priceCop}
+                    onChange={state.setPriceCop}
+                    isRequired
+                  >
+                    <Label>Precio (COP)</Label>
+                    <Input type="number" min={1} data-testid="evento-price-input" />
+                  </TextField>
+
+                  <Select
+                    fullWidth
+                    value={state.eventoPaymentMode}
+                    onChange={(value) => value && state.setEventoPaymentMode(value as "online" | "on_site")}
+                  >
+                    <Label>Modo de pago</Label>
+                    <Select.Trigger data-testid="evento-payment-mode-select">
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="online" textValue="Pago en línea">
+                          Pago en línea (Mercado Pago)
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        <ListBox.Item id="on_site" textValue="Pago en el establecimiento">
+                          Pago en el establecimiento
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </>
+              ) : null}
+
+              <Checkbox
+                isSelected={state.eventoOccupiesResource}
+                onChange={state.setEventoOccupiesResource}
+                data-testid="evento-occupies-resource-checkbox"
+              >
+                <Checkbox.Content>
+                  <Checkbox.Control>
+                    <Checkbox.Indicator />
+                  </Checkbox.Control>
+                  Ocupa el recurso compartido del establecimiento (bloquea campamentos/otros eventos
+                  reservables ese día)
+                </Checkbox.Content>
+              </Checkbox>
+            </>
+          ) : null}
+
+          {!eventoReservableEnLinea ? (
+            <TextField
+              fullWidth
+              name="price-label"
+              value={state.priceLabel}
+              onChange={state.setPriceLabel}
+              isRequired
+            >
+              <Label>Precio (texto libre)</Label>
+              <Input
+                placeholder="Ej. Desde $50.000 COP, entrada gratuita…"
+                data-testid="price-label-input"
+              />
+            </TextField>
+          ) : null}
 
           <Select
             fullWidth

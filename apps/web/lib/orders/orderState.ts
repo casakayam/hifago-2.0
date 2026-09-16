@@ -26,27 +26,41 @@ export function isDeadLine(status: string): boolean {
   return DEAD_LINE_STATUSES.includes(status);
 }
 
-/** Les cinq états qu'une commande peut porter d'elle-même. `failed` n'en est pas un : cf. l'en-tête. */
-export type OrderState = "paid" | "awaiting" | "unpaid" | "expired" | "cancelled";
+/**
+ * Les six états qu'une commande peut porter d'elle-même. `failed` n'en est pas un : cf. l'en-tête.
+ *
+ * `confirmed` (2026-09-15, evento réservable en ligne) — distinct d'`unpaid` : des lignes vivantes
+ * existent, mais aucune n'a d'acompte réellement dû EN LIGNE (evento gratuit, ou payable sur place
+ * — `acompte_cop` forcé à 0 par `create_order`). Sans cet état, `isPayable = orderState ===
+ * "unpaid"` (reserva/[token]/OrderResult.tsx) affichait un bouton « Pagar » qui échouait au clic
+ * avec `nothing_to_pay` (create_payment_intent) — un dead-end UX, jamais un vrai chemin prévu.
+ */
+export type OrderState = "paid" | "awaiting" | "unpaid" | "confirmed" | "expired" | "cancelled";
 
 /** La forme minimale dont la dérivation a besoin — compatible avec `OrderForDisplay` et la liste. */
 export type OrderStateInput = {
   paymentStatus: string;
   lines: { status: string }[];
+  /** Somme des `acompte_cop` des lignes actives (`order_for_client_jsonb`, agrégat déjà rendu). */
+  acompteCop: number;
 };
 
 /**
  * L'état d'une commande, dans l'ordre où un client le lirait : payée d'abord, puis en attente du
- * webhook, puis « il reste quelque chose de vivant donc c'est à payer », puis les deux fins
- * possibles — expirée (le paiement n'est jamais arrivé) ou annulée.
+ * webhook, puis « il reste quelque chose de vivant » — à payer si un acompte est réellement dû en
+ * ligne, confirmé sinon (evento gratuit/sur-place) —, puis les deux fins possibles — expirée (le
+ * paiement n'est jamais arrivé) ou annulée.
  *
  * ⚠️ `orders.status` n'est JAMAIS consulté : la colonne vaut `'confirmed'` sur toute ligne, rien ne
- * l'écrit, et depuis la spec 34 elle ne sort même plus de la base (invariant 4).
+ * l'écrit, et depuis la spec 34 elle ne sort même plus de la base (invariant 4). Ne pas confondre
+ * avec l'état `"confirmed"` DÉRIVÉ ci-dessus, qui ne dépend jamais de cette colonne.
  */
 export function deriveOrderState(order: OrderStateInput): OrderState {
   if (order.paymentStatus === "paid") return "paid";
   if (order.paymentStatus === "pending") return "awaiting";
-  if (order.lines.some((line) => !isDeadLine(line.status))) return "unpaid";
+  if (order.lines.some((line) => !isDeadLine(line.status))) {
+    return order.acompteCop > 0 ? "unpaid" : "confirmed";
+  }
   if (order.lines.some((line) => line.status === "expired")) return "expired";
   return "cancelled";
 }

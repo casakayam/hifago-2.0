@@ -13,6 +13,7 @@ import { BotonContacto } from "./BotonContacto";
 import { ReservationForm } from "./ReservationForm";
 import { LodgingReservationForm } from "./LodgingReservationForm";
 import { SlotReservationForm } from "./SlotReservationForm";
+import { EventoReservationForm } from "./EventoReservationForm";
 
 // LE CORPS DE LA FICHE PRODUIT (spec 30 §5a). Ex-`ProductDetailView`, réécrit sur le socle.
 //
@@ -124,8 +125,15 @@ export function FichaProducto({
           />
 
           {/* Aucun prix connu → AUCUNE ligne. Jamais « 0 COP », qui prétendrait la gratuité d'une
-              offre dont le prix se négocie. */}
-          {ficha.precio ? (
+              offre dont le prix se négocie. Un evento gratuit (is_free) EST l'exception délibérée :
+              ficha.precio vaut alors null (contrainte DB price_cop null quand is_free), donc sans ce
+              badge RIEN ne s'afficherait — un evento réellement gratuit se distingue justement d'un
+              prix simplement inconnu par ce statut indépendant, jamais par un prix à 0. */}
+          {ficha.eventoReservable?.isFree ? (
+            <p className="text-lg font-medium" data-testid="evento-free-badge">
+              {t("free")}
+            </p>
+          ) : ficha.precio ? (
             <p className="text-lg font-medium" data-testid="product-price">
               {ficha.precio.tipo === "texto" ? (
                 ficha.precio.label
@@ -137,6 +145,15 @@ export function FichaProducto({
               {ficha.modoReserva !== "evento" && ficha.modoReserva !== "vitrina" && sufijoUnidad ? (
                 <span className="ml-1 text-sm font-normal text-muted">{sufijoUnidad}</span>
               ) : null}
+            </p>
+          ) : null}
+
+          {/* Payable sur place (evento réservable) : le solde entier se règle à l'établissement,
+              jamais en ligne — même modèle que le solde du système d'acompte 17/10/7 existant,
+              appliqué ici à la totalité du prix plutôt qu'à son reliquat. */}
+          {ficha.eventoReservable?.paymentMode === "on_site" ? (
+            <p className="text-xs text-muted" data-testid="evento-pay-on-site-note">
+              {t("payOnSiteNote")}
             </p>
           ) : null}
 
@@ -159,7 +176,15 @@ export function FichaProducto({
             </p>
           ) : null}
 
-          {ficha.modoReserva === "vitrina" || ficha.modoReserva === "evento" ? (
+          {ficha.modoReserva === "evento_bookable" && ficha.eventoReservable ? (
+            <EventoReservationForm
+              productId={ficha.id}
+              minQty={ficha.minQty}
+              maxQty={ficha.eventoReservable.maxQty}
+              capacityMode={ficha.eventoReservable.capacityMode}
+              occurrences={ficha.eventoReservable.occurrences}
+            />
+          ) : ficha.modoReserva === "vitrina" || ficha.modoReserva === "evento" ? (
             // La vitrine : le calendrier laisse SA PLACE au bouton de contact, sans bandeau ni
             // texte explicatif (cahier §2e). ⚠️ Un evento SANS url n'affiche donc rien ici — un
             // cul-de-sac, inchangé depuis toujours et désormais nommé (spec 30 §10.5).
@@ -190,6 +215,9 @@ export function FichaProducto({
               durationDays={ficha.duracionDias ?? undefined}
               minQty={ficha.minQty}
               groupDiscount={ficha.descuentoGrupo ?? undefined}
+              precio={ficha.precio}
+              unidad={ficha.unidad}
+              locale={locale}
             />
           )}
 

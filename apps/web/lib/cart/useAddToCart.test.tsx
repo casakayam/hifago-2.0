@@ -72,6 +72,25 @@ describe("useAddToCart — succès", () => {
       expect(state.push).toHaveBeenCalledWith("/?q=kayak&personas=2&desdeCarrito=1")
     );
   });
+
+  // 2026-09-15 : un camp redirige vers /alojamientos (dates/personas du camp), jamais vers
+  // l'accueil — l'override court-circuite hrefRetornoCarrito/leerUltimosCriterios, qui ne
+  // connaissent que la dernière recherche libre, sans rapport avec CE camp.
+  it("redirige vers hrefRetorno quand fourni, jamais vers l'accueil", async () => {
+    guardarUltimosCriterios("?q=kayak&personas=2");
+    const { result } = renderHook(() => useAddToCart(), { wrapper });
+
+    await result.current(
+      { productId: "p1", date: "2026-10-05", qty: 2 },
+      { hrefRetorno: "/alojamientos?desde=2026-10-05&hasta=2026-10-09&personas=2" }
+    );
+
+    await waitFor(() =>
+      expect(state.push).toHaveBeenCalledWith(
+        "/alojamientos?desde=2026-10-05&hasta=2026-10-09&personas=2"
+      )
+    );
+  });
 });
 
 describe("useAddToCart — échec", () => {

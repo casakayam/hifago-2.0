@@ -102,6 +102,18 @@ type CardCommun = {
   contentGap?: CardContentGap;
   /** `row` = vignette à gauche, texte à droite — la ligne produit d'une fiche établissement. */
   layout?: CardLayout;
+  /**
+   * `true` : la carte remplit toute la hauteur disponible (`h-full`) et centre son contenu
+   * verticalement, au lieu de s'arrêter à la hauteur de son propre contenu. Sert la carte « voir
+   * más » du carrusel de `SeccionOfertas.tsx` : ses voisines n'ont pas toutes le même nombre de
+   * lignes (sous-titre présent ou non selon le type d'offre), et une hauteur calquée sur UN
+   * contenu précis se désynchronise dès que le contenu réel diffère. `align-items: stretch`
+   * (défaut d'un conteneur flex, posé sur le `<ul>` de la ligne) donne déjà à chaque `<li>` la
+   * hauteur de la plus grande carte — cette prop fait juste en sorte que le contenu de LA carte
+   * l'occupe, plutôt que de laisser un vide en dessous. Défaut `false` : les cinq usages existants
+   * (dans des grilles qui n'étirent pas leurs cellules) sont inchangés.
+   */
+  fullHeight?: boolean;
   testId?: string;
 };
 
@@ -115,11 +127,22 @@ type CardTitre = {
   titleAs: CardTitleLevel;
   /** L'apparence, décorrélée du niveau — même séparation que `Title`. */
   titleSize?: CardTitleSize;
+  /**
+   * `"center"` centre le titre (et le sous-titre/description sous lui, par héritage de
+   * `text-align`) — la carte « voir más » du carrusel de `SeccionOfertas.tsx` en a besoin pour
+   * ressembler à une carte d'offre normale sans photo ni prix, où rien d'autre n'ancre le titre à
+   * gauche. Défaut `"start"` : les cinq usages existants (catalogue, fiche produit ×2, fiche
+   * établissement ×2) sont inchangés.
+   */
+  titleAlign?: "start" | "center";
 };
 
 export type CardProps = CardCommun &
   (
-    | ({ href?: undefined } & (CardTitre | { title?: undefined; titleAs?: undefined; titleSize?: undefined }))
+    | ({ href?: undefined } & (
+        | CardTitre
+        | { title?: undefined; titleAs?: undefined; titleSize?: undefined; titleAlign?: undefined }
+      ))
     | ({
         /** Rend TOUTE la carte cliquable. Chemin interne : le préfixe de locale est conservé. */
         href: string;
@@ -209,11 +232,13 @@ export function Card({
   title,
   titleAs,
   titleSize = "sm",
+  titleAlign = "start",
   subtitle,
   description,
   contentGap = "sm",
   layout = "stack",
   href,
+  fullHeight = false,
   testId,
 }: CardProps) {
   const estLigne = layout === "row";
@@ -226,13 +251,21 @@ export function Card({
     media && !estLigne ? "overflow-hidden" : "",
     estLigne ? "flex-row items-center gap-4" : "",
     href ? `${CLICKABLE_CLASS} ${ENFANTS_INTERACTIFS_CLASS}` : "",
+    // `.card` de HeroUI est déjà `flex flex-col` (card.css) : `h-full` suffit à l'étirer, et
+    // `justify-center` centre le bloc media+en-tête+contenu dans l'espace en trop plutôt que de le
+    // laisser collé en haut avec un vide en dessous.
+    fullHeight ? "h-full justify-center" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
   const tete =
     title || subtitle || description ? (
-      <HeroUICard.Header>
+      // `text-center` sur l'EN-TÊTE, pas répété sur le titre : `text-align` est hérité, le
+      // sous-titre/description en dessous se centrent avec lui sans classe supplémentaire.
+      // `HeroUICard.Header`/`.Title` fusionnent ce `className` avec leurs classes `.card__*` par
+      // défaut (composeSlotClassName de HeroUI) plutôt que de les remplacer.
+      <HeroUICard.Header className={titleAlign === "center" ? "text-center" : undefined}>
         {title ? (
           <HeroUICard.Title
             // `line-clamp-1` : une carte de grille (catalogue, listing) doit garder une hauteur

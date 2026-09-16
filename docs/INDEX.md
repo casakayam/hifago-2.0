@@ -56,7 +56,7 @@
 
 ## Journal — historique chronologique (jamais chargé automatiquement)
 - [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-14
-- [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-14
+- [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-15
 - [Journal hifago — août 2026](journal/2026-08.md) · maj 2026-09-01
-- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-14
+- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-15
 - [Pièges empiriques hifago — index numéroté](pieges-empiriques.md) · maj 2026-09-09

@@ -23,12 +23,17 @@ import { useCart, type AddToCartInput } from "./CartContext";
 // réordonnées selon le panier (`desdeCarrito=1`, lu par `page.tsx`). `startTransition` plutôt que
 // `useTransition()` : rien ici n'affiche d'état `isPending`, il n'y a donc rien à exposer à
 // l'appelant.
+//
+// 2026-09-15 : `hrefRetorno` optionnel — un camp redirige vers `/alojamientos` (dates/personas déjà
+// en filtre) plutôt que l'accueil, `ReservationForm.tsx` le calcule et le passe ici. Repli sur le
+// comportement existant (`hrefRetornoCarrito`) quand absent : `LodgingReservationForm.tsx`/
+// `SlotReservationForm.tsx` continuent d'appeler ce hook sans 2ᵉ argument, inchangés.
 export function useAddToCart() {
   const t = useTranslations("ProductPage");
   const { addLine } = useCart();
   const router = useRouter();
 
-  return async (line: AddToCartInput) => {
+  return async (line: AddToCartInput, opciones?: { hrefRetorno?: string }) => {
     const result = await addLine(line);
     if (!result.ok) {
       toast.danger(t("addToCartError"));
@@ -37,7 +42,7 @@ export function useAddToCart() {
     toast.success(t("addedToCart"));
     const criterios = leerUltimosCriterios();
     startTransition(() => {
-      router.push(hrefRetornoCarrito(criterios));
+      router.push(opciones?.hrefRetorno ?? hrefRetornoCarrito(criterios));
     });
     return true;
   };

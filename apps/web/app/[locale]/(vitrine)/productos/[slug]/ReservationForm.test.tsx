@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { ReservationForm } from "./ReservationForm";
 import { loadMessages } from "@/messages";
@@ -7,8 +7,11 @@ import { loadMessages } from "@/messages";
 const messages = loadMessages("es");
 
 // Même patron que LodgingReservationForm.test.tsx : navigation et panier neutralisés, seule la
-// réaction du calendrier aux props est le sujet.
-vi.mock("@/i18n/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+// réaction du calendrier aux props est le sujet. `push` exposé (pas un `vi.fn()` anonyme) depuis
+// 2026-09-15 : la redirection post-ajout diffère désormais selon camp/non-camp (useAddToCart réel,
+// non mocké, tourne dans ce test — seul son router est neutralisé).
+const push = vi.fn();
+vi.mock("@/i18n/navigation", () => ({ useRouter: () => ({ push }) }));
 
 const addLine = vi.fn().mockResolvedValue({ ok: true });
 vi.mock("@/lib/cart/CartContext", () => ({ useCart: () => ({ lines: [], addLine }) }));
@@ -23,20 +26,28 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(TODAY);
   addLine.mockClear();
+  push.mockClear();
 });
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
-function renderForm(durationDays?: number, minQty?: number) {
+type Disponibilidad = { date: string; capacity: number; booked: number };
+
+function renderForm(
+  durationDays?: number,
+  minQty?: number,
+  availabilityOverride?: Disponibilidad[]
+) {
   return render(
     <NextIntlClientProvider locale="es" messages={{ ProductPage: messages.ProductPage, Common: messages.Common }}>
       <ReservationForm
         productId="p1"
-        availability={[{ date: DEPARTURE, capacity: 5, booked: 0 }]}
+        availability={availabilityOverride ?? [{ date: DEPARTURE, capacity: 5, booked: 0 }]}
         durationDays={durationDays}
         minQty={minQty}
+        locale="es"
       />
     </NextIntlClientProvider>
   );
@@ -109,5 +120,109 @@ describe("ReservationForm — min_qty > 1 (Jérôme, 2026-09-14)", () => {
   it("aucune indication de minimum quand min_qty est absent/1", () => {
     renderForm();
     expect(screen.queryByTestId("min-qty-hint")).toBeNull();
+  });
+});
+
+// Retour Jérôme (2026-09-15) : sous l'agenda, une liste des éditions triée par date, en cartes —
+// un seul état partagé avec le calendrier (jamais deux states à réconcilier), une édition sans
+// cupo désactivée (pas seulement grisée, correction actée en cours de conception).
+describe("ReservationForm — liste d'éditions synchronisée avec le calendrier (camp)", () => {
+  const DEPART_B = "2026-06-15";
+  const DEPART_COMPLETO = "2026-06-20";
+  const disponibilidades: Disponibilidad[] = [
+    { date: DEPARTURE, capacity: 5, booked: 0 },
+    { date: DEPART_B, capacity: 4, booked: 0 },
+    { date: DEPART_COMPLETO, capacity: 2, booked: 2 },
+  ];
+
+  it("n'affiche aucune liste hors camp (durationDays absent)", () => {
+    renderForm();
+    expect(screen.queryByTestId("edition-cards")).toBeNull();
+  });
+
+  it("affiche une carte par édition, y compris celle qui est complète", () => {
+    renderForm(3, undefined, disponibilidades);
+    expect(screen.getByTestId(`edition-card-${DEPARTURE}`)).toBeTruthy();
+    expect(screen.getByTestId(`edition-card-${DEPART_B}`)).toBeTruthy();
+    expect(screen.getByTestId(`edition-card-${DEPART_COMPLETO}`)).toBeTruthy();
+  });
+
+  it("cliquer une date du calendrier sélectionne la carte correspondante, et elle seule", () => {
+    renderForm(3, undefined, disponibilidades);
+
+    fireEvent.click(document.querySelector(`[data-date="${DEPARTURE}"]`)!);
+
+    expect(screen.getByTestId(`edition-card-${DEPARTURE}`).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId(`edition-card-${DEPART_B}`).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("cliquer une carte pilote le MÊME état que le calendrier (réutilise handleSelectDate)", () => {
+    renderForm(3, undefined, disponibilidades);
+
+    fireEvent.click(screen.getByTestId(`edition-card-${DEPART_B}`));
+
+    expect(screen.getByTestId("add-to-cart-button").hasAttribute("disabled")).toBe(false);
+    fireEvent.click(screen.getByTestId("add-to-cart-button"));
+    expect(addLine).toHaveBeenCalledWith({ productId: "p1", date: DEPART_B, qty: 1 });
+  });
+
+  it("une seule carte sélectionnée à la fois — choisir l'une décoche l'autre", () => {
+    renderForm(3, undefined, disponibilidades);
+
+    fireEvent.click(screen.getByTestId(`edition-card-${DEPARTURE}`));
+    expect(screen.getByTestId(`edition-card-${DEPARTURE}`).getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(screen.getByTestId(`edition-card-${DEPART_B}`));
+    expect(screen.getByTestId(`edition-card-${DEPARTURE}`).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByTestId(`edition-card-${DEPART_B}`).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("une édition sans cupo reste visible mais désactivée — aucune sélection possible au clic", () => {
+    renderForm(3, undefined, disponibilidades);
+
+    const carteComplete = screen.getByTestId(`edition-card-${DEPART_COMPLETO}`);
+    expect(carteComplete.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.click(carteComplete);
+
+    expect(carteComplete.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByTestId("add-to-cart-button").hasAttribute("disabled")).toBe(true);
+  });
+});
+
+// Retour Jérôme (2026-09-15) : on ne peut plus prendre un camp sans réserver un hébergement pour
+// ses nuits — le guidage front redirige vers /alojamientos (dates + personas déjà en filtre) au
+// lieu de l'accueil. L'obligation RÉELLE est portée par create_order (camp_missing_lodging),
+// couverte côté pgTAP — ce fichier ne couvre que le calcul de la redirection.
+describe("ReservationForm — redirection vers /alojamientos après l'ajout d'un camp", () => {
+  it("un camp multi-jours redirige vers /alojamientos avec desde/hasta/personas du départ choisi", async () => {
+    renderForm(4); // durationDays=4 : dernier jour = DEPARTURE + 3
+
+    fireEvent.click(document.querySelector(`[data-date="${DEPARTURE}"]`)!);
+    fireEvent.click(screen.getByTestId("add-to-cart-button"));
+
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith(
+        "/alojamientos?personas=1&desde=2026-06-10&hasta=2026-06-13&alojamientoParaCamp=1"
+      )
+    );
+  });
+
+  it("un camp d'une seule journée (durationDays=1) redirige vers l'accueil, comme avant", async () => {
+    renderForm(1);
+
+    fireEvent.click(document.querySelector(`[data-date="${DEPARTURE}"]`)!);
+    fireEvent.click(screen.getByTestId("add-to-cart-button"));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/?desdeCarrito=1"));
+  });
+
+  it("une activité/un transport (durationDays absent) redirige vers l'accueil, comme avant", async () => {
+    renderForm();
+
+    fireEvent.click(document.querySelector(`[data-date="${DEPARTURE}"]`)!);
+    fireEvent.click(screen.getByTestId("add-to-cart-button"));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/?desdeCarrito=1"));
   });
 });

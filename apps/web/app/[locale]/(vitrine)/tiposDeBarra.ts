@@ -3,12 +3,12 @@ import { ORDEN_SECCIONES, type TipoOferta } from "@/lib/catalog/tipos";
 import { segmentoDeTipo } from "@/lib/catalog/segmentos";
 import type { Locale } from "@/messages";
 
-// Les cinq onglets de type de la barre de navigation, construits UNE fois pour les cinq écrans qui
-// la montent : l'accueil (`page.tsx`), les cinq listings (`ListadoTipo.tsx`), l'index de catégories
-// (`actividades/page.tsx`) et les deux fiches (`establecimientos/[slug]/page.tsx`,
-// `productos/[slug]/page.tsx`). Même raison que `labelsBuscador.ts` : recopier `ORDEN_SECCIONES.map`
-// cinq fois exposerait le même risque de divergence silencieuse — un ordre changé ou un libellé
-// oublié sur un seul écran compile, passe le lint, et ne casse aucun test.
+// Les cinq onglets de type de `SelectorTipo`. Jusqu'au 2026-09-15, appelé par les cinq écrans qui
+// montraient encore ce sélecteur (l'accueil, les quatre listings, l'index de catégories, les deux
+// fiches) — depuis le retour de Jérôme qui réserve `SelectorTipo` à la home (`Migas` seul partout
+// ailleurs, voir `page.tsx`), `page.tsx` (l'accueil) en est le SEUL appelant. Laissé en fonction
+// séparée plutôt que réinlinée : elle compose deux sources de vérité déjà tranchées ailleurs (voir
+// plus bas) et resterait la bonne extension le jour où un second écran remonterait ce sélecteur.
 //
 // ⚠️ Le label et la route sont dérivés de deux sources de vérité déjà tranchées ailleurs :
 // `ORDEN_SECCIONES` (ordre d'affichage, `lib/catalog/tipos.ts`) et `segmentoDeTipo` (type → segment

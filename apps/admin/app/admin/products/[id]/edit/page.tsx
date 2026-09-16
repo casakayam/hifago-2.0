@@ -35,7 +35,14 @@ export default async function EditProductPage({
   const { data: productRow } = await supabase
     .from("products")
     .select(
-      "id, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, unit_count, lodging_kind, unit, default_capacity, stay_rates, category, type, establishment_id, sellable, lobby_category_id, lobby_product_id, establishment:establishments(lobby_connector_active, lobby_has_token)",
+      // online_bookable/evento_capacity_mode/is_free/evento_payment_mode/evento_occupies_resource
+      // (2026-09-15) : SEULS champs evento désormais chargés ici pour l'édition — délibérément pas
+      // price_label/occurrence_*/start_time/duration_minutes, qui restent le gap préexistant
+      // "création seulement" (cf. product-form.tsx, hors périmètre Jérôme) : les ajouter ici sans
+      // les rendre écrivables dans l'update() afficherait un formulaire qui SEMBLE éditer ces
+      // valeurs puis jette silencieusement le changement au clic sur Enregistrer — pire que le
+      // formulaire vierge actuel. Ces 5 champs-ci, eux, sont réellement lus ET réécrits.
+      "id, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, unit_count, lodging_kind, unit, default_capacity, stay_rates, category, type, establishment_id, sellable, lobby_category_id, lobby_product_id, online_bookable, evento_capacity_mode, is_free, evento_payment_mode, evento_occupies_resource, establishment:establishments(lobby_connector_active, lobby_has_token)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -101,6 +108,7 @@ export default async function EditProductPage({
     product.type as ProductType,
     (slotRulesRaw ?? []).length > 0,
     isRoomLinkedToLobby,
+    product.evento_capacity_mode as "unlimited" | "metered" | "rsvp" | null,
   );
 
   const photos = (media ?? []).map((m) => ({

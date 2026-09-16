@@ -3,13 +3,13 @@ import { isDeadLine } from "./orderState";
 
 // Même famille que getCartLines.ts, getOrderByToken.ts et getMyOrders.ts : ce module résout
 // lui-même auth.getUser() et construit son propre client — aucun paramètre. C'est ce qui permet de
-// l'appeler depuis `/carrito`, qui n'a aujourd'hui aucun accès Supabase et n'a pas le droit d'en
+// l'appeler depuis `/mi-viaje`, qui n'a aujourd'hui aucun accès Supabase et n'a pas le droit d'en
 // créer un directement (`scripts/check-data-layer.sh` : `(tunnel)/pago/page.tsx` est la SEULE
 // exemption restante à cette règle, une liste qui doit rétrécir, jamais grandir).
 //
 // ⚠️ POURQUOI CE MODULE EXISTE : `create_order` vide `cart_items` dès qu'elle réussit (spec 32) —
 // la réservation existe déjà, avant tout paiement. Un invité dont le paiement échoue ou qui ferme
-// l'onglet perd donc toute trace visible de sa commande sur `/carrito`/`/pago`, alors qu'elle est
+// l'onglet perd donc toute trace visible de sa commande sur `/mi-viaje`/`/pago`, alors qu'elle est
 // toujours là, retrouvable par son seul jeton (`/reserva/<jeton>`). Ce bloc lui redonne le chemin.
 //
 // ⚠️ Lit `orders`/`order_lines` en RLS DIRECTE (`orders_select` autorise déjà
@@ -45,7 +45,7 @@ const UNSETTLED_PAYMENT_STATUSES = ["unpaid", "pending"];
  *
  * Rend `[]` sans session (visiteur qui n'a jamais touché le panier), en cas d'erreur réseau, et
  * pour tout compte n'ayant aucune commande ouverte : ce bloc est un confort, jamais le contenu
- * principal de l'écran, il ne doit jamais casser `/carrito`/`/pago`.
+ * principal de l'écran, il ne doit jamais casser `/mi-viaje`/`/pago`.
  */
 export async function getPendingOrdersForViewer(): Promise<PendingOrderForViewer[]> {
   const supabase = await createClient();

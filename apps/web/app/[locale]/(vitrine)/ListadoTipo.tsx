@@ -5,8 +5,8 @@ import { todayInBogota } from "@hifago/domain";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { PageShell } from "@/components/atoms/PageShell";
 import { Title } from "@/components/atoms/Title";
+import { Migas } from "@/components/molecules/Migas";
 import { EstadoVacio } from "@/components/molecules/EstadoVacio";
-import { BarraNavegacion } from "@/components/organisms/BarraNavegacion";
 import { ListadoInfinito } from "@/components/organisms/ListadoInfinito";
 import { SLUG_SIN_TAG, buscarCategorias, buscarTipo } from "@/lib/catalog/buscar";
 import {
@@ -26,7 +26,6 @@ import { getSiteUrl } from "@/lib/seo/siteUrl";
 import type { Locale } from "@/messages";
 import { BuscadorInicio } from "./BuscadorInicio";
 import { labelsBuscador } from "./labelsBuscador";
-import { tiposDeBarra } from "./tiposDeBarra";
 
 // LE CORPS DES QUATRE PAGES DE LISTING (2026-09-08, spec 29 §5c/§5d).
 //
@@ -53,8 +52,6 @@ async function libelles(tipo: TipoOferta, locale: Locale) {
   return {
     seccion: tHome(`secciones.${tipo}`),
     inicio: tCommon("breadcrumbHome"),
-    // aria-label du sélecteur de type de BarraNavegacion — même tCommon, pas un second appel.
-    tiposEtiqueta: tCommon("selectorTipoEtiqueta"),
   };
 }
 
@@ -181,7 +178,7 @@ export async function ListadoTipo({
   categoria?: CategoriaDeListado;
 }) {
   const t = await getTranslations({ locale, namespace: "ListadoPage" });
-  const { seccion, inicio, tiposEtiqueta } = await libelles(tipo, locale);
+  const { seccion, inicio } = await libelles(tipo, locale);
 
   // ⚠️ `tipo` de l'URL est IGNORÉ (spec 29 §0) : le type vient du segment, qui fait foi. Un
   // `/es/camps?tipo=lodging` liste des camps — l'adresse dit ce que la page montre.
@@ -261,14 +258,7 @@ export async function ListadoTipo({
         data={buildBreadcrumbJsonLd(getSiteUrl(), migasParaJsonLd(migas, locale, rutaCanonica))}
       />
 
-      <BarraNavegacion
-        migas={migas}
-        migasEtiqueta={t("migasEtiqueta")}
-        locale={locale}
-        tipos={await tiposDeBarra(locale)}
-        tipoActivo={tipo}
-        tiposEtiqueta={tiposEtiqueta}
-      />
+      <Migas items={migas} etiqueta={t("migasEtiqueta")} locale={locale} testId="migas" />
 
       {/* ⚠️ VISIBLE, contrairement au `<h1>` masqué de l'accueil (décision 5) : la règle « rien
           au-dessus du bloc de recherche » du cahier §2a ne vaut que pour l'accueil. Sur une page

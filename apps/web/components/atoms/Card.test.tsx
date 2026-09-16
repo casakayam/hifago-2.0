@@ -65,6 +65,21 @@ describe("Card", () => {
     expect(grand.querySelector("h2")?.className).toContain("text-2xl");
   });
 
+  it("centre le titre (et l'en-tête qui le contient) seulement quand `titleAlign` le demande", () => {
+    const parDefaut = carte(<Card title="T" titleAs="h2"><p>x</p></Card>);
+    const centre = carte(<Card title="T" titleAs="h2" titleAlign="center"><p>x</p></Card>);
+    expect(parDefaut.querySelector("[data-slot='card-header']")?.className).not.toContain("text-center");
+    expect(centre.querySelector("[data-slot='card-header']")?.className).toContain("text-center");
+  });
+
+  it("`fullHeight` étire la carte à `h-full` et centre son contenu, sans y toucher par défaut", () => {
+    const parDefaut = carte(<Card title="T" titleAs="h2"><p>x</p></Card>);
+    const etiree = carte(<Card title="T" titleAs="h2" fullHeight><p>x</p></Card>);
+    expect(parDefaut.className).not.toContain("h-full");
+    expect(etiree.className).toContain("h-full");
+    expect(etiree.className).toContain("justify-center");
+  });
+
   it("n'ouvre l'écart du contenu que quand on le demande", () => {
     const parDefaut = carte(<Card title="T" titleAs="h2"><p>x</p></Card>);
     const aere = carte(<Card title="T" titleAs="h2" contentGap="lg"><p>x</p></Card>);
