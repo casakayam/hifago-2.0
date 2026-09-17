@@ -19,6 +19,8 @@ import esNotFound from "./es/NotFound.json";
 import esLogin from "./es/Login.json";
 import esSignup from "./es/Signup.json";
 import esVerifyEmail from "./es/VerifyEmail.json";
+import esForgotPassword from "./es/ForgotPassword.json";
+import esResetPassword from "./es/ResetPassword.json";
 import esCommon from "./es/Common.json";
 import esProductPage from "./es/ProductPage.json";
 import esEstablishmentPage from "./es/EstablishmentPage.json";
@@ -35,6 +37,8 @@ import enNotFound from "./en/NotFound.json";
 import enLogin from "./en/Login.json";
 import enSignup from "./en/Signup.json";
 import enVerifyEmail from "./en/VerifyEmail.json";
+import enForgotPassword from "./en/ForgotPassword.json";
+import enResetPassword from "./en/ResetPassword.json";
 import enCommon from "./en/Common.json";
 import enProductPage from "./en/ProductPage.json";
 import enEstablishmentPage from "./en/EstablishmentPage.json";
@@ -60,6 +64,8 @@ const MESSAGES = {
     Login: esLogin,
     Signup: esSignup,
     VerifyEmail: esVerifyEmail,
+    ForgotPassword: esForgotPassword,
+    ResetPassword: esResetPassword,
     Common: esCommon,
     ProductPage: esProductPage,
     EstablishmentPage: esEstablishmentPage,
@@ -78,6 +84,8 @@ const MESSAGES = {
     Login: enLogin,
     Signup: enSignup,
     VerifyEmail: enVerifyEmail,
+    ForgotPassword: enForgotPassword,
+    ResetPassword: enResetPassword,
     Common: enCommon,
     ProductPage: enProductPage,
     EstablishmentPage: enEstablishmentPage,

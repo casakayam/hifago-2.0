@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { EventoReservationForm } from "./EventoReservationForm";
+import { guardarUltimosCriterios } from "@/lib/catalog/ultimosCriterios";
 import { loadMessages } from "@/messages";
 
 const messages = loadMessages("es");
@@ -25,6 +26,7 @@ beforeEach(() => {
   vi.setSystemTime(TODAY);
   addLine.mockClear();
   push.mockClear();
+  sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -117,5 +119,44 @@ describe("EventoReservationForm — capacityMode 'rsvp' (aforo informatif, jamai
 
     expect(screen.getByTestId("evento-rsvp-count").textContent).toBe("20/15 inscritos");
     expect(screen.getByTestId("add-to-cart-button").hasAttribute("disabled")).toBe(false);
+  });
+});
+
+// Spec 28 §4 point 3 : « le calendrier de la fiche se pré-remplit depuis la mémoire du
+// navigateur » — jamais câblé avant ce lot.
+describe("EventoReservationForm — pré-remplissage depuis la recherche (spec 28 §4 point 3)", () => {
+  it("sélectionne au montage l'occurrence mémorisée, sans aucun clic", () => {
+    guardarUltimosCriterios(`?desde=${OCCURRENCE_A}&hasta=${OCCURRENCE_A}`);
+    renderForm("unlimited", [{ date: OCCURRENCE_A, capacity: null, booked: null, registeredQty: null }]);
+
+    expect(screen.getByTestId("add-to-cart-button").hasAttribute("disabled")).toBe(false);
+    fireEvent.click(screen.getByTestId("add-to-cart-button"));
+    expect(addLine).toHaveBeenCalledWith({ productId: "p1", date: OCCURRENCE_A, qty: 1 });
+  });
+
+  it("ignore une date mémorisée sans occurrence pour cet evento", () => {
+    guardarUltimosCriterios("?desde=2026-06-24&hasta=2026-06-24");
+    renderForm("unlimited", [{ date: OCCURRENCE_A, capacity: null, booked: null, registeredQty: null }]);
+
+    expect(screen.getByTestId("add-to-cart-button").hasAttribute("disabled")).toBe(true);
+  });
+});
+
+// Retour Gabriel (2026-09-16) : un evento redirige TOUJOURS vers /alojamientos après l'ajout au
+// panier (contrairement au camp, jamais de garde `durationDays > 1` — un evento n'a pas cette
+// notion), filtré sur la seule nuit de l'occurrence choisie. Même patron que
+// ReservationForm.test.tsx (« redirection vers /alojamientos après l'ajout d'un camp »).
+describe("EventoReservationForm — redirection vers /alojamientos après l'ajout au panier", () => {
+  it("redirige avec desde/hasta (une seule nuit) et personas de l'occurrence choisie", async () => {
+    renderForm("unlimited", [{ date: OCCURRENCE_A, capacity: null, booked: null, registeredQty: null }]);
+
+    fireEvent.click(document.querySelector(`[data-date="${OCCURRENCE_A}"]`)!);
+    fireEvent.click(screen.getByTestId("add-to-cart-button"));
+
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith(
+        "/alojamientos?personas=1&desde=2026-06-10&hasta=2026-06-11&alojamientoParaEvento=1"
+      )
+    );
   });
 });

@@ -3,7 +3,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Chevron } from "@/components/atoms/Chevron";
-import { Link, usePathname } from "@/i18n/navigation";
+import { Link, useRouter, usePathname } from "@/i18n/navigation";
+import { empujarConservandoQuery } from "@/lib/navigation/conservarQuery";
 import { routing } from "@/i18n/routing";
 import type { Locale } from "@/messages";
 
@@ -76,6 +77,7 @@ const DRAPEAUX: Record<Locale, () => React.ReactElement> = {
 export function LanguageSwitcher({ testId }: LanguageSwitcherProps) {
   const t = useTranslations("Chrome");
   const chemin = usePathname();
+  const router = useRouter();
   // La locale rendue vient de next-intl, jamais de l'URL : `usePathname` de `@/i18n/navigation`
   // retire justement le préfixe de locale, il ne peut donc pas la donner.
   const locale = useLocale() as Locale;
@@ -148,7 +150,15 @@ export function LanguageSwitcher({ testId }: LanguageSwitcherProps) {
               // ne doit pas dépendre d'un signe visuel.
               aria-current={courante ? "true" : undefined}
               className="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius)] px-3 text-sm hover:bg-default focus-visible:status-focused"
-              onClick={() => setOuvert(false)}
+              // ⚠️ `href`/`locale` restent STATIQUES (dégradation sans JS, découverte par un
+              // crawler — voir le point 2 de l'en-tête) ; la query string active est ajoutée au
+              // clic par `empujarConservandoQuery`, qui porte le raisonnement complet. Bug Jérôme
+              // du 2026-09-16 : changer de langue effaçait les filtres actifs.
+              onClick={(evenement) => {
+                evenement.preventDefault();
+                setOuvert(false);
+                empujarConservandoQuery(router, chemin, { locale: valeur });
+              }}
               data-testid={testId ? `${testId}-${valeur}` : undefined}
             >
               <Drapeau />

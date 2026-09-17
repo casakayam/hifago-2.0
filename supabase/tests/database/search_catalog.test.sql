@@ -18,7 +18,7 @@
 -- geste que les policies `_select_public` laissent bien passer ce qu'il faut.
 
 begin;
-select plan(33);
+select plan(39);
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────────────────────────
 insert into partners (id, display_name) values
@@ -123,6 +123,40 @@ insert into products (
 insert into product_calendar (product_id, date, open) values
   ('aaaa1111-0000-0000-0000-000000000203', date '2030-03-10', false),
   ('aaaa1111-0000-0000-0000-000000000203', date '2030-03-11', false);
+
+-- 20260916110000 — filtre dates bifurqué par type (camp/evento/activity à créneaux ont chacun leur
+-- propre modèle de disponibilité, jamais écrit dans product_calendar).
+--
+-- Camp : un départ fixe dans product_availability (jamais product_calendar). Le séjour couvre
+-- [départ, départ + duration_days - 1] (même formule que ultimoDiaCampIso côté app).
+insert into products (
+  id, partner_id, establishment_id, type, slug, name, price_cop, sellable, duration_days
+) values (
+  'aaaa1111-0000-0000-0000-000000000501', 'aaaa1111-0000-0000-0000-000000000001',
+  'aaaa1111-0000-0000-0000-00000000000b', 'camp', 'sc-camp',
+  '{"es":"Campamento de prueba"}'::jsonb, 500000, true, 7
+);
+
+insert into product_availability (product_id, date, capacity, booked) values
+  ('aaaa1111-0000-0000-0000-000000000501', today_in_bogota() + 30, 20, 0);
+
+-- Activity à créneaux : product_slot_rules porte un seul jour de semaine (celui de 2030-03-10, même
+-- voisinage de dates que `sc-cerrada` ci-dessus) — jamais de ligne product_calendar pour ce produit.
+insert into products (
+  id, partner_id, establishment_id, type, slug, name, price_cop, sellable
+) values (
+  'aaaa1111-0000-0000-0000-000000000204', 'aaaa1111-0000-0000-0000-000000000001',
+  'aaaa1111-0000-0000-0000-00000000000b', 'activity', 'sc-yoga-creneau',
+  '{"es":"Yoga de prueba"}'::jsonb, 40000, true
+);
+
+insert into product_slot_rules (
+  product_id, weekdays, start_time, end_time, slot_duration_minutes, capacity
+) values (
+  'aaaa1111-0000-0000-0000-000000000204',
+  array[extract(isodow from date '2030-03-10')::smallint],
+  '08:00', '09:00', 60, 10
+);
 
 -- Spec 29 — fixtures de tags. `sc-jetski` est classée, `sc-sin-tope` et `sc-cerrada` ne le sont
 -- pas : c'est ce contraste qui rend `p_sin_tag` vérifiable.
@@ -255,6 +289,59 @@ select is(
    where id in ('aaaa1111-0000-0000-0000-000000000203',   -- fermée sur TOUTE la plage
                 'aaaa1111-0000-0000-0000-000000000202')), -- aucune ligne : défaut = ouvert
   1, 'fermée sur toute la plage → absente ; sans ligne de calendrier → présente (défaut ouvert)'
+);
+
+-- ── Filtre dates : camp (product_availability, calendrier fixe par départ, 20260916110000) ──────
+select is(
+  (select count(*)::int
+   from search_catalog(
+     p_limite => 100000, p_desde => today_in_bogota() + 1, p_hasta => today_in_bogota() + 5
+   )
+   where id = 'aaaa1111-0000-0000-0000-000000000501'),
+  0, 'camp : aucun départ dans la plage → absent (product_calendar resterait vacuously ouvert)'
+);
+
+select is(
+  (select count(*)::int
+   from search_catalog(
+     p_limite => 100000, p_desde => today_in_bogota() + 28, p_hasta => today_in_bogota() + 32
+   )
+   where id = 'aaaa1111-0000-0000-0000-000000000501'),
+  1, 'camp : la plage chevauche [départ, départ+duration_days-1] → présent'
+);
+
+-- ── Filtre dates : evento (occurrence_type/occurrence_date, jamais product_calendar) ────────────
+select is(
+  (select count(*)::int
+   from search_catalog(
+     p_limite => 100000, p_desde => today_in_bogota() + 1, p_hasta => today_in_bogota() + 5
+   )
+   where id = 'aaaa1111-0000-0000-0000-000000000402'), -- E2, occurrence ponctuelle à +10j
+  0, 'evento ponctuel : occurrence hors plage → absent'
+);
+
+select is(
+  (select count(*)::int
+   from search_catalog(
+     p_limite => 100000, p_desde => today_in_bogota() + 8, p_hasta => today_in_bogota() + 12
+   )
+   where id = 'aaaa1111-0000-0000-0000-000000000402'),
+  1, 'evento ponctuel : occurrence dans la plage → présent'
+);
+
+-- ── Filtre dates : activity à créneaux (product_slot_rules.weekdays, jamais product_calendar) ───
+select is(
+  (select count(*)::int
+   from search_catalog(p_limite => 100000, p_desde => date '2030-03-11', p_hasta => date '2030-03-16')
+   where id = 'aaaa1111-0000-0000-0000-000000000204'),
+  0, 'activity à créneaux : aucun jour de la semaine du créneau dans la plage → absente'
+);
+
+select is(
+  (select count(*)::int
+   from search_catalog(p_limite => 100000, p_desde => date '2030-03-08', p_hasta => date '2030-03-10')
+   where id = 'aaaa1111-0000-0000-0000-000000000204'),
+  1, 'activity à créneaux : la plage contient le jour de la semaine du créneau → présente'
 );
 
 -- ── Filtre par tag, et le slug inconnu (spec 29 §6c) ────────────────────────────────────────────

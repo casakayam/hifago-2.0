@@ -20,7 +20,7 @@ import {
 import { segmentoDeTipo } from "@/lib/catalog/segmentos";
 import type { TipoOferta } from "@/lib/catalog/tipos";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/jsonld/breadcrumb";
-import { migasParaJsonLd } from "@/lib/seo/migas";
+import { migasConCriterios, migasParaJsonLd } from "@/lib/seo/migas";
 import { buildPageMetadata } from "@/lib/seo/pageMetadata";
 import { getSiteUrl } from "@/lib/seo/siteUrl";
 import type { Locale } from "@/messages";
@@ -228,6 +228,11 @@ export async function ListadoTipo({
     : [{ nombre: inicio, href: "/" }, { nombre: titulo }];
   const rutaCanonica = categoria ? `/${segmento}/${categoria.slug}` : `/${segmento}`;
 
+  // `migasConCriterios` et pas un `map` local : le raisonnement (pourquoi le JSON-LD garde `migas`
+  // nu) vit dans le helper, à côté de `migasParaJsonLd`, jamais recopié écran par écran.
+  const sufijoCriterios = escribirCriterios(criterios);
+  const migasVisibles = migasConCriterios(migas, sufijoCriterios);
+
   const labels = await labelsBuscador(locale as Locale);
 
   // L'URL du pont, critères compris et SANS `pagina` : `ListadoInfinito` y ajoute la sienne.
@@ -248,8 +253,11 @@ export async function ListadoTipo({
   return (
     <PageShell variant="large">
       {/* ⚠️ Le JSON-LD est rendu ICI, côté serveur, et jamais dans `Migas` : règle SEO 6 du dépôt —
-          le composant affiche, la route décrit. Les deux sont construits depuis LA MÊME liste
-          `migas`, ce qui est la seule façon de garantir qu'ils ne divergent pas. */}
+          le composant affiche, la route décrit. Les deux sortent de la MÊME liste `migas` — jamais
+          recalculés séparément, ce qui garantit qu'ils ne peuvent pas diverger en STRUCTURE (chemin,
+          libellé, ordre). `migasVisibles`, juste au-dessus, n'en est qu'une décoration dérivée (voir
+          son commentaire) : `migas` reste la seule source, `migasVisibles` ne fait qu'y ajouter un
+          suffixe de critères avant affichage. */}
       <JsonLd
         // ⚠️ `migasParaJsonLd` et pas un `map` local : ces quatre lignes étaient recopiées ici, et
         // c'est cette copie même que l'extraction du 2026-09-08 devait supprimer — elle y avait
@@ -258,7 +266,7 @@ export async function ListadoTipo({
         data={buildBreadcrumbJsonLd(getSiteUrl(), migasParaJsonLd(migas, locale, rutaCanonica))}
       />
 
-      <Migas items={migas} etiqueta={t("migasEtiqueta")} locale={locale} testId="migas" />
+      <Migas items={migasVisibles} etiqueta={t("migasEtiqueta")} locale={locale} testId="migas" />
 
       {/* ⚠️ VISIBLE, contrairement au `<h1>` masqué de l'accueil (décision 5) : la règle « rien
           au-dessus du bloc de recherche » du cahier §2a ne vaut que pour l'accueil. Sur une page

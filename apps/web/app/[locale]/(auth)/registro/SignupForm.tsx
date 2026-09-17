@@ -9,6 +9,7 @@ import { Link, useRouter } from "@/i18n/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { buildAuthCallbackRedirect } from "@hifago/domain";
 import { Button, Input, Label, TextField } from "@hifago/ui";
+import { CamposContrasena } from "@/components/molecules/CamposContrasena";
 import { OAuthSection } from "@/components/molecules/GoogleButton";
 
 // Adapté de l'ancien apps/admin/app/signup/SignupForm.tsx (git show bb254e9, supprimé depuis —
@@ -88,19 +89,14 @@ export function SignupForm({ next, initialEmail = "" }: { next: string; initialE
           <Label>{t("email")}</Label>
           <Input type="email" autoComplete="email" />
         </TextField>
-        <TextField name="password" value={password} onChange={setPassword} isRequired>
-          <Label>{t("password")}</Label>
-          <Input type="password" autoComplete="new-password" minLength={6} />
-        </TextField>
-        <TextField
-          name="confirm-password"
-          value={confirmPassword}
-          onChange={setConfirmPassword}
-          isRequired
-        >
-          <Label>{t("confirmPassword")}</Label>
-          <Input type="password" autoComplete="new-password" minLength={6} />
-        </TextField>
+        <CamposContrasena
+          password={password}
+          confirmPassword={confirmPassword}
+          onPasswordChange={setPassword}
+          onConfirmPasswordChange={setConfirmPassword}
+          labelPassword={t("password")}
+          labelConfirmPassword={t("confirmPassword")}
+        />
         {error ? (
           <p role="alert" data-testid="signup-error" className="text-sm text-danger">
             {error}

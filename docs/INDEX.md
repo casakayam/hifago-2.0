@@ -6,7 +6,7 @@
 
 ## Cadrage — architecture, modèle de données, cahiers des charges
 - [Audit du modèle de données cible — entités partagées](00-modele-de-donnees.md) · maj 2026-09-14
-- [Cahier des charges — portail client (marketplace global, Guatapé = première localisation)](01-cahier-des-charges-client.md) · maj 2026-09-14
+- [Cahier des charges — portail client (marketplace global, Guatapé = première localisation)](01-cahier-des-charges-client.md) · maj 2026-09-16
 - [Cahier des charges — portail socio (aujourd'hui /partner)](02-cahier-des-charges-socio.md) · maj 2026-09-07
 - [Cahier des charges — back-office admin (aujourd'hui /admin)](03-cahier-des-charges-admin.md) · maj 2026-09-07
 - [Choix de stack et architecture cible](04-architecture-cible.md) · maj 2026-09-07
@@ -25,7 +25,7 @@
 - [Design system admin — fond beige, coins carrés (piste Argile)](specs/09-design-system-admin.md) — **Implémenté** · maj 2026-09-07
 - [Listes admin/socio standardisées — pagination, tri, filtres, composant réutilisable](specs/10-listes-standardisees-admin-socio.md) — **Implémenté** · maj 2026-09-07
 - [Admin : parcours unifié création/édition d'une activité — i18n nom/description, lieu, photos dès la création, module de créneaux horaires récurrents](specs/11-admin-activite-parcours-unifie-creneaux.md) — **Implémenté** · maj 2026-08-16
-- [Admin : active products.type='lodging' (« house ») dans le parcours produit — check-in/check-out, capacité, extras de tarification (saison, week-end, dépôt, inclusiones)](specs/12-admin-alojamiento-house.md) — **Implémenté** · maj 2026-09-07
+- [Admin : active products.type='lodging' (« house ») dans le parcours produit — check-in/check-out, capacité, extras de tarification (saison, week-end, dépôt, inclusiones)](specs/12-admin-alojamiento-house.md) — **Implémenté** · maj 2026-09-16
 - [Admin : active products.type='hotel' — un hôtel a plusieurs sous-produits qui sont des chambres, chacune avec son propre prix/capacité](specs/13-admin-hotel-habitaciones.md) — **Supprimée** (reste : Supprimée le 2026-08-27 (T3 de la spec 24) — l'étage hôtel n'existe plus, ni en code ni…) · maj 2026-09-07
 - [Admin : active products.type='transport' dans le parcours produit — lieu + tags + prix par tramos de capacité de véhicule, réutilisation intégrale du ProductForm unifié](specs/14-admin-transporte.md) — **Implémenté** · maj 2026-08-27
 - [Socio : proposer la création d'une nouvelle fiche produit](specs/15-socio-creation-produit.md) — **Implémenté** · maj 2026-09-07
@@ -55,8 +55,8 @@
 - [Avant d'écrire une spec — poser les bonnes questions](specs/avant-la-spec.md) — **modele** · maj 2026-08-16
 
 ## Journal — historique chronologique (jamais chargé automatiquement)
-- [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-14
-- [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-15
+- [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-16
+- [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-16
 - [Journal hifago — août 2026](journal/2026-08.md) · maj 2026-09-01
-- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-15
+- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-16
 - [Pièges empiriques hifago — index numéroté](pieges-empiriques.md) · maj 2026-09-09

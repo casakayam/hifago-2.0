@@ -78,6 +78,18 @@ Les paliers de prix par nombre de personnes **ne vivent pas** dans `stay_rates` 
 `price_tiers`/`min_qty`/`max_qty`, déjà construits pour l'activité (spec 08/11) et déjà câblés dans
 `create_order` — `qty` sur une ligne de commande `lodging` = nombre de personnes.
 
+> ⚠️ **Correction du 2026-09-16, migration `20260916120000_fix_lodging_price_missing_qty`** — la
+> règle ci-dessus (« `qty` = nombre de personnes », posée le 2026-08-16, jamais revisitée après
+> l'introduction de `products.lodging_kind` le 2026-08-27) est **renversée** : `qty` sur une ligne
+> `lodging` désigne désormais des **unités facturables** (lits pour `dorm`, chambres pour
+> `private`, toujours 1 pour `whole_house`, où la notion n'a pas vraiment de sens), jamais des
+> occupants. `price_tiers[].price_cop` redevient donc un prix **par unité** et par nuit (palier de
+> remise optionnel par quantité d'unités), multiplié par `qty` comme dans toutes les autres branches
+> de `create_order` — ce n'était plus le cas depuis la fusion des branches `room_type_id`/lodging du
+> 2026-08-27 (`20260827220000_drop_hotel_room_types.sql`), une régression silencieuse détectée et
+> confirmée avec Gabriel le 2026-09-16. Le reste de cette section (colonnes, `stay_rates`) n'est pas
+> affecté.
+
 ### Invariants
 
 - Le parcours de création/édition d'un alojamiento est le **même composant** `ProductForm` que
@@ -152,7 +164,8 @@ semaine/week-end ») : la demande de Jérôme comble ce gap connu, pas une repri
   d'entrée que camp/evento (lien existant « + Actividad », aucun nouveau lien/écran).
 - Réutilisation intégrale du parcours activité : nom/description i18n, lieu optionnel, photos dès
   la création, tags, prix simple ou par tramos, bornes min/max de quantité (réinterprétées comme
-  nombre de personnes pour un alojamiento).
+  unités facturables — lits/chambres/maisons selon `lodging_kind` — pour un alojamiento, jamais un
+  nombre de personnes depuis la correction du 2026-09-16, cf. § « Modèle de données »).
 - Check-in/check-out (`products.check_in_time`/`check_out_time`, colonnes `time`) et capacité de
   couchage (`products.capacity`), éditables en création **et** en édition directement dans
   `ProductForm` (pas de staging, ce sont de simples colonnes `products`).
@@ -173,7 +186,8 @@ semaine/week-end ») : la demande de Jérôme comble ce gap connu, pas une repri
 ## 3. Décisions retenues
 
 - **Le « mélange »** — pas de duplication d'un système de tramos déjà existant : paliers de prix
-  par nombre de personnes → réutilise tel quel `price_tiers`/`min_qty`/`max_qty` (spec 08/11) ;
+  par quantité d'unités facturables (nombre de personnes à l'origine, corrigé le 2026-09-16, cf.
+  § « Modèle de données ») → réutilise tel quel `price_tiers`/`min_qty`/`max_qty` (spec 08/11) ;
   majoration saison + majoration week-end (nouveau) + inclusiones + dépôt + note → seule partie
   sans équivalent hifago, stockée dans la colonne dormante `stay_rates` réutilisée telle quelle
   (zéro nouvelle colonne pour cette partie).

@@ -29,6 +29,8 @@ export type MyOrderLine = {
   establishmentSlug: string | null;
   date: string;
   endDate: string | null;
+  /** `products.duration_days` — non nul seulement pour un camp (cf. `getOrderByToken.ts`). */
+  durationDays: number | null;
   slotStartTime: string | null;
   qty: number;
   /** Décision ④ : ce qui a été payé en ligne POUR CETTE prestation, figé à la commande. */
@@ -81,6 +83,7 @@ type RpcLine = {
   establishment_slug: string | null;
   date: string;
   end_date: string | null;
+  duration_days: number | null;
   slot_start_time: string | null;
   qty: number;
   acompte_cop: number;
@@ -129,6 +132,7 @@ export async function getMyOrders(locale: Locale): Promise<MyOrders | null> {
       establishmentSlug: line.establishment_slug,
       date: line.date,
       endDate: line.end_date,
+      durationDays: line.duration_days,
       slotStartTime: line.slot_start_time,
       qty: line.qty,
       acompteCop: line.acompte_cop,

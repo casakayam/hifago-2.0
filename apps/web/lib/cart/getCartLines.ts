@@ -1,5 +1,6 @@
 import { createClient } from "@hifago/supabase/server";
 import { resolveLocalizedField, asLocalizedField } from "@hifago/domain";
+import type { PriceTier } from "@/lib/reservas/reservationRange";
 import type { Locale } from "@/messages";
 
 // Spec 32 (panier en base) — lecture JOINTE du panier de l'appelant, réservée aux Server
@@ -31,6 +32,12 @@ export type CartLineForDisplay = {
    * (nuits requises = duration_days - 1).
    */
   durationDays: number | null;
+  /**
+   * `products.price_tiers` — jsonb déjà normalisé côté Postgres. Sert uniquement à
+   * `computeCartLineTotal` (`lib/cart/cartLineTotal.ts`) pour reproduire, côté panier, le même
+   * palier de quantité que `LodgingReservationForm.tsx` affiche déjà sur la fiche produit.
+   */
+  priceTiers: PriceTier[] | null;
 };
 
 export async function getCartLines(locale: Locale): Promise<CartLineForDisplay[]> {
@@ -38,8 +45,11 @@ export async function getCartLines(locale: Locale): Promise<CartLineForDisplay[]
   const { data, error } = await supabase
     .from("cart_items")
     .select(
-      "id, product_id, date, end_date, slot_start_time, qty, created_at, products(name, type, slug, price_cop, sellable, establishment_id, duration_days, establishment:establishments(id, name))"
+      "id, product_id, date, end_date, slot_start_time, qty, created_at, products(name, type, slug, price_cop, price_tiers, sellable, establishment_id, duration_days, establishment:establishments(id, name))"
     )
+    // Ordre chronologique du séjour (Jérôme, 2026-09-16) : la date de la ligne d'abord, jamais
+    // l'ordre d'ajout au panier. `created_at` en départage stable pour deux lignes à la même date.
+    .order("date", { ascending: true })
     .order("created_at", { ascending: true });
 
   if (error || !data) return [];
@@ -62,6 +72,7 @@ export async function getCartLines(locale: Locale): Promise<CartLineForDisplay[]
       priceCop: product?.price_cop ?? 0,
       unavailable: !product?.sellable,
       durationDays: product?.duration_days ?? null,
+      priceTiers: (product?.price_tiers as PriceTier[] | null | undefined) ?? null,
     };
   });
 }

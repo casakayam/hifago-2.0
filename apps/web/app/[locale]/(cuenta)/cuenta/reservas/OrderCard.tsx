@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { Card } from "@/components/atoms/Card";
-import { Price } from "@/components/atoms/Price";
+import { MontantsLigne } from "@/components/molecules/MontantsLigne";
 import { formatLineSchedule } from "@/lib/orders/formatLineSchedule";
 import { deriveOrderState, isDeadLine } from "@/lib/orders/orderState";
 import { CancelLineButton } from "./CancelLineButton";
@@ -99,28 +99,13 @@ export async function OrderCard({ order, locale }: OrderCardProps) {
                 {/* Décision ④ : ce qui a été payé POUR CETTE prestation, et son prix total. Le
                     reste dû sur place se lit par différence, et vit sur le détail — un troisième
                     montant ici alourdirait une carte qui en porte déjà deux par prestation. */}
-                <dl className="flex shrink-0 flex-col gap-0.5 text-xs sm:text-right">
-                  <div className="flex gap-2 sm:justify-end">
-                    <dt className="text-muted">{t("linePaid")}</dt>
-                    <dd>
-                      <Price
-                        amountCop={line.acompteCop}
-                        locale={locale}
-                        testId={`line-paid-${line.id}`}
-                      />
-                    </dd>
-                  </div>
-                  <div className="flex gap-2 sm:justify-end">
-                    <dt className="text-muted">{t("lineTotal")}</dt>
-                    <dd>
-                      <Price
-                        amountCop={line.totalCop}
-                        locale={locale}
-                        testId={`line-total-${line.id}`}
-                      />
-                    </dd>
-                  </div>
-                </dl>
+                <MontantsLigne
+                  locale={locale}
+                  montants={[
+                    { label: t("linePaid"), amountCop: line.acompteCop, testId: `line-paid-${line.id}` },
+                    { label: t("lineTotal"), amountCop: line.totalCop, testId: `line-total-${line.id}` },
+                  ]}
+                />
               </div>
 
               {line.status === "reserved" ? (

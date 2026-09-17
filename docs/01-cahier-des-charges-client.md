@@ -3,7 +3,7 @@ id: refonte-cdc-client
 titre: "Cahier des charges — portail client (marketplace global, Guatapé = première localisation)"
 theme: cadrage
 statut: brouillon
-maj: 2026-09-14
+maj: 2026-09-16
 resume: >
   Comportement métier cible du portail de réservation client, dérivé du comportement réel actuel
   et challengé section par section avec Jérôme avant reprise dans la refonte.
@@ -70,6 +70,17 @@ Ajoutés par la relecture intégrale du 2026-09-07 :
   de remise » — le mécanisme de *remise* décrit ici n'a jamais été construit, pour aucun type de
   produit (cf. `00-modele-de-donnees.md` §3, ligne « Prix par palier de quantité/personnes »). Ce
   qui est faux, c'est l'idée qu'un hébergement n'aurait aucune tarification par nombre de personnes.
+- **§3a, `qty` sur une ligne `lodging` — sémantique RENVERSÉE le 2026-09-16**, révisée par
+  `docs/specs/12-admin-alojamiento-house.md` (§ « Modèle de données », migration
+  `20260916120000_fix_lodging_price_missing_qty`). La puce précédente dit « `qty` valant le nombre
+  de personnes » : c'était vrai le 2026-08-16, ça ne l'est plus. `qty` désigne désormais des
+  **unités facturables** — un lit pour `lodging_kind='dorm'`, une chambre pour `'private'`,
+  toujours 1 pour `'whole_house'` — jamais des occupants ; `price_tiers[].price_cop` est donc un
+  prix **par unité et par nuit**, multiplié par `qty` comme dans toute autre branche de
+  `create_order`. Ce n'était plus le cas depuis la fusion des branches `room_type_id`/lodging du
+  2026-08-27 (régression silencieuse de trois semaines). Conséquence pour §3a l.529 (« Maison/
+  logement entier : prix par palier de nombre de personnes ») : lire « par palier d'unités
+  facturables ». Sections ci-dessous non réécrites — cette ligne en tient lieu.
 - **§3a, « remise optionnelle par quantité/nombre de personnes » — construite, pour `camp`
   uniquement (2026-09-14).** `docs/specs/36-remise-remplissage-camp.md` referme l'écart signalé par
   la puce précédente : `products.group_discount_threshold_qty`/`group_discount_pct` existent
@@ -87,6 +98,12 @@ Ajoutés par la relecture intégrale du 2026-09-07 :
   L'invariant que ce paragraphe demandait « à construire » est donc acquis. Reste vrai, et posé par
   la même spec : Lobby fait foi sur la **disponibilité** seule, hifago sur tout le reste (nom,
   description, photos, capacité, prix), Lobby ne faisant que **proposer** une valeur à la liaison.
+- **§7, dernière lacune (« un prix par personne multiplié automatiquement ? La convention actuelle
+  suppose la première ») — TRANCHÉE le 2026-09-16**, même spec 12 et même migration
+  `20260916120000`. La réponse retenue pour `lodging` est : le prix saisi est un prix par **unité
+  facturable**, et `create_order` le multiplie par `qty`. La convention que ce paragraphe disait
+  « supposée » est donc devenue explicite, vérifiée par un test de parcours réel
+  (`apps/web/e2e/reserve-lodging-range.spec.ts`, scénario `qty > 1`) en plus du pgTAP.
 - **§7/A11 et §8 « Cibles futures importantes », mention « tarif week-end différencié » — périmé
   pour l'hébergement.** Livré par `docs/specs/12-admin-alojamiento-house.md` (majoration week-end
   dans `products.stay_rates`, nouveauté assumée face à la v1). Séjour minimum et délai de préavis

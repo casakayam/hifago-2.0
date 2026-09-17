@@ -4,8 +4,10 @@ import {
   escribirCriterios,
   hayCriterios,
   hrefAlojamientosCompatibles,
+  hrefAlojamientosParaEvento,
   hrefRetornoCarrito,
   leerAlojamientoParaCamp,
+  leerAlojamientoParaEvento,
   leerCriterios,
   leerDesdeCarrito,
   leerPagina,
@@ -177,6 +179,27 @@ describe("leerAlojamientoParaCamp", () => {
 
   it("ne fuit jamais dans les critères : escribirCriterios ne l'écrit pas", () => {
     const criterios = leerCriterios({ q: "kayak", alojamientoParaCamp: "1" });
+    expect(escribirCriterios(criterios)).toBe("?q=kayak");
+  });
+});
+
+describe("hrefAlojamientosParaEvento — redirection evento → hébergement (2026-09-16)", () => {
+  it("construit /alojamientos avec desde/hasta/personas et le drapeau contextuel evento", () => {
+    expect(
+      hrefAlojamientosParaEvento({ desde: "2026-10-05", hasta: "2026-10-06", personas: 2 })
+    ).toBe("/alojamientos?personas=2&desde=2026-10-05&hasta=2026-10-06&alojamientoParaEvento=1");
+  });
+});
+
+describe("leerAlojamientoParaEvento", () => {
+  it("répond vrai uniquement sur la valeur exacte \"1\"", () => {
+    expect(leerAlojamientoParaEvento({ alojamientoParaEvento: "1" })).toBe(true);
+    expect(leerAlojamientoParaEvento({})).toBe(false);
+    expect(leerAlojamientoParaEvento({ alojamientoParaEvento: "0" })).toBe(false);
+  });
+
+  it("ne fuit jamais dans les critères : escribirCriterios ne l'écrit pas", () => {
+    const criterios = leerCriterios({ q: "kayak", alojamientoParaEvento: "1" });
     expect(escribirCriterios(criterios)).toBe("?q=kayak");
   });
 });

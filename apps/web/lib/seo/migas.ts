@@ -28,3 +28,21 @@ export function migasParaJsonLd(
     path: `/${locale}${miga.href ?? rutaCanonica}`,
   }));
 }
+
+/**
+ * La copie AFFICHÉE du fil d'Ariane, chaque lien portant les critères de recherche en cours.
+ *
+ * ⚠️ Jamais appliqué à `migas` lui-même, qui reste la source UNIQUE du JSON-LD `BreadcrumbList` :
+ * un `BreadcrumbList` doit rester une hiérarchie canonique, jamais porter un état de filtre
+ * éphémère (Google). C'est la SEULE divergence tolérée entre le fil visible et son JSON-LD — la
+ * structure (chemin, libellé, ordre), elle, ne doit jamais diverger, cf. `migasParaJsonLd`.
+ *
+ * Bug Jérôme du 2026-09-16 : cliquer « Inicio » (ou la section parente) depuis une page filtrée
+ * effaçait la recherche en cours. Le `map` a été écrit deux fois le jour même (`ListadoTipo`,
+ * `IndiceCategoriasConOfertas`) — exactement la copie que l'extraction du 2026-09-08 avait
+ * supprimée de `ListadoTipo`. Il vit ici, une fois. Un `sufijo` vide rend des `href` identiques :
+ * aucun embranchement à écrire au point d'appel.
+ */
+export function migasConCriterios(migas: MigaItem[], sufijo: string): MigaItem[] {
+  return migas.map((miga) => (miga.href ? { ...miga, href: `${miga.href}${sufijo}` } : miga));
+}

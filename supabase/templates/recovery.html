@@ -1,4 +1,12 @@
+<!-- Lien dynamique par app, comme confirmation.html (feature 32) : tout appelant de
+     resetPasswordForEmail() (apps/admin ou apps/web) DOIT passer options.redirectTo construite via
+     new URL(...).searchParams.set("next", ...) — {{ .RedirectTo }} retomberait sinon sur site_url
+     SANS query string, cassant le "&token_hash=..." qui suit. apps/admin pose next=/reset-password
+     (ForgotPasswordForm.tsx, déjà conforme) ; apps/web pose next=/<locale>/restablecer-password
+     (ForgotPasswordForm.tsx, préfixé de la locale car /auth/callback est hors [locale]). Avant ce
+     correctif, ce lien était codé en dur sur le port 3101 (admin) — cassait silencieusement tout
+     reset envoyé à un compte web. -->
 <h2>Restablece tu contraseña en Hifago</h2>
 <p>Sigue este enlace para elegir una nueva contraseña. Vale una hora y se usa una sola vez:</p>
-<p><a href="http://localhost:3101/auth/callback?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password">Restablecer contraseña</a></p>
+<p><a href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=recovery">Restablecer contraseña</a></p>
 <p>Si no lo pediste tú, puedes ignorar este correo — tu contraseña actual sigue siendo válida.</p>

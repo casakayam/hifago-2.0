@@ -9,10 +9,13 @@ import { Button, cn } from "@hifago/ui";
 // push/replace/prefetch) — mais la règle ne souffre pas d'exception au cas par cas : un jour
 // quelqu'un ajoutera un `push` dans ce fichier, et il perdrait le préfixe de langue en silence.
 import { Link, useRouter } from "@/i18n/navigation";
+import { Card } from "@/components/atoms/Card";
 import { Price } from "@/components/atoms/Price";
+import { MontantsLigne } from "@/components/molecules/MontantsLigne";
 import { Title } from "@/components/atoms/Title";
 import { formatLineSchedule } from "@/lib/orders/formatLineSchedule";
 import { deriveOrderState, isDeadLine } from "@/lib/orders/orderState";
+import { computeTripRange, formatTripLabel } from "@/lib/orders/tripRange";
 import type { OrderForDisplay } from "@/lib/orders/getOrderByToken";
 import type { Locale } from "@/messages";
 
@@ -172,7 +175,7 @@ export function OrderResult({ order, locale, isRealAccount, paymentOutcome }: Or
     window.location.href = createResult.init_point;
   }
 
-  const remainderCop = order.totalCop - order.acompteCop;
+  const tripLabel = formatTripLabel(computeTripRange(order.lines), locale, t);
 
   return (
     <div className="flex flex-col gap-6" data-testid="order-result">
@@ -209,8 +212,7 @@ export function OrderResult({ order, locale, isRealAccount, paymentOutcome }: Or
         </Button>
       ) : null}
 
-      <section className="flex flex-col gap-3">
-        <Title as="h2">{t("summary")}</Title>
+      <Card title={tripLabel} titleAs="h2" titleSize="md" contentGap="md" testId="trip-summary">
         <ul className="flex flex-col gap-3">
           {order.lines.map((line) => {
             const isDead = isDeadLine(line.status);
@@ -220,7 +222,11 @@ export function OrderResult({ order, locale, isRealAccount, paymentOutcome }: Or
                 data-testid={`order-line-${line.id}`}
                 data-status={line.status}
                 className={cn(
-                  "flex items-start justify-between gap-4 rounded-lg border p-3 text-sm",
+                  // Sous `sm`, le montant passe SOUS le libellé plutôt qu'à sa droite : rien n'est
+                  // masqué selon la largeur, on réorganise (.claude/rules/ui.md) — même patron que
+                  // OrderCard.tsx (`/cuenta/reservas`), nécessaire depuis que ce `<li>` porte un
+                  // `<dl>` à deux montants et pas un seul `<Price>` court.
+                  "flex flex-col gap-2 rounded-lg border p-3 text-sm sm:flex-row sm:items-start sm:justify-between",
                   isDead ? "border-default-200 text-muted" : "border"
                 )}
               >
@@ -277,7 +283,22 @@ export function OrderResult({ order, locale, isRealAccount, paymentOutcome }: Or
                     </a>
                   ) : null}
                 </div>
-                <Price amountCop={line.totalCop} locale={locale} />
+                {/* Décision Gabriel (2026-09-16) : le reste dû sur place se lit par article, jamais
+                    en un seul total agrégé en bas de carte — une commande peut toucher plusieurs
+                    établissements, un montant unique induit en erreur. Le balisage est celui
+                    d'`OrderCard.tsx` (`/cuenta/reservas`) parce que c'est LE MÊME composant : seule
+                    la paire de montants change. */}
+                <MontantsLigne
+                  locale={locale}
+                  montants={[
+                    { label: t("total"), amountCop: line.totalCop, testId: `line-total-${line.id}` },
+                    {
+                      label: t("remainder"),
+                      amountCop: line.totalCop - line.acompteCop,
+                      testId: `line-remainder-${line.id}`,
+                    },
+                  ]}
+                />
               </li>
             );
           })}
@@ -296,16 +317,8 @@ export function OrderResult({ order, locale, isRealAccount, paymentOutcome }: Or
               <Price amountCop={order.acompteCop} locale={locale} testId="order-acompte" />
             </dd>
           </div>
-          {/* Le client paie 17 % en ligne, le reste à l'établissement (cahier §2b.8) — le dire ici
-              évite qu'il croie avoir tout réglé, ou n'avoir rien réglé. */}
-          <div className="flex justify-between text-muted">
-            <dt>{t("remainder")}</dt>
-            <dd>
-              <Price amountCop={remainderCop} locale={locale} testId="order-remainder" />
-            </dd>
-          </div>
         </dl>
-      </section>
+      </Card>
 
       <section className="flex flex-col gap-1 text-sm">
         <Title as="h2">{t("holder")}</Title>

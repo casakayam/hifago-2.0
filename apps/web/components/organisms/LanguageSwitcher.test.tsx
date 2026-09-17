@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { NextIntlClientProvider } from "next-intl";
@@ -9,6 +9,8 @@ import { LanguageSwitcher } from "./LanguageSwitcher";
 //
 // Le mock rend la prop `locale` en préfixe, comme le vrai `Link` de next-intl : sans elle, rien de
 // ce que ce composant existe pour garantir ne serait vérifiable.
+const pushMock = vi.fn();
+
 vi.mock("@/i18n/navigation", () => ({
   Link: ({ href, locale, children, ...props }: React.ComponentProps<"a"> & { locale?: string }) => (
     <a href={locale ? `/${locale}${href}` : String(href)} {...props}>
@@ -16,6 +18,7 @@ vi.mock("@/i18n/navigation", () => ({
     </a>
   ),
   usePathname: () => "/productos/kayak",
+  useRouter: () => ({ push: pushMock }),
 }));
 
 function rendu(locale: Locale = "es") {
@@ -32,6 +35,16 @@ function rendu(locale: Locale = "es") {
 }
 
 describe("LanguageSwitcher", () => {
+  // ⚠️ Deux fuites entre tests sinon : `pushMock` est un mock de MODULE (partagé par tous les
+  // tests de ce fichier), et `window.history.pushState` modifie l'état RÉEL de jsdom, qui persiste
+  // d'un test à l'autre dans le même fichier.
+  beforeEach(() => {
+    pushMock.mockClear();
+  });
+  afterEach(() => {
+    window.history.pushState({}, "", "/");
+  });
+
   it("affiche la langue courante en toutes lettres, dans sa propre langue", () => {
     expect(rendu("es").declencheur.textContent).toContain("Español");
     // ⚠️ « English » et non « Inglés » : un anglophone perdu sur /es doit reconnaître sa langue.
@@ -46,6 +59,18 @@ describe("LanguageSwitcher", () => {
     const en = container.querySelector('[data-testid="lang-en"]') as HTMLAnchorElement;
     expect(en.tagName).toBe("A");
     expect(en.getAttribute("href")).toBe("/en/productos/kayak");
+  });
+
+  // Bug Jérôme du 2026-09-16 : changer de langue effaçait les filtres actifs (l'ancien `href`
+  // statique de `usePathname` ne portait jamais la query string). `href`/`locale` restent
+  // statiques dans le DOM (voir le test précédent) ; c'est l'`onClick` qui lit
+  // `window.location.search` en direct et navigue avec, via `router.push`.
+  it("conserve la query string active en cliquant un lien de langue", () => {
+    window.history.pushState({}, "", "/es/productos/kayak?q=kayak&personas=2");
+    const { container, declencheur } = rendu();
+    fireEvent.click(declencheur);
+    fireEvent.click(container.querySelector('[data-testid="lang-en"]') as HTMLAnchorElement);
+    expect(pushMock).toHaveBeenCalledWith("/productos/kayak?q=kayak&personas=2", { locale: "en" });
   });
 
   it("marque la langue active autrement que par un signe visuel", () => {

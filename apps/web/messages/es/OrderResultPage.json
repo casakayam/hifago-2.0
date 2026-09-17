@@ -21,7 +21,10 @@
   "pay": "Pagar el anticipo",
   "retryPayment": "Reintentar pago",
   "paying": "Redirigiendo a Mercado Pago…",
-  "summary": "Tu reserva",
+  "trip": {
+    "range": "Tu viaje del {start} al {end}",
+    "single": "Tu viaje del {start}"
+  },
   "lineQty": "Cantidad: {count}",
   "total": "Total",
   "acompte": "Anticipo (pago en línea)",

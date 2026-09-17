@@ -21,6 +21,7 @@ function ligne(partial: Partial<CartLineForDisplay> & { id: string }): CartLineF
     priceCop: 100000,
     unavailable: false,
     durationDays: null,
+    priceTiers: null,
     ...partial,
   };
 }

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { LodgingReservationForm } from "./LodgingReservationForm";
+import { guardarUltimosCriterios } from "@/lib/catalog/ultimosCriterios";
 import { loadMessages } from "@/messages";
 
 const messages = loadMessages("es");
@@ -43,6 +44,7 @@ const OPEN_NIGHT = `${MONTH}-12`;
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(TODAY);
+  sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -129,6 +131,34 @@ describe("LodgingReservationForm — le calendrier suit la quantité demandée",
   it("nomme l'unité de la quantité selon la nature du couchage", () => {
     renderForm();
     expect(screen.getByText("Camas")).toBeTruthy();
+  });
+});
+
+// Spec 28 §4 point 3 : « le calendrier de la fiche se pré-remplit depuis la mémoire du
+// navigateur » — jamais câblé avant ce lot. Seule validation possible au montage : les bornes de
+// l'horizon (`pmsRestrictions` est vide tant que le fetch mensuel n'a pas répondu) — la
+// validation nuit par nuit reste celle déjà en place (`hasUnavailableNightInRange`).
+describe("LodgingReservationForm — pré-remplissage depuis la recherche (spec 28 §4 point 3)", () => {
+  it("pose la plage mémorisée et navigue vers son mois, même hors du mois affiché par défaut", () => {
+    guardarUltimosCriterios("?desde=2026-07-05&hasta=2026-07-08");
+    renderForm();
+
+    expect(document.querySelector('[data-date="2026-07-05"]')).toBeTruthy();
+    expect(document.querySelector(`[data-date="${OPEN_NIGHT}"]`)).toBeFalsy();
+  });
+
+  it("le bandeau d'indisponibilité existant réagit si la plage posée n'a pas de disponibilité SSR connue", () => {
+    guardarUltimosCriterios("?desde=2026-07-05&hasta=2026-07-08");
+    renderForm();
+
+    expect(screen.getByTestId("range-unavailable-warning")).toBeTruthy();
+  });
+
+  it("ignore une plage au-delà de l'horizon réservable", () => {
+    guardarUltimosCriterios("?desde=2027-06-01&hasta=2027-06-03");
+    renderForm();
+
+    expect(screen.getByText("Elige la fecha de entrada y salida en el calendario.")).toBeTruthy();
   });
 });
 

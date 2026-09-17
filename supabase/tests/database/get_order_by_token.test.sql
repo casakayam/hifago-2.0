@@ -12,7 +12,7 @@
 --      dans la RLS, elle est une porte à part, avec sa propre clé ;
 --   5. les totaux ignorent les lignes mortes, alors que ces lignes restent LISTÉES.
 begin;
-select plan(31);
+select plan(33);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -236,6 +236,21 @@ select is(
   (public.get_order_by_token((select access_token from t_token)) #>> '{order,lines,0,establishment_contact_phone}'),
   '+573001234567',
   'le contact de l''établissement sort du contrat quand il existe (spec 34 décision ⑥)'
+);
+
+-- Le produit de fixture est de type 'activity' : `duration_days` y est NUL par défaut, comme pour
+-- toute ligne hors camp (contrainte products_duration_days_required_for_camp, 20260814220000).
+select ok(
+  (public.get_order_by_token((select access_token from t_token)) #> '{order,lines,0,duration_days}') = 'null'::jsonb,
+  'duration_days est null pour une ligne hors camp — jamais une valeur inventée'
+);
+
+update products set duration_days = 7 where id = '89330000-0000-4000-8000-000000000021';
+
+select is(
+  (public.get_order_by_token((select access_token from t_token)) #>> '{order,lines,0,duration_days}')::int,
+  7,
+  'duration_days sort du contrat quand il existe (20260916) — l''écran reconstitue la date de fin d''un camp'
 );
 
 -- orders.status vaut 'confirmed' sur toute ligne et aucun update ne l'écrit nulle part

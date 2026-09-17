@@ -498,11 +498,12 @@ select is(
      from order_lines where id = (select (result->>'order_line_id')::uuid from tmp_modify_l1)),
   jsonb_build_object(
     'date', '2028-12-04'::date, 'end_date', '2028-12-06'::date, 'qty', 2,
-    'status', 'reserved', 'price_cop', 300000, 'total_cop', 300000
+    'status', 'reserved', 'price_cop', 300000, 'total_cop', 600000
   ),
-  -- Correctif 20260818250000 : un alojamiento reste UNE seule unité facturable quel que soit le
-  -- nombre d'occupants (150000/nuit × 2 nuits = 300000, jamais multiplié par qty=2 ensuite).
-  'L1 : nouvelle ligne correcte (date/end_date/qty/prix, total_cop non multiplié par qty)'
+  -- Correctif 20260916120000 (renverse 20260818250000) : qty désigne des unités facturables
+  -- (lits/chambres selon lodging_kind), jamais des occupants — 150000/nuit × 2 nuits = 300000,
+  -- MULTIPLIÉ par qty=2 → 600000. price_cop reste le prix par unité (total_cop / qty = 300000).
+  'L1 : nouvelle ligne correcte (date/end_date/qty/prix, total_cop multiplié par qty)'
 );
 select is(
   (select booked from product_availability

@@ -1,3 +1,5 @@
+import { ultimoDiaCampIso } from "@/lib/cart/campMissingLodging";
+
 // La date (ou la plage, ou le créneau) d'une ligne, rendue de la même façon partout.
 //
 // Extrait le 2026-09-10 (spec 33) : les six mêmes lignes de ternaires vivaient à l'identique dans
@@ -18,11 +20,27 @@ export type LineSchedule = {
   date: string;
   endDate?: string | null;
   slotStartTime?: string | null;
+  /** `products.duration_days` — non nul seulement pour un camp, qui ne porte jamais `endDate`
+   * (contrainte `products_duration_days_required_for_camp`). Sert à reconstituer sa date de fin. */
+  durationDays?: number | null;
 };
 
+/**
+ * La date de fin à AFFICHER : `endDate` si la ligne en porte une (hébergement), sinon calculée
+ * depuis `duration_days` pour un camp multi-jours (MÊME formule que `create_order`,
+ * `ultimoDiaCampIso`), sinon absente. Exportée pour `computeTripRange` (`tripRange.ts`), qui a
+ * besoin de la même résolution pour la plage globale, pas seulement pour le texte d'une ligne.
+ */
+export function resolveDisplayEndDate({ date, endDate, durationDays }: LineSchedule): string | null {
+  if (endDate) return endDate;
+  if (durationDays && durationDays > 1) return ultimoDiaCampIso(date, durationDays);
+  return null;
+}
+
 /** `2026-11-01`, `2026-11-01 → 2026-11-03`, ou `2026-11-01 · 09:00` selon la forme de la ligne. */
-export function formatLineSchedule({ date, endDate, slotStartTime }: LineSchedule): string {
-  if (endDate) return `${date} → ${endDate}`;
-  if (slotStartTime) return `${date} · ${slotStartTime}`;
-  return date;
+export function formatLineSchedule(line: LineSchedule): string {
+  const resolvedEndDate = resolveDisplayEndDate(line);
+  if (resolvedEndDate) return `${line.date} → ${resolvedEndDate}`;
+  if (line.slotStartTime) return `${line.date} · ${line.slotStartTime}`;
+  return line.date;
 }

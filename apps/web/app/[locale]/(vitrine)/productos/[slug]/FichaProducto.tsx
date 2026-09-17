@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Card } from "@hifago/ui";
 import { Price } from "@/components/atoms/Price";
@@ -7,6 +8,8 @@ import { Title } from "@/components/atoms/Title";
 import { BackLink } from "@/components/atoms/BackLink";
 import { PhotoStrip } from "@/components/molecules/PhotoStrip";
 import { Link } from "@/i18n/navigation";
+import { escribirCriterios } from "@/lib/catalog/criterios";
+import { usePrefillUltimosCriterios } from "@/lib/reservas/usePrefillUltimosCriterios";
 import type { FichaProducto as DatosFicha } from "@/lib/catalog/tipos";
 import type { Locale } from "@/messages";
 import { BotonContacto } from "./BotonContacto";
@@ -53,6 +56,19 @@ export function FichaProducto({
   const t = useTranslations("ProductPage");
   const tCommon = useTranslations("Common");
 
+  // Défaut `"/"` identique au rendu serveur (`sessionStorage` indisponible) : aucun risque
+  // d'hydratation, lu une seule fois après montage — par le MÊME hook que les quatre formulaires de
+  // réservation, jamais un second lecteur « au montage » de la même mémoire (la clé, le repli et le
+  // moment de lecture n'ont qu'un propriétaire). Bug Jérôme du 2026-09-16 : revenir au catalogue
+  // depuis une fiche effaçait la recherche en cours. `escribirCriterios` directement, jamais
+  // `hrefRetornoCarrito` : celle-ci pose toujours `desdeCarrito=1`, le drapeau de réordonnancement
+  // réservé à un ajout au panier réel (page.tsx) — un simple clic « retour » ne doit pas le
+  // déclencher.
+  const [hrefRetorno, setHrefRetorno] = useState("/");
+  usePrefillUltimosCriterios(
+    useCallback((criterios) => setHrefRetorno(`/${escribirCriterios(criterios)}`), [])
+  );
+
   const alojamiento = ficha.alojamiento;
 
   // `unidad` est une unité de PRIX — à ne pas confondre avec `lodgingKind`, qui est une nature de
@@ -96,7 +112,7 @@ export function FichaProducto({
           `RouterProvider` react-aria (absent de la version installée), ou rendre le panier
           persistant — ce que le cahier §2b.6 décide depuis le 2026-09-07 et que le backlog porte
           déjà. Ce lien disparaîtra avec la seconde. */}
-      <BackLink href="/" label={t("backToCatalog")} testId="volver-al-catalogo" />
+      <BackLink href={hrefRetorno} label={t("backToCatalog")} testId="volver-al-catalogo" />
 
       <Card>
         <Card.Header>

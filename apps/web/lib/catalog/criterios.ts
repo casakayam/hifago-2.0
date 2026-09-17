@@ -154,7 +154,28 @@ export function hayCriterios(criterios: Criterios): boolean {
  * Rien n'échoue jamais : une valeur absente ou différente de `"1"` répond simplement non.
  */
 export function leerDesdeCarrito(params: ParamsBrutos): boolean {
-  return primero(params.desdeCarrito) === "1";
+  return leerBandera(params, "desdeCarrito");
+}
+
+/**
+ * Les DRAPEAUX CONTEXTUELS (`desdeCarrito`, `alojamientoParaCamp`, `alojamientoParaEvento`) : ils
+ * disent « pourquoi on est arrivé ici », jamais ce qu'on cherche — ils ne rejoignent donc jamais
+ * `Criterios`, ni un canonical, ni un « Ver más ». Ces deux fonctions sont le seul endroit qui
+ * connaisse leur écriture et leur lecture, exactement comme `escribirCriterios`/`leerCriterios`
+ * pour les critères eux-mêmes : le piège `?` vs `&` (selon qu'il y a déjà des critères ou non)
+ * était recopié à chaque nouveau drapeau, et le jeu grandit à chaque parcours ajouté.
+ */
+function hrefConBandera(
+  base: string,
+  criterios: Pick<Criterios, "desde" | "hasta" | "personas">,
+  bandera: string
+): string {
+  const sufijo = escribirCriterios(criterios);
+  return `${base}${sufijo}${sufijo ? "&" : "?"}${bandera}=1`;
+}
+
+function leerBandera(params: ParamsBrutos, bandera: string): boolean {
+  return primero(params[bandera]) === "1";
 }
 
 /**
@@ -165,8 +186,7 @@ export function leerDesdeCarrito(params: ParamsBrutos): boolean {
  * dans ce même fichier, jamais une chaîne recopiée à la main d'un côté ou de l'autre.
  */
 export function hrefRetornoCarrito(criterios: Criterios): string {
-  const sufijo = escribirCriterios(criterios);
-  return `/${sufijo}${sufijo ? "&" : "?"}desdeCarrito=1`;
+  return hrefConBandera("/", criterios, "desdeCarrito");
 }
 
 /**
@@ -188,8 +208,7 @@ export function hrefRetornoCarrito(criterios: Criterios): string {
 export function hrefAlojamientosCompatibles(
   criterios: Pick<Criterios, "desde" | "hasta" | "personas">
 ): string {
-  const sufijo = escribirCriterios(criterios);
-  return `/alojamientos${sufijo}${sufijo ? "&" : "?"}alojamientoParaCamp=1`;
+  return hrefConBandera("/alojamientos", criterios, "alojamientoParaCamp");
 }
 
 /**
@@ -197,5 +216,23 @@ export function hrefAlojamientosCompatibles(
  * raisonnement que `leerDesdeCarrito` (le paramètre décrit d'où on vient, jamais un critère).
  */
 export function leerAlojamientoParaCamp(params: ParamsBrutos): boolean {
-  return primero(params.alojamientoParaCamp) === "1";
+  return leerBandera(params, "alojamientoParaCamp");
+}
+
+/**
+ * Même formule que `hrefAlojamientosCompatibles`, drapeau contextuel distinct
+ * (`alojamientoParaEvento`) car le bandeau affiché sur `/alojamientos` diffère (« la nuit de ton
+ * évènement », jamais pluralisé — un evento n'a qu'UNE nuit par construction, contrairement à un
+ * camp multi-jours). Appelant : `EventoReservationForm.tsx`, systématiquement après l'ajout au
+ * panier (pas de garde `durationDays > 1` : un evento n'a pas cette notion).
+ */
+export function hrefAlojamientosParaEvento(
+  criterios: Pick<Criterios, "desde" | "hasta" | "personas">
+): string {
+  return hrefConBandera("/alojamientos", criterios, "alojamientoParaEvento");
+}
+
+/** Même raisonnement que `leerAlojamientoParaCamp`, pour le drapeau côté evento. */
+export function leerAlojamientoParaEvento(params: ParamsBrutos): boolean {
+  return leerBandera(params, "alojamientoParaEvento");
 }

@@ -14,7 +14,7 @@
 -- (pgTAP tourne en transaction annulée, structurellement incapable de simuler une vraie
 -- concurrence).
 begin;
-select plan(10);
+select plan(12);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -132,6 +132,56 @@ select is(
   (select total_cop from order_lines where holder_name = 'Holder Lodging Range Success'),
   (200000 + round(200000 * 1.20))::bigint,
   'create_order alojamiento par plage : total_cop = somme nuit par nuit, majoration week-end incluse'
+);
+
+-- === create_order — alojamiento par plage, qty > 1 : le total multiplie bien par qty =============
+-- Régression du 2026-09-16 (migration 20260916120000_fix_lodging_price_missing_qty) : qty désigne
+-- des unités facturables (lits/chambres selon lodging_kind), jamais des occupants — price_tiers
+-- redevient donc un prix PAR UNITÉ et par nuit, à multiplier par qty comme les autres branches de
+-- create_order. Produit et dates dédiés (jamais ceux du scénario ci-dessus, déjà consommés) pour
+-- que ce total ne coïncide pas par accident avec qty=1 (les deux formules donnent le même résultat
+-- à qty=1, ce qui avait rendu la régression invisible).
+--
+-- reset role : le rôle est resté `authenticated` depuis la ligne 94 (dernier `set local role`, pour
+-- les appels resolve_date_price/create_order ci-dessus) — un insert catalogue (produit/calendrier/
+-- disponibilité) doit repasser par le rôle superuser par défaut de la transaction pgTAP, comme les
+-- fixtures du haut de fichier, sous peine de violer la RLS d'écriture sur products.
+reset role;
+insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug,
+                      min_qty, max_qty, price_tiers)
+values ('88930000-0000-4000-8000-000000000023', '88930000-0000-4000-8000-000000000001',
+        '88930000-0000-4000-8000-000000000011', 'lodging', jsonb_build_object('es', 'Casa Range Qty Test'),
+        100000, true, 'range-lodging-qty',
+        1, 4,
+        jsonb_build_array(
+          jsonb_build_object('min_qty', 1, 'max_qty', 1, 'price_cop', 100000),
+          jsonb_build_object('min_qty', 2, 'max_qty', 4, 'price_cop', 90000)
+        ));
+insert into product_calendar (product_id, date, open)
+select '88930000-0000-4000-8000-000000000023', d::date, true
+  from generate_series('2028-12-10'::date, '2028-12-13'::date, interval '1 day') as d;
+insert into product_availability (product_id, date, capacity, booked)
+select '88930000-0000-4000-8000-000000000023', d::date, 2, 0
+  from generate_series('2028-12-10'::date, '2028-12-13'::date, interval '1 day') as d;
+
+set local role authenticated;
+select test_login('88930000-0000-4000-8000-000000000034');
+insert into cart_items (account_id, product_id, date, end_date, qty) values
+  ('88930000-0000-4000-8000-000000000034', '88930000-0000-4000-8000-000000000023',
+   '2028-12-10', '2028-12-12', 2);
+create temp table tmp_lodging_qty as
+select create_order(
+  'Holder Lodging Range Qty', p_holder_email => 'lodging-range-qty@test.local'
+) as result;
+
+select ok(
+  (select (result->>'ok')::boolean from tmp_lodging_qty),
+  'create_order alojamiento par plage, qty=2 : réservation de 2 nuits acceptée'
+);
+select is(
+  (select total_cop from order_lines where holder_name = 'Holder Lodging Range Qty'),
+  (2 * 90000 * 2)::bigint,
+  'create_order alojamiento par plage, qty=2 : total_cop = nuits × tarif du palier (qty=2) × qty, jamais sans le facteur qty'
 );
 
 -- === create_order — alojamiento par plage : refus (date fermée) tout-ou-rien =====================

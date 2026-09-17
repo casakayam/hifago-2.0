@@ -31,9 +31,13 @@ export type OrderLineForDisplay = {
   establishmentName: string;
   date: string;
   endDate: string | null;
+  /** `products.duration_days` — non nul seulement pour un camp (`endDate` reste null pour lui ;
+   * l'écran reconstitue sa date de fin via `ultimoDiaCampIso`, `formatLineSchedule`). */
+  durationDays: number | null;
   slotStartTime: string | null;
   qty: number;
   totalCop: number;
+  acompteCop: number;
   /** `reserved` | `fulfilled` | `no_show` | `cancelled_by_client` | `cancelled_by_provider` | `expired` | `superseded` */
   status: string;
   /** Spec 34 décision ③ — le lien vers la fiche. `null` si la prestation n'a pas d'établissement. */
@@ -80,6 +84,7 @@ type RpcLine = {
   establishment_contact_phone: string | null;
   date: string;
   end_date: string | null;
+  duration_days: number | null;
   slot_start_time: string | null;
   qty: number;
   price_cop: number;
@@ -136,9 +141,11 @@ export async function getOrderByToken(
         resolveLocalizedField(asLocalizedField(line.establishment_name), locale) ?? "",
       date: line.date,
       endDate: line.end_date,
+      durationDays: line.duration_days,
       slotStartTime: line.slot_start_time,
       qty: line.qty,
       totalCop: line.total_cop,
+      acompteCop: line.acompte_cop,
       status: line.status,
       establishmentSlug: line.establishment_slug,
       establishmentContactUrl: line.establishment_contact_phone

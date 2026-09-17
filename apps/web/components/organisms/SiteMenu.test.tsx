@@ -13,6 +13,9 @@ vi.mock("@/i18n/navigation", () => ({
     </a>
   ),
   usePathname: () => "/productos/kayak",
+  // `LanguageSwitcher`, monté par ce composant, appelle `useRouter` depuis le lot du
+  // 2026-09-16 (conservation de la query string au changement de langue).
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
 const messages = loadMessages("es");

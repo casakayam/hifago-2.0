@@ -23,6 +23,7 @@ import {
   estadoDisponibilidad,
   plazasRestantes,
 } from "@/lib/reservas/disponibilidad";
+import { usePrefillUltimosCriterios } from "@/lib/reservas/usePrefillUltimosCriterios";
 
 // Spec 18 §0 Tranche 1 : produit à créneaux horaires (product_slot_rules côté admin, ex. jetski —
 // cf. hifago/docs/journal/2026-08.md entrée 2026-08-18, motivé par un produit réel bloqué faute de
@@ -145,11 +146,43 @@ export function SlotReservationForm({
     : undefined;
   const slotRemaining = selectedSlot ? remainingForSlot(selectedSlot, inCartByKey) : 0;
 
+  // UN SEUL prédicat « cette date est-elle refusée ? », passé tel quel au `disabled` du calendrier
+  // ET appelé en tête de `handleSelectDate` — le pré-remplissage (spec 28 §4 point 3) appelle ce
+  // handler HORS du calendrier. Écrire les conditions deux fois, à cinquante lignes d'écart, les
+  // laissait diverger en silence : ce formulaire n'avait recopié qu'une des trois dans son handler.
+  //
+  // Bornes : minuit à GUATAPÉ, jamais l'heure du NAVIGATEUR (lot fuseau, 2026-08-28) — un visiteur
+  // européen ouvrant la fiche le 1er du mois à 2 h du matin voyait le dernier jour du mois
+  // précédent barré, alors qu'à Guatapé il était encore réservable. Borne HAUTE : au-delà de
+  // l'horizon produit rien n'est vendable, sans elle ces dates paraissaient sélectionnables et
+  // n'étaient refusées qu'après coup.
+  function fechaNoSeleccionable(date: Date): boolean {
+    const daySlotsForDate = byDate.get(format(date, "yyyy-MM-dd"));
+    // ⚠️ Une date SANS créneau du tout est refusée, alors qu'elle n'est pas « complète » : rien n'y
+    // est vendable, il n'y a simplement rien. `diaCompleto` répond `false` dans ce cas — c'est la
+    // bonne réponse à SA question, et le distinguer ici plutôt que dans le prédicat.
+    if (!daySlotsForDate) return true;
+    return (
+      date < startOfTodayInBogota() ||
+      date > dernierJourReservable ||
+      diaCompleto(daySlotsForDate, inCartByKey)
+    );
+  }
+
   function handleSelectDate(date: Date | undefined) {
+    // Un clic réel ne peut jamais être refusé ici (déjà exclu par le même prédicat côté
+    // `disabled`) : la garde ne sert qu'au pré-remplissage.
+    if (date && fechaNoSeleccionable(date)) return;
     setSelectedDate(date);
     setSelectedSlotStartTime(undefined);
     setQty(minQty);
   }
+
+  // Spec 28 §4 point 3 : la date filtrée dans la recherche, si elle porte des créneaux réels de CE
+  // produit, est déjà posée en arrivant sur la fiche — même garde que le clic (ci-dessus).
+  usePrefillUltimosCriterios(({ desde }) => {
+    if (desde) handleSelectDate(parseISO(desde));
+  });
 
   function handleSelectSlot(slot: SlotRow) {
     if (remainingForSlot(slot, inCartByKey) < 1) return;
@@ -185,24 +218,7 @@ export function SlotReservationForm({
           // serait peint comme « aujourd'hui ».
           today={startOfTodayInBogota()}
           onSelect={handleSelectDate}
-          disabled={[
-            // Minuit à GUATAPÉ, jamais l'heure du NAVIGATEUR (lot fuseau, 2026-08-28) : un visiteur
-            // européen ouvrant la fiche le 1er du mois à 2 h du matin voyait le dernier jour du mois
-            // précédent barré, alors qu'à Guatapé il était encore réservable.
-            { before: startOfTodayInBogota() },
-            // Borne HAUTE : au-delà de l'horizon produit, rien n'est vendable. Sans elle, ces
-            // dates paraissaient sélectionnables et n'étaient refusées qu'après coup.
-            { after: dernierJourReservable },
-            // ⚠️ Une date SANS créneau du tout est désactivée (`true`), alors qu'elle n'est pas
-            // « complète » : rien n'y est vendable, il n'y a simplement rien. `diaCompleto` répond
-            // `false` dans ce cas — c'est la bonne réponse à SA question, et les deux appelants
-            // n'en font pas le même usage. Le distinguer ici plutôt que dans le prédicat.
-            (date) => {
-              const daySlotsForDate = byDate.get(format(date, "yyyy-MM-dd"));
-              if (!daySlotsForDate) return true;
-              return diaCompleto(daySlotsForDate, inCartByKey);
-            },
-          ]}
+          disabled={[fechaNoSeleccionable]}
           modifiers={{ full: fullDates }}
           modifiersClassNames={{ full: "line-through opacity-60" }}
           // data-date (ISO, indépendant de la locale) : cible stable pour les tests e2e, même

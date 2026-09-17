@@ -18,6 +18,7 @@
   "editionSpotsBadge": "{count, plural, one {# cupo} other {# cupos}}",
   "editionNights": "{count, plural, one {# noche obligatoria} other {# noches obligatorias}}",
   "editionPriceForTwo": "para {count} adultos",
+  "showMoreEditions": "Ver {count, plural, one {# edición más} other {# ediciones más}}",
   "selectDate": "Elige una fecha en el calendario para reservar.",
   "selectSlotDate": "Elige un día en el calendario para ver los horarios disponibles.",
   "selectSlotTime": "Elige un horario.",

@@ -21,7 +21,10 @@
   "pay": "Pay the deposit",
   "retryPayment": "Retry payment",
   "paying": "Redirecting to Mercado Pago…",
-  "summary": "Your booking",
+  "trip": {
+    "range": "Your trip from {start} to {end}",
+    "single": "Your trip on {start}"
+  },
   "lineQty": "Quantity: {count}",
   "total": "Total",
   "acompte": "Deposit (paid online)",

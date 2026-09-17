@@ -12,6 +12,7 @@ import {
   escribirCriterios,
   hayCriterios,
   leerAlojamientoParaCamp,
+  leerAlojamientoParaEvento,
   leerCriterios,
   type ParamsBrutos,
 } from "@/lib/catalog/criterios";
@@ -19,7 +20,7 @@ import { segmentoDeTipo } from "@/lib/catalog/segmentos";
 import type { TipoOferta } from "@/lib/catalog/tipos";
 import { nightsInRange } from "@/lib/reservas/reservationRange";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/jsonld/breadcrumb";
-import { migasParaJsonLd } from "@/lib/seo/migas";
+import { migasConCriterios, migasParaJsonLd } from "@/lib/seo/migas";
 import { getSiteUrl } from "@/lib/seo/siteUrl";
 import type { Locale } from "@/messages";
 import { BuscadorInicio } from "./BuscadorInicio";
@@ -86,12 +87,31 @@ export async function IndiceCategoriasConOfertas({
     ? nightsInRange({ from: parseISO(criterios.desde!), to: parseISO(criterios.hasta!) }).length
     : 0;
 
+  // Même raisonnement, pour un evento (2026-09-16) — jamais pluralisé : `hrefAlojamientosParaEvento`
+  // ne pose jamais qu'une seule nuit (cf. son commentaire), donc rien à compter ici.
+  const alojamientoParaEvento =
+    tipo === "lodging" &&
+    leerAlojamientoParaEvento(searchParams) &&
+    Boolean(criterios.desde && criterios.hasta);
+
+  // Un seul bandeau rendu, la précédence exprimée UNE fois (le camp l'emporte) — le balisage était
+  // recopié à l'identique pour les deux cas, seuls le testId et la clé de message changeaient.
+  const avisoAlojamiento = alojamientoParaCamp
+    ? { testId: "camp-lodging-hint", texto: t("campLodgingHint", { count: nochesCamp }) }
+    : alojamientoParaEvento
+      ? { testId: "event-lodging-hint", texto: t("eventLodgingHint") }
+      : null;
+
   // LA seule requête de la page, et elle ne part pas d'ici : `lib/catalog/` la porte. Elle rend
   // les catégories DÉJÀ triées (`Intl.Collator` de la locale), chacune avec ses offres plafonnées
   // à `POR_CATEGORIA`, et la catégorie de rattrapage toujours en dernier.
   const categorias = await buscarCategorias(tipo, criterios, { porCategoria: POR_CATEGORIA, locale });
 
   const migas = [{ nombre: inicio, href: "/" }, { nombre: seccion }];
+
+  // `migasConCriterios` et pas un `map` local : même helper que `ListadoTipo.tsx`, le raisonnement
+  // (pourquoi le JSON-LD garde `migas` nu) y vit une seule fois.
+  const migasVisibles = migasConCriterios(migas, sufijoCriterios);
 
   const labels = await labelsBuscador(locale);
 
@@ -105,7 +125,7 @@ export async function IndiceCategoriasConOfertas({
         )}
       />
 
-      <Migas items={migas} etiqueta={t("migasEtiqueta")} locale={locale} testId="migas" />
+      <Migas items={migasVisibles} etiqueta={t("migasEtiqueta")} locale={locale} testId="migas" />
 
       {/* VISIBLE, contrairement au `<h1>` masqué de l'accueil (décision 5, spec 29) : un titre
           masqué laisserait le visiteur deviner où il a atterri. */}
@@ -122,15 +142,16 @@ export async function IndiceCategoriasConOfertas({
         atajosTipo={[]}
       />
 
-      {alojamientoParaCamp ? (
+      {avisoAlojamiento ? (
         // Même habillage que le bloc bloquant de `/mi-viaje` (`lodging-required-notice`) — un
         // visiteur doit reconnaître le même message aux deux endroits, pas une simple phrase grise
         // noyée sous la barre de recherche (retour Jérôme : « il faut que ce soit plus visible »).
+        // Côté evento, aucun bloc bloquant équivalent sur `/mi-viaje` (jamais décidé) : informatif.
         <div
           className="rounded-lg border border-border bg-surface-secondary p-4 text-sm"
-          data-testid="camp-lodging-hint"
+          data-testid={avisoAlojamiento.testId}
         >
-          {t("campLodgingHint", { count: nochesCamp })}
+          {avisoAlojamiento.texto}
         </div>
       ) : null}
 

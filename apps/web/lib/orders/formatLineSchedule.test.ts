@@ -31,4 +31,22 @@ describe("formatLineSchedule", () => {
       "2026-11-01"
     );
   });
+
+  it("reconstitue la date de fin d'un camp depuis durationDays — endDate est toujours null pour lui", () => {
+    expect(
+      formatLineSchedule({ date: "2026-10-01", endDate: null, durationDays: 7 })
+    ).toBe("2026-10-01 → 2026-10-07");
+  });
+
+  it("ne montre pas de plage pour un camp d'un seul jour (durationDays <= 1)", () => {
+    expect(formatLineSchedule({ date: "2026-10-01", endDate: null, durationDays: 1 })).toBe(
+      "2026-10-01"
+    );
+  });
+
+  it("préfère endDate à durationDays si les deux sont présents (ne devrait pas arriver en pratique)", () => {
+    expect(
+      formatLineSchedule({ date: "2026-10-01", endDate: "2026-10-03", durationDays: 7 })
+    ).toBe("2026-10-01 → 2026-10-03");
+  });
 });

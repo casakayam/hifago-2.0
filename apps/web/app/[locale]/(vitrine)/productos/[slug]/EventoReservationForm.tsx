@@ -11,9 +11,10 @@ import {
   TextField,
   dateTaggedDayButtonComponents,
 } from "@hifago/ui";
-import { startOfTodayInBogota } from "@hifago/domain";
+import { addDaysIso, startOfTodayInBogota } from "@hifago/domain";
 import { useCart } from "@/lib/cart/CartContext";
 import { useAddToCart } from "@/lib/cart/useAddToCart";
+import { hrefAlojamientosParaEvento } from "@/lib/catalog/criterios";
 import { mesPorDefecto, ultimoDiaReservable } from "@/lib/reservas/calendario";
 import { limitarCantidad, pisoCantidad, topeCantidad } from "@/lib/reservas/cantidad";
 import {
@@ -22,6 +23,7 @@ import {
   estadoDisponibilidad,
   plazasRestantes,
 } from "@/lib/reservas/disponibilidad";
+import { usePrefillUltimosCriterios } from "@/lib/reservas/usePrefillUltimosCriterios";
 
 // Evento réservable en ligne (2026-09-15) — colocalisé comme SlotReservationForm/
 // LodgingReservationForm (un seul consommateur, FichaProducto.tsx), jamais dans components/.
@@ -125,21 +127,54 @@ export function EventoReservationForm({
   // jamais `undefined` (react-day-picker retomberait sur le mois du NAVIGATEUR).
   const defaultMonth = mesPorDefecto(occurrences[0]?.date);
 
+  // UN SEUL prédicat « cette date est-elle refusée ? », passé tel quel au `disabled` du calendrier
+  // ET appelé en tête de `handleSelectDate` — le pré-remplissage (spec 28 §4 point 3) appelle ce
+  // handler HORS du calendrier. Écrire les conditions deux fois, à cinquante lignes d'écart, les
+  // laissait diverger en silence : ce formulaire n'en portait aucune dans son handler.
+  //
+  // Bornes : minuit à GUATAPÉ, jamais l'heure du NAVIGATEUR (lot fuseau, 2026-08-28) — un visiteur
+  // européen ouvrant la fiche le 1er du mois à 2 h du matin voyait le dernier jour du mois
+  // précédent barré, alors qu'à Guatapé il était encore réservable. Borne HAUTE : au-delà de
+  // l'horizon produit rien n'est vendable, sans elle ces dates paraissaient sélectionnables et
+  // n'étaient refusées qu'après coup.
+  function fechaNoSeleccionable(date: Date): boolean {
+    return (
+      date < startOfTodayInBogota() ||
+      date > dernierJourReservable ||
+      !byDate.has(format(date, "yyyy-MM-dd"))
+    );
+  }
+
   function handleSelectDate(date: Date | undefined) {
     if (!date) {
       setSelectedDate(undefined);
       setQty(minQty);
       return;
     }
-    const iso = format(date, "yyyy-MM-dd");
-    if (!byDate.has(iso)) return;
-    setSelectedDate(iso);
+    if (fechaNoSeleccionable(date)) return;
+    setSelectedDate(format(date, "yyyy-MM-dd"));
     setQty(minQty);
   }
 
+  // Spec 28 §4 point 3 : la date filtrée dans la recherche, si elle correspond à une occurrence
+  // réelle de CE produit, est déjà posée en arrivant sur la fiche — `handleSelectDate` porte déjà
+  // la garde, aucune condition à recopier ici.
+  usePrefillUltimosCriterios(({ desde }) => {
+    if (desde) handleSelectDate(parseISO(desde));
+  });
+
+  // Retour Gabriel (2026-09-16) : contrairement au camp (`durationDays > 1` seulement), TOUT evento
+  // redirige vers /alojamientos après l'ajout — un evento n'a pas de notion de durée, la nuit à
+  // couvrir est systématiquement celle de l'occurrence choisie (`desde` = date, `hasta` = date + 1
+  // jour via `addDaysIso`, jamais `date-fns` — piège fuseau déjà connu de ce fichier).
   async function handleAddToCart() {
     if (!selectedDate || isFull) return;
-    await addToCart({ productId, date: selectedDate, qty });
+    const hrefRetorno = hrefAlojamientosParaEvento({
+      desde: selectedDate,
+      hasta: addDaysIso(selectedDate, 1),
+      personas: qty,
+    });
+    await addToCart({ productId, date: selectedDate, qty }, { hrefRetorno });
   }
 
   return (
@@ -154,11 +189,7 @@ export function EventoReservationForm({
           // "aujourd'hui" et la borne basse doivent venir de GUATAPÉ, jamais du navigateur.
           today={startOfTodayInBogota()}
           onSelect={handleSelectDate}
-          disabled={[
-            { before: startOfTodayInBogota() },
-            { after: dernierJourReservable },
-            (date) => !byDate.has(format(date, "yyyy-MM-dd")),
-          ]}
+          disabled={[fechaNoSeleccionable]}
           modifiers={{ full: fullDates }}
           modifiersClassNames={{ full: "line-through opacity-60" }}
           // data-date (ISO) : cible stable pour les tests, indépendante de la locale d'affichage.

@@ -166,6 +166,23 @@ test("cliquer une carte mène à la fiche de l'offre correspondante", async ({ p
   await expect(page.getByTestId("product-name")).toBeVisible();
 });
 
+// Bug Jérôme du 2026-09-16 : revenir au catalogue depuis une fiche effaçait la recherche en cours.
+// `FichaProducto.tsx` ne peut PAS lire cette recherche depuis son URL (la fiche ne porte jamais les
+// critères — spec 28 §4) : elle passe par la mémoire `sessionStorage` que `BuscadorInicio` tient à
+// jour à chaque visite (`lib/catalog/ultimosCriterios.ts`), relue au montage du lien de retour.
+test("revenir au catalogue depuis une fiche conserve la recherche en cours", async ({ page }) => {
+  await irAlInicio(page);
+  await buscar(page, "kayak");
+
+  await page.getByTestId(`tarjeta-${ACTIVIDAD_KAYAK}-link`).click();
+  await expect(page).toHaveURL(new RegExp(`/es/productos/${ACTIVIDAD_KAYAK}$`));
+
+  await page.getByTestId("volver-al-catalogo").click();
+  await page.waitForURL(/\/es\?q=kayak$/);
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByTestId(`tarjeta-${ACTIVIDAD_KAYAK}`)).toBeVisible();
+});
+
 test("une recherche par texte pousse les critères dans l'URL et le serveur re-rend des résultats filtrés", async ({
   page,
 }) => {
@@ -193,6 +210,32 @@ test("une recherche par texte pousse les critères dans l'URL et le serveur re-r
   // Le champ garde le texte cherché : un visiteur qui revient d'un résultat doit relire sa
   // recherche, pas un champ vide.
   await expect(page.getByTestId("buscador-bar-input")).toHaveValue("kayak");
+});
+
+// Bug Jérôme du 2026-09-16 : naviguer après une recherche effaçait les critères actifs, à deux
+// endroits successifs du MÊME parcours — l'onglet de type (`tiposDeBarra.ts` construisait un `href`
+// nu, sans `sufijoCriterios`, contrairement aux liens « Ver más » testés plus haut), puis « Inicio »
+// du fil d'Ariane (`migas`, la liste servant aussi le JSON-LD `BreadcrumbList`, ne portait jamais
+// les critères ; `migasConCriterios` en dérive maintenant une copie affichée qui les porte, sans
+// jamais toucher `migas` lui-même, JSON-LD inchangé).
+//
+// UN SEUL parcours, deux étapes : le second cas se joue de toute façon après le premier — deux
+// tests en faisaient deux fois le trajet navigateur complet, le plus lent de la suite.
+test("les critères de recherche survivent à la navigation (onglet de type, puis « Inicio »)", async ({
+  page,
+}) => {
+  await irAlInicio(page);
+  await buscar(page, "kayak");
+
+  await page.getByTestId("selector-tipos-activity").click();
+  await page.waitForURL(/\/es\/actividades\?q=kayak$/);
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByTestId(`tarjeta-${ACTIVIDAD_KAYAK}`)).toBeVisible();
+
+  await page.getByTestId("migas").getByRole("link", { name: "Inicio" }).click();
+  await page.waitForURL(/\/es\?q=kayak$/);
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByTestId(`tarjeta-${ACTIVIDAD_KAYAK}`)).toBeVisible();
 });
 
 test("une recherche sans résultat rend l'état vide, et la barre reste utilisable", async ({

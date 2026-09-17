@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { NextIntlClientProvider } from "next-intl";
@@ -50,6 +50,8 @@ vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
 // (specs 28 et 30) ; `FichaProducto.test.tsx` en est l'héritier. `Link` reçoit ici
 // une prop `locale` en plus : le mock la rend en préfixe, exactement comme le vrai — sans quoi le
 // test du sélecteur de langue ne vérifierait rien de ce qui compte.
+const pushMock = vi.fn();
+
 vi.mock("@/i18n/navigation", () => ({
   Link: ({ href, locale, children, ...props }: React.ComponentProps<"a"> & { locale?: string }) => (
     <a href={locale ? `/${locale}${href}` : String(href)} {...props}>
@@ -57,6 +59,7 @@ vi.mock("@/i18n/navigation", () => ({
     </a>
   ),
   usePathname: () => "/productos/kayak",
+  useRouter: () => ({ push: pushMock }),
 }));
 
 const messages = loadMessages("es");
@@ -122,6 +125,15 @@ async function rendu(props: { isAuthenticated?: boolean; lignes?: AddToCartInput
 }
 
 describe("SiteHeader", () => {
+  // ⚠️ `pushMock` est un mock de MODULE, partagé par tous les tests ; `window.history.pushState`
+  // modifie l'état réel de jsdom, qui persiste sinon d'un test à l'autre du même fichier.
+  beforeEach(() => {
+    pushMock.mockClear();
+  });
+  afterEach(() => {
+    window.history.pushState({}, "", "/");
+  });
+
   it("introduit les landmarks que l'app n'avait pas", async () => {
     const container = await rendu();
     const header = container.querySelector("header") as HTMLElement;
@@ -137,6 +149,17 @@ describe("SiteHeader", () => {
     expect(logo.tagName).toBe("A");
     expect(logo.getAttribute("href")).toBe("/");
     expect(logo.getAttribute("aria-label")).toBe(messages.Chrome.homeLabel);
+  });
+
+  // Bug Jérôme du 2026-09-16 : cliquer le logo effaçait les filtres actifs. `href="/"` reste
+  // statique dans le DOM (test précédent) ; c'est l'`onClick` qui lit `window.location.search` en
+  // direct et navigue avec, via `router.push`.
+  it("conserve la query string active en cliquant le logo", async () => {
+    window.history.pushState({}, "", "/es/actividades?q=kayak");
+    const container = await rendu();
+    const logo = container.querySelector('[data-testid="header-home"]') as HTMLAnchorElement;
+    fireEvent.click(logo);
+    expect(pushMock).toHaveBeenCalledWith("/?q=kayak");
   });
 
   describe("le panier", () => {

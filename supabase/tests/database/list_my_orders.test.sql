@@ -204,9 +204,10 @@ select is(
      from jsonb_array_elements(public.list_my_orders() -> 'orders') o,
           lateral jsonb_array_elements(o -> 'lines') l
     where l ? 'acompte_cop' and l ? 'total_cop'
-      and l ? 'establishment_slug' and l ? 'establishment_contact_phone'),
+      and l ? 'establishment_slug' and l ? 'establishment_contact_phone'
+      and l ? 'duration_days'),
   4,
-  'chaque ligne porte ses DEUX montants (décision ④) et son établissement (décisions ③/⑥)'
+  'chaque ligne porte ses DEUX montants (décision ④), son établissement (décisions ③/⑥) et duration_days (20260916)'
 );
 
 -- ---------------------------------------------------------------------------------------------

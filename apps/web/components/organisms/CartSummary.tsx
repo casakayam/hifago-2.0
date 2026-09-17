@@ -10,8 +10,11 @@ import { createClient } from "@hifago/supabase/client";
 import { useRouter } from "@/i18n/navigation";
 import { useCart } from "@/lib/cart/CartContext";
 import { Button, cn } from "@hifago/ui";
+import { Card } from "@/components/atoms/Card";
 import { Price } from "@/components/atoms/Price";
 import { formatLineSchedule } from "@/lib/orders/formatLineSchedule";
+import { computeTripRange, formatTripLabel } from "@/lib/orders/tripRange";
+import { computeCartLineTotal } from "@/lib/cart/cartLineTotal";
 import type { CartLineForDisplay } from "@/lib/cart/getCartLines";
 import type { Locale } from "@/messages";
 
@@ -31,6 +34,9 @@ export type CartSummaryProps = {
 
 export function CartSummary({ lines, editable, locale }: CartSummaryProps) {
   const t = useTranslations("CartPage");
+  // Le titre "Tu viaje del X al X" est partagé avec l'écran de résultat — mêmes clés
+  // `OrderResultPage.trip.*`, jamais recopiées (cf. `lib/orders/tripRange.ts`).
+  const tTrip = useTranslations("OrderResultPage");
   const router = useRouter();
   const { refresh } = useCart();
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -45,7 +51,15 @@ export function CartSummary({ lines, editable, locale }: CartSummaryProps) {
     router.refresh();
   }
 
-  const total = lines.reduce((sum, line) => sum + line.priceCop * line.qty, 0);
+  // UN seul passage : `computeCartLineTotal` parcourt les nuits une par une (date-fns `format`
+  // par nuit) pour une ligne d'hébergement — le recalculer dans le `map` d'affichage doublait ce
+  // travail à chaque rendu, donc à chaque retrait de ligne.
+  const totalesPorLinea = lines.map(computeCartLineTotal);
+  const total = totalesPorLinea.reduce((sum, montant) => sum + montant, 0);
+  // Estimation FIXE à 17 %, jamais le pourcentage exact selon commission_case (create_order, qui
+  // peut descendre à 7 % sur un cas rare d'auto-parrainage) — même principe « panier = estimation
+  // affichée » que le reste de ce composant, cf. cartLineTotal.ts.
+  const totalNow = Math.round(total * 0.17);
 
   if (lines.length === 0) {
     return (
@@ -55,10 +69,14 @@ export function CartSummary({ lines, editable, locale }: CartSummaryProps) {
     );
   }
 
+  // Calculé APRÈS la garde ci-dessus : `computeTripRange` suppose `lines` non vide (même
+  // invariant que côté commande, tenu ici par l'embranchement plutôt que par `create_order`).
+  const tripLabel = formatTripLabel(computeTripRange(lines), locale, tTrip);
+
   return (
-    <div className="flex flex-col gap-6">
+    <Card title={tripLabel} titleAs="h2" titleSize="md" contentGap="md" testId="trip-summary">
       <ul className="flex flex-col gap-3">
-        {lines.map((line) => (
+        {lines.map((line, i) => (
           <li
             key={line.id}
             data-testid={`cart-line-${line.id}`}
@@ -81,7 +99,7 @@ export function CartSummary({ lines, editable, locale }: CartSummaryProps) {
               ) : null}
             </div>
             <div className="flex items-center gap-3">
-              <Price amountCop={line.priceCop * line.qty} locale={locale} />
+              <Price amountCop={totalesPorLinea[i]} locale={locale} />
               {editable ? (
                 <Button
                   type="button"
@@ -102,6 +120,9 @@ export function CartSummary({ lines, editable, locale }: CartSummaryProps) {
       <p className="text-lg font-medium" data-testid="cart-total">
         {t("total")}: <Price amountCop={total} locale={locale} />
       </p>
-    </div>
+      <p className="text-sm text-muted" data-testid="cart-total-now">
+        {t("totalNow")}: <Price amountCop={totalNow} locale={locale} />
+      </p>
+    </Card>
   );
 }

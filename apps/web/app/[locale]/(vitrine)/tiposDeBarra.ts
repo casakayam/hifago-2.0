@@ -19,14 +19,18 @@ import type { Locale } from "@/messages";
 // ⚠️ Ce module reste SERVEUR (`getTranslations`, pas `useTranslations`) et n'importe de `tipos.ts`
 // que des types/constantes sans dépendance — comme `labelsBuscador.ts`, ça évite de faire entrer le
 // barrel `@hifago/ui` dans le graphe d'un Server Component par transitivité (CLAUDE.md §11.16).
+// ⚠️ `sufijoCriterios` (2026-09-16, bug Jérôme : « en changeant de page les filtres s'enlèvent »)
+// est calculé par l'appelant, jamais recalculé ici — même contrat que `hrefSeccion`/
+// `hrefCategoria` (`lib/catalog/buscar.ts`), qui composent déjà ce même suffixe.
 export async function tiposDeBarra(
-  locale: Locale
+  locale: Locale,
+  sufijoCriterios: string
 ): Promise<{ tipo: TipoOferta; label: string; href: string }[]> {
   const t = await getTranslations({ locale, namespace: "HomePage" });
 
   return ORDEN_SECCIONES.map((tipo) => ({
     tipo,
     label: t(`secciones.${tipo}`),
-    href: `/${segmentoDeTipo(tipo)}`,
+    href: `/${segmentoDeTipo(tipo)}${sufijoCriterios}`,
   }));
 }

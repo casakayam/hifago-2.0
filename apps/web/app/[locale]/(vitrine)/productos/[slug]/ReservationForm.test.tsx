@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { addDays, format, parseISO } from "date-fns";
 import { NextIntlClientProvider } from "next-intl";
 import { ReservationForm } from "./ReservationForm";
+import { guardarUltimosCriterios } from "@/lib/catalog/ultimosCriterios";
 import { loadMessages } from "@/messages";
 
 const messages = loadMessages("es");
@@ -27,6 +29,7 @@ beforeEach(() => {
   vi.setSystemTime(TODAY);
   addLine.mockClear();
   push.mockClear();
+  sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -123,6 +126,39 @@ describe("ReservationForm — min_qty > 1 (Jérôme, 2026-09-14)", () => {
   });
 });
 
+// Spec 28 §4 point 3 : « le calendrier de la fiche se pré-remplit depuis la mémoire du
+// navigateur » — jamais câblé avant ce lot. `guardarUltimosCriterios` (réel, pas mocké) sème la
+// mémoire exactement comme `BuscadorInicio` le fait déjà pour toute recherche avec dates.
+describe("ReservationForm — pré-remplissage depuis la recherche (spec 28 §4 point 3)", () => {
+  it("sélectionne au montage la date mémorisée, sans aucun clic", () => {
+    guardarUltimosCriterios(`?desde=${DEPARTURE}&hasta=${DEPARTURE}`);
+    renderForm();
+
+    expect(screen.getByTestId("add-to-cart-button").hasAttribute("disabled")).toBe(false);
+    fireEvent.click(screen.getByTestId("add-to-cart-button"));
+    expect(addLine).toHaveBeenCalledWith({ productId: "p1", date: DEPARTURE, qty: 1 });
+  });
+
+  it("ignore une date mémorisée qui ne correspond à aucun départ de ce produit", () => {
+    guardarUltimosCriterios("?desde=2026-06-25&hasta=2026-06-25");
+    renderForm();
+
+    expect(screen.getByTestId("add-to-cart-button").hasAttribute("disabled")).toBe(true);
+  });
+
+  // Test par mutation de la garde de bornes ajoutée à `handleSelectDate` : sans elle, ce cas
+  // passerait pour la mauvaise raison (`product_availability` n'a aucune borne côté requête).
+  it("ignore une date mémorisée déjà passée à Guatapé, même si une ligne réelle existe", () => {
+    guardarUltimosCriterios("?desde=2026-05-20&hasta=2026-05-20");
+    renderForm(undefined, undefined, [
+      { date: "2026-05-20", capacity: 5, booked: 0 },
+      { date: DEPARTURE, capacity: 5, booked: 0 },
+    ]);
+
+    expect(screen.getByTestId("add-to-cart-button").hasAttribute("disabled")).toBe(true);
+  });
+});
+
 // Retour Jérôme (2026-09-15) : sous l'agenda, une liste des éditions triée par date, en cartes —
 // un seul état partagé avec le calendrier (jamais deux states à réconcilier), une édition sans
 // cupo désactivée (pas seulement grisée, correction actée en cours de conception).
@@ -187,6 +223,61 @@ describe("ReservationForm — liste d'éditions synchronisée avec le calendrier
 
     expect(carteComplete.getAttribute("aria-pressed")).toBe("false");
     expect(screen.getByTestId("add-to-cart-button").hasAttribute("disabled")).toBe(true);
+  });
+});
+
+// Retour Gabriel (2026-09-16) : « si 10 [éditions] tu affiches les 10 » — un camp à départs
+// fréquents rendait une carte par édition sans plafond. Plafonné à 5, un bouton normal (même
+// style que les autres boutons du formulaire, pas de variante à part) qui en dévoile 5 DE PLUS à
+// chaque clic — jamais la liste entière d'un coup, jamais de bouton « voir moins » ensuite.
+describe("ReservationForm — liste d'éditions plafonnée à 5 (retour Gabriel, 2026-09-16)", () => {
+  const disponibilidadesLongues: Disponibilidad[] = Array.from({ length: 12 }, (_, i) => ({
+    date: format(addDays(parseISO(DEPARTURE), i * 7), "yyyy-MM-dd"),
+    capacity: 5,
+    booked: 0,
+  }));
+
+  it("n'affiche que les 5 premières éditions et un bouton « voir plus »", () => {
+    renderForm(3, undefined, disponibilidadesLongues);
+
+    for (const row of disponibilidadesLongues.slice(0, 5)) {
+      expect(screen.getByTestId(`edition-card-${row.date}`)).toBeTruthy();
+    }
+    for (const row of disponibilidadesLongues.slice(5)) {
+      expect(screen.queryByTestId(`edition-card-${row.date}`)).toBeNull();
+    }
+    expect(screen.getByTestId("show-more-editions").textContent).toBe("Ver 5 ediciones más");
+  });
+
+  it("cliquer « voir plus » n'en ajoute que 5 de plus, jamais la liste entière", () => {
+    renderForm(3, undefined, disponibilidadesLongues);
+
+    fireEvent.click(screen.getByTestId("show-more-editions"));
+
+    for (const row of disponibilidadesLongues.slice(0, 10)) {
+      expect(screen.getByTestId(`edition-card-${row.date}`)).toBeTruthy();
+    }
+    for (const row of disponibilidadesLongues.slice(10)) {
+      expect(screen.queryByTestId(`edition-card-${row.date}`)).toBeNull();
+    }
+    expect(screen.getByTestId("show-more-editions").textContent).toBe("Ver 2 ediciones más");
+  });
+
+  it("un second clic révèle le reliquat et fait disparaître le bouton", () => {
+    renderForm(3, undefined, disponibilidadesLongues);
+
+    fireEvent.click(screen.getByTestId("show-more-editions"));
+    fireEvent.click(screen.getByTestId("show-more-editions"));
+
+    for (const row of disponibilidadesLongues) {
+      expect(screen.getByTestId(`edition-card-${row.date}`)).toBeTruthy();
+    }
+    expect(screen.queryByTestId("show-more-editions")).toBeNull();
+  });
+
+  it("aucun bouton « voir plus » à 5 éditions ou moins", () => {
+    renderForm(3, undefined, disponibilidadesLongues.slice(0, 5));
+    expect(screen.queryByTestId("show-more-editions")).toBeNull();
   });
 });
 

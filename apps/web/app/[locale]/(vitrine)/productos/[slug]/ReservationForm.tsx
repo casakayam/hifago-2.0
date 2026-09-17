@@ -36,10 +36,14 @@ import {
   estadoDisponibilidad,
   plazasRestantes,
 } from "@/lib/reservas/disponibilidad";
+import { usePrefillUltimosCriterios } from "@/lib/reservas/usePrefillUltimosCriterios";
 import type { PrecioTarjeta } from "@/lib/catalog/tipos";
 import type { Locale } from "@/messages";
 
 type AvailabilityRow = { date: string; capacity: number; booked: number };
+
+// Retour Gabriel (2026-09-16) : nombre de cartes visibles avant le bouton « voir plus ».
+const EDICIONES_VISIBLES_INICIALMENTE = 5;
 
 export function ReservationForm({
   productId,
@@ -88,6 +92,13 @@ export function ReservationForm({
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [qty, setQty] = useState(minQty);
+  // Retour Gabriel (2026-09-16) : au-delà de EDICIONES_VISIBLES_INICIALMENTE, la liste s'allongeait
+  // sans borne (un camp à 10 départs affichait 10 cartes) — plafonnée, avec un bouton qui en
+  // dévoile EDICIONES_VISIBLES_INICIALMENTE de plus à chaque clic (jamais tout d'un coup). Jamais
+  // réduit une fois déployé : aucun bouton « voir moins » demandé.
+  const [edicionesVisiblesCount, setEdicionesVisiblesCount] = useState(
+    EDICIONES_VISIBLES_INICIALMENTE
+  );
 
   const byDate = useMemo(
     () => new Map(availability.map((row) => [row.date, row])),
@@ -134,6 +145,8 @@ export function ReservationForm({
   // formulaire — `durationDays > 1` est déjà, plus haut, le signal qui distingue les deux
   // (`diasSemanaSeleccionada`/surlignage `campWeek` ne s'activent que dans ce cas).
   const afficherEditions = durationDays > 1 && availability.length > 0;
+  const edicionesVisibles = availability.slice(0, edicionesVisiblesCount);
+  const edicionesOcultasCount = availability.length - edicionesVisibles.length;
 
   // Ne dépend d'AUCUNE ligne : calculé une fois, pas une fois par édition affichée (il l'était, avec
   // son lookup ICU, à chaque tour de la boucle, pour un résultat identique).
@@ -170,18 +183,49 @@ export function ReservationForm({
     return Array.from({ length: durationDays }, (_, i) => addDays(depart, i));
   }, [selectedIso, durationDays]);
 
+  // UN SEUL prédicat « cette date est-elle refusée ? », passé tel quel au `disabled` du calendrier
+  // ET appelé en tête de `handleSelectDate` — le pré-remplissage (spec 28 §4 point 3) appelle ce
+  // handler HORS du calendrier. Écrire les conditions deux fois, à cinquante lignes d'écart, les
+  // laissait diverger en silence : chaque formulaire n'en avait recopié qu'une partie, et l'écart
+  // n'était visible que par le chemin le moins testé.
+  //
+  // Bornes : minuit à GUATAPÉ, jamais l'heure du NAVIGATEUR (lot fuseau, 2026-08-28) — un visiteur
+  // européen ouvrant la fiche le 1er du mois à 2 h du matin voyait le dernier jour du mois
+  // précédent barré, alors qu'à Guatapé il était encore réservable. Borne HAUTE : au-delà de
+  // l'horizon produit rien n'est vendable, sans elle ces dates paraissaient sélectionnables et
+  // n'étaient refusées qu'après coup.
+  function fechaNoSeleccionable(date: Date): boolean {
+    return (
+      date < startOfTodayInBogota() ||
+      date > dernierJourReservable ||
+      !porJourDepart.has(format(date, "yyyy-MM-dd"))
+    );
+  }
+
   function handleSelectDate(date: Date | undefined) {
     if (!date) {
       setSelectedDate(undefined);
       setQty(minQty);
       return;
     }
+    // `product_availability` n'a AUCUNE borne côté requête (lib/catalog/producto.ts) : une ligne
+    // passée ou hors de l'horizon de 6 mois peut légitimement s'y trouver. Un clic réel ne peut
+    // jamais atteindre cette branche (déjà exclu par le même prédicat), donc aucun changement de
+    // comportement au clic.
+    if (fechaNoSeleccionable(date)) return;
     // Cliquer n'importe quel jour de la semaine sélectionne le DÉPART de cette semaine, jamais le
     // jour cliqué lui-même — `byDate` (et donc la capacité/le panier) ne connaît que les départs.
-    const departIso = porJourDepart.get(format(date, "yyyy-MM-dd"));
-    setSelectedDate(departIso ? parseISO(departIso) : date);
+    // La clé est garantie présente par le prédicat ci-dessus.
+    const departIso = porJourDepart.get(format(date, "yyyy-MM-dd"))!;
+    setSelectedDate(parseISO(departIso));
     setQty(minQty);
   }
+
+  // Spec 28 §4 point 3 : la date filtrée dans la recherche, si elle correspond à un départ réel de
+  // CE produit, est déjà posée en arrivant sur la fiche — même garde que le clic (ci-dessus).
+  usePrefillUltimosCriterios(({ desde }) => {
+    if (desde) handleSelectDate(parseISO(desde));
+  });
 
   // Spec 28 Tranche 3 : sur succès, `useAddToCart` redirige vers l'accueil — SAUF pour un camp de
   // plus d'un jour (2026-09-15), qui redirige vers `/alojamientos` avec les dates et le nombre de
@@ -222,16 +266,7 @@ export function ReservationForm({
           // serait peint comme « aujourd'hui ».
           today={startOfTodayInBogota()}
           onSelect={handleSelectDate}
-          disabled={[
-            // Minuit à GUATAPÉ, jamais l'heure du NAVIGATEUR (lot fuseau, 2026-08-28) : un visiteur
-            // européen ouvrant la fiche le 1er du mois à 2 h du matin voyait le dernier jour du mois
-            // précédent barré, alors qu'à Guatapé il était encore réservable.
-            { before: startOfTodayInBogota() },
-            // Borne HAUTE : au-delà de l'horizon produit, rien n'est vendable. Sans elle, ces
-            // dates paraissaient sélectionnables et n'étaient refusées qu'après coup.
-            { after: dernierJourReservable },
-            (date) => !porJourDepart.has(format(date, "yyyy-MM-dd")),
-          ]}
+          disabled={[fechaNoSeleccionable]}
           modifiers={{ full: fullDates, campWeek: diasSemanaSeleccionada }}
           modifiersClassNames={{
             full: "line-through opacity-60",
@@ -249,7 +284,7 @@ export function ReservationForm({
           <h2 className="text-sm font-medium">{t("chooseEditionTitle")}</h2>
           <p className="mb-2 text-xs text-muted">{t("chooseEditionSubtitle")}</p>
           <div className="flex flex-col gap-2" data-testid="edition-cards">
-            {availability.map((row) => {
+            {edicionesVisibles.map((row) => {
               const isSelected = row.date === selectedIso;
               const remainingRow = plazasRestantes(row, inCartByDate.get(row.date) ?? 0);
               const isFull = estadoDisponibilidad(remainingRow) === "completo";
@@ -298,6 +333,18 @@ export function ReservationForm({
               );
             })}
           </div>
+          {edicionesOcultasCount > 0 ? (
+            <Button
+              variant="outline"
+              className="mt-2 rounded-[4px]"
+              data-testid="show-more-editions"
+              onPress={() => setEdicionesVisiblesCount((count) => count + EDICIONES_VISIBLES_INICIALMENTE)}
+            >
+              {t("showMoreEditions", {
+                count: Math.min(EDICIONES_VISIBLES_INICIALMENTE, edicionesOcultasCount),
+              })}
+            </Button>
+          ) : null}
         </div>
       ) : null}
 

@@ -72,12 +72,13 @@ select is(
   'cas 3 : aucune ligne product_availability créée pour le produit PMS-backed'
 );
 
--- Cas 4 : la ligne order_lines a bien été écrite, avec un prix cohérent (2 nuits à 100000 = 200000,
--- 1 seule unité facturable — alojamiento, pas de multiplication par qty=2 personnes).
+-- Cas 4 : la ligne order_lines a bien été écrite, avec un prix cohérent (2 nuits à 100000 = 200000
+-- par unité, MULTIPLIÉ par qty=2 unités facturables — migration 20260916120000, qty désigne des
+-- lits/chambres, jamais des occupants → total_cop = 400000, price_cop reste le prix par unité).
 select is(
   (select jsonb_build_object('price_cop', price_cop, 'total_cop', total_cop, 'pms_booking_id', pms_booking_id)
      from order_lines where product_id = '88930000-0000-4000-8000-000000000031'),
-  jsonb_build_object('price_cop', 200000, 'total_cop', 200000, 'pms_booking_id', null),
+  jsonb_build_object('price_cop', 200000, 'total_cop', 400000, 'pms_booking_id', null),
   'cas 4 : order_lines écrite avec le bon total, pms_booking_id encore null (rempli hors create_order)'
 );
 

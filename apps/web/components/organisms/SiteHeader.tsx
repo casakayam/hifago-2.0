@@ -3,7 +3,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@hifago/ui";
-import { Link } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
+import { empujarConservandoQuery } from "@/lib/navigation/conservarQuery";
 import { IconButton } from "@/components/atoms/IconButton";
 import { IconLink } from "@/components/atoms/IconLink";
 import { useCart } from "@/lib/cart/CartContext";
@@ -121,6 +122,7 @@ function LogoHifago() {
 
 export function SiteHeader({ isAuthenticated, testId }: SiteHeaderProps) {
   const t = useTranslations("Chrome");
+  const router = useRouter();
   const { lines } = useCart();
   const [menuOuvert, setMenuOuvert] = useState(false);
   const idMenu = useId();
@@ -170,10 +172,18 @@ export function SiteHeader({ isAuthenticated, testId }: SiteHeaderProps) {
       <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-2 px-4 py-2">
         {/* ⚠️ Le logo n'est PAS un <h1> : le titre appartient au contenu de la page, et huit pages
             le perdraient au profit de la marque. C'est un lien vers l'accueil, et son nom
-            accessible le dit. `min-h-11` pour la cible tactile, comme les deux boutons. */}
+            accessible le dit. `min-h-11` pour la cible tactile, comme les deux boutons.
+            ⚠️ `href="/"` reste STATIQUE ; la query string active est ajoutée au clic par
+            `empujarConservandoQuery`, qui porte le raisonnement (dégradation sans JS, pourquoi
+            jamais `useSearchParams()`). Bug Jérôme du 2026-09-16 : cliquer le logo effaçait les
+            filtres actifs. */}
         <Link
           href="/"
           aria-label={t("homeLabel")}
+          onClick={(evenement) => {
+            evenement.preventDefault();
+            empujarConservandoQuery(router, "/");
+          }}
           className="inline-flex min-h-11 items-center rounded-[var(--radius)] px-1 focus-visible:status-focused"
           data-testid={testId ? `${testId}-home` : undefined}
         >

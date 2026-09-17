@@ -97,7 +97,7 @@ export default async function HomePage({ params, searchParams }: PageProps<"/[lo
   });
 
   const labels = await labelsBuscador(locale as Locale);
-  const tiposBarra = await tiposDeBarra(locale as Locale);
+  const tiposBarra = await tiposDeBarra(locale as Locale, sufijoCriterios);
 
   return (
     <PageShell variant="large">

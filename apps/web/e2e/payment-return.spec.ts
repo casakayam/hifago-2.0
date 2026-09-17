@@ -72,7 +72,10 @@ test("commande validée → adresse propre à la commande, avec numéro, récapi
   await expect(page.getByTestId(/^order-line-/)).toHaveCount(1);
   await expect(page.getByTestId("order-total")).toBeVisible();
   await expect(page.getByTestId("order-acompte")).toBeVisible();
-  await expect(page.getByTestId("order-remainder")).toBeVisible();
+  // Le reste dû sur place se lit désormais par article (une commande peut toucher plusieurs
+  // établissements) — ce test a exactement 1 ligne (assertion ci-dessus), le testid par ligne
+  // suffit à prouver que le montant est bien rendu.
+  await expect(page.getByTestId(/^line-remainder-/)).toBeVisible();
 
   // Pas encore payé (Mercado Pago n'a jamais été atteint) : l'écran doit le dire et proposer de
   // payer — jamais laisser croire que la réservation est confirmée.

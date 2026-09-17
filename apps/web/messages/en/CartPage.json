@@ -4,6 +4,7 @@
   "lineQty": "Quantity: {count}",
   "lineUnavailable": "This service is no longer available. You can remove it from your trip.",
   "total": "Total",
+  "totalNow": "Total to pay now",
   "removeLine": "Remove",
   "goToCheckout": "Book now",
   "lodgingRequiredNotice": "Your camp requires lodging in your trip that covers its {count, plural, one {# night} other {# nights}} before you book.",

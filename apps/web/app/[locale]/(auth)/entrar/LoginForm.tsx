@@ -85,7 +85,7 @@ export function LoginForm({ next, callbackFailed = false }: { next: string; call
     <div className="flex w-full max-w-sm flex-col gap-4">
       <OAuthSection next={next} />
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <TextField name="email" value={email} onChange={setEmail} isRequired>
           <Label>{t("email")}</Label>
           <Input type="email" autoComplete="email" />
@@ -94,6 +94,13 @@ export function LoginForm({ next, callbackFailed = false }: { next: string; call
           <Label>{t("password")}</Label>
           <Input type="password" autoComplete="current-password" />
         </TextField>
+        <Link
+          href="/olvide-password"
+          data-testid="forgot-password-link"
+          className="self-start text-xs text-muted underline"
+        >
+          {t("forgotPasswordLink")}
+        </Link>
         {error ? (
           <p role="alert" data-testid="login-error" className="text-sm text-danger">
             {error}

@@ -41,6 +41,7 @@ import {
 import { limitarCantidad, topeCantidad } from "@/lib/reservas/cantidad";
 import { plazasRestantes } from "@/lib/reservas/disponibilidad";
 import { motivoPms } from "@/lib/reservas/pms";
+import { usePrefillUltimosCriterios } from "@/lib/reservas/usePrefillUltimosCriterios";
 
 // Spec 17 §0 Tranche 2, §10 point 6 — react-day-picker mode="range", tranché sur prototype réel
 // (cf. docs/journal/2026-08.md). Une seule entité tarifée : le produit lui-même, via
@@ -132,11 +133,18 @@ export function LodgingReservationForm({
   const [pmsMonths, setPmsMonths] = useState<Map<string, PmsMonthState>>(new Map());
   const [attempt, setAttempt] = useState(0);
   const loadedMonthsRef = useRef<Set<string>>(new Set());
+  // ⚠️ Le chargement PMS ATTEND que le pré-remplissage ait tranché. Les effets partent dans l'ordre
+  // de déclaration : sans cette garde, le mois COURANT était demandé au montage, puis le
+  // pré-remplissage posait `visibleMonth` sur le mois recherché et la première réponse était jetée
+  // (`if (cancelled) return`). Un aller-retour réseau entier gaspillé par visite venant d'une
+  // recherche datée — et, hors fenêtre de cache de 60 s, un vrai appel LobbyPMS sur un quota de
+  // 60/min. Un rendu de plus contre une requête de moins.
+  const [prefillResuelto, setPrefillResuelto] = useState(false);
 
   const monthKey = useMemo(() => format(visibleMonth, "yyyy-MM"), [visibleMonth]);
 
   useEffect(() => {
-    if (!isPmsBacked || loadedMonthsRef.current.has(monthKey)) return;
+    if (!isPmsBacked || !prefillResuelto || loadedMonthsRef.current.has(monthKey)) return;
     let cancelled = false;
     const setMonth = (state: PmsMonthState) =>
       setPmsMonths((prev) => new Map(prev).set(monthKey, state));
@@ -187,7 +195,7 @@ export function LodgingReservationForm({
     return () => {
       cancelled = true;
     };
-  }, [isPmsBacked, monthKey, productId, attempt]);
+  }, [isPmsBacked, prefillResuelto, monthKey, productId, attempt]);
 
   const monthState = pmsMonths.get(monthKey);
   // CE QU'ON FAIT DE L'ÉCHEC — une seule table, dans `lib/reservas/pms.ts`. La décision vivait en
@@ -267,6 +275,24 @@ export function LodgingReservationForm({
     () => ({ firstIso: plancherIso, lastIso: lastBookableDateIso() }),
     [plancherIso]
   );
+
+  // Spec 28 §4 point 3 : la plage filtrée dans la recherche, si elle tient dans l'horizon de ce
+  // produit, est déjà posée en arrivant sur la fiche — `visibleMonth` suit pour que la grille
+  // ouvre directement sur ce mois. Seule validation possible ICI : les bornes de l'horizon —
+  // `pmsRestrictions` est vide au premier rendu, aucune validation nuit par nuit n'est synchrone à
+  // ce stade. `hasUnavailableNightInRange`/le bandeau `range-unavailable-warning` réagiront d'eux-
+  // mêmes si la plage posée ici se révèle finalement indisponible une fois les vraies données PMS
+  // arrivées — exactement le filet déjà en place pour un clic réel avant que son mois soit chargé.
+  usePrefillUltimosCriterios(({ desde, hasta }) => {
+    // ⚠️ `setPrefillResuelto(true)` sur TOUS les chemins, y compris ceux qui ne pré-remplissent
+    // rien : c'est ce drapeau qui débloque le chargement PMS plus haut. L'oublier sur une branche
+    // laisserait le calendrier d'un produit PMS vide pour toujours.
+    setPrefillResuelto(true);
+    if (!desde || !hasta || desde === hasta) return; // un seul jour ne fait jamais une nuit
+    if (desde < bornesCalendrier.firstIso || hasta > bornesCalendrier.lastIso) return;
+    setRange({ from: isoDateToLocalMidnight(desde), to: isoDateToLocalMidnight(hasta) });
+    setVisibleMonth(isoDateToLocalMidnight(desde));
+  });
 
   const ancreIso = useMemo(() => isoDeFecha(range?.from), [range]);
 
