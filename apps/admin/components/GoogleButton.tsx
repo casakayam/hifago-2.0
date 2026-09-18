@@ -4,6 +4,11 @@ import { useState } from "react";
 import { createClient } from "@hifago/supabase/client";
 import { Button, toast } from "@hifago/ui";
 
+// `apps/web/components/molecules/GoogleButton.tsx` est un second exemplaire, ADAPTÉ et non
+// partagé (revue de packaging admin, 2026-09-17) — pas un oubli : raison complète (i18n, panier
+// anonyme, erreur en ligne vs toast) documentée en tête de ce fichier-là. `CLAUDE.md` §2.1 : un
+// module ne monte dans `packages/` que s'il est prouvé consommé à l'identique par les deux apps.
+//
 // Flux redirect (pas popup) — bonne pratique Supabase Auth (docs/specs/
 // 07-connexion-inscription-complete.md §3) : Google redirige vers l'URL de callback Supabase
 // (déclarée côté Google Cloud Console), qui redirige ensuite vers /auth/callback (Route Handler,

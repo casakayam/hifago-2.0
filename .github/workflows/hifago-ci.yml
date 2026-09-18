@@ -58,6 +58,12 @@ jobs:
       # (cuenta) et (auth) sont noindex, et aucune route ne l'annule (spec 27 §0 invariant 6).
       - name: Référencement (données structurées honnêtes, JSON-LD échappé, zones noindex)
         run: bash scripts/check-seo.sh
+      # Bloquant depuis la revue de packaging admin (2026-09-17) — vérifié PAR MUTATION. Jusque-là,
+      # la convention kebab-case d'apps/admin/components/ n'était constatée qu'a posteriori dans le
+      # code (apps/web/components/README.md la mentionnait en passant), jamais outillée : exactement
+      # le cas que CLAUDE.md §11.20 nomme (« une règle que rien ne vérifie n'est pas une règle »).
+      - name: Nommage kebab-case d'apps/admin/components/
+        run: bash scripts/check-admin-components-naming.sh
       # Les trois contrôles de la vitrine (spec 27 §8), tous vérifiés PAR MUTATION avant d'être
       # posés. Ils existent parce que les règles qu'ils portent sont invisibles à la relecture et
       # ne cassent rien tout de suite : une couleur en dur ne se voit qu'au jour de l'habillage,
