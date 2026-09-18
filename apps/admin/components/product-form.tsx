@@ -5,25 +5,21 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { slugify } from "@/lib/utils";
 import { asLocalizedField } from "@hifago/domain";
-import type { Json, TablesInsert } from "@hifago/supabase/database.types";
+import type { Json, TablesInsert, TablesUpdate } from "@hifago/supabase/database.types";
 import { Button, Label, ListBox, Select, toast } from "@hifago/ui";
 import { type TagOption } from "@/components/tags-multiselect";
-import {
-  LocalizedTextField,
-  buildLocalizedPayload,
-  type LocalizedValue,
-} from "@/components/localized-text-field";
+import { LocalizedTextField, type LocalizedValue } from "@/components/localized-text-field";
 import { ProductTypeFields } from "@/components/product-type-fields";
 import type { LobbyRoomOption } from "@/components/lobby-option-picker";
 import { StagedProductPhotos, type StagedPhoto } from "@/components/product-photos-staged";
-import { lowestTierPrice, toPriceTiersColumn, validatePriceTiers } from "@/lib/products/priceTiers";
+import { validatePriceTiers } from "@/lib/products/priceTiers";
 import { validateGroupDiscount } from "@/lib/products/groupDiscount";
-import { toEventoBookableColumns } from "@/lib/products/eventoBookable";
 import { validateSlotRules, toSlotRuleRows } from "@/lib/products/slotRules";
-import { toTransportInfoColumns, validateTransportInfo } from "@/lib/products/transportInfo";
-import { toStayRatesColumn, validateStayRates } from "@/lib/products/stayRates";
-import { toProgramColumn, validateProgram } from "@/lib/products/program";
+import { validateTransportInfo } from "@/lib/products/transportInfo";
+import { validateStayRates } from "@/lib/products/stayRates";
+import { validateProgram } from "@/lib/products/program";
 import { buildProductCreationPayload } from "@/lib/products/productCreationPayload";
+import { buildProductEditPayload } from "@/lib/products/productEditPayload";
 import { mergeLobbyRoom } from "@/lib/products/lobbyRoomImport";
 import { asLodgingKind, asLodgingUnit } from "@hifago/domain";
 import {
@@ -207,8 +203,7 @@ export function ProductForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
-    isEvento, isCamp, isActivity, isLodging, isTransport,
-    hasLocationAndTags, hasPriceQtyFields, hasCheckInOut, hasDefaultCapacity,
+    isEvento, isCamp, isActivity, isLodging, isTransport, hasPriceQtyFields,
   } = productTypeGating(type);
 
   // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — en édition, le statut vient directement
@@ -447,83 +442,17 @@ export function ProductForm({
 
     setIsSubmitting(true);
     const supabase = createClient();
-    const nameJson = buildLocalizedPayload(name) ?? { es: nombreEs };
-    const descriptionJson = buildLocalizedPayload(description) ?? null;
 
     if (isEditing && product) {
+      // Dédoublonnage payload d'édition (chantier 2026-09-17) : cet update() construisait son
+      // propre objet à la main, en dérive lente mais réelle de productEditPayload.ts (seul autre
+      // écrivain du même payload jsonb, côté proposition) — deux bugs vivants trouvés en les
+      // comparant (lobby_category_id/lobby_product_id absents là-bas, group_discount_* absents
+      // ici). Une seule fonction désormais, testée par payloadParity.test.ts.
+      const editPayload = buildProductEditPayload(type, name, description, fields);
       const { error: updateError } = await supabase
         .from("products")
-        .update({
-          name: nameJson,
-          description: descriptionJson,
-          ...(hasLocationAndTags
-            ? {
-                address: fields.address.trim() || null,
-                lat: fields.lat.trim() ? Number(fields.lat) : null,
-                lon: fields.lon.trim() ? Number(fields.lon) : null,
-              }
-            : {}),
-          // `> 0`, et pas seulement `Number.isFinite` : `Number("")` vaut 0, pas NaN. La garde
-          // précédente laissait donc passer un champ prix VIDE, qui partait à 0 et se faisait
-          // refuser par `products_price_cop_positive` — passer un produit existant en vitrine en
-          // effaçant son prix était impossible (même défaut que la création, mesuré le 2026-09-09).
-          price_cop:
-            isEvento && fields.isFree
-              ? null
-              : usesTiers
-                ? lowestTierPrice(fields.priceTiers)
-                : Number.isFinite(price) && price > 0
-                  ? price
-                  : null,
-          price_tiers: usesTiers ? toPriceTiersColumn(fields.priceTiers) : null,
-          // La vitrine reste MODIFIABLE après création. Sans ces deux clés, poser une URL puis la
-          // corriger était impossible : l'update ne les portait pas, donc la valeur d'origine
-          // restait figée sans qu'aucun message ne le dise.
-          ...(isEvento
-            ? {}
-            : {
-                external_booking_url: fields.externalBookingUrl.trim() || null,
-                price_label: enVitrina ? fields.priceLabel.trim() || null : null,
-              }),
-          // Evento réservable en ligne (2026-09-15) — contrairement au reste des champs evento,
-          // réellement réécrits en édition (cf. commentaire d'EditableProduct). price_label est
-          // porté par ce bloc-ci et non par celui du dessus (isEvento ? {} : {...price_label}) : un
-          // evento online_bookable n'a jamais de libellé libre, `toEventoBookableColumns` pose le
-          // null. MÊME fonction que le chemin de création — jamais un second miroir manuel.
-          ...(isEvento ? toEventoBookableColumns(fields) : {}),
-          // Transport informatif (2026-09-16) — MÊME fonction que le chemin de création
-          // (productCreationPayload.ts), jamais un second miroir manuel : c'est la leçon écrite
-          // dans l'en-tête d'eventoBookable.ts.
-          ...(isTransport ? toTransportInfoColumns(fields.transportInfo) : {}),
-          ...(hasPriceQtyFields
-            ? {
-                min_qty: fields.minQty.trim() ? Number(fields.minQty) : null,
-                max_qty: fields.maxQty.trim() ? Number(fields.maxQty) : null,
-              }
-            : {}),
-          ...(hasCheckInOut
-            ? { check_in_time: fields.checkInTime || null, check_out_time: fields.checkOutTime || null }
-            : {}),
-          ...(isLodging
-            ? {
-                capacity: fields.capacity.trim() ? Number(fields.capacity) : null,
-                unit_count: fields.unitCount.trim() ? Number(fields.unitCount) : null,
-                lodging_kind: fields.lodgingKind || null,
-                unit: fields.unit || null,
-                stay_rates: toStayRatesColumn(fields.stayRates),
-                lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
-              }
-            : {}),
-          // Programme (spec 37) : chargé par le select de edit/page.tsx ET réécrit ici — jamais
-          // l'un sans l'autre, sinon le formulaire semblerait éditer une valeur qu'il jette.
-          ...(isCamp ? { program: toProgramColumn(fields.program) } : {}),
-          ...(isActivity || isTransport
-            ? { lobby_product_id: fields.lobbyProductId.trim() ? Number(fields.lobbyProductId) : null }
-            : {}),
-          ...(hasDefaultCapacity
-            ? { default_capacity: fields.defaultCapacity.trim() ? Number(fields.defaultCapacity) : null }
-            : {}),
-        })
+        .update(editPayload as TablesUpdate<"products">)
         .eq("id", product.id);
 
       if (updateError) {

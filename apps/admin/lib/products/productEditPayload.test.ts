@@ -1,0 +1,124 @@
+import { describe, expect, it } from "vitest";
+import { buildProductEditPayload } from "./productEditPayload";
+import { buildFields, FIXTURE_INIT } from "./productPayloadFixtures";
+
+const NAME = { es: "Nombre de prueba", en: "Test name" };
+const DESCRIPTION = { es: "Descripción", en: "Description" };
+
+// Miroir de productCreationPayload.test.ts, MAIS jamais tags/photos/slot_rules (délégués à des
+// blocs séparés à sauvegarde immédiate, jamais réécrits par ce payload — cf. l'en-tête du fichier
+// testé) et price_tiers/price_cop toujours présents (jamais gatés par le type, contrairement à la
+// création). Écrire ce test a trouvé un 3e bug réel, en plus des deux déjà identifiés
+// (lobby_category_id/lobby_product_id) : ce fichier ne portait ENTIÈREMENT AUCUN champ evento
+// réservable en ligne — corrigé dans le même chantier, cf. productEditPayload.ts.
+describe("buildProductEditPayload", () => {
+  it("toujours présent quel que soit le type : name, description, price_cop, price_tiers", () => {
+    const payload = buildProductEditPayload("activity", NAME, DESCRIPTION, buildFields(FIXTURE_INIT.activity));
+    expect(payload).toHaveProperty("name");
+    expect(payload).toHaveProperty("description");
+    expect(payload).toHaveProperty("price_cop");
+    expect(payload).toHaveProperty("price_tiers");
+  });
+
+  it("jamais de tags/photos/slot_rules, quel que soit le type — délégués à des blocs séparés", () => {
+    for (const type of ["activity", "evento", "camp", "lodging", "transport"] as const) {
+      const payload = buildProductEditPayload(type, NAME, DESCRIPTION, buildFields(FIXTURE_INIT[type]));
+      expect(payload).not.toHaveProperty("tag_ids");
+      expect(payload).not.toHaveProperty("photos");
+      expect(payload).not.toHaveProperty("slot_rules");
+    }
+  });
+
+  it("activity : lieu générique, prix/qty, capacité par défaut, lien Lobby produit — jamais logement/camp/evento/transport", () => {
+    const payload = buildProductEditPayload("activity", NAME, DESCRIPTION, buildFields(FIXTURE_INIT.activity));
+    for (const key of [
+      "address", "lat", "lon", "price_cop", "price_tiers", "external_booking_url", "price_label",
+      "min_qty", "max_qty", "lobby_product_id", "default_capacity",
+    ]) {
+      expect(payload).toHaveProperty(key);
+    }
+    for (const key of [
+      "check_in_time", "check_out_time", "capacity", "unit_count", "lodging_kind", "unit",
+      "stay_rates", "lobby_category_id", "group_discount_threshold_qty", "group_discount_pct",
+      "program", "online_bookable", "evento_capacity_mode", "transport_contact_phone",
+    ]) {
+      expect(payload).not.toHaveProperty(key);
+    }
+  });
+
+  it("evento : réservabilité en ligne réécrite (bug corrigé par ce chantier), jamais lieu/lobby/logement/camp", () => {
+    const payload = buildProductEditPayload("evento", NAME, DESCRIPTION, buildFields(FIXTURE_INIT.evento));
+    for (const key of [
+      "price_cop", "price_tiers", "online_bookable", "evento_capacity_mode", "is_free",
+      "evento_payment_mode", "evento_occupies_resource", "default_capacity", "price_label",
+    ]) {
+      expect(payload).toHaveProperty(key);
+    }
+    // Un evento réservable en ligne (online_bookable=true dans la fixture) n'a jamais d'URL externe
+    // ni de min/max qty — jamais posés par le bloc générique (isEvento ? {} : {...}) ni par
+    // hasPriceQtyFields (qui exclut evento).
+    for (const key of [
+      "address", "lat", "lon", "external_booking_url", "min_qty", "max_qty", "check_in_time",
+      "check_out_time", "capacity", "unit_count", "lodging_kind", "unit", "stay_rates",
+      "lobby_category_id", "lobby_product_id", "transport_contact_phone",
+      "group_discount_threshold_qty", "group_discount_pct", "program",
+    ]) {
+      expect(payload).not.toHaveProperty(key);
+    }
+  });
+
+  it("camp : programme + remise de groupe réécrits (parité avec la création), jamais lieu/lobby/logement/evento", () => {
+    const payload = buildProductEditPayload("camp", NAME, DESCRIPTION, buildFields(FIXTURE_INIT.camp));
+    for (const key of [
+      "price_cop", "price_tiers", "external_booking_url", "price_label", "default_capacity",
+      "group_discount_threshold_qty", "group_discount_pct", "program",
+    ]) {
+      expect(payload).toHaveProperty(key);
+    }
+    for (const key of [
+      "address", "lat", "lon", "min_qty", "max_qty", "check_in_time", "check_out_time", "capacity",
+      "unit_count", "lodging_kind", "unit", "stay_rates", "lobby_category_id", "lobby_product_id",
+      "transport_contact_phone", "online_bookable", "evento_capacity_mode",
+    ]) {
+      expect(payload).not.toHaveProperty(key);
+    }
+  });
+
+  it("lodging : lieu, tarifs de séjour, lien Lobby catégorie (bug corrigé par ce chantier) — jamais camp/evento/transport", () => {
+    const payload = buildProductEditPayload("lodging", NAME, DESCRIPTION, buildFields(FIXTURE_INIT.lodging));
+    for (const key of [
+      "address", "lat", "lon", "price_cop", "price_tiers", "external_booking_url", "price_label",
+      "min_qty", "max_qty", "check_in_time", "check_out_time", "capacity", "unit_count",
+      "lodging_kind", "unit", "stay_rates", "lobby_category_id", "default_capacity",
+    ]) {
+      expect(payload).toHaveProperty(key);
+    }
+    for (const key of [
+      "lobby_product_id", "transport_contact_phone", "group_discount_threshold_qty",
+      "group_discount_pct", "program", "online_bookable", "evento_capacity_mode",
+    ]) {
+      expect(payload).not.toHaveProperty(key);
+    }
+  });
+
+  it("transport : infos de départ/arrivée dédiées, lien Lobby produit — jamais lieu générique/logement/camp/evento/capacité par défaut", () => {
+    const payload = buildProductEditPayload("transport", NAME, DESCRIPTION, buildFields(FIXTURE_INIT.transport));
+    for (const key of [
+      "price_cop", "price_tiers", "external_booking_url", "price_label", "min_qty", "max_qty",
+      "lobby_product_id", "transport_contact_phone", "transport_first_departure_time",
+      "transport_last_departure_time", "transport_seats_per_departure", "transport_departure_address",
+      "transport_departure_lat", "transport_departure_lon", "transport_arrival_address",
+      "transport_arrival_lat", "transport_arrival_lon",
+    ]) {
+      expect(payload).toHaveProperty(key);
+    }
+    for (const key of [
+      "address", "lat", "lon", "check_in_time", "check_out_time", "capacity", "unit_count",
+      "lodging_kind", "unit", "stay_rates", "lobby_category_id", "default_capacity",
+      "group_discount_threshold_qty", "group_discount_pct", "program", "online_bookable",
+      "evento_capacity_mode",
+    ]) {
+      expect(payload).not.toHaveProperty(key);
+    }
+  });
+});

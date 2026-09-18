@@ -3,6 +3,7 @@ import { lowestTierPrice, toPriceTiersColumn } from "@/lib/products/priceTiers";
 import { toStayRatesColumn } from "@/lib/products/stayRates";
 import { toProgramColumn } from "@/lib/products/program";
 import { toGroupDiscountColumns } from "@/lib/products/groupDiscount";
+import { toEventoBookableColumns } from "@/lib/products/eventoBookable";
 import { toTransportInfoColumns } from "@/lib/products/transportInfo";
 import { productTypeGating, type ProductType, type ProductTypeFieldsState } from "@/lib/products/useProductTypeFieldsState";
 
@@ -19,10 +20,9 @@ export function buildProductEditPayload(
 ): Record<string, unknown> {
   const {
     isEvento, hasLocationAndTags, hasPriceQtyFields, hasCheckInOut, isLodging, hasDefaultCapacity,
-    isTransport, isCamp,
+    isTransport, isCamp, isActivity,
   } = productTypeGating(type);
   const usesTiers = hasPriceQtyFields && fields.priceMode === "tiers";
-  const needsOwnPrice = !isEvento;
   // Même garde que productCreationPayload : `Number("")` vaut 0, PAS NaN, et 0 est refusé par
   // `products_price_cop_positive`. Sans ce `> 0`, effacer le prix d'un produit pour le passer en
   // vitrine faisait échouer l'approbation de la proposition (mesuré le 2026-09-09).
@@ -39,9 +39,12 @@ export function buildProductEditPayload(
           lon: fields.lon.trim() ? Number(fields.lon) : null,
         }
       : {}),
-    ...(needsOwnPrice
-      ? { price_cop: usesTiers ? lowestTierPrice(fields.priceTiers) : priceCopOuNull }
-      : {}),
+    // Manquait ici jusqu'au chantier de dédoublonnage payload (2026-09-17) : gaté par `!isEvento`,
+    // ce champ n'apparaissait jamais dans le payload d'un evento — modifier le prix (ou basculer
+    // isFree) d'un evento réservable en ligne via une proposition était donc silencieusement
+    // ignoré. Miroir exact de l'update() historique de ProductForm : toujours présent, un evento
+    // gratuit vaut `null`, jamais gaté par le type.
+    price_cop: isEvento && fields.isFree ? null : usesTiers ? lowestTierPrice(fields.priceTiers) : priceCopOuNull,
     price_tiers: usesTiers ? toPriceTiersColumn(fields.priceTiers) : null,
     // Miroir exact du bloc d'édition de ProductForm (product-form.tsx) : la vitrine reste
     // modifiable après création. Ces deux clés manquaient ici ET dans la whitelist de
@@ -53,6 +56,14 @@ export function buildProductEditPayload(
           external_booking_url: fields.externalBookingUrl.trim() || null,
           price_label: fields.externalBookingUrl.trim() ? fields.priceLabel.trim() || null : null,
         }),
+    // Manquait ENTIÈREMENT ici jusqu'au chantier de dédoublonnage payload (2026-09-17) — le bug le
+    // plus sérieux trouvé en écrivant les tests de ce chantier, pas anticipé par la revue initiale :
+    // ce fichier n'avait jamais porté ce bloc, alors que l'update() historique de ProductForm
+    // l'écrivait pour toute édition directe admin. `online_bookable`/`evento_capacity_mode`/
+    // `is_free`/`evento_payment_mode`/`evento_occupies_resource` d'un evento existant repartaient
+    // silencieusement à leur valeur en base à chaque édition (directe ET proposition) — jamais
+    // testé unitairement avant ce chantier. MÊME fonction que productCreationPayload.ts.
+    ...(isEvento ? toEventoBookableColumns(fields) : {}),
     ...(hasPriceQtyFields
       ? {
           min_qty: fields.minQty.trim() ? Number(fields.minQty) : null,
@@ -71,7 +82,17 @@ export function buildProductEditPayload(
           lodging_kind: fields.lodgingKind || null,
           unit: fields.unit || null,
           stay_rates: toStayRatesColumn(fields.stayRates),
+          // Manquait ici jusqu'au chantier de dédoublonnage payload (2026-09-17) : product-form.tsx
+          // l'écrivait dans son update() manuel, ce fichier ne l'émettait pas — modifier un logement
+          // lié à Lobby via une proposition (socio ou modération) effaçait silencieusement le lien.
+          lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
         }
+      : {}),
+    // Manquait ici jusqu'au chantier de dédoublonnage payload (2026-09-17), même bug que
+    // lobby_category_id ci-dessus mais côté activity/transport. Miroir exact de
+    // productCreationPayload.ts (même condition, même commentaire de raisonnement).
+    ...(isActivity || isTransport
+      ? { lobby_product_id: fields.lobbyProductId.trim() ? Number(fields.lobbyProductId) : null }
       : {}),
     ...(hasDefaultCapacity
       ? { default_capacity: fields.defaultCapacity.trim() ? Number(fields.defaultCapacity) : null }
