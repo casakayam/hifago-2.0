@@ -20,6 +20,20 @@ export default async function NewProductPage({
     label: resolveLocalizedField(asLocalizedField(tag.label), "es") ?? tag.id,
   }));
 
+  // Équipements structurés (migration 20260917110000) — staged à la création (ProductForm variant
+  // "admin" uniquement, cf. son commentaire showAmenities). Chargé inconditionnellement ici (pas de
+  // gating par type possible avant que l'admin choisisse "Alojamiento" dans le formulaire) — même
+  // logique que allTags, dont le gating par type est décidé côté client.
+  const { data: amenitiesRaw } = await supabase
+    .from("catalog_amenities")
+    .select("id, label, category_key")
+    .order("category_key")
+    .order("sort_order");
+  const allAmenities = (amenitiesRaw ?? []).map((amenity) => ({
+    id: amenity.id,
+    label: resolveLocalizedField(asLocalizedField(amenity.label), "es") ?? amenity.id,
+  }));
+
   const resolvedSearchParams = await searchParams;
   const establishmentParam = resolvedSearchParams?.establishment;
   // Pré-rempli si venu de la liste établissements (?establishment=<id>), mais toujours modifiable
@@ -34,6 +48,7 @@ export default async function NewProductPage({
         establishments={establishments ?? []}
         initialEstablishmentId={initialEstablishmentId}
         allTags={allTags}
+        allAmenities={allAmenities}
       />
     </div>
   );

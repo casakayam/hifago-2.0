@@ -7,6 +7,7 @@ import { Button, Checkbox, ImageCrop, Input, Label, Modal, TextArea, TextField, 
 import Link from "next/link";
 import { SearchableCombobox } from "@/components/searchable-combobox";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
+import { TagsMultiSelect, type TagOption } from "@/components/tags-multiselect";
 
 type Partner = { id: string; display_name: string };
 // Miroir local du type Json généré par Supabase (packages/supabase/src/database.types.ts) — pas
@@ -31,9 +32,15 @@ const overlayButtonClass =
 export function NewEstablishmentForm({
   partners,
   defaultPartnerId = null,
+  allAmenities = [],
 }: {
   partners: Partner[];
   defaultPartnerId?: string | null;
+  // Équipements structurés (migration 20260917110000) — stagés comme le reste du formulaire,
+  // demande explicite de Jérôme (2026-09-17) : contrairement aux tags, qui n'ont ici aucun
+  // équivalent, l'équipement doit pouvoir être saisi dès la création, pas seulement après via
+  // EstablishmentAmenitiesBlock.
+  allAmenities?: TagOption[];
 }) {
   const router = useRouter();
 
@@ -57,6 +64,7 @@ export function NewEstablishmentForm({
   const [photos, setPhotos] = useState<{ path: string; url: string }[]>([]);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [selectedAmenityIds, setSelectedAmenityIds] = useState<string[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -181,6 +189,18 @@ export function NewEstablishmentForm({
     for (const { error: mediaError } of mediaResults) {
       if (mediaError) {
         toast.danger("El establecimiento se creó, pero una foto no se pudo asociar.");
+      }
+    }
+
+    // Équipements structurés — rattachés après coup comme les photos ci-dessus (establishment_id
+    // n'existe qu'une fois create_establishment résolu), non bloquant : un échec ici laisse
+    // l'établissement créé sans équipements, corrigible depuis EstablishmentAmenitiesBlock.
+    if (selectedAmenityIds.length > 0) {
+      const { error: amenitiesError } = await supabase
+        .from("establishment_amenity_assignments")
+        .insert(selectedAmenityIds.map((amenityId) => ({ establishment_id: establishmentId, amenity_id: amenityId })));
+      if (amenitiesError) {
+        toast.danger("El establecimiento se creó, pero el equipamiento no se pudo asociar.");
       }
     }
 
@@ -368,6 +388,20 @@ export function NewEstablishmentForm({
             </Modal.Backdrop>
           </Modal>
         </div>
+      </fieldset>
+
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-lg font-semibold">Equipamiento — opcional</legend>
+        <TagsMultiSelect
+          availableTags={allAmenities}
+          selectedTagIds={selectedAmenityIds}
+          onChange={setSelectedAmenityIds}
+          allowCreate={false}
+          label="Equipamiento"
+          placeholder="Buscar equipamiento…"
+          emptyMessage="Ningún equipamiento disponible."
+          testId="amenities-multiselect"
+        />
       </fieldset>
 
       <Button

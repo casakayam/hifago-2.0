@@ -9,6 +9,7 @@ import { EstablishmentStayBlock } from "./EstablishmentStayBlock";
 import { EstablishmentPmsBlock } from "./EstablishmentPmsBlock";
 import { EstablishmentStatusBlock } from "./EstablishmentStatusBlock";
 import { EstablishmentTagsBlock } from "./EstablishmentTagsBlock";
+import { EstablishmentAmenitiesBlock } from "./EstablishmentAmenitiesBlock";
 import { EstablishmentProductsTable } from "./EstablishmentProductsTable";
 
 export default async function AdminEstablishmentDetailPage({
@@ -72,6 +73,23 @@ export default async function AdminEstablishmentDetailPage({
   }));
   const initialTagIds = (tagAssignments ?? []).map((a) => a.tag_id);
 
+  // Équipements structurés (migration 20260917110000, décision Jérôme du 2026-09-17) — même patron
+  // que les tags ci-dessus, table dédiée `catalog_amenities` (jamais `catalog_tags`, réservée aux
+  // catégories éditoriales), aucun gating par type côté établissement.
+  const [{ data: amenitiesRaw }, { data: amenityAssignments }] = await Promise.all([
+    supabase.from("catalog_amenities").select("id, label, category_key").order("category_key").order("sort_order"),
+    supabase
+      .from("establishment_amenity_assignments")
+      .select("amenity_id")
+      .eq("establishment_id", establishment.id),
+  ]);
+
+  const allAmenities = (amenitiesRaw ?? []).map((amenity) => ({
+    id: amenity.id,
+    label: resolveLocalizedField(asLocalizedField(amenity.label), "es") ?? amenity.id,
+  }));
+  const initialAmenityIds = (amenityAssignments ?? []).map((a) => a.amenity_id);
+
   // RLS (products_select_public) : l'admin voit aussi les activités non publiées (sellable=false).
   const { data: products } = await supabase
     .from("products")
@@ -132,6 +150,12 @@ export default async function AdminEstablishmentDetailPage({
         establishmentId={establishment.id}
         allTags={allTags}
         initialTagIds={initialTagIds}
+      />
+
+      <EstablishmentAmenitiesBlock
+        establishmentId={establishment.id}
+        allAmenities={allAmenities}
+        initialAmenityIds={initialAmenityIds}
       />
 
       <EstablishmentProductsTable products={products ?? []} />

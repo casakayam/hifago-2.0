@@ -193,6 +193,12 @@ describe("ProductTypeFields — champs d'une chambre liée à LobbyPMS (préremp
   it("un transporte lié à Lobby ne masque rien non plus", () => {
     render(<Harness type="transport" init={{ lobbyProductId: 5151 }} />);
     expect(screen.getByTestId("price-input")).toBeTruthy();
-    expect(screen.getByTestId("default-capacity-input")).toBeTruthy();
+    // ⚠️ `default-capacity-input` était asserté ici jusqu'au 2026-09-17. Un transport n'a plus de
+    // cupo (décision Jérôme : il se contacte, il ne se réserve pas en ligne, donc aucune ligne de
+    // `product_availability` n'est jamais matérialisée et le champ serait inerte). Ce qui reste
+    // vrai, et que ce test dit toujours : un lien Lobby ne MASQUE rien de ce qui doit être saisi.
+    expect(screen.getByTestId("transport-contact-phone-input")).toBeTruthy();
+    expect(screen.getByTestId("transport-first-departure-input")).toBeTruthy();
+    expect(screen.queryByTestId("default-capacity-input")).toBeNull();
   });
 });

@@ -8,9 +8,12 @@ import {
   todayInBogota,
 } from "@hifago/domain";
 import { createPublicClient } from "@/lib/supabase/publicClient";
+import { resolverPrograma } from "@/lib/catalog/programa";
 import { hasNativeContent } from "@/lib/seo/nativeContent";
 import { routing } from "@/i18n/routing";
+import { TELEFONO_HIFAGO, urlDeContacto } from "@/lib/contacto/whatsapp";
 import { esTipoOferta, resolverPrecio } from "./tipos";
+import { agruparAmenidadesPorCategoria, type FilaAmenidad } from "./amenidades";
 import type {
   FichaProducto,
   FilaDisponibilidad,
@@ -36,13 +39,24 @@ import type {
 
 const BUCKET_MEDIA = "catalog-media";
 
+// "HH:MM:SS" (sérialisation Postgres d'une colonne `time`) → "HH:MM". Le découpage vit dans CETTE
+// couche, celle qui possède la forme DB, et nulle part ailleurs : un composant ne doit jamais
+// recevoir autre chose qu'une chaîne déjà prête à afficher, sinon la tentation de la recombiner en
+// `new Date(\`${fecha}T${hora}\`)` réapparaît — et cet objet serait interprété dans le fuseau du
+// navigateur VISITEUR, pas celui de Bogota (spec 18 §0, CLAUDE.md §11.20).
+// ⚠️ Le repo porte déjà trois découpages équivalents ailleurs (`toTimeInputValue` ×2 côté admin,
+// `toHHMM` dans SlotReservationForm) : c'est de la dette connue, pas un modèle à suivre.
+function recortarHora(hora: string | null): string | null {
+  return hora ? hora.slice(0, 5) : null;
+}
+
 // Template literal SANS interpolation, sur une seule ligne : supabase-js infère le type de retour
 // en analysant le type LITTÉRAL de la chaîne. Une concaténation l'élargirait en `string` et ferait
 // tomber tout le typage sur `GenericStringError`.
 //
 // `establishment(...)` ne demande JAMAIS `photo_urls` : la colonne est hors du GRANT SELECT public
 // (20260819110000), et la demander ferait échouer la requête ENTIÈRE — pas seulement ce champ.
-const COLUMNAS_PRODUCTO = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, capacity, unit_count, lodging_kind, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, duration_days, group_discount_threshold_qty, group_discount_pct, lobby_category_id, online_bookable, evento_capacity_mode, is_free, evento_payment_mode, establishment:establishments(id, slug, name, description, address)`;
+const COLUMNAS_PRODUCTO = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, capacity, unit_count, lodging_kind, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, duration_days, program, group_discount_threshold_qty, group_discount_pct, lobby_category_id, online_bookable, evento_capacity_mode, is_free, evento_payment_mode, transport_first_departure_time, transport_last_departure_time, transport_seats_per_departure, transport_departure_address, transport_departure_lat, transport_departure_lon, transport_arrival_address, transport_arrival_lat, transport_arrival_lon, transport_contact_phone, establishment:establishments(id, slug, name, description, address)`;
 
 /**
  * ⚠️ Mémoïsé par `cache` de React, et ce n'est pas une optimisation : `generateMetadata` et le
@@ -67,6 +81,18 @@ export const getProductoPorSlug = cache(
     const esEvento = producto.type === "evento";
     const esEventoReservable = esEvento && Boolean(producto.online_bookable);
     const esAlojamiento = producto.type === "lodging";
+    const esTransporte = producto.type === "transport";
+
+    // ⚠️ Calculée UNE SEULE FOIS et réutilisée aux DEUX endroits ci-dessous (le résolveur de mode
+    // ET l'objet rendu) : deux expressions séparées finiraient par diverger, et un mode « vitrina »
+    // sans `urlExterna` affiche un cul-de-sac muet — le défaut déjà nommé pour les eventos
+    // (spec 30 §10.5). Fonction pure exportée plus bas, pour que la garantie soit TESTÉE et pas
+    // seulement écrite (CLAUDE.md §11.20).
+    const urlContacto = resolverUrlContacto({
+      esTransporte,
+      urlExterna: producto.external_booking_url,
+      telefonoTransporte: producto.transport_contact_phone,
+    });
     const esPmsBacked = isPmsBacked({
       type: producto.type,
       lobbyCategoryId: producto.lobby_category_id,
@@ -110,6 +136,21 @@ export const getProductoPorSlug = cache(
             .gte("date", hoyIso)
         : { data: [] };
 
+    // Équipements structurés (migration 20260917110000) — même patron conditionnel que
+    // leerTarifas/leerDisponibilidad juste au-dessus : réservé au logement, un produit non-lodging
+    // ne coûte rien de plus que la fiche d'avant. `resolveLocalizedField`/`asLocalizedField`
+    // n'interviennent PAS ici : la résolution se fait après le Promise.all, dans
+    // agruparAmenidadesPorCategoria (amenidades.ts) — jamais dans le composant.
+    const leerAmenidades = async () =>
+      esAlojamiento
+        ? await supabase
+            .from("product_amenity_assignments")
+            .select(
+              "amenity:catalog_amenities(label, sort_order, category:catalog_amenity_categories(label, sort_order))"
+            )
+            .eq("product_id", producto.id)
+        : { data: [] };
+
     // Evento réservable en ligne (2026-09-15) — deux lectures indépendantes de plus, même patron
     // que les helpers ci-dessus : un evento non activé (le cas courant aujourd'hui) ne coûte rien
     // de plus que la fiche d'avant. get_evento_rsvp_counts n'a de sens qu'en mode 'rsvp' (compteur
@@ -140,6 +181,7 @@ export const getProductoPorSlug = cache(
       { data: fotosEstablecimiento },
       { data: ocurrenciasEvento },
       { data: rsvpEvento },
+      { data: amenidadesRaw },
     ] = await Promise.all([
       leerDisponibilidad(),
       contarReglasDeFranja(),
@@ -156,12 +198,15 @@ export const getProductoPorSlug = cache(
         .order("sort", { ascending: true }),
       leerOcurrenciasEvento(),
       leerRsvpEvento(),
+      leerAmenidades(),
     ]);
+
+    const amenidades = agruparAmenidadesPorCategoria((amenidadesRaw ?? []) as FilaAmenidad[], locale);
 
     const modoReserva = resolverModoReserva({
       esEvento,
       esEventoReservable,
-      urlExterna: producto.external_booking_url,
+      urlExterna: urlContacto,
       esAlojamiento,
       tieneFranjas: (nbReglasFranja ?? 0) > 0,
     });
@@ -204,7 +249,7 @@ export const getProductoPorSlug = cache(
       unidad: producto.unit,
       minQty: producto.min_qty ?? 1,
       modoReserva,
-      urlExterna: producto.external_booking_url,
+      urlExterna: urlContacto,
       // Renseignée pour tout evento, INDÉPENDAMMENT du mode : la date d'un événement est une
       // propriété de son type, pas de la façon dont on le réserve. Les confondre était le défaut
       // que la spec 30 corrige (§5b).
@@ -242,6 +287,29 @@ export const getProductoPorSlug = cache(
             // réservable, borné à 20.
             maxQty: producto.max_qty ?? 20,
             esPmsBacked,
+            amenidades,
+          }
+        : null,
+      // Transport informatif (migration 20260916150000). Le découpage "HH:MM:SS" → "HH:MM" se fait
+      // ICI, dans la couche qui possède la forme DB, et UNE SEULE FOIS : le composant reçoit déjà
+      // des chaînes opaques prêtes à afficher, et n'a donc aucune raison de toucher à une heure.
+      // C'est ce qui rend structurellement impossible le `new Date(\`${fecha}T${hora}\`)` que la
+      // spec 18 §0 interdit (fuseau du navigateur visiteur ≠ Bogota).
+      transporte: esTransporte
+        ? {
+            primeraSalida: recortarHora(producto.transport_first_departure_time),
+            ultimaSalida: recortarHora(producto.transport_last_departure_time),
+            plazasPorSalida: producto.transport_seats_per_departure,
+            salida: {
+              direccion: producto.transport_departure_address,
+              lat: producto.transport_departure_lat,
+              lon: producto.transport_departure_lon,
+            },
+            llegada: {
+              direccion: producto.transport_arrival_address,
+              lat: producto.transport_arrival_lat,
+              lon: producto.transport_arrival_lon,
+            },
           }
         : null,
       duracionDias: producto.duration_days,
@@ -252,6 +320,14 @@ export const getProductoPorSlug = cache(
               porcentaje: Math.round(producto.group_discount_pct * 100),
             }
           : null,
+      // Programme d'un camp (spec 37) — résolu ICI, jamais dans le composant. `resolverPrograma`
+      // rend null pour tout type non-camp sans avoir à tester le type : la colonne y est
+      // structurellement null (products_program_camp_only).
+      programa: resolverPrograma(producto.program, locale),
+      // Première salida encore ouverte, pour dater le programme dès le HTML initial — donc pour un
+      // crawler comme pour un visiteur qui n'a rien cliqué. `disponibilidad` est déjà filtrée sur
+      // `gte("date", hoyIso)` et triée par date plus haut : on prend la première, sans refiltrer.
+      primeraSalidaIso: (disponibilidad ?? [])[0]?.date ?? null,
       disponibilidad: (disponibilidad ?? []) as FilaDisponibilidad[],
       tarifas: (tarifas ?? []) as FilaTarifa[],
       franjas: (franjas ?? []) as FilaFranja[],
@@ -295,6 +371,36 @@ export const getProductoPorSlug = cache(
  *
  * Exporté pour être testable seul : c'est la règle la plus facile à casser par inadvertance.
  */
+/**
+ * L'URL du bouton de contact d'une fiche — et, pour un transport, la GARANTIE qu'il en a toujours
+ * une (décision Jérôme du 2026-09-17 : « normalement il faut juste son num de tel pour contacter »,
+ * « non obligatoire le num et sinon c'est celui de hifago »).
+ *
+ * ⚠️ C'EST CE REPLI QUI FAIT DISPARAÎTRE LE CALENDRIER des fiches de transport, et il faut
+ * comprendre pourquoi il vit ici plutôt que dans `resolverModoReserva` juste en dessous :
+ * ce dernier bifurque sur la FORME du produit, jamais sur son type — un principe du projet, et
+ * `docs/dette-technique.md` note déjà que `search_catalog` fait l'inverse. Lui ajouter un
+ * `if (tipo === "transport")` aurait posé une TROISIÈME taxonomie concurrente de « comment ce
+ * produit se réserve ». À la place, cette fonction garantit la forme : pour un transport, le
+ * dernier terme ne peut jamais être nul, donc `urlExterna` est toujours renseignée, donc le mode
+ * vaut toujours `"vitrina"` — sans qu'aucune règle ne connaisse le type.
+ *
+ * Priorité : l'URL propre du transporteur (son site de réservation) > son WhatsApp > celui de
+ * Hifago. Pour tout autre type, le comportement est inchangé : `external_booking_url` ou `null`.
+ */
+export function resolverUrlContacto({
+  esTransporte,
+  urlExterna,
+  telefonoTransporte,
+}: {
+  esTransporte: boolean;
+  urlExterna: string | null;
+  telefonoTransporte: string | null;
+}): string | null {
+  if (!esTransporte) return urlExterna;
+  return urlExterna ?? urlDeContacto(telefonoTransporte ?? TELEFONO_HIFAGO);
+}
+
 export function resolverModoReserva({
   esEvento,
   esEventoReservable,

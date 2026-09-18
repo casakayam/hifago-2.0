@@ -4,13 +4,12 @@
   "name": { "es": "Privado Medellín ↔ Guatapé · hasta 4 pers." },
   "price_cop": 326000,
   "unit": "per_house",
-  "capacity": 4,
-  "default_capacity": 4,
   "min_qty": 1,
   "max_qty": 1,
-  "address": "Medellín, Antioquia, Colombia",
-  "lat": 6.2442,
-  "lon": -75.5736,
+  "transport_seats_per_departure": 4,
+  "transport_departure_address": "Medellín, Antioquia, Colombia",
+  "transport_departure_lat": 6.2442,
+  "transport_departure_lon": -75.5736,
   "tags": [],
   "photos": []
 }

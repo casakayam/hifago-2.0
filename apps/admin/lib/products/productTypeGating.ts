@@ -39,7 +39,18 @@ export function productTypeGating(type: ProductType) {
     isActivity,
     isLodging,
     isTransport,
-    hasLocationAndTags: isActivity || isLodging || isTransport,
+    // `isTransport` RETIRÉ le 2026-09-16 (demande Jérôme, migration 20260916150000) : un trajet a
+    // DEUX extrémités, donc ses propres colonnes dédiées `transport_departure_*` /
+    // `transport_arrival_*` et ses propres blocs de saisie (« Lugar de salida » / « Lugar de
+    // llegada », cf. product-type-fields.tsx). Le trio générique `address`/`lat`/`lon` n'est plus
+    // ni exposé ni écrit pour ce type — données transférées par la migration, `transport` retiré
+    // des whitelists `address` des 4 RPC de proposition. Continuer à l'exposer ici aurait laissé
+    // DEUX champs d'adresse sur le même formulaire, donc deux sources de vérité pour un seul lieu.
+    // ⚠️ Les TAGS d'un transport ne sont pas touchés : ils ont leur propre booléen (`hasTags`
+    // ci-dessous, qui garde `isTransport`) depuis le retour Jérôme du 2026-08-18. Le nom
+    // `hasLocationAndTags` est donc trompeur depuis cette date-là, pas depuis ce lot — renommage
+    // cosmétique laissé de côté volontairement (4 fichiers, zéro effet fonctionnel).
+    hasLocationAndTags: isActivity || isLodging,
     // Retour Jérôme (2026-08-18) : un camp a aussi des "servicios incluidos" (desayuno, transporte,
     // guía…) qui doivent être des tags comme pour les autres types, pour pouvoir un jour trier/
     // filtrer dessus — camp n'a en revanche pas besoin d'adresse propre (déjà celle de son
@@ -49,6 +60,12 @@ export function productTypeGating(type: ProductType) {
     // pouvoir en avoir") — même raisonnement que camp, pas d'adresse propre non plus, donc toujours
     // absent de hasLocationAndTags.
     hasTags: isActivity || isLodging || isTransport || isCamp || isEvento,
+    // Équipements structurés (migration 20260917110000, décision Jérôme du 2026-09-17) — logement
+    // UNIQUEMENT côté produit (l'établissement, lui, est toujours éligible, sans gating — cf.
+    // EstablishmentAmenitiesBlock.tsx, même raisonnement que hasTags côté établissement). Table
+    // dédiée `catalog_amenities`, jamais `catalog_tags` : mélanger polluerait les catégories
+    // éditoriales d'activités branchées sur search_catalog/`/actividades`.
+    hasAmenities: isLodging,
     hasPriceQtyFields: isActivity || isLodging || isTransport,
     hasCheckInOut: isLodging,
     // Types qui matérialisent product_availability — seuls ceux-là peuvent porter un cupo par
@@ -60,12 +77,24 @@ export function productTypeGating(type: ProductType) {
     // elle-même la valeur (resolve_lodging_default_capacity) — le champ n'est PAS pré-rempli côté
     // formulaire (pas fait, resterait à ajouter si on veut que le partenaire voie/ajuste la valeur
     // avant de valider plutôt que de la découvrir après coup).
-    hasDefaultCapacity: isActivity || isCamp || isTransport || isLodging,
+    // `isTransport` RETIRÉ le 2026-09-17 (décision Jérôme : un transport ne se réserve plus en
+    // ligne, il se contacte). Sans calendrier, aucune ligne de `product_availability` n'est jamais
+    // matérialisée pour ce type et `create_order` ne le traverse plus : le champ serait INERTE tout
+    // en affichant « 40 », donc en faisant croire à un plafond réel. La migration 20260917100000
+    // vide les valeurs posées par mockData. Aligne enfin l'écran sur docs/specs/14 §0, qui écrivait
+    // depuis le début « pas de capacité produit, capacity_default=NULL en V1 — le transporteur
+    // dispatche son propre parc ».
+    hasDefaultCapacity: isActivity || isCamp || isLodging,
     // Remise par seuil de remplissage cumulé (migration 20260914130000, demande Jérôme du
     // 2026-09-14) — camp UNIQUEMENT, imposé aussi côté base (products_group_discount_camp_only) :
     // seul ce type a aujourd'hui un remplissage cumulé fiable par départ (product_availability).
     // Étendre à activité/transport/evento serait un chantier distinct, pas une omission ici.
     hasGroupDiscount: isCamp,
+    // Programme jour par jour (migration 20260916130000, demande Jérôme du 2026-09-16) — camp
+    // UNIQUEMENT, imposé aussi côté base (products_program_camp_only). L'evento portait lui aussi
+    // un programme en V1 et docs/00-modele-de-donnees.md §4b le prévoit, mais Jérôme a scopé ce
+    // lot au camp : l'ouvrir plus tard = relever ce booléen ET le CHECK, jamais l'un sans l'autre.
+    hasProgram: isCamp,
   };
 }
 

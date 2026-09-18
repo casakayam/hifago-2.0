@@ -49,5 +49,15 @@
     "recurringWeeklyOngoing": "Every {weekday}, every {days} days, ongoing."
   },
   "fotoAlt": "{nombre}, photo {indice} of {total}",
-  "migasEtiqueta": "Breadcrumb"
+  "migasEtiqueta": "Breadcrumb",
+  "transportDepartureSingle": "Departures at {hora}",
+  "transportDepartureRange": "Departures between {desde} and {hasta}",
+  "transportSeatsPerDeparture": "{count, plural, one {# seat per departure} other {# seats per departure}}",
+  "transportFrom": "From: {lugar}",
+  "transportTo": "To: {lugar}",
+  "transportMapsLink": "View the route on Google Maps",
+  "transportMapsNewTab": "View the route on Google Maps (opens in a new tab)",
+  "programTitle": "The plan, day by day",
+  "programDay": "Day {dia}",
+  "programDayWithDate": "Day {dia} · {fecha}"
 }

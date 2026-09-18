@@ -8,6 +8,7 @@ import {
   nocheDeshabilitada,
   pisoLeadDays,
   ultimoDiaReservable,
+  fechaDelDiaDePrograma,
 } from "./calendario";
 import type { ReachableWindow } from "./reservationRange";
 
@@ -233,5 +234,35 @@ describe("nocheDeshabilitada", () => {
       expect(nocheDeshabilitada("2026-12-27", avecAncre(f))).toBe(true);
       expect(nocheDeshabilitada("2026-12-23", avecAncre(f))).toBe(false);
     });
+  });
+});
+
+describe("fechaDelDiaDePrograma", () => {
+  it("día 1 = jour du départ, et non le lendemain", () => {
+    expect(fechaDelDiaDePrograma("2026-11-15", 1, "es")).toBe(
+      new Intl.DateTimeFormat("es", { weekday: "short", day: "numeric", month: "short" }).format(
+        new Date(2026, 10, 15),
+      ),
+    );
+  });
+
+  it("décale de (día - 1) jours, y compris au passage d'un mois", () => {
+    expect(fechaDelDiaDePrograma("2026-11-29", 4, "es")).toBe(
+      new Intl.DateTimeFormat("es", { weekday: "short", day: "numeric", month: "short" }).format(
+        new Date(2026, 11, 2),
+      ),
+    );
+  });
+
+  it("formate selon la langue — c'est la raison de passer par Intl plutôt que de composer à la main", () => {
+    expect(fechaDelDiaDePrograma("2026-11-15", 1, "en")).not.toBe(
+      fechaDelDiaDePrograma("2026-11-15", 1, "es"),
+    );
+  });
+
+  it("un día absurde (0 ou négatif) retombe sur le jour du départ, jamais une date avant la salida", () => {
+    expect(fechaDelDiaDePrograma("2026-11-15", 0, "es")).toBe(
+      fechaDelDiaDePrograma("2026-11-15", 1, "es"),
+    );
   });
 });

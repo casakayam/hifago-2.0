@@ -177,6 +177,26 @@ function validerReferences({ partners, tags, establishments, activities, rooms, 
     if (!Array.isArray(c.departures) || c.departures.length === 0) {
       erreurs.push(`${c._fichier} : "departures" requis (tableau non vide de dates) pour un camp.`);
     }
+    // `program` est facultatif, mais s'il est là il doit être exploitable : c'est le seul endroit
+    // où une donnée mock malformée peut atteindre la base, et un jour au-delà de la durée passerait
+    // les CHECK SQL (volontairement souples) pour n'échouer qu'à l'affichage.
+    if (c.program !== undefined) {
+      if (!Array.isArray(c.program)) {
+        erreurs.push(`${c._fichier} : "program" doit être un tableau [{day, text:{es,…}}].`);
+      } else {
+        for (const [i, ligne] of c.program.entries()) {
+          const jour = ligne?.day;
+          if (!Number.isInteger(jour) || jour < 1 || jour > (c.duration_days ?? 0)) {
+            erreurs.push(
+              `${c._fichier} : program[${i}].day doit être un entier entre 1 et duration_days (${c.duration_days}).`,
+            );
+          }
+          if (!ligne?.text?.es || String(ligne.text.es).trim() === "") {
+            erreurs.push(`${c._fichier} : program[${i}].text.es est obligatoire (repli de la fiche).`);
+          }
+        }
+      }
+    }
   }
 
   verifierDoublons(establishments, (e) => e.name?.es, "établissements", erreurs);
@@ -304,6 +324,29 @@ async function creerPartenaires(admin, svc, partners) {
   return { idParCle, crees, ignores, personnesCreees, personnesIgnorees };
 }
 
+// Équipements structurés (migration 20260917110000, décision Jérôme du 2026-09-17) — DIFFÉRENCE
+// STRUCTURELLE avec les tags : ce référentiel n'est JAMAIS créé par le script mock, contrairement à
+// `catalog_tags` (créerTags ci-dessous). Il vit en migration, appliquée aussi en préprod — le
+// script se contente d'ASSIGNER des slugs déjà en base, et échoue bruyamment si un slug référencé
+// n'existe pas (référentiel non seedé), plutôt que de le créer à la volée.
+async function chargerAmenitiesExistantes(admin) {
+  const { data, error } = await admin.from("catalog_amenities").select("id, slug");
+  if (error) throw new Error(`lecture catalog_amenities : ${error.message}`);
+  return new Map((data ?? []).map((a) => [a.slug, a.id]));
+}
+
+function resoudreAmenityIds(item, idAmenityParSlug) {
+  return (item.amenities ?? []).map((slug) => {
+    const id = idAmenityParSlug.get(slug);
+    if (!id) {
+      throw new Error(
+        `${item._fichier} : amenity "${slug}" introuvable dans catalog_amenities (référentiel non seedé ? migration 20260917120000 appliquée ?).`
+      );
+    }
+    return id;
+  });
+}
+
 async function creerTags(admin, svc, tags) {
   const idParCle = new Map();
   let crees = 0;
@@ -344,7 +387,7 @@ async function creerTags(admin, svc, tags) {
   return { idParCle, crees, ignores };
 }
 
-async function creerEtablissements(admin, svc, establishments, idPartenaireParCle) {
+async function creerEtablissements(admin, svc, establishments, idPartenaireParCle, idAmenityParSlug) {
   const idParCle = new Map();
   let crees = 0;
   let ignores = 0;
@@ -421,6 +464,14 @@ async function creerEtablissements(admin, svc, establishments, idPartenaireParCl
       photosTeleversees += 1;
     }
 
+    const amenityIds = resoudreAmenityIds(e, idAmenityParSlug);
+    if (amenityIds.length > 0) {
+      const { error } = await admin
+        .from("establishment_amenity_assignments")
+        .insert(amenityIds.map((amenity_id) => ({ establishment_id: idEtablissement, amenity_id })));
+      if (error) throw new Error(`${e._fichier} : insert establishment_amenity_assignments : ${error.message}`);
+    }
+
     idParCle.set(cle, idEtablissement);
     crees += 1;
   }
@@ -433,7 +484,7 @@ async function creerEtablissements(admin, svc, establishments, idPartenaireParCl
 // gère tous les types de `products` via le même payload générique
 // (capacity/unit/lodging_kind/slot_rules/occurrence_*/tag_ids/photos...) — pas de RPC séparée par
 // type. Les champs qui ne s'appliquent pas à un type donné restent simplement `null` en base.
-async function creerProduits(admin, svc, produits, { dossier, type }, idPartenaireParCle, idEtablissementParCle, idTagParCle) {
+async function creerProduits(admin, svc, produits, { dossier, type }, idPartenaireParCle, idEtablissementParCle, idTagParCle, idAmenityParSlug) {
   let crees = 0;
   let ignores = 0;
   let photosTeleversees = 0;
@@ -480,6 +531,11 @@ async function creerProduits(admin, svc, produits, { dossier, type }, idPartenai
       duration_days: item.duration_days ?? null,
       // Remise par seuil de remplissage cumulé (migration 20260914130000) — camp uniquement,
       // les deux ensemble ou aucun (contrainte CHECK products_group_discount_pair).
+      // Programme jour par jour (spec 37) — camp uniquement (CHECK products_program_camp_only).
+      // `?? null` produit ici le littéral JSON `null` côté RPC : c'est justement ce que la
+      // normalisation de create_product_from_proposal (migration 20260916140000) absorbe, sans
+      // quoi tout camp SANS programme serait rejeté par products_program_is_array.
+      program: item.program ?? null,
       group_discount_threshold_qty: item.group_discount_threshold_qty ?? null,
       group_discount_pct: item.group_discount_pct ?? null,
       start_time: item.start_time ?? null,
@@ -492,6 +548,23 @@ async function creerProduits(admin, svc, produits, { dossier, type }, idPartenai
       address: item.address ?? null,
       lat: item.lat ?? null,
       lon: item.lon ?? null,
+      // Transport informatif (migration 20260916150000). ⚠️ Ce payload mappe chaque clé
+      // EXPLICITEMENT : une clé de JSON absente d'ici est jetée en silence, sans que rien ne le
+      // signale — donc les 9 colonnes doivent y figurer, comme dans la whitelist de
+      // create_product_from_proposal qu'on appelle juste en dessous.
+      // ⚠️ Un transport n'utilise PLUS `address`/`lat`/`lon` ci-dessus : ses mocks portent
+      // `transport_departure_*` (les 6 fichiers de mockData/transport/ ont été renommés avec la
+      // migration). Les laisser tous les deux recréerait la double source de vérité.
+      transport_first_departure_time: item.transport_first_departure_time ?? null,
+      transport_last_departure_time: item.transport_last_departure_time ?? null,
+      transport_seats_per_departure: item.transport_seats_per_departure ?? null,
+      transport_departure_address: item.transport_departure_address ?? null,
+      transport_departure_lat: item.transport_departure_lat ?? null,
+      transport_departure_lon: item.transport_departure_lon ?? null,
+      transport_arrival_address: item.transport_arrival_address ?? null,
+      transport_arrival_lat: item.transport_arrival_lat ?? null,
+      transport_arrival_lon: item.transport_arrival_lon ?? null,
+      transport_contact_phone: item.transport_contact_phone ?? null,
       slot_rules: item.slot_rules ?? null,
       photos,
       tag_ids: (item.tags ?? []).map((cleTag) => idTagParCle.get(cleTag)),
@@ -508,6 +581,20 @@ async function creerProduits(admin, svc, produits, { dossier, type }, idPartenai
     if (item._extra_columns) {
       const { error } = await svc.from("products").update(item._extra_columns).eq("id", idProduit);
       if (error) throw new Error(`${item._fichier} : update _extra_columns : ${error.message}`);
+    }
+
+    // Équipements structurés (migration 20260917110000) — logement uniquement, même gating que
+    // hasAmenities côté admin (productTypeGating.ts). Assignation directe, jamais via le payload de
+    // create_product_from_proposal (qui ne connaît pas cette table) — cf. l'en-tête de
+    // chargerAmenitiesExistantes ci-dessus.
+    if (type === "lodging") {
+      const amenityIds = resoudreAmenityIds(item, idAmenityParSlug);
+      if (amenityIds.length > 0) {
+        const { error } = await admin
+          .from("product_amenity_assignments")
+          .insert(amenityIds.map((amenity_id) => ({ product_id: idProduit, amenity_id })));
+        if (error) throw new Error(`${item._fichier} : insert product_amenity_assignments : ${error.message}`);
+      }
     }
 
     // Evento réservable en ligne, mode 'metered' (2026-09-15) — matérialise product_availability
@@ -597,7 +684,15 @@ async function main() {
   const resultatTags = await creerTags(admin, svc, tags);
   console.log(`   tags : ${resultatTags.crees} créé(s), ${resultatTags.ignores} ignoré(s)`);
 
-  const resultatEtablissements = await creerEtablissements(admin, svc, establishments, resultatPartenaires.idParCle);
+  const idAmenityParSlug = await chargerAmenitiesExistantes(admin);
+
+  const resultatEtablissements = await creerEtablissements(
+    admin,
+    svc,
+    establishments,
+    resultatPartenaires.idParCle,
+    idAmenityParSlug
+  );
   console.log(
     `   établissements : ${resultatEtablissements.crees} créé(s), ${resultatEtablissements.ignores} ignoré(s), ` +
       `${resultatEtablissements.photosTeleversees} photo(s)`
@@ -610,7 +705,8 @@ async function main() {
     { dossier: "activities", type: "activity" },
     resultatPartenaires.idParCle,
     resultatEtablissements.idParCle,
-    resultatTags.idParCle
+    resultatTags.idParCle,
+    idAmenityParSlug
   );
   console.log(
     `   activités : ${resultatActivites.crees} créée(s), ${resultatActivites.ignores} ignorée(s), ` +
@@ -624,7 +720,8 @@ async function main() {
     { dossier: "rooms", type: "lodging" },
     resultatPartenaires.idParCle,
     resultatEtablissements.idParCle,
-    resultatTags.idParCle
+    resultatTags.idParCle,
+    idAmenityParSlug
   );
   console.log(
     `   chambres : ${resultatChambres.crees} créée(s), ${resultatChambres.ignores} ignorée(s), ` +
@@ -638,7 +735,8 @@ async function main() {
     { dossier: "events", type: "evento" },
     resultatPartenaires.idParCle,
     resultatEtablissements.idParCle,
-    resultatTags.idParCle
+    resultatTags.idParCle,
+    idAmenityParSlug
   );
   console.log(
     `   événements : ${resultatEvenements.crees} créé(s), ${resultatEvenements.ignores} ignoré(s), ` +
@@ -652,7 +750,8 @@ async function main() {
     { dossier: "transport", type: "transport" },
     resultatPartenaires.idParCle,
     resultatEtablissements.idParCle,
-    resultatTags.idParCle
+    resultatTags.idParCle,
+    idAmenityParSlug
   );
   console.log(
     `   transports : ${resultatTransport.crees} créé(s), ${resultatTransport.ignores} ignoré(s), ` +
@@ -666,7 +765,8 @@ async function main() {
     { dossier: "camps", type: "camp" },
     resultatPartenaires.idParCle,
     resultatEtablissements.idParCle,
-    resultatTags.idParCle
+    resultatTags.idParCle,
+    idAmenityParSlug
   );
   console.log(
     `   camps : ${resultatCamps.crees} créé(s), ${resultatCamps.ignores} ignoré(s), ` +

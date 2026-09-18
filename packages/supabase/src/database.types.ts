@@ -197,6 +197,68 @@ export type Database = {
           },
         ]
       }
+      catalog_amenities: {
+        Row: {
+          category_key: string
+          created_at: string
+          id: string
+          label: Json
+          often_paid: boolean
+          recommended_level: string
+          slug: string
+          sort_order: number
+        }
+        Insert: {
+          category_key: string
+          created_at?: string
+          id?: string
+          label: Json
+          often_paid?: boolean
+          recommended_level?: string
+          slug: string
+          sort_order?: number
+        }
+        Update: {
+          category_key?: string
+          created_at?: string
+          id?: string
+          label?: Json
+          often_paid?: boolean
+          recommended_level?: string
+          slug?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_amenities_category_key_fkey"
+            columns: ["category_key"]
+            isOneToOne: false
+            referencedRelation: "catalog_amenity_categories"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
+      catalog_amenity_categories: {
+        Row: {
+          created_at: string
+          key: string
+          label: Json
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          key: string
+          label: Json
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          key?: string
+          label?: Json
+          sort_order?: number
+        }
+        Relationships: []
+      }
       catalog_tags: {
         Row: {
           created_at: string
@@ -297,6 +359,39 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "partner_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      establishment_amenity_assignments: {
+        Row: {
+          amenity_id: string
+          created_at: string
+          establishment_id: string
+        }
+        Insert: {
+          amenity_id: string
+          created_at?: string
+          establishment_id: string
+        }
+        Update: {
+          amenity_id?: string
+          created_at?: string
+          establishment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "establishment_amenity_assignments_amenity_id_fkey"
+            columns: ["amenity_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_amenities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "establishment_amenity_assignments_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
             referencedColumns: ["id"]
           },
         ]
@@ -1502,6 +1597,39 @@ export type Database = {
           },
         ]
       }
+      product_amenity_assignments: {
+        Row: {
+          amenity_id: string
+          created_at: string
+          product_id: string
+        }
+        Insert: {
+          amenity_id: string
+          created_at?: string
+          product_id: string
+        }
+        Update: {
+          amenity_id?: string
+          created_at?: string
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_amenity_assignments_amenity_id_fkey"
+            columns: ["amenity_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_amenities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_amenity_assignments_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_availability: {
         Row: {
           booked: number
@@ -1862,6 +1990,7 @@ export type Database = {
           price_cop: number | null
           price_label: string | null
           price_tiers: Json | null
+          program: Json | null
           qty_unit: string
           recurrence_end_count: number | null
           recurrence_end_date: string | null
@@ -1873,6 +2002,16 @@ export type Database = {
           sort: number | null
           start_time: string | null
           stay_rates: Json | null
+          transport_arrival_address: string | null
+          transport_arrival_lat: number | null
+          transport_arrival_lon: number | null
+          transport_contact_phone: string | null
+          transport_departure_address: string | null
+          transport_departure_lat: number | null
+          transport_departure_lon: number | null
+          transport_first_departure_time: string | null
+          transport_last_departure_time: string | null
+          transport_seats_per_departure: number | null
           type: string
           unit: string | null
           unit_count: number | null
@@ -1916,6 +2055,7 @@ export type Database = {
           price_cop?: number | null
           price_label?: string | null
           price_tiers?: Json | null
+          program?: Json | null
           qty_unit?: string
           recurrence_end_count?: number | null
           recurrence_end_date?: string | null
@@ -1927,6 +2067,16 @@ export type Database = {
           sort?: number | null
           start_time?: string | null
           stay_rates?: Json | null
+          transport_arrival_address?: string | null
+          transport_arrival_lat?: number | null
+          transport_arrival_lon?: number | null
+          transport_contact_phone?: string | null
+          transport_departure_address?: string | null
+          transport_departure_lat?: number | null
+          transport_departure_lon?: number | null
+          transport_first_departure_time?: string | null
+          transport_last_departure_time?: string | null
+          transport_seats_per_departure?: number | null
           type: string
           unit?: string | null
           unit_count?: number | null
@@ -1970,6 +2120,7 @@ export type Database = {
           price_cop?: number | null
           price_label?: string | null
           price_tiers?: Json | null
+          program?: Json | null
           qty_unit?: string
           recurrence_end_count?: number | null
           recurrence_end_date?: string | null
@@ -1981,6 +2132,16 @@ export type Database = {
           sort?: number | null
           start_time?: string | null
           stay_rates?: Json | null
+          transport_arrival_address?: string | null
+          transport_arrival_lat?: number | null
+          transport_arrival_lon?: number | null
+          transport_contact_phone?: string | null
+          transport_departure_address?: string | null
+          transport_departure_lat?: number | null
+          transport_departure_lon?: number | null
+          transport_first_departure_time?: string | null
+          transport_last_departure_time?: string | null
+          transport_seats_per_departure?: number | null
           type?: string
           unit?: string | null
           unit_count?: number | null

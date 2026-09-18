@@ -11,6 +11,13 @@ import { slugify } from "../lib/utils";
 // l'alojamiento/l'hôtel), le prix par tramos couvrant seul les paliers de capacité de véhicule
 // (« hasta 4/7 pers. » de la V1) — tout en exerçant le chemin complet création → édition, cf.
 // CLAUDE.md §6.5.
+//
+// Étendu le 2026-09-16 (migration 20260916150000, demande Jérôme) : un transport porte désormais
+// une fenêtre de départs, des places annoncées par départ et DEUX lieux dédiés, tous INFORMATIFS.
+// Ce test porte aussi le seul garde-fou mécanique du retrait du trio générique `address`/`lat`/`lon`
+// pour ce type — l'assertion `address-input` à 0, exactement comme `check-in-input` juste à côté.
+// Sans elle, rien n'empêcherait de le réexposer un jour et de recréer la double source de vérité
+// (CLAUDE.md §11.20).
 const FIXTURE_PHOTO = path.join(__dirname, "fixtures/test-photo.jpg");
 
 test("admin crée un transport (prix par tramos de capacidad de vehículo), l'édite et vérifie la persistance", async ({
@@ -43,10 +50,25 @@ test("admin crée un transport (prix par tramos de capacidad de vehículo), l'é
   const nameEs = `Privado aeropuerto Guatapé ES ${suffix}`;
   await page.locator('input[name="nombre"]').fill(nameEs);
 
-  // Lieu (réutilisation du parcours activité/alojamiento/hôtel) — opcional, point de départ.
-  await page.getByTestId("address-input").fill("Aeropuerto José María Córdova, Rionegro");
-  await page.getByTestId("lat-input").fill("6.1645");
-  await page.getByTestId("lon-input").fill("-75.4231");
+  // Les DEUX lieux du trajet, dans leurs colonnes dédiées — le trio générique `address`/`lat`/`lon`
+  // n'existe plus pour ce type (assertion plus bas).
+  await page.getByTestId("departure-address-input").fill("Aeropuerto José María Córdova, Rionegro");
+  await page.getByTestId("departure-lat-input").fill("6.1645");
+  await page.getByTestId("departure-lon-input").fill("-75.4231");
+  await page.getByTestId("arrival-address-input").fill("Parque Principal, Guatapé");
+  await page.getByTestId("arrival-lat-input").fill("6.2326");
+  await page.getByTestId("arrival-lon-input").fill("-75.1592");
+
+  // Le contact du transporteur (2026-09-17). OPTIONNEL en soi, mais renseigné ici pour pouvoir
+  // asserter plus bas que c'est bien SON numéro qui atterrit sur le bouton de la fiche publique,
+  // et pas le repli Hifago.
+  await page.getByTestId("transport-contact-phone-input").fill("+573001112233");
+
+  // Fenêtre de départs + places annoncées — informatif, jamais un créneau réservable : le mode de
+  // réservation du transport reste par DATE (aucun `product_slot_rules` n'est créé ici).
+  await page.getByTestId("transport-first-departure-input").fill("07:00");
+  await page.getByTestId("transport-last-departure-input").fill("07:45");
+  await page.getByTestId("transport-seats-input").fill("40");
 
   // Foto (opcional, même staging que les autres types).
   const gallery = page.getByTestId("media-gallery");
@@ -72,6 +94,13 @@ test("admin crée un transport (prix par tramos de capacidad de vehículo), l'é
   // transporteur dispatche son propre parc — même absence que pour une activité, spec 14 §gating).
   await expect(page.getByTestId("check-in-input")).toHaveCount(0);
   await expect(page.getByTestId("capacity-input")).toHaveCount(0);
+  // Le trio générique a quitté ce type le 2026-09-16 : deux champs d'adresse sur le même écran
+  // auraient été deux sources de vérité pour un seul lieu.
+  await expect(page.getByTestId("address-input")).toHaveCount(0);
+  await expect(page.getByTestId("lat-input")).toHaveCount(0);
+  // Le cupo a quitté ce type le 2026-09-17 : sans calendrier, il ne serait jamais lu, et afficher
+  // « 40 » ferait croire à un plafond réel (docs/specs/14 §0 le disait depuis le début).
+  await expect(page.getByTestId("default-capacity-input")).toHaveCount(0);
 
   await page.getByTestId("create-product-button").click();
   await expect(page).toHaveURL(/\/admin\/establishments$/);
@@ -83,6 +112,31 @@ test("admin crée un transport (prix par tramos de capacidad de vehículo), l'é
   const slug = slugify(nameEs);
   const publicResponse = await page.goto(webProductUrl(slug));
   expect(publicResponse?.status()).toBe(200);
+
+  // Le but même du lot : ces informations sont VISIBLES par le voyageur, pas seulement en base
+  // (« ces infos doivent être dans la fiche du produit », Jérôme, 2026-09-16).
+  await expect(page.getByTestId("transport-schedule")).toContainText("07:00");
+  await expect(page.getByTestId("transport-schedule")).toContainText("07:45");
+  await expect(page.getByTestId("transport-schedule")).toContainText("40");
+  await expect(page.getByTestId("transport-route")).toContainText("Guatapé");
+  // Lien d'itinéraire : une simple URL Maps, jamais un appel à la Google Routes API.
+  const mapsHref = await page.getByTestId("transport-maps-link").getAttribute("href");
+  expect(mapsHref).toContain("google.com/maps/dir/");
+  expect(mapsHref).toContain("origin=6.1645%2C-75.4231");
+
+  // ⚠️ LE POINT DU 2026-09-17 : un transport se CONTACTE, il ne se réserve pas en ligne. Le
+  // calendrier et le bouton « Añadir a Mi viaje » ont laissé la place au bouton WhatsApp — et
+  // c'est bien le numéro du transporteur, pas le repli Hifago.
+  const contactHref = await page.getByTestId("vitrina-contact-link").getAttribute("href");
+  expect(contactHref).toBe("https://wa.me/573001112233");
+  await expect(page.getByTestId("add-to-cart-button")).toHaveCount(0);
+  // Le prix reste affiché malgré le mode vitrine.
+  // ⚠️ PAS d'assertion sur le suffixe « por persona » ici, et ce n'est pas un oubli : `products.unit`
+  // n'est PAS saisissable pour un transport (le champ est lodging-only dans product-type-fields),
+  // donc un transport créé depuis l'admin n'a jamais d'unité de prix — mesuré ici le 2026-09-17.
+  // Les mocks, eux, la renseignent à la main. Le rétablissement du suffixe en mode vitrine est
+  // couvert par FichaProducto.transporte.test.tsx, qui peut, lui, poser l'unité.
+  await expect(page.getByTestId("product-price")).toContainText("COP");
 
   const adminClient = await createSignedInClient(SEEDED_ACCOUNTS.admin, SEEDED_PASSWORD);
   const { data: created } = await adminClient
@@ -101,7 +155,12 @@ test("admin crée un transport (prix par tramos de capacidad de vehículo), l'é
   // Contrairement aux chambres d'hôtel (table enfant, bloc édition séparé), le prix par tramos est
   // une simple colonne products : préremplie directement dans ProductForm, aucun bloc séparé.
   await expect(page.locator('input[name="nombre"]')).toHaveValue(nameEs);
-  await expect(page.getByTestId("address-input")).toHaveValue("Aeropuerto José María Córdova, Rionegro");
+  await expect(page.getByTestId("departure-address-input")).toHaveValue("Aeropuerto José María Córdova, Rionegro");
+  await expect(page.getByTestId("arrival-address-input")).toHaveValue("Parque Principal, Guatapé");
+  await expect(page.getByTestId("transport-first-departure-input")).toHaveValue("07:00");
+  await expect(page.getByTestId("transport-last-departure-input")).toHaveValue("07:45");
+  await expect(page.getByTestId("transport-seats-input")).toHaveValue("40");
+  await expect(page.getByTestId("transport-contact-phone-input")).toHaveValue("+573001112233");
   await expect(page.getByTestId("price-tiers-editor")).toBeVisible();
   await expect(page.getByTestId("price-tier-price-0")).toHaveValue("210000");
   await expect(page.getByTestId("price-tier-price-1")).toHaveValue("362000");
@@ -109,12 +168,19 @@ test("admin crée un transport (prix par tramos de capacidad de vehículo), l'é
   await expect(page.getByTestId("max-qty-input")).toHaveValue("7");
   await expect(page.getByTestId("check-in-input")).toHaveCount(0);
   await expect(page.getByTestId("capacity-input")).toHaveCount(0);
+  await expect(page.getByTestId("address-input")).toHaveCount(0);
 
   // Édite directement dans le même submit (pas de bouton de sauvegarde séparé pour ces champs).
   await page.getByTestId("price-tier-price-1").fill("380000");
+  // Une seule salida (primera = última) : c'est le cas NORMAL d'un transfert à heure fixe, et c'est
+  // ce que le `>=` du CHECK products_transport_departure_order autorise — le formulaire doit
+  // l'accepter sans message d'erreur.
+  await page.getByTestId("transport-last-departure-input").fill("07:00");
   await page.getByTestId("save-product-button").click();
   await expect(page).toHaveURL(/\/admin\/establishments\/[0-9a-f-]{36}$/);
 
   await page.goto(`/admin/products/${productId}/edit`);
   await expect(page.getByTestId("price-tier-price-1")).toHaveValue("380000");
+  await expect(page.getByTestId("transport-first-departure-input")).toHaveValue("07:00");
+  await expect(page.getByTestId("transport-last-departure-input")).toHaveValue("07:00");
 });

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { TransportInfoFields } from "@/lib/products/transportInfo";
+import { ProgramEditor } from "@/components/program-editor";
 import { Checkbox, Input, Label, ListBox, Select, Switch, TextField } from "@hifago/ui";
 import { TagsMultiSelect, type TagOption } from "@/components/tags-multiselect";
 import { LobbyOptionPicker, type LobbyRoomOption } from "@/components/lobby-option-picker";
@@ -77,12 +79,15 @@ export function ProductTypeFields({
   showSlotRulesEditor,
   allowCreateTags,
   availableTags,
+  showAmenities,
+  availableAmenities,
   establishmentId,
   establishmentLobbyConnected,
   allowManualLobbyEntry,
   onApplyLobbyRoomData,
   lobbyLinkReadOnly = false,
   allowOnlineBookableConfig = false,
+  campDurationDays = null,
 }: {
   type: ProductType;
   state: ProductTypeFieldsState;
@@ -95,12 +100,27 @@ export function ProductTypeFields({
   showSlotRulesEditor?: boolean;
   allowCreateTags?: boolean;
   availableTags?: TagOption[];
+  // Équipements structurés (migration 20260917110000) — MÊME gating "création seulement" que
+  // showTags, mais admin-only en plus (jamais passé `true` par le variant socio-proposal ni par
+  // ModerateProductCreationProposalForm) : ces deux consommateurs omettent la prop, qui reste
+  // `undefined`/falsy, le bloc ne se rend donc jamais pour eux — les équipements restent un geste
+  // admin post-création par défaut (ProductAmenitiesBlock en édition), staged ici seulement pour la
+  // création ADMIN directe (cf. product-form.tsx).
+  showAmenities?: boolean;
+  availableAmenities?: TagOption[];
   // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — remplace l'ancien showLobbyFields
   // (booléen unique, admin-only). establishmentLobbyConnected (dérivé de
   // lobby_connector_active && lobby_has_token côté appelant) contrôle si le bloc s'affiche DU TOUT
   // (admin ET socio, dès que l'établissement est connecté) ; allowManualLobbyEntry
   // (`variant === "admin"`) contrôle si l'option "Entrada manual" (ID tapé à la main) est proposée
   // — jamais au socio, pour préserver l'invariant qui empêche d'injecter un ID Lobby arbitraire.
+  // Durée PERSISTÉE du camp (spec 37), pour que l'éditeur de programme ouvre le bon nombre de
+  // journées en ÉDITION — où l'input « Duración (días) » reste volontairement vierge (gap
+  // création-only, cf. le commentaire du select dans admin/products/[id]/edit/page.tsx). En
+  // création, la valeur saisie dans le formulaire prime sur cette prop. Elle n'alimente QUE
+  // l'éditeur de programme : la réinjecter dans l'input afficherait une valeur que l'update
+  // n'écrit pas.
+  campDurationDays?: number | null;
   establishmentId?: string;
   establishmentLobbyConnected?: boolean;
   allowManualLobbyEntry?: boolean;
@@ -125,7 +145,8 @@ export function ProductTypeFields({
 }) {
   const {
     isEvento, isCamp, isActivity, isLodging, isTransport,
-    hasLocationAndTags, hasTags, hasPriceQtyFields, hasCheckInOut, hasDefaultCapacity, hasGroupDiscount,
+    hasLocationAndTags, hasTags, hasAmenities, hasPriceQtyFields, hasCheckInOut, hasDefaultCapacity, hasGroupDiscount,
+    hasProgram,
   } = productTypeGating(type);
 
   // Le vrai discriminant des champs evento : configurable ICI (admin) ET effectivement basculé.
@@ -143,6 +164,70 @@ export function ProductTypeFields({
   const lobbyLinkCopy = LOBBY_LINK_COPY[type];
 
   const addressSearchRef = useRef<HTMLDivElement | null>(null);
+  // Transport (2026-09-16) : DEUX widgets de plus, un par extrémité du trajet.
+  // ⚠️ TROIS refs et TROIS effets distincts, jamais un seul mutualisé. Deux raisons, et les deux
+  // sont des bugs silencieux :
+  //  1. un ref unique serait écrasé par le dernier `<div ref>` rendu, donc un widget se monterait
+  //     dans le mauvais conteneur ;
+  //  2. un effet unique keyé sur `[hasLocationAndTags]` NE SE RELANCERAIT PAS en basculant le
+  //     sélecteur Tipo d'`activity` à `transport` — la valeur du booléen ne change pas de `false` à
+  //     `true`, elle passe de `true` à `false` sans que l'autre condition soit observée. Les
+  //     conteneurs de départ/arrivée apparaîtraient dans le DOM et ne recevraient JAMAIS de widget,
+  //     sans la moindre erreur. Chaque effet garde donc sa propre condition dans ses dépendances.
+  const departureSearchRef = useRef<HTMLDivElement | null>(null);
+  const arrivalSearchRef = useRef<HTMLDivElement | null>(null);
+
+  // Forme FONCTIONNELLE du setter (`(prev) => …`), pas `{ ...state.transportInfo, … }` : le
+  // callback du widget Google arrive de façon asynchrone, longtemps après le render qui l'a monté,
+  // et fermerait sinon sur un `transportInfo` périmé.
+  const setTransport = (patch: Partial<TransportInfoFields>) =>
+    state.setTransportInfo((prev) => ({ ...prev, ...patch }));
+
+  useEffect(() => {
+    if (!isTransport) return;
+    const container = departureSearchRef.current;
+    if (!container) return;
+    return mountAddressAutocomplete(
+      container,
+      (place) => {
+        setTransport({
+          departureAddress: place.address,
+          ...(place.lat !== null && place.lon !== null
+            ? { departureLat: String(place.lat), departureLon: String(place.lon) }
+            : {}),
+        });
+      },
+      {
+        testId: "departure-address-autocomplete",
+        ariaLabel: "Lugar de salida",
+        placeholder: "Empieza a escribir el lugar de salida…",
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- state est un objet stable de setters, jamais recréé entre renders utiles
+  }, [isTransport]);
+
+  useEffect(() => {
+    if (!isTransport) return;
+    const container = arrivalSearchRef.current;
+    if (!container) return;
+    return mountAddressAutocomplete(
+      container,
+      (place) => {
+        setTransport({
+          arrivalAddress: place.address,
+          ...(place.lat !== null && place.lon !== null
+            ? { arrivalLat: String(place.lat), arrivalLon: String(place.lon) }
+            : {}),
+        });
+      },
+      {
+        testId: "arrival-address-autocomplete",
+        ariaLabel: "Lugar de llegada",
+        placeholder: "Empieza a escribir el lugar de llegada…",
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- idem : seuls des setters sont capturés
+  }, [isTransport]);
 
   useEffect(() => {
     if (!hasLocationAndTags) return;
@@ -308,6 +393,155 @@ export function ProductTypeFields({
         </>
       ) : null}
 
+      {/* TRANSPORT — horaires et lieux, PUREMENT INFORMATIFS (migration 20260916150000, demande
+          Jérôme du 2026-09-16 : « c'est à titre informatif pour la personne qui réserve »).
+          Ce qu'on sort du code en faisant ça : le texte figé `transport_info_html` du portail
+          legacy (`public/reservar.js:176` du dépôt parent), que personne ne pouvait modifier sans
+          déployer.
+          ⚠️ La fenêtre de départs n'est PAS un créneau réservable : aucun `product_slot_rules` ici,
+          cette table-là rendrait `create_order` bloquant (refus `slot_required`). Un transport
+          reste réservé par DATE, et son cupo réel est « Cupo diario por defecto » plus bas.
+          Le lieu de départ vit dans `transport_departure_*`, pas dans le trio générique
+          `address`/`lat`/`lon` (retiré d'`hasLocationAndTags` pour ce type) : un trajet a DEUX
+          extrémités, et une seule convention de nommage doit porter un seul concept. */}
+      {isTransport ? (
+        <>
+          {/* LE CONTACT, en premier : c'est par là que le voyageur réserve un trajet. Un transport
+              n'a plus de calendrier ni de panier (décision Jérôme du 2026-09-17) — sa fiche publique
+              affiche un bouton WhatsApp à la place. Champ OPTIONNEL : vide, c'est le WhatsApp de
+              Hifago qui répond, jamais un bouton mort. */}
+          <div className="flex flex-col gap-1.5">
+            <TextField
+              fullWidth
+              name="transport-contact-phone"
+              value={state.transportInfo.contactPhone}
+              onChange={(value) => setTransport({ contactPhone: value })}
+            >
+              <Label>Teléfono de contacto (WhatsApp) — opcional</Label>
+              <Input
+                type="tel"
+                placeholder="+573001112233"
+                data-testid="transport-contact-phone-input"
+              />
+            </TextField>
+            <p className="text-xs text-muted" data-testid="transport-contact-phone-help">
+              Formato internacional, con el indicativo del país. Si lo dejas vacío, la ficha pública
+              muestra el WhatsApp de Hifago. Un transporte no se reserva en línea: el viajero
+              escribe por WhatsApp.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="departure-address-search">Lugar de salida — buscar (Google), opcional</Label>
+            <div id="departure-address-search" ref={departureSearchRef} data-testid="departure-address-search" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="departure-address">Lugar de salida</Label>
+            <Input
+              id="departure-address"
+              value={state.transportInfo.departureAddress}
+              onChange={(event) => setTransport({ departureAddress: event.target.value })}
+              placeholder="Se completa al elegir una sugerencia arriba, o escribe aquí directamente"
+              data-testid="departure-address-input"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="departure-lat">Latitud de salida — detectada o manual</Label>
+              <Input
+                id="departure-lat"
+                value={state.transportInfo.departureLat}
+                onChange={(event) => setTransport({ departureLat: event.target.value })}
+                data-testid="departure-lat-input"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="departure-lon">Longitud de salida — detectada o manual</Label>
+              <Input
+                id="departure-lon"
+                value={state.transportInfo.departureLon}
+                onChange={(event) => setTransport({ departureLon: event.target.value })}
+                data-testid="departure-lon-input"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="arrival-address-search">Lugar de llegada — buscar (Google), opcional</Label>
+            <div id="arrival-address-search" ref={arrivalSearchRef} data-testid="arrival-address-search" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="arrival-address">Lugar de llegada</Label>
+            <Input
+              id="arrival-address"
+              value={state.transportInfo.arrivalAddress}
+              onChange={(event) => setTransport({ arrivalAddress: event.target.value })}
+              placeholder="Se completa al elegir una sugerencia arriba, o escribe aquí directamente"
+              data-testid="arrival-address-input"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="arrival-lat">Latitud de llegada — detectada o manual</Label>
+              <Input
+                id="arrival-lat"
+                value={state.transportInfo.arrivalLat}
+                onChange={(event) => setTransport({ arrivalLat: event.target.value })}
+                data-testid="arrival-lat-input"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="arrival-lon">Longitud de llegada — detectada o manual</Label>
+              <Input
+                id="arrival-lon"
+                value={state.transportInfo.arrivalLon}
+                onChange={(event) => setTransport({ arrivalLon: event.target.value })}
+                data-testid="arrival-lon-input"
+              />
+            </div>
+          </div>
+
+          {/* `first = last` est VALIDE, et c'est le cas normal d'un transfert à heure fixe — d'où le
+              `>=` du CHECK products_transport_departure_order, divergence assumée avec
+              product_slot_rules_time_order (qui exige, lui, un intervalle strict). */}
+          <div className="grid grid-cols-2 gap-4">
+            <TextField
+              fullWidth
+              name="transport-first-departure"
+              value={state.transportInfo.firstDepartureTime}
+              onChange={(value) => setTransport({ firstDepartureTime: value })}
+            >
+              <Label>Primera salida — opcional</Label>
+              <Input type="time" data-testid="transport-first-departure-input" />
+            </TextField>
+            <TextField
+              fullWidth
+              name="transport-last-departure"
+              value={state.transportInfo.lastDepartureTime}
+              onChange={(value) => setTransport({ lastDepartureTime: value })}
+            >
+              <Label>Última salida — opcional</Label>
+              <Input type="time" data-testid="transport-last-departure-input" />
+            </TextField>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <TextField
+              fullWidth
+              name="transport-seats"
+              value={state.transportInfo.seatsPerDeparture}
+              onChange={(value) => setTransport({ seatsPerDeparture: value })}
+            >
+              <Label>Plazas por salida — opcional</Label>
+              <Input type="number" min={1} data-testid="transport-seats-input" />
+            </TextField>
+            <p className="text-xs text-muted" data-testid="transport-seats-help">
+              Solo informativo: se muestra en la ficha pública y nunca bloquea una reserva. El cupo
+              que sí bloquea es «Cupo diario por defecto» más abajo.
+            </p>
+          </div>
+        </>
+      ) : null}
+
       {showTags && hasTags ? (
         <TagsMultiSelect
           availableTags={availableTags ?? []}
@@ -315,6 +549,19 @@ export function ProductTypeFields({
           onChange={state.setSelectedTagIds}
           allowCreate={allowCreateTags}
           testId="tags-multiselect"
+        />
+      ) : null}
+
+      {showAmenities && hasAmenities ? (
+        <TagsMultiSelect
+          availableTags={availableAmenities ?? []}
+          selectedTagIds={state.selectedAmenityIds}
+          onChange={state.setSelectedAmenityIds}
+          allowCreate={false}
+          label="Equipamiento"
+          placeholder="Buscar equipamiento…"
+          emptyMessage="Ningún equipamiento disponible."
+          testId="amenities-multiselect"
         />
       ) : null}
 
@@ -556,6 +803,22 @@ export function ProductTypeFields({
           <Label>Duración (días)</Label>
           <Input type="number" min={1} data-testid="duration-days-input" />
         </TextField>
+      ) : null}
+
+      {hasProgram ? (
+        <ProgramEditor
+          value={state.program}
+          onChange={state.setProgram}
+          // La durée SAISIE prime sur la durée persistée : en création elle n'existe que dans le
+          // formulaire, et en édition on veut suivre l'écran si l'admin la renseigne. `Number("")`
+          // vaut 0, d'où le test sur la chaîne avant la conversion (même garde que
+          // productCreationPayload).
+          durationDays={
+            state.durationDays.trim() !== "" && Number(state.durationDays) >= 1
+              ? Number(state.durationDays)
+              : campDurationDays
+          }
+        />
       ) : null}
 
       {isEvento ? (

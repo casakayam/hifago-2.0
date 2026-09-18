@@ -237,6 +237,17 @@ export type DatosEventoReservable = {
   maxQty: number;
 };
 
+/**
+ * Un groupe d'équipements déjà résolus dans la locale demandée — jamais le JSONB brut côté
+ * composant (`resolveLocalizedField`/`asLocalizedField` vivent dans la couche de données,
+ * `.claude/rules/apps.md`). `categoria` est le libellé de `catalog_amenity_categories.label`,
+ * `items` ceux de `catalog_amenities.label` qui lui sont rattachés, déjà triés par `sort_order`.
+ */
+export type AmenidadPorCategoria = {
+  categoria: string;
+  items: string[];
+};
+
 /** Ce que seul un hébergement porte. `null` sur tout autre type. */
 export type DatosAlojamiento = {
   lodgingKind: string | null;
@@ -246,6 +257,41 @@ export type DatosAlojamiento = {
   maxQty: number;
   /** `type = 'lodging'` ET une catégorie Lobby : la disponibilité vient alors du PMS, pas de la base. */
   esPmsBacked: boolean;
+  /**
+   * `product_amenity_assignments` (migration 20260917110000) — toujours `[]`, jamais `null` : pas
+   * de garde supplémentaire côté composant. Référentiel fermé, peuplé par migration (décision
+   * Jérôme du 2026-09-17), jamais de texte libre partenaire.
+   */
+  amenidades: AmenidadPorCategoria[];
+};
+
+/** Une extrémité d'un trajet de transport. Les trois champs sont indépendamment nuls : l'admin
+ *  peut taper une adresse à la main sans passer par la suggestion Google (donc sans coordonnées). */
+export type LugarTransporte = {
+  direccion: string | null;
+  lat: number | null;
+  lon: number | null;
+};
+
+/**
+ * `products.transport_*` (migration 20260916150000) — non nul seulement pour `transport`
+ * (contrainte CHECK `products_transport_info_transport_only`).
+ *
+ * ⚠️ PUREMENT INFORMATIF, et c'est tout le point de ce lot (demande Jérôme du 2026-09-16 : « c'est
+ * à titre informatif pour la personne qui réserve »). La fenêtre de départs n'est PAS un créneau
+ * réservable — `modoReserva` d'un transport reste `date` (ou `vitrina`), jamais `slot`, et
+ * `plazasPorSalida` n'est pas un cupo : celui qui bloque vraiment vit dans `disponibilidad`.
+ *
+ * Les heures sont des chaînes `"HH:MM"` OPAQUES, déjà découpées par la couche de données. Ne
+ * jamais les recombiner avec une date en objet `Date` : il serait interprété dans le fuseau du
+ * navigateur VISITEUR, pas celui de Bogota (spec 18 §0).
+ */
+export type DatosTransporte = {
+  primeraSalida: string | null;
+  ultimaSalida: string | null;
+  plazasPorSalida: number | null;
+  salida: LugarTransporte;
+  llegada: LugarTransporte;
 };
 
 /** L'établissement, vu depuis une fiche produit. */
@@ -285,6 +331,8 @@ export type FichaProducto = {
   /** Non nul ⟺ `modoReserva === "evento_bookable"`. */
   eventoReservable: DatosEventoReservable | null;
   alojamiento: DatosAlojamiento | null;
+  /** Non nul seulement pour `transport` — cf. `DatosTransporte`, informatif de bout en bout. */
+  transporte: DatosTransporte | null;
   /**
    * `products.duration_days` — non nul seulement pour `camp` (contrainte CHECK). Une ligne de
    * `disponibilidad` porte la date de DÉPART seule ; c'est ce champ qui dit sur combien de jours le
@@ -298,6 +346,21 @@ export type FichaProducto = {
    * prix recalculé côté client — `create_order` reste la seule source du prix engageant.
    */
   descuentoGrupo: { umbralPersonas: number; porcentaje: number } | null;
+  /**
+   * `products.program` (spec 37) — non nul seulement pour `camp` (contrainte CHECK), DÉJÀ résolu
+   * dans la locale demandée et regroupé par journée : la couche de données résout le JSONB, jamais
+   * le composant (`.claude/rules/apps.md`). Le jour est RELATIF au départ (día 1 = jour du départ),
+   * donc le même programme vaut pour toutes les éditions du camp ; la date réelle se calcule à
+   * l'affichage depuis la salida choisie.
+   */
+  programa: { dia: number; lineas: string[] }[] | null;
+  /**
+   * Première salida encore ouverte (>= aujourd'hui à Guatapé), ou `null`. Dérivée ici, côté
+   * serveur, précisément pour que le programme s'affiche AVEC de vraies dates dans le HTML initial
+   * — donc pour un crawler comme pour un visiteur qui n'a encore rien cliqué. La calculer côté
+   * composant supposerait un `new Date()` client, interdit par `scripts/check-timezone.sh`.
+   */
+  primeraSalidaIso: string | null;
   disponibilidad: FilaDisponibilidad[];
   tarifas: FilaTarifa[];
   franjas: FilaFranja[];
@@ -327,5 +390,8 @@ export type FichaEstablecimiento = {
   fotos: FotoTarjeta[];
   alojamientos: TarjetaOferta[];
   otrosProductos: TarjetaOferta[];
+  /** `establishment_amenity_assignments` (migration 20260917110000) — même contrat que
+   *  `DatosAlojamiento.amenidades` : toujours `[]`, jamais `null`. */
+  amenidades: AmenidadPorCategoria[];
   localesNativas: string[];
 };

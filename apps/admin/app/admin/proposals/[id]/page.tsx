@@ -31,7 +31,7 @@ export default async function AdminProposalDetailPage({
   const { data: proposal } = await supabase
     .from("product_proposals")
     .select(
-      "id, status, version, payload, kind, type, establishment_id, rejection_reason, product:products(id, type, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, unit_count, lodging_kind, unit, default_capacity, stay_rates), establishment:establishments(id, name, lobby_connector_active, lobby_has_token), partner:partners(display_name)"
+      "id, status, version, payload, kind, type, establishment_id, rejection_reason, product:products(id, type, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, unit_count, lodging_kind, unit, default_capacity, stay_rates, transport_first_departure_time, transport_last_departure_time, transport_seats_per_departure, transport_departure_address, transport_departure_lat, transport_departure_lon, transport_arrival_address, transport_arrival_lat, transport_arrival_lon, transport_contact_phone, program, duration_days), establishment:establishments(id, name, lobby_connector_active, lobby_has_token), partner:partners(display_name)"
     )
     .eq("id", id)
     .maybeSingle();

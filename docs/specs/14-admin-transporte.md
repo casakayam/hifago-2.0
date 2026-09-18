@@ -5,7 +5,7 @@ theme: specs
 public: [ia, dev, jerome]
 langue: fr
 statut: implemente
-maj: 2026-08-16
+maj: 2026-09-16
 resume: >
   Active le type de produit `transport`, autorisé par le CHECK constraint depuis la toute première
   migration catalogue mais jamais exposé à un écran admin. Réutilise le parcours ProductForm
@@ -34,6 +34,60 @@ repond_a:
 > `product_room_types` ou d'une « branche chambre » ci-dessous décrit un état passé** ; le mécanisme
 > équivalent vit sur `products`/`product_availability`. Détail et raisons : `docs/specs/24-modele-
 > hebergement-et-surface-lobbypms.md` §4, et le bandeau de `docs/specs/13-admin-hotel-habitaciones.md`.
+
+> **Amendement daté du 2026-09-16 — le transport porte désormais des horaires et DEUX lieux
+> structurés.** Trois affirmations de cette spec sont révoquées à la demande de Jérôme :
+>
+> 1. **« Toute donnée d'horaires structurée » n'est plus hors périmètre** (§2 Out). Un transport
+>    porte une **fenêtre de départs quotidienne** — `transport_first_departure_time` /
+>    `transport_last_departure_time` — et un nombre de **places annoncées par départ**
+>    (`transport_seats_per_departure`). ⚠️ **Ces trois champs sont PUREMENT INFORMATIFS** : ils ne
+>    sont lus par aucune RPC, ne décrémentent rien, et ne rendent pas le transport réservable à
+>    l'heure. Ce ne sont surtout **pas** des `product_slot_rules`, qui rendraient `create_order`
+>    bloquant (refus `slot_required`, `docs/specs/18` §0). Le cupo réel d'un transport reste
+>    `products.default_capacity`, par date.
+> 2. **« Aucune migration » est faux** (§0 Modèle de données). La migration
+>    `20260916*_transport_departure_info.sql` ajoute 9 colonnes à `products` et 6 CHECK de portée.
+> 3. **Le « lieu (point de départ) » n'est plus `products.address`/`lat`/`lon`** (§2 In, §4 pt 3).
+>    Le transport a désormais deux lieux dédiés et symétriques — `transport_departure_address`/
+>    `_lat`/`_lon` et `transport_arrival_address`/`_lat`/`_lon` — saisis par le même widget Google
+>    Places, et le trio générique n'est plus exposé ni utilisé pour ce type (migration de données
+>    incluse). Raison : un trajet a deux extrémités, et une seule convention de nommage pour un
+>    seul concept.
+>
+> **Ancrage legacy** (« refaire pas réinventer ») : ces informations existaient déjà en production,
+> mais **figées dans le code** — `public/reservar.js:176` du dépôt parent porte `transport_info_html`
+> (« salidas … desde el Parque de El Poblado o la Carrera 70 (Laureles) a las 7:00 y 7:45 »), avec
+> son miroir lecture seule assumé dans `public/admin.html:755`. Ce lot les sort du code pour les
+> rendre éditables depuis le backoffice, et les affiche sur la fiche produit de la vitrine.
+> **Amendement daté du 2026-09-17 — un transport ne se réserve plus en ligne, il se CONTACTE.**
+> Demande Jérôme : « normalement il faut juste son num de tel pour contacter », puis « non
+> obligatoire le num et sinon c'est celui de hifago ». Deux affirmations de plus sont révoquées :
+>
+> 1. **§2 In « Un trajet de transport devient un produit vendable normal, visible sur le portail
+>    public via le mécanisme générique » est FAUX depuis ce lot.** La fiche d'un transport n'affiche
+>    plus ni calendrier ni panier : elle affiche un bouton de contact WhatsApp. La colonne
+>    `transport_contact_phone` (E.164, **optionnelle**) porte le numéro du transporteur ; laissée
+>    vide, la fiche retombe sur le WhatsApp de Hifago. C'est ce repli qui rend la règle vraie sans
+>    exception : `resolverUrlContacto()` (`apps/web/lib/catalog/producto.ts`) garantit qu'un
+>    transport a toujours une URL de contact, donc que `resolverModoReserva` le classe toujours en
+>    `"vitrina"` — **sans qu'aucune règle ne bifurque sur `products.type`**, la bifurcation par la
+>    FORME restant le principe du projet. Priorité : URL propre du transporteur > son WhatsApp >
+>    celui de Hifago.
+> 2. **§0 « pas de capacité produit » redevient VRAI, après avoir été contredit par les mocks.**
+>    `default_capacity` n'est plus exposé pour ce type et les valeurs posées par mockData (40, 20,
+>    4, 7) sont vidées : sans calendrier, aucune ligne de `product_availability` n'est matérialisée,
+>    le champ serait inerte tout en faisant croire à un plafond. La capacité de véhicule vit
+>    désormais dans `transport_seats_per_departure`, qui est **affichée** (« 40 plazas por salida »)
+>    et ne bloque rien.
+>
+> Migration : `20260917100000_transport_contact_phone.sql`. Garantie prouvée par
+> `apps/web/lib/catalog/producto.test.ts` (« un transport n'a JAMAIS de calendrier »), pas seulement
+> écrite.
+
+> Ce qui **reste** hors périmètre : la carte transport multi-transporteurs groupée, l'affichage sur
+> les cartes de résultats de l'accueil (tranché par Jérôme le 2026-09-16 : « ces infos doivent être
+> dans la fiche du produit »), et un service de nuit à cheval sur minuit (`last >= first`).
 
 # Admin : activer `type='transport'` dans le parcours produit
 

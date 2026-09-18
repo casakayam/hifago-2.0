@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { LinkButton } from "@/components/atoms/LinkButton";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { URL_WHATSAPP_HIFAGO } from "@/lib/contacto/whatsapp";
 
 // Le footer de la vitrine (2026-09-02, vague 5). Avec le header livré la veille, l'app a enfin ses
 // landmarks : `<header>`, `<main>` (PageShell), `<footer>`.
@@ -43,7 +44,10 @@ const LIENS_INSTITUTIONNELS: readonly { href: string; cle: string }[] = [];
 // ⚠️ Cette troisième copie rend la remontée dans `packages/` justifiée au sens de CLAUDE.md §2.1 —
 // la double consommation n'est plus supposée, elle est prouvée. C'est une décision d'architecture,
 // donc signalée au coordinateur, pas prise ici.
-const WHATSAPP_URL = "https://wa.me/573215764841";
+// Le numéro vit désormais dans `lib/contacto/whatsapp.ts`, en une seule copie (2026-09-17) :
+// il est aussi le repli de contact d'un transport sans téléphone propre. Ce module est isolé de
+// Supabase, donc l'importer ici ne rapatrie rien dans le bundle.
+const WHATSAPP_URL = URL_WHATSAPP_HIFAGO;
 
 export type SiteFooterProps = {
   testId?: string;

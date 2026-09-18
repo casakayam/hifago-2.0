@@ -71,6 +71,21 @@ export function formatEditionDateRange(startIso: string, durationDays: number, l
 }
 
 /**
+ * Date réelle du jour N du programme d'un camp (spec 37), à partir de la salida choisie. Le jour
+ * est RELATIF (día 1 = jour du départ), donc `salidaIso + (dia - 1)`.
+ *
+ * Même raison que `formatEditionDateRange` de passer par `Intl` plutôt que de composer la chaîne à
+ * la main : l'ordre des éléments et l'abréviation du mois changent avec la langue. Et même raison
+ * de recevoir `salidaIso` plutôt que de lire l'horloge — un `new Date()` ici serait attrapé par
+ * `scripts/check-timezone.sh`, et la date « aujourd'hui » n'a de sens qu'en heure de Guatapé, que
+ * seule la couche de données connaît.
+ */
+export function fechaDelDiaDePrograma(salidaIso: string, dia: number, locale: Locale): string {
+  const formateur = new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short" });
+  return formateur.format(addDays(parseISO(salidaIso), Math.max(dia, 1) - 1));
+}
+
+/**
  * `lead_days` — LE PLANCHER QUI MONTE, pas des nuits à barrer une par une : le délai de réservation
  * est une propriété de la catégorie, pas de telle ou telle nuit.
  *

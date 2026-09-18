@@ -41,15 +41,6 @@ describe("validateStayRates", () => {
     expect(validateStayRates(draft({ weekendSurchargePct: "abc" }))).toMatch(/porcentaje/);
   });
 
-  it("plus de 20 inclusiones → erreur", () => {
-    const includes = Array.from({ length: 21 }, (_, i) => `Servicio ${i}`);
-    expect(validateStayRates(draft({ includes }))).toMatch(/20 servicios/);
-  });
-
-  it("une inclusion trop longue → erreur", () => {
-    expect(validateStayRates(draft({ includes: ["x".repeat(81)] }))).toMatch(/80 caracteres/);
-  });
-
   it("dépôt négatif ou non numérique → erreur", () => {
     expect(validateStayRates(draft({ depositCop: "-1" }))).toMatch(/depósito/);
     expect(validateStayRates(draft({ depositCop: "abc" }))).toMatch(/depósito/);
@@ -78,16 +69,11 @@ describe("toStayRatesColumn", () => {
     expect(column?.weekend_surcharge_pct).toBe(0.1);
   });
 
-  it("filtre les inclusiones vides et trie les jours/mois", () => {
+  it("trie les jours/mois", () => {
     const column = toStayRatesColumn(
-      draft({
-        seasonMonths: [12, 1],
-        seasonSurchargePct: "10",
-        includes: ["Wifi", "", "  ", "Piscina"],
-      }),
+      draft({ seasonMonths: [12, 1], seasonSurchargePct: "10" }),
     );
     expect(column?.season.months).toEqual([1, 12]);
-    expect(column?.includes).toEqual(["Wifi", "Piscina"]);
   });
 
   it("dépôt et note vides → null explicite", () => {
@@ -113,7 +99,6 @@ describe("stayRatesFromColumn", () => {
       seasonNote: "Diciembre y enero",
       weekendDays: [5, 6, 7],
       weekendSurchargePct: "15",
-      includes: ["Wifi", "Piscina"],
       depositCop: "200000",
       extraNote: "Llevar toalla",
     });

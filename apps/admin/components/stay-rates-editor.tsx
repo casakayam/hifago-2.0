@@ -50,14 +50,6 @@ export function StayRatesEditor({
     onChange({ ...value, [field]: next });
   }
 
-  function updateInclude(index: number, text: string) {
-    onChange({ ...value, includes: value.includes.map((item, i) => (i === index ? text : item)) });
-  }
-
-  function removeInclude(index: number) {
-    onChange({ ...value, includes: value.includes.filter((_, i) => i !== index) });
-  }
-
   return (
     <div className="flex flex-col gap-4" data-testid={`${testIdPrefix}stay-rates-editor`}>
       <div className="flex flex-col gap-2">
@@ -130,37 +122,6 @@ export function StayRatesEditor({
             data-testid={`${testIdPrefix}stay-rates-weekend-surcharge-input`}
           />
         </TextField>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Label>Incluye — opcional</Label>
-        {value.includes.map((item, index) => (
-          <div key={index} className="flex items-center gap-2">
-            <Input
-              value={item}
-              onChange={(event) => updateInclude(index, event.target.value)}
-              placeholder="Ej. Wifi, piscina…"
-              data-testid={`${testIdPrefix}stay-rates-include-${index}`}
-            />
-            <button
-              type="button"
-              onClick={() => removeInclude(index)}
-              aria-label="Quitar servicio incluido"
-              data-testid={`${testIdPrefix}remove-stay-rates-include-${index}`}
-              className="text-sm text-danger"
-            >
-              ×
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() => onChange({ ...value, includes: [...value.includes, ""] })}
-          data-testid={`${testIdPrefix}add-stay-rates-include-button`}
-          className="self-start text-xs font-medium underline"
-        >
-          + Agregar servicio incluido
-        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-2">

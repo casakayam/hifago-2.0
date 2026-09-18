@@ -28,6 +28,12 @@ export function TagsMultiSelect({
   // écriture admin-only (RLS), un socio qui déclencherait handleCreateTag échouerait
   // silencieusement — retirer l'affordance "+ Crear…" plutôt que de montrer un geste qui échoue.
   allowCreate = true,
+  // Équipements structurés (migration 20260917110000) — liste fermée (`allowCreate={false}`), le
+  // placeholder par défaut ("...o crear un tag") promettrait une création impossible : trouvé en
+  // vérifiant l'écran réel (le texte restait identique pour Equipamiento malgré allowCreate=false,
+  // défaut préexistant que `allowCreate` seul ne couvrait pas). Défaut inchangé pour ne rien
+  // altérer côté tags.
+  placeholder = "Buscar o crear un tag…",
 }: {
   availableTags: TagOption[];
   selectedTagIds: string[];
@@ -36,6 +42,7 @@ export function TagsMultiSelect({
   testId?: string;
   emptyMessage?: string;
   allowCreate?: boolean;
+  placeholder?: string;
 }) {
   const [query, setQuery] = useState("");
   // Tags créés depuis ce composant pendant sa durée de vie — le parent (Server Component) n'a pas
@@ -125,7 +132,7 @@ export function TagsMultiSelect({
       >
         <Label>{label}</Label>
         <ComboBox.InputGroup>
-          <Input placeholder="Buscar o crear un tag…" data-testid={testId} />
+          <Input placeholder={placeholder} data-testid={testId} />
           <ComboBox.Trigger />
         </ComboBox.InputGroup>
         <ComboBox.Popover>

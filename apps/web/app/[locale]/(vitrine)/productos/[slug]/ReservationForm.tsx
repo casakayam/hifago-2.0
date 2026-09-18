@@ -54,6 +54,7 @@ export function ReservationForm({
   precio = null,
   unidad = null,
   locale = "es",
+  onSalidaChange,
 }: {
   productId: string;
   availability: AvailabilityRow[];
@@ -67,6 +68,14 @@ export function ReservationForm({
    * de tarification NUITÉE de lodging (cf. son propre branchement sur la seule présence d'`end_date`).
    */
   durationDays?: number;
+  /**
+   * Notifie la fiche de la salida sélectionnée, pour qu'elle date le programme du camp (spec 37).
+   * ⚠️ Simple MIROIR en écriture : ce composant reste seul propriétaire de `selectedDate`, il ne
+   * reçoit rien en retour. Faire l'inverse (remonter l'état, rendre ce formulaire contrôlé)
+   * toucherait selectedDate/selectedRow/remaining/diasSemanaSeleccionada, le reset de `qty` et le
+   * prefill dans un fichier déjà couvert par un test à horloge figée — coût sans bénéfice de rendu.
+   */
+  onSalidaChange?: (salidaIso: string | null) => void;
   /** `products.min_qty`, replié à 1 — cf. `lib/reservas/cantidad.ts`. */
   minQty?: number;
   /**
@@ -206,6 +215,7 @@ export function ReservationForm({
     if (!date) {
       setSelectedDate(undefined);
       setQty(minQty);
+      onSalidaChange?.(null);
       return;
     }
     // `product_availability` n'a AUCUNE borne côté requête (lib/catalog/producto.ts) : une ligne
@@ -219,6 +229,10 @@ export function ReservationForm({
     const departIso = porJourDepart.get(format(date, "yyyy-MM-dd"))!;
     setSelectedDate(parseISO(departIso));
     setQty(minQty);
+    // Notifie la fiche pour qu'elle DATE le programme du camp (spec 37). Posé ici, dans l'unique
+    // point d'écriture de la sélection, donc valable aussi pour le clic sur une carte d'édition et
+    // pour le pré-remplissage depuis l'URL, qui passent tous deux par cette fonction.
+    onSalidaChange?.(departIso);
   }
 
   // Spec 28 §4 point 3 : la date filtrée dans la recherche, si elle correspond à un départ réel de

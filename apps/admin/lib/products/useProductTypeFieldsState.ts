@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { tiersFromColumn, type PriceTier } from "@/lib/products/priceTiers";
 import { groupDiscountFromColumns, type GroupDiscount } from "@/lib/products/groupDiscount";
+import { emptyProgram, programFromColumn, type DraftProgram } from "@/lib/products/program";
+import { emptyTransportInfo, type TransportInfoFields } from "@/lib/products/transportInfo";
 import { emptyStayRates, stayRatesFromColumn, type DraftStayRates } from "@/lib/products/stayRates";
 import { slotRulesFromColumn, type DraftSlotRule } from "@/lib/products/slotRules";
 import { asLodgingKind, asLodgingUnit, type LodgingKind, type LodgingUnit } from "@hifago/domain";
@@ -32,6 +34,12 @@ export type ProductTypeFieldsInit = {
   lat?: number | null;
   lon?: number | null;
   tagIds?: string[];
+  // Équipements structurés stagés à la CRÉATION (migration 20260917110000) — même patron que
+  // tagIds : liste d'ids, rattachée après l'insert (product-form.tsx), jamais dans une RPC de
+  // proposition socio (les équipements restent un geste admin, cf. journal 2026-09-17). Absent de
+  // RawProductFieldsPayload/payloadToFieldsInit à dessein : aucun payload de proposition n'en porte
+  // jamais.
+  amenityIds?: string[];
   priceCop?: number | null;
   priceTiers?: unknown;
   minQty?: number | null;
@@ -57,6 +65,9 @@ export type ProductTypeFieldsInit = {
   // groupDiscountFromColumns (cf. groupDiscount.ts).
   groupDiscountThresholdQty?: number | null;
   groupDiscountPct?: number | null;
+  // Programme jour par jour (migration 20260916130000) — camp uniquement. Forme de COLONNE
+  // (liste plate [{day, text}]), regroupée par journée pour le formulaire par programFromColumn.
+  program?: unknown;
   slotRules?: unknown;
   priceLabel?: string | null;
   occurrenceType?: OccurrenceType;
@@ -81,6 +92,21 @@ export type ProductTypeFieldsInit = {
   isFree?: boolean;
   eventoPaymentMode?: "online" | "on_site" | null;
   eventoOccupiesResource?: boolean;
+  // Transport informatif (migration 20260916150000, demande Jérôme du 2026-09-16). Regroupés dans
+  // un seul objet d'état `transportInfo` (patron de `groupDiscount`/`stayRates`), mais déclarés
+  // ici à plat parce que cet init reflète les COLONNES, pas la forme de l'état.
+  // ⚠️ Le lieu de départ est `transportDepartureAddress`, PAS `address` : le trio générique n'est
+  // plus utilisé pour ce type (cf. productTypeGating.ts).
+  transportFirstDepartureTime?: string | null;
+  transportLastDepartureTime?: string | null;
+  transportSeatsPerDeparture?: number | null;
+  transportDepartureAddress?: string | null;
+  transportDepartureLat?: number | null;
+  transportDepartureLon?: number | null;
+  transportArrivalAddress?: string | null;
+  transportArrivalLat?: number | null;
+  transportArrivalLon?: number | null;
+  transportContactPhone?: string | null;
 };
 
 // Extrait de ProductForm (spec 15) pour être consommé par deux rendus distincts du même gating par
@@ -92,6 +118,7 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
   const [lat, setLat] = useState(init.lat != null ? String(init.lat) : "");
   const [lon, setLon] = useState(init.lon != null ? String(init.lon) : "");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(init.tagIds ?? []);
+  const [selectedAmenityIds, setSelectedAmenityIds] = useState<string[]>(init.amenityIds ?? []);
 
   const hasInitialTiers = Array.isArray(init.priceTiers) && (init.priceTiers as unknown[]).length > 0;
   const [priceMode, setPriceMode] = useState<PriceMode>(hasInitialTiers ? "tiers" : "simple");
@@ -115,6 +142,11 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
     init.stayRates ? stayRatesFromColumn(init.stayRates) : emptyStayRates(),
   );
   const [durationDays, setDurationDays] = useState(init.durationDays != null ? String(init.durationDays) : "");
+  // Lazy initializer (comme groupDiscount juste en dessous) : programFromColumn parcourt le jsonb,
+  // inutile de le refaire à chaque rendu.
+  const [program, setProgram] = useState<DraftProgram>(() =>
+    init.program === undefined ? emptyProgram() : programFromColumn(init.program),
+  );
   const [groupDiscount, setGroupDiscount] = useState<GroupDiscount>(() =>
     groupDiscountFromColumns(init.groupDiscountThresholdQty, init.groupDiscountPct),
   );
@@ -169,9 +201,30 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
   // bloque par défaut le calendrier partagé du prestataire, désactivable au cas par cas.
   const [eventoOccupiesResource, setEventoOccupiesResource] = useState(init.eventoOccupiesResource ?? true);
 
+  // Transport informatif (2026-09-16). Hydraté ICI plutôt que par une fonction `fromColumns` dans
+  // transportInfo.ts : les deux heures arrivent en "HH:MM:SS" (sérialisation Postgres) et
+  // `toTimeInputValue` vit déjà dans ce fichier — une 4e copie du `slice(0, 5)` n'aurait rien
+  // apporté. Les heures restent des chaînes opaques de bout en bout, jamais un objet Date
+  // (spec 18 §0).
+  const [transportInfo, setTransportInfo] = useState<TransportInfoFields>(() => ({
+    ...emptyTransportInfo(),
+    firstDepartureTime: toTimeInputValue(init.transportFirstDepartureTime),
+    lastDepartureTime: toTimeInputValue(init.transportLastDepartureTime),
+    seatsPerDeparture:
+      init.transportSeatsPerDeparture != null ? String(init.transportSeatsPerDeparture) : "",
+    departureAddress: init.transportDepartureAddress ?? "",
+    departureLat: init.transportDepartureLat != null ? String(init.transportDepartureLat) : "",
+    departureLon: init.transportDepartureLon != null ? String(init.transportDepartureLon) : "",
+    arrivalAddress: init.transportArrivalAddress ?? "",
+    arrivalLat: init.transportArrivalLat != null ? String(init.transportArrivalLat) : "",
+    arrivalLon: init.transportArrivalLon != null ? String(init.transportArrivalLon) : "",
+    contactPhone: init.transportContactPhone ?? "",
+  }));
+
   return {
     address, setAddress, lat, setLat, lon, setLon,
     selectedTagIds, setSelectedTagIds,
+    selectedAmenityIds, setSelectedAmenityIds,
     priceMode, setPriceMode, priceCop, setPriceCop, priceTiers, setPriceTiers,
     minQty, setMinQty, maxQty, setMaxQty,
     checkInTime, setCheckInTime, checkOutTime, setCheckOutTime,
@@ -180,6 +233,7 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
     defaultCapacity, setDefaultCapacity, stayRates, setStayRates,
     durationDays, setDurationDays,
     groupDiscount, setGroupDiscount,
+    program, setProgram,
     slotRules, setSlotRules,
     priceLabel, setPriceLabel,
     occurrenceType, setOccurrenceType,
@@ -198,6 +252,7 @@ export function useProductTypeFieldsState(init: ProductTypeFieldsInit = {}) {
     isFree, setIsFree,
     eventoPaymentMode, setEventoPaymentMode,
     eventoOccupiesResource, setEventoOccupiesResource,
+    transportInfo, setTransportInfo,
   };
 }
 
@@ -229,6 +284,7 @@ export type RawProductFieldsPayload = {
   duration_days?: number | null;
   group_discount_threshold_qty?: number | null;
   group_discount_pct?: number | null;
+  program?: unknown;
   slot_rules?: unknown;
   price_label?: string | null;
   occurrence_type?: OccurrenceType;
@@ -241,6 +297,22 @@ export type RawProductFieldsPayload = {
   external_booking_url?: string | null;
   lobby_category_id?: number | null;
   lobby_product_id?: number | null;
+  // Transport informatif (2026-09-16). ⚠️ OBLIGATOIRE ici, pas seulement dans les RPC : les 3
+  // écrans de modération hydratent l'état par `payloadToFieldsInit` PUIS reconstruisent le payload
+  // (ModerateProductCreationProposalForm, ModerateProposalForm, EditProposalForm). Une clé non
+  // mappée ci-dessous part donc à `null` dans le payload corrigé — les horaires et lieux proposés
+  // par un socio seraient EFFACÉS à l'instant où l'admin approuve, sans erreur nulle part. C'est
+  // exactement le défaut que l'en-tête de ce type raconte pour spec 15 / journal 2026-08-17.
+  transport_first_departure_time?: string | null;
+  transport_last_departure_time?: string | null;
+  transport_seats_per_departure?: number | null;
+  transport_departure_address?: string | null;
+  transport_departure_lat?: number | null;
+  transport_departure_lon?: number | null;
+  transport_arrival_address?: string | null;
+  transport_arrival_lat?: number | null;
+  transport_arrival_lon?: number | null;
+  transport_contact_phone?: string | null;
 };
 
 export function payloadToFieldsInit(payload: RawProductFieldsPayload): ProductTypeFieldsInit {
@@ -266,6 +338,7 @@ export function payloadToFieldsInit(payload: RawProductFieldsPayload): ProductTy
     durationDays: payload.duration_days,
     groupDiscountThresholdQty: payload.group_discount_threshold_qty,
     groupDiscountPct: payload.group_discount_pct,
+    program: payload.program,
     slotRules: payload.slot_rules,
     priceLabel: payload.price_label,
     occurrenceType: payload.occurrence_type,
@@ -278,5 +351,15 @@ export function payloadToFieldsInit(payload: RawProductFieldsPayload): ProductTy
     externalBookingUrl: payload.external_booking_url,
     lobbyCategoryId: payload.lobby_category_id,
     lobbyProductId: payload.lobby_product_id,
+    transportFirstDepartureTime: payload.transport_first_departure_time,
+    transportLastDepartureTime: payload.transport_last_departure_time,
+    transportSeatsPerDeparture: payload.transport_seats_per_departure,
+    transportDepartureAddress: payload.transport_departure_address,
+    transportDepartureLat: payload.transport_departure_lat,
+    transportDepartureLon: payload.transport_departure_lon,
+    transportArrivalAddress: payload.transport_arrival_address,
+    transportArrivalLat: payload.transport_arrival_lat,
+    transportArrivalLon: payload.transport_arrival_lon,
+    transportContactPhone: payload.transport_contact_phone,
   };
 }

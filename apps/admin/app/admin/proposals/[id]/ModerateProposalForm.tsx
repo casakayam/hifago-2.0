@@ -54,12 +54,25 @@ export function ModerateProposalForm({
   const [description, setDescription] = useState<LocalizedValue>(() => ({
     ...(asLocalizedField(proposedPayload.description) ?? {}),
   }));
-  const fields = useProductTypeFieldsState(payloadToFieldsInit(proposedPayload));
+  // ⚠️ Le programme (spec 37) est hydraté depuis la proposition SI ELLE PORTE LA CLÉ, sinon depuis
+  // le produit actuel. Sans cette distinction, une proposition déposée AVANT la migration
+  // 20260916140000 (payload sans la clé) partirait d'un éditeur vide, et comme ce formulaire
+  // reconstruit TOUT le payload à l'approbation (buildProductEditPayload), il émettrait
+  // `program: null` et EFFACERAIT le programme du camp. C'est la même distinction absent/null que
+  // la garde `v_final_payload ? 'program'` exprime côté SQL — ici il faut la tenir côté client,
+  // parce que c'est ce formulaire qui décide du payload final.
+  const fields = useProductTypeFieldsState(
+    payloadToFieldsInit(
+      "program" in proposedPayload
+        ? proposedPayload
+        : { ...proposedPayload, program: currentPayload.program },
+    ),
+  );
   const [rejectionReason, setRejectionReason] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { hasLocationAndTags, hasPriceQtyFields, hasCheckInOut, isLodging, isEvento } =
+  const { hasLocationAndTags, hasPriceQtyFields, hasCheckInOut, isLodging, isEvento, isCamp } =
     productTypeGating(type);
   const needsOwnPrice = !isEvento;
 
@@ -163,6 +176,19 @@ export function ModerateProposalForm({
             <div>
               <dt className="inline font-medium text-foreground">Capacidad: </dt>
               <dd className="inline">{currentPayload.capacity ?? "—"}</dd>
+            </div>
+          ) : null}
+          {/* Le programme d'un camp (spec 37) : sans cette ligne, le modérateur approuverait une
+              refonte complète du déroulé sans jamais voir celui qu'il remplace — exactement le
+              « change en silence » que la note ci-dessous décrit. */}
+          {isCamp ? (
+            <div>
+              <dt className="inline font-medium text-foreground">Programa: </dt>
+              <dd className="inline">
+                {Array.isArray(currentPayload.program) && currentPayload.program.length > 0
+                  ? `${currentPayload.program.length} línea(s)`
+                  : "—"}
+              </dd>
             </div>
           ) : null}
           {/* Affiché à côté de la capacité (2026-08-26) : le modérateur compare l'existant à la

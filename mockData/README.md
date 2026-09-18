@@ -96,9 +96,22 @@ Domaine dédié `@mock.hifago.test`, distinct de `@hifago.test` (comptes de `see
   "mode": "rooms",                       // "rooms" | "whole_house" | absent
   "contact_phone": "+573001234567",
   "status": "active",                    // "active" | "archived"
+  "amenities": ["wifi", "piscina-privada", "muelle-privado"],  // optionnel, cf. § Équipements ci-dessous
   "photos": ["1.jpg", "2.png", "3.jpg"]
 }
 ```
+
+## Équipements structurés (`amenities`) — établissements ET chambres
+
+⚠️ **Différent de `tags` : ces slugs doivent DÉJÀ exister en base.** Le référentiel
+(`catalog_amenities`) vit en migration (`20260917110000_catalog_amenities.sql` +
+`20260917120000_catalog_amenities_seed.sql`), appliquée aussi en préprod — le script ne le crée
+**jamais**, contrairement à `tags/<clé>.json`. Un slug référencé qui n'existe pas en base fait
+échouer le script bruyamment (`amenity "..." introuvable dans catalog_amenities`), plutôt que de le
+créer silencieusement. Le champ `"amenities": [...]` (tableau de slugs) est optionnel, accepté à la
+fois dans `establishments/<clé>.json` et dans `rooms/<clé>.json`, assigné respectivement à
+`establishment_amenity_assignments`/`product_amenity_assignments` après création de l'item — jamais
+retouché sur un item déjà existant, même règle que le reste de ce fichier.
 
 ## `activities/<clé>.json`
 
@@ -136,6 +149,7 @@ produit), juste un dossier et des champs différents :
   "capacity": 2,
   "unit_count": 2,            // ⚠️ voir ci-dessous — PAS un fichier par chambre identique
   "lodging_kind": "private",  // "private" | "dorm" | "whole_house"
+  "amenities": ["bano-privado", "aire-acondicionado"],  // optionnel, cf. § Équipements plus haut
   "photos": ["1.jpeg", "2.jpeg"]
 }
 ```
@@ -218,6 +232,19 @@ fichier explicites sur le cas testé — pas les événements "vitrine" comme `j
 Même mécanisme que `activities/`, sans `slot_rules` (jamais whitelisté pour ce type) : disponibilité
 générique par date via `default_capacity`, comme un `camp`.
 
+⚠️ **Un transport n'utilise PAS `address`/`lat`/`lon`** (contrairement à `activities/` et
+`lodging/`) depuis la migration `20260916150000` : il porte ses **deux** extrémités dans
+`transport_departure_*` et `transport_arrival_*`. Un trajet a un départ ET une arrivée, et le trio
+générique n'en décrivait qu'un. Les mettre quand même recréerait deux sources de vérité pour le même
+lieu — et le formulaire admin ne les expose plus pour ce type.
+
+Et la phrase « sans `slot_rules` » ci-dessus reste **vraie** : la fenêtre de départs
+(`transport_first_departure_time`/`transport_last_departure_time`) et les places par départ sont
+**purement informatives**, affichées sur la fiche publique. Elles ne rendent pas le transport
+réservable à l'heure et ne bloquent rien — c'est justement pour ça que ce ne sont pas des
+`slot_rules`, qui feraient refuser `slot_required` à `create_order`. Le cupo qui bloque reste
+`default_capacity`.
+
 ```jsonc
 {
   "partner": "hifago",
@@ -228,7 +255,16 @@ générique par date via `default_capacity`, comme un `camp`.
   "capacity": 20,
   "default_capacity": 20,               // amorce product_availability, comme pour une activité
   "min_qty": 1, "max_qty": 20,
-  "address": "Parque Principal, Guatapé", "lat": 6.2326, "lon": -75.1592,
+  // Les deux extrémités du trajet. Coordonnées facultatives : sans elles, l'adresse s'affiche
+  // quand même, seul le lien « Ver el trayecto en Google Maps » disparaît (il lui faut les deux
+  // extrémités). Les deux lat/lon d'un même lieu vont ensemble ou pas du tout (CHECK).
+  "transport_departure_address": "Parque Principal, Guatapé", "transport_departure_lat": 6.2326, "transport_departure_lon": -75.1592,
+  "transport_arrival_address": "Medellín, Antioquia", "transport_arrival_lat": 6.2442, "transport_arrival_lon": -75.5736,
+  // Fenêtre de départs quotidienne + places annoncées — INFORMATIF, jamais un créneau réservable.
+  // Les deux heures ensemble ou aucune, et `last >= first` (une seule salida s'écrit avec les deux
+  // à la même valeur, ex. "14:00"/"14:00" pour un transfert privé).
+  "transport_first_departure_time": "07:00", "transport_last_departure_time": "07:45",
+  "transport_seats_per_departure": 20,
   "tags": [], "photos": []
 }
 ```
@@ -257,9 +293,20 @@ fonctionne pour ce type (branche générique de `create_order`, prix par personn
   "departures": ["2026-10-01", "2026-12-01"],  // requis, un par départ — jamais un tableau vide
   "group_discount_threshold_qty": 16,  // optionnel — remise si le remplissage CUMULÉ du départ
   "group_discount_pct": 0.20,          // optionnel — atteint ce seuil ; les deux ensemble ou aucun
+  "program": [                         // optionnel — déroulé jour par jour (spec 37)
+    { "day": 1, "text": { "es": "Recogida en Medellín", "en": "Pickup in Medellín" } },
+    { "day": 1, "text": { "es": "Fogata al llegar" } }   // plusieurs lignes par jour = normal
+  ],
   "tags": [], "photos": []
 }
 ```
+`program` (migration `20260916130000`) est une liste PLATE : plusieurs entrées portent normalement
+le même `day` — c'est ainsi qu'une journée porte plusieurs lignes, il n'y a rien à imbriquer. Le
+`day` est RELATIF au départ (`day: 1` = jour du départ), donc le même programme vaut pour TOUS les
+`departures` ; la fiche publique calcule la date réelle depuis l'édition choisie. `text.es` est
+obligatoire sur chaque ligne (c'est le repli), `text.en` facultatif. Le seeder refuse un `day` hors
+de `1..duration_days` — la base, elle, l'accepterait (aucun CHECK croisé, cf. spec 37).
+
 `group_discount_*` (migration `20260914130000`) est un mécanisme DIFFÉRENT de `price_tiers`
 ci-dessus : il porte sur le remplissage cumulé de TOUTES les réservations d'un même départ
 (`product_availability.booked`), pas la quantité d'UNE seule réservation — cf.

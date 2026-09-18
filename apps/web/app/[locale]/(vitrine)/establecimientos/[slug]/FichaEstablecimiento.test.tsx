@@ -52,6 +52,7 @@ function ficha(overrides: Partial<DatosFicha> = {}): DatosFicha {
     fotos: [],
     alojamientos: [],
     otrosProductos: [],
+    amenidades: [],
     localesNativas: ["es"],
     ...overrides,
   };
@@ -125,6 +126,26 @@ describe("FichaEstablecimiento — le contact public", () => {
   it("n'affiche AUCUN bouton sans numéro, et rien à la place", () => {
     renderFicha();
     expect(screen.queryByTestId("establishment-contact-link")).toBeNull();
+  });
+});
+
+describe("FichaEstablecimiento — équipements structurés (2026-09-17)", () => {
+  it("affiche les équipements groupés par catégorie", () => {
+    renderFicha({
+      amenidades: [
+        { categoria: "Piscina y bienestar", items: ["Piscina privada", "Jacuzzi"] },
+        { categoria: "Servicios básicos", items: ["Wifi"] },
+      ],
+    });
+    const seccion = screen.getByTestId("establishment-amenities");
+    expect(seccion.textContent).toContain("Piscina y bienestar");
+    expect(seccion.textContent).toContain("Piscina privada");
+    expect(seccion.textContent).toContain("Wifi");
+  });
+
+  it("n'affiche rien quand aucun équipement n'est assigné", () => {
+    renderFicha({ amenidades: [] });
+    expect(screen.queryByTestId("establishment-amenities")).toBeNull();
   });
 });
 

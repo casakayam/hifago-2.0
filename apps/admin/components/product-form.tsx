@@ -20,7 +20,9 @@ import { lowestTierPrice, toPriceTiersColumn, validatePriceTiers } from "@/lib/p
 import { validateGroupDiscount } from "@/lib/products/groupDiscount";
 import { toEventoBookableColumns } from "@/lib/products/eventoBookable";
 import { validateSlotRules, toSlotRuleRows } from "@/lib/products/slotRules";
+import { toTransportInfoColumns, validateTransportInfo } from "@/lib/products/transportInfo";
 import { toStayRatesColumn, validateStayRates } from "@/lib/products/stayRates";
+import { toProgramColumn, validateProgram } from "@/lib/products/program";
 import { buildProductCreationPayload } from "@/lib/products/productCreationPayload";
 import { mergeLobbyRoom } from "@/lib/products/lobbyRoomImport";
 import { asLodgingKind, asLodgingUnit } from "@hifago/domain";
@@ -57,6 +59,12 @@ export type EditableProduct = {
   unit: string | null;
   default_capacity: number | null;
   stay_rates: unknown;
+  // Programme jour par jour d'un camp (spec 37) : lu ici ET réécrit dans l'update() plus bas.
+  program: unknown;
+  // Durée persistée — lue UNIQUEMENT pour alimenter campDurationDays (nombre de journées ouvertes
+  // par l'éditeur de programme), jamais réinjectée dans l'input « Duración (días) » ni réécrite :
+  // apps/web/lib/orders/formatLineSchedule.ts la relit pour dater des commandes déjà payées.
+  duration_days: number | null;
   type: string;
   establishment_id: string;
   lobby_category_id: number | null;
@@ -73,6 +81,20 @@ export type EditableProduct = {
   is_free: boolean;
   evento_payment_mode: string | null;
   evento_occupies_resource: boolean;
+  // Transport informatif (migration 20260916150000). Chargés ici ET réécrits dans l'update() plus
+  // bas, comme les champs evento réservable — pas le gap « création seulement » de
+  // duration_days/group_discount_*. ⚠️ Le lieu de départ est `transport_departure_address`, pas
+  // `address` : le trio générique n'est plus exposé pour ce type.
+  transport_first_departure_time: string | null;
+  transport_last_departure_time: string | null;
+  transport_seats_per_departure: number | null;
+  transport_departure_address: string | null;
+  transport_departure_lat: number | null;
+  transport_departure_lon: number | null;
+  transport_arrival_address: string | null;
+  transport_arrival_lat: number | null;
+  transport_arrival_lon: number | null;
+  transport_contact_phone: string | null;
 };
 
 // Spec 15 — variant "socio-proposal" : un socio ne peut jamais écrire products directement (RLS
@@ -116,12 +138,18 @@ export function ProductForm({
   establishments = [],
   initialEstablishmentId = "",
   allTags = [],
+  allAmenities = [],
   product,
   variant = "admin",
 }: {
   establishments?: Establishment[];
   initialEstablishmentId?: string;
   allTags?: TagOption[];
+  // Équipements structurés (migration 20260917110000) — stagés à la création ADMIN uniquement
+  // (jamais pour variant "socio-proposal", cf. le commentaire de showAmenities dans
+  // product-type-fields.tsx). En édition, ce prop n'est pas lu : ProductAmenitiesBlock (rendu par
+  // la page) reprend la main avec son propre chargement.
+  allAmenities?: TagOption[];
   product?: EditableProduct;
   variant?: "admin" | "socio-proposal";
 }) {
@@ -153,6 +181,7 @@ export function ProductForm({
           unit: asLodgingUnit(product.unit),
           defaultCapacity: product.default_capacity,
           stayRates: product.stay_rates,
+          program: product.program,
           lobbyCategoryId: product.lobby_category_id,
           lobbyProductId: product.lobby_product_id,
           onlineBookable: product.online_bookable,
@@ -160,6 +189,16 @@ export function ProductForm({
           isFree: product.is_free,
           eventoPaymentMode: product.evento_payment_mode as "online" | "on_site" | null,
           eventoOccupiesResource: product.evento_occupies_resource,
+          transportFirstDepartureTime: product.transport_first_departure_time,
+          transportLastDepartureTime: product.transport_last_departure_time,
+          transportSeatsPerDeparture: product.transport_seats_per_departure,
+          transportDepartureAddress: product.transport_departure_address,
+          transportDepartureLat: product.transport_departure_lat,
+          transportDepartureLon: product.transport_departure_lon,
+          transportArrivalAddress: product.transport_arrival_address,
+          transportArrivalLat: product.transport_arrival_lat,
+          transportArrivalLon: product.transport_arrival_lon,
+          transportContactPhone: product.transport_contact_phone,
         }
       : undefined,
   );
@@ -270,6 +309,37 @@ export function ProductForm({
     // evento vitrine/gratuit ; on_site reste payant et exige donc bien price_cop).
     const eventoOnlinePaid = isEvento && fields.onlineBookable && !fields.isFree;
     const needsOwnPrice = (!isEvento && !enVitrina) || eventoOnlinePaid;
+
+    // Transport informatif (2026-09-16) — miroir des CHECK de la migration 20260916150000.
+    // ⚠️ VOLONTAIREMENT hors du `if (!isEditing)` ci-dessous, contrairement à
+    // validateGroupDiscount/validateSlotRules : ces deux-là ne tournent QU'À LA CRÉATION (gap
+    // préexistant, pas corrigé ici pour ne pas élargir ce lot). Laisser le transport dans le même
+    // cas aurait laissé un admin poser en édition une dernière salida antérieure à la première, et
+    // récolter un 400 illisible de `products_transport_departure_order` au lieu d'un message.
+    // Programme d'un camp (spec 37) — comme le transport juste en dessous, VOLONTAIREMENT hors du
+    // `if (!isEditing)` : le programme est éditable dans les deux modes (c'est tout l'intérêt), donc
+    // le valider seulement à la création laisserait passer en édition un jour au-delà de la durée
+    // ou une ligne sans espagnol, et le rejet arriverait en 400 illisible côté base.
+    if (isCamp) {
+      const programError = validateProgram(
+        fields.program,
+        fields.durationDays.trim() !== "" && Number(fields.durationDays) >= 1
+          ? Number(fields.durationDays)
+          : (product?.duration_days ?? null),
+      );
+      if (programError) {
+        toast.danger(programError);
+        return;
+      }
+    }
+
+    if (isTransport) {
+      const transportError = validateTransportInfo(fields.transportInfo);
+      if (transportError) {
+        toast.danger(transportError);
+        return;
+      }
+    }
 
     if (!isEditing) {
       // partner_id n'est jamais saisi indépendamment — dérivé de l'établissement choisi.
@@ -421,6 +491,10 @@ export function ProductForm({
           // evento online_bookable n'a jamais de libellé libre, `toEventoBookableColumns` pose le
           // null. MÊME fonction que le chemin de création — jamais un second miroir manuel.
           ...(isEvento ? toEventoBookableColumns(fields) : {}),
+          // Transport informatif (2026-09-16) — MÊME fonction que le chemin de création
+          // (productCreationPayload.ts), jamais un second miroir manuel : c'est la leçon écrite
+          // dans l'en-tête d'eventoBookable.ts.
+          ...(isTransport ? toTransportInfoColumns(fields.transportInfo) : {}),
           ...(hasPriceQtyFields
             ? {
                 min_qty: fields.minQty.trim() ? Number(fields.minQty) : null,
@@ -440,6 +514,9 @@ export function ProductForm({
                 lobby_category_id: fields.lobbyCategoryId.trim() ? Number(fields.lobbyCategoryId) : null,
               }
             : {}),
+          // Programme (spec 37) : chargé par le select de edit/page.tsx ET réécrit ici — jamais
+          // l'un sans l'autre, sinon le formulaire semblerait éditer une valeur qu'il jette.
+          ...(isCamp ? { program: toProgramColumn(fields.program) } : {}),
           ...(isActivity || isTransport
             ? { lobby_product_id: fields.lobbyProductId.trim() ? Number(fields.lobbyProductId) : null }
             : {}),
@@ -571,6 +648,19 @@ export function ProductForm({
           .insert(fields.selectedTagIds.map((tagId) => ({ product_id: newProduct.id, tag_id: tagId })));
         if (tagsError) {
           toast.danger("El producto se creó, pero los tags no se pudieron asociar.");
+        }
+      })(),
+      (async () => {
+        // Équipements structurés (migration 20260917110000) — même discipline que les tags
+        // juste au-dessus : `fields.selectedAmenityIds` reste `[]` pour variant "socio-proposal"
+        // (showAmenities y vaut toujours false, rien à saisir), donc cette insertion est un no-op
+        // silencieux et sûr dans ce cas.
+        if (fields.selectedAmenityIds.length === 0) return;
+        const { error: amenitiesError } = await supabase
+          .from("product_amenity_assignments")
+          .insert(fields.selectedAmenityIds.map((amenityId) => ({ product_id: newProduct.id, amenity_id: amenityId })));
+        if (amenitiesError) {
+          toast.danger("El producto se creó, pero el equipamiento no se pudo asociar.");
         }
       })(),
       (async () => {
@@ -736,12 +826,16 @@ export function ProductForm({
         establishmentLobbyConnected={establishmentLobbyConnected}
         allowManualLobbyEntry={variant === "admin"}
         allowOnlineBookableConfig={variant === "admin"}
+        campDurationDays={product?.duration_days ?? null}
         onApplyLobbyRoomData={applyLobbyRoomData}
         // Retour Jérôme (2026-08-18) : les chambres/dortoires doivent pouvoir avoir des photos
         // aussi côté socio — les masquer ici était la seule raison pour laquelle elles ne
         // pouvaient jamais en avoir (buildProductCreationPayload transporte désormais ces photos,
         // moderate_product_proposal/create_product_from_proposal les persistent à l'approbation).
         availableTags={allTags}
+        // Équipements structurés — admin-direct, création seulement (édition : ProductAmenitiesBlock).
+        showAmenities={!isEditing && variant === "admin"}
+        availableAmenities={allAmenities}
       />
 
       {/* Démasqué avec la description ci-dessus, même raison : une chambre liée à Lobby ne pouvait

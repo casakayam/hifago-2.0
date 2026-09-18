@@ -2,9 +2,11 @@ import { buildLocalizedPayload, type LocalizedValue } from "@/components/localiz
 import type { StagedPhoto } from "@/components/product-photos-staged";
 import { lowestTierPrice, toPriceTiersColumn } from "@/lib/products/priceTiers";
 import { toStayRatesColumn } from "@/lib/products/stayRates";
+import { toProgramColumn } from "@/lib/products/program";
 import { toGroupDiscountColumns } from "@/lib/products/groupDiscount";
 import { toEventoBookableColumns } from "@/lib/products/eventoBookable";
 import { toSlotRuleRows } from "@/lib/products/slotRules";
+import { toTransportInfoColumns } from "@/lib/products/transportInfo";
 import { productTypeGating, type ProductType, type ProductTypeFieldsState } from "@/lib/products/useProductTypeFieldsState";
 
 // Construit le payload jsonb attendu par submit_product_creation_proposal / le
@@ -74,6 +76,9 @@ export function buildProductCreationPayload(
           // uniquement, même limitation que duration_days ci-dessus (« gap préexistant, jamais
           // éditable aujourd'hui », cf. product-form.tsx) : pas une omission distincte.
           ...toGroupDiscountColumns(fields.groupDiscount),
+          // Programme jour par jour (spec 37) : disponible DÈS la création, demande explicite de
+          // Jérôme — un camp naît avec son programme en un seul clic, il n'y a pas d'écran d'après.
+          program: toProgramColumn(fields.program),
         }
       : {}),
     ...(hasCheckInOut
@@ -107,6 +112,12 @@ export function buildProductCreationPayload(
       ? { default_capacity: fields.defaultCapacity.trim() ? Number(fields.defaultCapacity) : null }
       : {}),
     ...(isActivity ? { slot_rules: toSlotRuleRows(fields.slotRules) } : {}),
+    // Transport informatif (migration 20260916150000, demande Jérôme du 2026-09-16) : fenêtre de
+    // départs, places annoncées par départ, et les DEUX lieux dédiés — `transport_departure_*`
+    // remplace le trio générique `address`/`lat`/`lon` pour ce type (retiré d'`hasLocationAndTags`).
+    // Une seule définition des 9 colonnes, partagée avec le chemin d'édition (`toTransportInfoColumns`) :
+    // les écrire à la main de chaque côté est ce qui avait déjà fait diverger `price_label`.
+    ...(isTransport ? toTransportInfoColumns(fields.transportInfo) : {}),
     // LA VITRINE, pour tous les types sauf evento (qui porte déjà ces deux clés dans son bloc).
     // C'est la PRÉSENCE de l'URL qui fait la vitrine, jamais le type — cahier §2e, ouvert par la
     // contrainte `products_price_cop_required_unless_vitrine` (spec 30 §3.1).

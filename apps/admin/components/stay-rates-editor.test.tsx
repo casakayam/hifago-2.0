@@ -47,21 +47,4 @@ describe("StayRatesEditor", () => {
     fireEvent.click(friday);
     expect(friday.checked).toBe(false);
   });
-
-  it("« + Agregar servicio incluido » ajoute une ligne, « × » la retire", () => {
-    render(<Harness />);
-    expect(screen.queryByTestId("stay-rates-include-0")).toBeNull();
-    fireEvent.click(screen.getByTestId("add-stay-rates-include-button"));
-    expect(screen.queryByTestId("stay-rates-include-0")).not.toBeNull();
-    fireEvent.click(screen.getByTestId("remove-stay-rates-include-0"));
-    expect(screen.queryByTestId("stay-rates-include-0")).toBeNull();
-  });
-
-  it("saisir un service inclus met à jour la valeur du champ", () => {
-    render(<Harness />);
-    fireEvent.click(screen.getByTestId("add-stay-rates-include-button"));
-    const input = screen.getByTestId("stay-rates-include-0") as HTMLInputElement;
-    fireEvent.change(input, { target: { value: "Wifi" } });
-    expect(input.value).toBe("Wifi");
-  });
 });

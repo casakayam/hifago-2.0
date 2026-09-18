@@ -17,6 +17,7 @@ import { ProductStatusBlock } from "./ProductStatusBlock";
 import { ProductPhotosBlock } from "./ProductPhotosBlock";
 import { ImportLobbyPhotosBlock } from "./ImportLobbyPhotosBlock";
 import { ProductTagsBlock } from "./ProductTagsBlock";
+import { ProductAmenitiesBlock } from "./ProductAmenitiesBlock";
 import { ProductSlotRulesBlock } from "./ProductSlotRulesBlock";
 
 // "HH:MM:SS" (sérialisation Postgres d'une colonne time) → "HH:MM" (valeur attendue par
@@ -35,6 +36,17 @@ export default async function EditProductPage({
   const { data: productRow } = await supabase
     .from("products")
     .select(
+      // `program` (2026-09-16, spec 37) : lu ICI **et** réécrit par l'update() de ProductForm — les
+      // deux ensemble, jamais l'un sans l'autre, exactement la règle énoncée juste en dessous.
+      //
+      // `duration_days` est l'exception assumée : chargé sans être réécrit, mais JAMAIS réinjecté
+      // dans l'input « Duración (días) », qui reste vierge (gap création-only inchangé). Il ne sert
+      // qu'à la prop d'information `campDurationDays` de l'éditeur de programme, pour ouvrir le bon
+      // nombre de journées. Le rendre éditable serait un changement de comportement, pas un
+      // rattrapage : apps/web/lib/orders/formatLineSchedule.ts et getOrderByToken.ts RELISENT
+      // duration_days pour reconstituer la date de fin de commandes DÉJÀ PAYÉES — le modifier
+      // réécrirait rétroactivement les dates de réservations existantes.
+      //
       // online_bookable/evento_capacity_mode/is_free/evento_payment_mode/evento_occupies_resource
       // (2026-09-15) : SEULS champs evento désormais chargés ici pour l'édition — délibérément pas
       // price_label/occurrence_*/start_time/duration_minutes, qui restent le gap préexistant
@@ -42,7 +54,7 @@ export default async function EditProductPage({
       // les rendre écrivables dans l'update() afficherait un formulaire qui SEMBLE éditer ces
       // valeurs puis jette silencieusement le changement au clic sur Enregistrer — pire que le
       // formulaire vierge actuel. Ces 5 champs-ci, eux, sont réellement lus ET réécrits.
-      "id, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, unit_count, lodging_kind, unit, default_capacity, stay_rates, category, type, establishment_id, sellable, lobby_category_id, lobby_product_id, online_bookable, evento_capacity_mode, is_free, evento_payment_mode, evento_occupies_resource, establishment:establishments(lobby_connector_active, lobby_has_token)",
+      "id, name, description, address, lat, lon, price_cop, price_tiers, min_qty, max_qty, check_in_time, check_out_time, capacity, unit_count, lodging_kind, unit, default_capacity, stay_rates, category, type, establishment_id, sellable, lobby_category_id, lobby_product_id, online_bookable, evento_capacity_mode, is_free, evento_payment_mode, evento_occupies_resource, transport_first_departure_time, transport_last_departure_time, transport_seats_per_departure, transport_departure_address, transport_departure_lat, transport_departure_lon, transport_arrival_address, transport_arrival_lat, transport_arrival_lon, transport_contact_phone, program, duration_days, establishment:establishments(lobby_connector_active, lobby_has_token)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -63,7 +75,7 @@ export default async function EditProductPage({
   // conservé, champ conditionnel). productTypeGating : SEULE définition de ces booléens dans tout
   // le projet (cf. apps/admin/lib/products/useProductTypeFieldsState.ts), partagée avec ProductForm
   // et ModerateProductCreationProposalForm.
-  const { isActivity, isLodging, isTransport, hasTags } = productTypeGating(
+  const { isActivity, isLodging, isTransport, hasTags, hasAmenities } = productTypeGating(
     product.type as ProductType,
   );
   // Refonte parcours produit ↔ LobbyPMS (2026-08-26) — même condition que product-type-fields.tsx/
@@ -78,6 +90,8 @@ export default async function EditProductPage({
     { data: media },
     { data: tagsRaw },
     { data: assignments },
+    { data: amenitiesRaw },
+    { data: amenityAssignments },
     { data: slotRulesRaw },
   ] = await Promise.all([
     supabase
@@ -91,6 +105,14 @@ export default async function EditProductPage({
     hasTags
       ? supabase.from("product_tag_assignments").select("tag_id").eq("product_id", product.id)
       : Promise.resolve({ data: [] as { tag_id: string }[] }),
+    // Équipements structurés (migration 20260917110000) — même patron que tags juste au-dessus,
+    // table dédiée `catalog_amenities`, gating `hasAmenities` (lodging uniquement).
+    hasAmenities
+      ? supabase.from("catalog_amenities").select("id, label, category_key").order("category_key").order("sort_order")
+      : Promise.resolve({ data: [] as { id: string; label: unknown; category_key: string }[] }),
+    hasAmenities
+      ? supabase.from("product_amenity_assignments").select("amenity_id").eq("product_id", product.id)
+      : Promise.resolve({ data: [] as { amenity_id: string }[] }),
     // Spec 11 — règles de créneaux : réservées à "activity", même gating que tags/tramos.
     isActivity
       ? supabase
@@ -121,6 +143,12 @@ export default async function EditProductPage({
     label: resolveLocalizedField(asLocalizedField(tag.label), "es") ?? tag.id,
   }));
   const initialTagIds = (assignments ?? []).map((a) => a.tag_id);
+
+  const allAmenities = (amenitiesRaw ?? []).map((amenity) => ({
+    id: amenity.id,
+    label: resolveLocalizedField(asLocalizedField(amenity.label), "es") ?? amenity.id,
+  }));
+  const initialAmenityIds = (amenityAssignments ?? []).map((a) => a.amenity_id);
 
   const initialSlotRules: DraftSlotRule[] = (slotRulesRaw ?? []).map((rule) => ({
     weekdays: rule.weekdays,
@@ -174,6 +202,13 @@ export default async function EditProductPage({
       <ProductStatusBlock productId={product.id} initialSellable={product.sellable} />
       {hasTags ? (
         <ProductTagsBlock productId={product.id} allTags={allTags} initialTagIds={initialTagIds} />
+      ) : null}
+      {hasAmenities ? (
+        <ProductAmenitiesBlock
+          productId={product.id}
+          allAmenities={allAmenities}
+          initialAmenityIds={initialAmenityIds}
+        />
       ) : null}
       {/* Démasqué le 2026-08-26 (arbitrage « import à la liaison »). Ce bloc était retiré pour une
           chambre liée à Lobby : combiné au fait que rien n'importait jamais photos[], une chambre

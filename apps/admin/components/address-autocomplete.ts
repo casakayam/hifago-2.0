@@ -96,9 +96,21 @@ function loadGoogleMapsScript(): Promise<void> {
 // Monte le widget dans `container` (un <div> vide, jamais un <input> HeroUI existant — c'est un
 // Web Component qui gère son propre input interne). Retourne une fonction de nettoyage à appeler
 // au démontage.
+// 3e paramètre ajouté le 2026-09-16 (transport : deux lieux sur le même écran). Optionnel, avec
+// les valeurs historiques par défaut, pour que les 6 appelants existants n'aient rien à changer.
+// Sans lui, deux instances sur la même page partageraient `data-testid="address-autocomplete"`
+// (mode strict Playwright) et, plus grave, annonceraient TOUTES LES DEUX « Dirección » au lecteur
+// d'écran — un vrai défaut d'accessibilité, pas une gêne de test.
+export type AddressAutocompleteOptions = {
+  testId?: string;
+  ariaLabel?: string;
+  placeholder?: string;
+};
+
 export function mountAddressAutocomplete(
   container: HTMLElement,
   onPlaceSelected: (result: PlaceSelection) => void,
+  options: AddressAutocompleteOptions = {},
 ): () => void {
   let cancelled = false;
   let element: PlaceAutocompleteElementLike | null = null;
@@ -110,9 +122,9 @@ export function mountAddressAutocomplete(
       if (cancelled || !places) return;
       element = new places.PlaceAutocompleteElement();
       element.includedRegionCodes = ["co"]; // même restriction que public/admin.js:821 en legacy
-      element.placeholder = "Empieza a escribir una dirección…";
-      element.setAttribute("data-testid", "address-autocomplete");
-      element.setAttribute("aria-label", "Dirección");
+      element.placeholder = options.placeholder ?? "Empieza a escribir una dirección…";
+      element.setAttribute("data-testid", options.testId ?? "address-autocomplete");
+      element.setAttribute("aria-label", options.ariaLabel ?? "Dirección");
 
       handler = (event: Event) => {
         const { placePrediction } = event as PlaceSelectEvent;

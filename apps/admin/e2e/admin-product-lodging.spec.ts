@@ -65,12 +65,11 @@ test("admin crée un alojamiento (check-in/check-out, capacidad, temporada/fin d
   await page.getByTestId("check-out-input").fill("11:00");
   await page.getByTestId("capacity-input").fill("8");
 
-  // Extras stay_rates (nouveau, spec 12) — temporada alta + recargo fin de semana + inclusión + depósito.
+  // Extras stay_rates (spec 12) — temporada alta + recargo fin de semana + depósito. `includes`
+  // (« Incluye ») retiré le 2026-09-17, supersedé par les équipements structurés (cf. stayRates.ts).
   await toggleCheckbox(page.getByTestId("stay-rates-month-12"));
   await page.getByTestId("stay-rates-season-surcharge-input").fill("20");
   await page.getByTestId("stay-rates-weekend-surcharge-input").fill("10");
-  await page.getByTestId("add-stay-rates-include-button").click();
-  await page.getByTestId("stay-rates-include-0").fill("Wifi");
   await page.getByTestId("stay-rates-deposit-input").fill("200000");
 
   await page.getByTestId("create-product-button").click();
@@ -106,7 +105,6 @@ test("admin crée un alojamiento (check-in/check-out, capacidad, temporada/fin d
   await expect(checkboxInput(page.getByTestId("stay-rates-month-12"))).toBeChecked();
   await expect(page.getByTestId("stay-rates-season-surcharge-input")).toHaveValue("20");
   await expect(page.getByTestId("stay-rates-weekend-surcharge-input")).toHaveValue("10");
-  await expect(page.getByTestId("stay-rates-include-0")).toHaveValue("Wifi");
   await expect(page.getByTestId("stay-rates-deposit-input")).toHaveValue("200000");
 
   // Édite directement dans le même submit (pas de bouton de sauvegarde séparé pour ces champs).

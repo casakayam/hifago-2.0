@@ -7,13 +7,17 @@ import { Price } from "@/components/atoms/Price";
 import { Title } from "@/components/atoms/Title";
 import { BackLink } from "@/components/atoms/BackLink";
 import { PhotoStrip } from "@/components/molecules/PhotoStrip";
+import { AmenidadesList } from "@/components/molecules/AmenidadesList";
 import { Link } from "@/i18n/navigation";
 import { escribirCriterios } from "@/lib/catalog/criterios";
 import { usePrefillUltimosCriterios } from "@/lib/reservas/usePrefillUltimosCriterios";
 import type { FichaProducto as DatosFicha } from "@/lib/catalog/tipos";
 import type { Locale } from "@/messages";
 import { BotonContacto } from "./BotonContacto";
+import { LinkButton } from "@/components/atoms/LinkButton";
+import { enlaceItinerarioGoogleMaps } from "@/lib/products/enlaceGoogleMaps";
 import { ReservationForm } from "./ReservationForm";
+import { ProgramaCamp } from "./ProgramaCamp";
 import { LodgingReservationForm } from "./LodgingReservationForm";
 import { SlotReservationForm } from "./SlotReservationForm";
 import { EventoReservationForm } from "./EventoReservationForm";
@@ -64,6 +68,12 @@ export function FichaProducto({
   // `hrefRetornoCarrito` : celle-ci pose toujours `desdeCarrito=1`, le drapeau de réordonnancement
   // réservé à un ajout au panier réel (page.tsx) — un simple clic « retour » ne doit pas le
   // déclencher.
+  // Salida sélectionnée, pour DATER le programme du camp (spec 37). ⚠️ Ce n'est pas un second état
+  // à réconcilier : ReservationForm reste seul propriétaire de la sélection, il se contente de la
+  // notifier ici (miroir en écriture unique). L'initialiser avec `primeraSalidaIso`, calculé côté
+  // serveur, fait que le HTML initial porte déjà de vraies dates — pour un crawler comme pour un
+  // visiteur qui n'a encore rien cliqué.
+  const [salidaIso, setSalidaIso] = useState<string | null>(ficha.primeraSalidaIso);
   const [hrefRetorno, setHrefRetorno] = useState("/");
   usePrefillUltimosCriterios(
     useCallback((criterios) => setHrefRetorno(`/${escribirCriterios(criterios)}`), [])
@@ -97,6 +107,46 @@ export function FichaProducto({
     alojamiento?.capacity != null ? t("lodgingCapacity", { count: alojamiento.capacity }) : null,
     alojamiento?.unitCount != null ? t("lodgingUnitCount", { count: alojamiento.unitCount }) : null,
   ].filter(Boolean);
+
+  // TRANSPORT — la fenêtre de départs, les places annoncées et le trajet. Tout est INFORMATIF : ces
+  // lignes ne changent rien au formulaire de réservation rendu plus bas (un transport reste réservé
+  // par DATE), elles répondent juste à « à quelle heure, d'où, vers où » avant que le visiteur
+  // choisisse sa date. Demande Jérôme du 2026-09-16.
+  const transporte = ficha.transporte;
+  // DEUX clés distinctes, jamais une clé construite dynamiquement : `t()` ne vérifierait plus
+  // l'existence de la clé (même raison que `etiquetaCouchage` ci-dessus). `primeraSalida ===
+  // ultimaSalida` est le cas NORMAL d'un transfert à heure fixe, pas un cas dégradé — d'où le `>=`
+  // du CHECK en base.
+  const lineaHorario = transporte
+    ? [
+        transporte.primeraSalida
+          ? transporte.primeraSalida === transporte.ultimaSalida
+            ? t("transportDepartureSingle", { hora: transporte.primeraSalida })
+            : t("transportDepartureRange", {
+                desde: transporte.primeraSalida,
+                hasta: transporte.ultimaSalida ?? "",
+              })
+          : null,
+        transporte.plazasPorSalida != null
+          ? t("transportSeatsPerDeparture", { count: transporte.plazasPorSalida })
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
+  const lineaRuta = transporte
+    ? [
+        transporte.salida.direccion ? t("transportFrom", { lugar: transporte.salida.direccion }) : null,
+        transporte.llegada.direccion ? t("transportTo", { lugar: transporte.llegada.direccion }) : null,
+      ]
+        .filter(Boolean)
+        .join(" → ")
+    : "";
+  // `null` dès qu'une extrémité n'a pas ses coordonnées : un itinéraire à une seule borne n'existe
+  // pas. Les adresses restent affichées dans ce cas — seul le lien disparaît.
+  const enlaceMapa = transporte
+    ? enlaceItinerarioGoogleMaps(transporte.salida, transporte.llegada)
+    : null;
 
   return (
     <>
@@ -158,7 +208,15 @@ export function FichaProducto({
               )}
               {/* Aucun suffixe sur une vitrine ni sur un evento : leur prix est un libellé libre,
                   pas un tarif à l'unité. */}
-              {ficha.modoReserva !== "evento" && ficha.modoReserva !== "vitrina" && sufijoUnidad ? (
+              {/* ⚠️ `vitrina` RETIRÉ de cette exclusion le 2026-09-17. Depuis que tout transport
+                  est en mode vitrine (son contact est garanti, cf. `lib/catalog/producto.ts`),
+                  l'exclure faisait perdre « por persona » / « por trayecto » sur CHAQUE transport —
+                  or c'est exactement ce que le texte legacy qu'on remplace insistait à dire (« El
+                  precio es por pasajero, ida y vuelta », « por trayecto (solo ida) y por
+                  vehículo »). Un suffixe d'unité accompagne un prix CHIFFRÉ ; il n'a jamais rien
+                  eu à voir avec la façon de réserver. `evento` reste exclu : son prix est un
+                  libellé libre (`price_label`), auquel « por persona » ne s'applique pas. */}
+              {ficha.modoReserva !== "evento" && sufijoUnidad ? (
                 <span className="ml-1 text-sm font-normal text-muted">{sufijoUnidad}</span>
               ) : null}
             </p>
@@ -183,6 +241,16 @@ export function FichaProducto({
             </p>
           ) : null}
 
+          {/* Équipements structurés (migration 20260917110000, décision Jérôme du 2026-09-17) —
+              référentiel fermé, résolu dans la locale par la couche de données. Section entière
+              absente si `amenidades` est vide, même discipline que `faits` juste au-dessus. */}
+          {alojamiento && alojamiento.amenidades.length > 0 ? (
+            <section className="flex flex-col gap-3" data-testid="product-amenities">
+              <Title as="h2">{tCommon("amenitiesTitle")}</Title>
+              <AmenidadesList grupos={alojamiento.amenidades} testId="product-amenities-list" />
+            </section>
+          ) : null}
+
           {/* ⚠️ L'OCCURRENCE EST INDÉPENDANTE DU MODE DE RÉSERVATION. Elle était rendue dans la
               seule branche `evento`, comme si la date d'un événement dépendait de la façon dont on
               le réserve. C'est une propriété du TYPE : elle s'affiche pour tout evento. */}
@@ -190,6 +258,45 @@ export function FichaProducto({
             <p data-testid="evento-occurrence" className="text-sm text-muted">
               {etiquetas.ocurrencia}
             </p>
+          ) : null}
+
+          {/* ⚠️ Même discipline que `faits` juste au-dessus : chaque ligne est FACULTATIVE et rendue
+              séparément, et le bloc entier disparaît si le transport ne porte rien — plutôt qu'un
+              séparateur orphelin. Placé AVANT le formulaire de réservation, parce que « à quelle
+              heure, d'où, vers où » se lit avant de choisir une date, pas après.
+              Rien à voir avec `establishment-address` plus bas : celle-là est l'adresse du VENDEUR. */}
+          {transporte && (lineaHorario || lineaRuta) ? (
+            <div className="flex flex-col items-start gap-1" data-testid="transport-info">
+              {lineaHorario ? (
+                <p className="text-sm text-muted" data-testid="transport-schedule">
+                  {lineaHorario}
+                </p>
+              ) : null}
+              {lineaRuta ? (
+                <p className="text-sm text-muted" data-testid="transport-route">
+                  {lineaRuta}
+                </p>
+              ) : null}
+              {enlaceMapa ? (
+                // Marge négative pour aligner le TEXTE du bouton sur celui des deux paragraphes
+                // au-dessus : un bouton `ghost` garde son padding horizontal (12px), qui décalait
+                // sinon son libellé vers la droite — mesuré sur le rendu réel aux deux largeurs.
+                // Alignement optique ; `LinkButton` n'accepte pas de `className`, délibérément.
+                <div className="-ml-3">
+                  <LinkButton
+                    href={enlaceMapa}
+                    external
+                    newTabLabel={t("transportMapsNewTab")}
+                    variant="ghost"
+                    color="neutral"
+                    size="sm"
+                    testId="transport-maps-link"
+                  >
+                    {t("transportMapsLink")}
+                  </LinkButton>
+                </div>
+              ) : null}
+            </div>
           ) : null}
 
           {ficha.modoReserva === "evento_bookable" && ficha.eventoReservable ? (
@@ -234,8 +341,25 @@ export function FichaProducto({
               precio={ficha.precio}
               unidad={ficha.unidad}
               locale={locale}
+              onSalidaChange={setSalidaIso}
             />
           )}
+
+          {/* ⚠️ HORS de la branche `modoReserva` ci-dessus, délibérément : la leçon est écrite en
+              majuscules plus haut dans ce fichier à propos de l'occurrence d'un evento (« L'OCCURRENCE
+              EST INDÉPENDANTE DU MODE DE RÉSERVATION »). Un camp servi en vitrine
+              (external_booking_url) ou non réservable en ligne garde son programme : le déroulé des
+              journées ne dépend pas de la façon dont on réserve. */}
+          {ficha.programa ? (
+            <ProgramaCamp
+              programa={ficha.programa}
+              salidaIso={salidaIso}
+              locale={locale}
+              titulo={t("programTitle")}
+              etiquetaDia={(dia) => t("programDay", { dia })}
+              etiquetaDiaConFecha={(dia, fecha) => t("programDayWithDate", { dia, fecha })}
+            />
+          ) : null}
 
           <p className="text-xs text-muted">{tCommon("cancellationPolicy")}</p>
         </Card.Content>

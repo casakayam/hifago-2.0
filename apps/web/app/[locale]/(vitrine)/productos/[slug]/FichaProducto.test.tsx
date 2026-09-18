@@ -35,6 +35,7 @@ function renderView(overrides: {
   unitCount: number | null;
   lodgingKind?: LodgingKind | null;
   unit?: string | null;
+  amenidades?: { categoria: string; items: string[] }[];
 }) {
   // Une fiche COMPLÈTE, construite une fois : le composant reçoit désormais un seul objet
   // `FichaProducto` au lieu de 22 props éparses (spec 30 §7c). Un champ oublié devient une erreur
@@ -55,6 +56,11 @@ function renderView(overrides: {
     eventoReservable: null,
     duracionDias: null,
     descuentoGrupo: null,
+    programa: null,
+    primeraSalidaIso: null,
+    // Cette fiche est un `lodging` : le CHECK products_transport_info_transport_only garantit que
+    // seul un `transport` peut porter ces champs.
+    transporte: null,
     alojamiento: {
       lodgingKind: overrides.lodgingKind ?? null,
       capacity: overrides.capacity,
@@ -62,6 +68,7 @@ function renderView(overrides: {
       priceTiers: null,
       maxQty: 1,
       esPmsBacked: true,
+      amenidades: overrides.amenidades ?? [],
     },
     disponibilidad: [],
     tarifas: [],
@@ -182,5 +189,25 @@ describe("FichaProducto — unité de prix", () => {
     expect(texte).toContain("120.000");
     expect(texte).not.toContain("por persona");
     expect(texte).not.toContain("por la casa entera");
+  });
+});
+
+// products/product_amenity_assignments (migration 20260917110000, décision Jérôme du 2026-09-17).
+describe("FichaProducto — équipements structurés", () => {
+  it("affiche les équipements groupés par catégorie quand la fiche en porte", () => {
+    renderView({
+      capacity: 2,
+      unitCount: 1,
+      amenidades: [{ categoria: "Baño", items: ["Baño privado", "Secador de pelo"] }],
+    });
+    const seccion = screen.getByTestId("product-amenities");
+    expect(seccion.textContent).toContain("Baño");
+    expect(seccion.textContent).toContain("Baño privado");
+    expect(seccion.textContent).toContain("Secador de pelo");
+  });
+
+  it("n'affiche pas la section si amenidades est vide", () => {
+    renderView({ capacity: 2, unitCount: 1, amenidades: [] });
+    expect(screen.queryByTestId("product-amenities")).toBeNull();
   });
 });

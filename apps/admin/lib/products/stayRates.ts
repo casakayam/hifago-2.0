@@ -4,18 +4,26 @@
 // un écran jusqu'ici. Les paliers de prix par nombre de personnes ne vivent PAS ici : ils
 // réutilisent price_tiers/min_qty/max_qty (déjà construits pour l'activité, spec 08/11) plutôt que
 // de dupliquer les `tiers` de stay_rates — seuls les champs sans équivalent hifago existant sont
-// repris ici (saison, dépôt, inclusions, note), plus une majoration week-end qui n'existait pas en
-// V1 (demande explicite de Jérôme, cf. spec 12 §1 — le seul levier temporel de la V1 était mensuel).
+// repris ici (saison, dépôt, note), plus une majoration week-end qui n'existait pas en V1 (demande
+// explicite de Jérôme, cf. spec 12 §1 — le seul levier temporel de la V1 était mensuel).
 // Même convention que priceTiers.ts/slotRules.ts : type "brouillon" en strings pour les inputs
 // contrôlés, validation retournant un message d'erreur ou null, conversion vers le JSON de colonne
 // juste avant l'écriture.
+//
+// ⚠️ `includes` (« Incluye — opcional », texte libre) RETIRÉ le 2026-09-17 (décision Jérôme) —
+// supersedé par le référentiel fermé d'équipements structurés (`catalog_amenities`/
+// `product_amenity_assignments`, migration 20260917110000). Base locale vérifiée VIDE avant retrait
+// (`select count(*) from products where stay_rates is not null` → 0) : aucune perte de donnée ici.
+// `toStayRatesColumn` continue de RECONSTRUIRE l'objet entier à chaque sauvegarde — si une ligne
+// préprod/prod porte encore un `stay_rates.includes` d'avant ce lot, la prochaine sauvegarde de
+// n'importe quel autre champ de cette même grille l'effacera silencieusement (pas vérifié sur ces
+// environnements, jamais touchés depuis cette session). Signalé ici plutôt que découvert plus tard.
 export type DraftStayRates = {
   seasonMonths: number[]; // 1=enero..12=diciembre
   seasonSurchargePct: string; // pourcentage saisi (0-100), converti en fraction 0-1 à l'écriture
   seasonNote: string;
   weekendDays: number[]; // ISO 8601 : 1=lundi..7=dimanche
   weekendSurchargePct: string; // même traitement que seasonSurchargePct
-  includes: string[];
   depositCop: string;
   extraNote: string;
 };
@@ -24,13 +32,10 @@ type StayRatesColumn = {
   season: { months: number[]; surcharge_pct: number; note: string | null };
   weekend_days: number[];
   weekend_surcharge_pct: number;
-  includes: string[];
   deposit_cop: number | null;
   extra_note: string | null;
 };
 
-const MAX_INCLUDES = 20;
-const MAX_TEXT = 80;
 const MAX_NOTE = 300;
 const MAX_PRICE = 100_000_000;
 
@@ -43,7 +48,6 @@ export function emptyStayRates(): DraftStayRates {
     seasonNote: "",
     weekendDays: [5, 6],
     weekendSurchargePct: "",
-    includes: [],
     depositCop: "",
     extraNote: "",
   };
@@ -80,14 +84,6 @@ export function validateStayRates(draft: DraftStayRates): string | null {
     }
   }
 
-  const includes = draft.includes.map((item) => item.trim()).filter(Boolean);
-  if (includes.length > MAX_INCLUDES) {
-    return `Máximo ${MAX_INCLUDES} servicios incluidos.`;
-  }
-  if (includes.some((item) => item.length > MAX_TEXT)) {
-    return `Cada servicio incluido debe tener menos de ${MAX_TEXT} caracteres.`;
-  }
-
   if (draft.depositCop.trim().length > 0) {
     const deposit = Number(draft.depositCop);
     if (!Number.isFinite(deposit) || deposit < 0 || deposit > MAX_PRICE) {
@@ -106,13 +102,11 @@ export function validateStayRates(draft: DraftStayRates): string | null {
 // ("NULL = pas de grille"). weekendDays garde sa présélection par défaut même vide de sens tant
 // qu'aucun recargo n'est saisi : ignoré ici pour ne pas déclencher un stockage non vide à tort.
 export function toStayRatesColumn(draft: DraftStayRates): StayRatesColumn | null {
-  const includes = draft.includes.map((item) => item.trim()).filter(Boolean);
   const isEmpty =
     draft.seasonMonths.length === 0 &&
     isEmptyPct(draft.seasonSurchargePct) &&
     draft.seasonNote.trim().length === 0 &&
     isEmptyPct(draft.weekendSurchargePct) &&
-    includes.length === 0 &&
     draft.depositCop.trim().length === 0 &&
     draft.extraNote.trim().length === 0;
   if (isEmpty) return null;
@@ -127,14 +121,15 @@ export function toStayRatesColumn(draft: DraftStayRates): StayRatesColumn | null
     weekend_surcharge_pct: isEmptyPct(draft.weekendSurchargePct)
       ? 0
       : Number(draft.weekendSurchargePct) / 100,
-    includes,
     deposit_cop: draft.depositCop.trim() ? Math.round(Number(draft.depositCop)) : null,
     extra_note: draft.extraNote.trim() || null,
   };
 }
 
 // Lit la colonne (jsonb) sans jamais throw : une grille corrompue ou absente = brouillon vide,
-// même philosophie que stayService.parseStayRates côté V1 ("grille illisible, ignorée").
+// même philosophie que stayService.parseStayRates côté V1 ("grille illisible, ignorée"). Un
+// éventuel `includes` legacy dans la colonne est simplement ignoré ici (pas relu, pas affiché) —
+// il reste en base tel quel jusqu'à la prochaine sauvegarde de cette grille (cf. en-tête).
 export function stayRatesFromColumn(value: unknown): DraftStayRates {
   const base = emptyStayRates();
   if (!value || typeof value !== "object") return base;
@@ -161,7 +156,6 @@ export function stayRatesFromColumn(value: unknown): DraftStayRates {
     seasonNote: raw.season?.note ?? "",
     weekendDays: weekendDays.length > 0 ? weekendDays : base.weekendDays,
     weekendSurchargePct,
-    includes: Array.isArray(raw.includes) ? raw.includes.filter((i): i is string => typeof i === "string") : [],
     depositCop: typeof raw.deposit_cop === "number" ? String(raw.deposit_cop) : "",
     extraNote: raw.extra_note ?? "",
   };

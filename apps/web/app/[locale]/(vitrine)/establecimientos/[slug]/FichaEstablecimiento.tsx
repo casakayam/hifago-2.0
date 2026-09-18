@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { Card } from "@hifago/ui";
 import { Title } from "@/components/atoms/Title";
 import { PhotoStrip } from "@/components/molecules/PhotoStrip";
+import { AmenidadesList } from "@/components/molecules/AmenidadesList";
 import { TarjetaOferta } from "@/components/molecules/TarjetaOferta";
 import { EstadoVacio } from "@/components/molecules/EstadoVacio";
 import type { FichaEstablecimiento as DatosFicha } from "@/lib/catalog/tipos";
@@ -31,6 +32,7 @@ export function FichaEstablecimiento({
   locale: Locale;
 }) {
   const t = useTranslations("EstablishmentPage");
+  const tCommon = useTranslations("Common");
 
   // Le titre de la section des couchages dépend de la façon dont le lieu se vend. « Sin
   // especificar » n'est pas un oubli à combler : un établissement qui ne vend que des activités
@@ -99,6 +101,16 @@ export function FichaEstablecimiento({
               etiqueta={t("contactar")}
               testId="establishment-contact-link"
             />
+          ) : null}
+
+          {/* Équipements structurés (migration 20260917110000, décision Jérôme du 2026-09-17) —
+              référentiel fermé, résolu dans la locale par la couche de données. Section entière
+              absente si `amenidades` est vide, même discipline que les horaires juste au-dessus. */}
+          {ficha.amenidades.length > 0 ? (
+            <section className="flex flex-col gap-3" data-testid="establishment-amenities">
+              <Title as="h2">{tCommon("amenitiesTitle")}</Title>
+              <AmenidadesList grupos={ficha.amenidades} testId="establishment-amenities-list" />
+            </section>
           ) : null}
         </Card.Content>
       </Card>

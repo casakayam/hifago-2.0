@@ -49,5 +49,15 @@
     "recurringWeeklyOngoing": "Los {weekday}, cada {days} días, de forma indefinida."
   },
   "fotoAlt": "{nombre}, foto {indice} de {total}",
-  "migasEtiqueta": "Ruta de navegación"
+  "migasEtiqueta": "Ruta de navegación",
+  "transportDepartureSingle": "Salidas a las {hora}",
+  "transportDepartureRange": "Salidas entre las {desde} y las {hasta}",
+  "transportSeatsPerDeparture": "{count, plural, one {# plaza por salida} other {# plazas por salida}}",
+  "transportFrom": "Salida: {lugar}",
+  "transportTo": "Llegada: {lugar}",
+  "transportMapsLink": "Ver el trayecto en Google Maps",
+  "transportMapsNewTab": "Ver el trayecto en Google Maps (se abre en una pestaña nueva)",
+  "programTitle": "El plan, día a día",
+  "programDay": "Día {dia}",
+  "programDayWithDate": "Día {dia} · {fecha}"
 }

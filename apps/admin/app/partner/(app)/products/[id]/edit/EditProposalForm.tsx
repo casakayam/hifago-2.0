@@ -63,7 +63,16 @@ export function EditProposalForm({
   const [description, setDescription] = useState<LocalizedValue>(() => ({
     ...(asLocalizedField(currentPayload.description) ?? {}),
   }));
-  const fields = useProductTypeFieldsState(payloadToFieldsInit(currentPayload));
+  // `duration_days` est chargé par le select de cette page (spec 37) pour alimenter le nombre de
+  // journées de l'éditeur de programme — mais il est retiré ICI de l'hydratation du formulaire.
+  // Sans ce retrait, l'input « Duración (días) » s'afficherait rempli alors que
+  // buildProductEditPayload ne l'émet pas (le socio n'a pas à changer la durée d'un camp déjà
+  // vendu) : le champ semblerait modifiable puis jetterait le changement en silence — précisément
+  // ce que le commentaire du select d'admin/products/[id]/edit/page.tsx interdit. Il repart donc
+  // par la prop campDurationDays, qui n'alimente que l'éditeur de programme.
+  const fields = useProductTypeFieldsState(
+    payloadToFieldsInit({ ...currentPayload, duration_days: null }),
+  );
 
   const [proposal, setProposal] = useState(pendingProposal);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -182,6 +191,7 @@ export function EditProposalForm({
           establishmentId={establishmentId}
           establishmentLobbyConnected={establishmentLobbyConnected}
           lobbyLinkReadOnly
+          campDurationDays={currentPayload.duration_days ?? null}
         />
 
         <Button type="submit" isDisabled={isSubmitting} data-testid="submit-proposal-button">

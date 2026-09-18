@@ -5,6 +5,7 @@ import { hasNativeContent } from "@/lib/seo/nativeContent";
 import { routing } from "@/i18n/routing";
 import { esTipoOferta, resolverPrecio } from "./tipos";
 import type { FichaEstablecimiento, FotoTarjeta, TarjetaOferta } from "./tipos";
+import { agruparAmenidadesPorCategoria, type FilaAmenidad } from "./amenidades";
 
 // La fiche d'un LIEU — spec 30 §7b. Ce module retire la DERNIÈRE exemption vitrine de
 // `scripts/check-data-layer.sh` : elle tombe à deux entrées, toutes deux hors vitrine (le compte
@@ -44,8 +45,8 @@ export const getEstablecimientoPorSlug = cache(
 
     if (!establecimiento) return null;
 
-    // Deux lectures indépendantes — ni l'une ni l'autre n'a besoin du résultat de la seconde.
-    const [{ data: fotos }, { data: productos }] = await Promise.all([
+    // Trois lectures indépendantes — aucune n'a besoin du résultat d'une autre.
+    const [{ data: fotos }, { data: productos }, { data: amenidadesRaw }] = await Promise.all([
       supabase
         .from("establishment_media")
         .select("storage_path")
@@ -57,7 +58,17 @@ export const getEstablecimientoPorSlug = cache(
         .eq("establishment_id", establecimiento.id)
         .eq("sellable", true)
         .order("created_at"),
+      // Équipements structurés (migration 20260917110000) — résolution de langue faite APRÈS,
+      // dans agruparAmenidadesPorCategoria (amenidades.ts), jamais ici ni dans le composant.
+      supabase
+        .from("establishment_amenity_assignments")
+        .select(
+          "amenity:catalog_amenities(label, sort_order, category:catalog_amenity_categories(label, sort_order))"
+        )
+        .eq("establishment_id", establecimiento.id),
     ]);
+
+    const amenidades = agruparAmenidadesPorCategoria((amenidadesRaw ?? []) as FilaAmenidad[], locale);
 
     // La SEULE attente séquentielle : les photos dépendent des ids qu'on vient d'obtenir. Une
     // jointure imbriquée les ramènerait en un tour, mais imposerait de trier les médias côté
@@ -129,6 +140,7 @@ export const getEstablecimientoPorSlug = cache(
       fotos: (fotos ?? []).map((fila) => ({ url: urlPublica(fila.storage_path) })),
       alojamientos: tarjetas.filter((tarjeta) => tarjeta.tipo === "lodging"),
       otrosProductos: tarjetas.filter((tarjeta) => tarjeta.tipo !== "lodging"),
+      amenidades,
       localesNativas: routing.locales.filter((candidate) =>
         hasNativeContent(establecimiento.name, candidate)
       ),
@@ -136,13 +148,8 @@ export const getEstablecimientoPorSlug = cache(
   }
 );
 
-/**
- * L'URL du bouton de contact, depuis un numéro E.164.
- *
- * ⚠️ La contrainte `establishments_contact_phone_e164` garantit la forme en base ; cette fonction
- * ne fait que retirer le `+`, que `wa.me` n'accepte pas. Elle ne devine RIEN — un composant qui
- * déduirait « c'est un numéro, donc WhatsApp » ferait de la logique métier dans du rendu.
- */
-export function urlDeContacto(telefonoE164: string): string {
-  return `https://wa.me/${telefonoE164.replace(/^\+/, "")}`;
-}
+// Déplacée le 2026-09-17 dans `lib/contacto/whatsapp.ts`, qui n'a AUCUNE dépendance Supabase —
+// elle est désormais importable depuis un composant `"use client"` sans embarquer tout ce module
+// (et `createPublicClient`) dans le bundle navigateur. Réexportée ici pour ne casser aucun des
+// imports existants, qui restent parfaitement valides.
+export { urlDeContacto } from "@/lib/contacto/whatsapp";
