@@ -1,8 +1,7 @@
 "use client";
 
-import { useRef, useEffect } from "react";
 import { Input, Label } from "@hifago/ui";
-import { mountAddressAutocomplete } from "@/components/address-autocomplete";
+import { useAddressAutocomplete } from "@/components/use-address-autocomplete";
 import type { ProductTypeFieldsState } from "@/lib/products/useProductTypeFieldsState";
 
 // Extrait de product-type-fields.tsx (découpage des god components, 2026-09-17) — rendu quand
@@ -12,20 +11,13 @@ import type { ProductTypeFieldsState } from "@/lib/products/useProductTypeFields
 // distinct depuis le 2026-08-18 (productTypeGating.ts) — renommage cosmétique laissé de côté
 // volontairement lors du découpage, comme documenté là-bas.
 export function LocationAndTagsFields({ state }: { state: ProductTypeFieldsState }) {
-  const addressSearchRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const container = addressSearchRef.current;
-    if (!container) return;
-    return mountAddressAutocomplete(container, (place) => {
-      state.setAddress(place.address);
-      if (place.lat !== null && place.lon !== null) {
-        state.setLat(String(place.lat));
-        state.setLon(String(place.lon));
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- state est un objet stable de setters, jamais recréé entre renders utiles
-  }, []);
+  const addressSearchRef = useAddressAutocomplete((place) => {
+    state.setAddress(place.address);
+    if (place.lat !== null && place.lon !== null) {
+      state.setLat(String(place.lat));
+      state.setLon(String(place.lon));
+    }
+  });
 
   return (
     <>

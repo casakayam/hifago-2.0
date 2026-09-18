@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { createClient } from "@hifago/supabase/client";
-import { toast } from "@hifago/ui";
 import { TagsMultiSelect, type TagOption } from "@/components/tags-multiselect";
+import { useAssignmentToggle } from "@/components/use-assignment-toggle";
 
 // Bloc séparé du formulaire d'édition — même patron que ProductTagsBlock.tsx/ProductStatusBlock.tsx :
 // action distincte, sauvegarde immédiate par ajout/retrait, pas un champ de plus dans le submit
-// principal d'EditProductForm.
+// principal d'EditProductForm. La mécanique insert/delete vit désormais dans `useAssignmentToggle`
+// (revue de packaging admin, 2026-09-17).
 //
 // Copie littérale de `ProductTagsBlock.tsx` — `catalog_amenities`/`product_amenity_assignments` au
 // lieu de `catalog_tags`/`product_tag_assignments`. Monté uniquement quand `hasAmenities` (lodging),
@@ -23,43 +22,23 @@ export function ProductAmenitiesBlock({
   allAmenities: TagOption[];
   initialAmenityIds: string[];
 }) {
-  const [selectedAmenityIds, setSelectedAmenityIds] = useState(initialAmenityIds);
-
-  async function handleChange(nextIds: string[]) {
-    const supabase = createClient();
-    const added = nextIds.filter((id) => !selectedAmenityIds.includes(id));
-    const removed = selectedAmenityIds.filter((id) => !nextIds.includes(id));
-
-    if (added.length > 0) {
-      const { error: insertError } = await supabase
-        .from("product_amenity_assignments")
-        .insert(added.map((amenityId) => ({ product_id: productId, amenity_id: amenityId })));
-      if (insertError) {
-        toast.danger("No se pudo añadir el equipamiento.");
-        return;
-      }
-      toast.success("Equipamiento añadido.");
-    }
-    if (removed.length > 0) {
-      const { error: deleteError } = await supabase
-        .from("product_amenity_assignments")
-        .delete()
-        .eq("product_id", productId)
-        .in("amenity_id", removed);
-      if (deleteError) {
-        toast.danger("No se pudo quitar el equipamiento.");
-        return;
-      }
-      toast.success("Equipamiento quitado.");
-    }
-    setSelectedAmenityIds(nextIds);
-  }
+  const { selectedIds, handleChange } = useAssignmentToggle({
+    table: "product_amenity_assignments",
+    entityIdColumn: "product_id",
+    assignedIdColumn: "amenity_id",
+    entityId: productId,
+    initialAssignedIds: initialAmenityIds,
+    addedMessage: "Equipamiento añadido.",
+    removedMessage: "Equipamiento quitado.",
+    addErrorMessage: "No se pudo añadir el equipamiento.",
+    removeErrorMessage: "No se pudo quitar el equipamiento.",
+  });
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
       <TagsMultiSelect
         availableTags={allAmenities}
-        selectedTagIds={selectedAmenityIds}
+        selectedTagIds={selectedIds}
         onChange={handleChange}
         allowCreate={false}
         label="Equipamiento"

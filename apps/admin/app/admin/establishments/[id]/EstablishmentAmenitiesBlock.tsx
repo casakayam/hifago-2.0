@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { createClient } from "@hifago/supabase/client";
-import { toast } from "@hifago/ui";
 import { TagsMultiSelect, type TagOption } from "@/components/tags-multiselect";
+import { useAssignmentToggle } from "@/components/use-assignment-toggle";
 
 // Bloc séparé du formulaire d'édition — même patron que EstablishmentTagsBlock.tsx : action
 // distincte, sauvegarde immédiate par ajout/retrait, pas un champ de plus dans un submit.
@@ -11,7 +9,8 @@ import { TagsMultiSelect, type TagOption } from "@/components/tags-multiselect";
 // Copie littérale de `EstablishmentTagsBlock.tsx` — `catalog_amenities`/
 // `establishment_amenity_assignments` au lieu de `catalog_tags`/`establishment_tag_assignments`.
 // Un établissement est TOUJOURS éligible aux équipements (même raisonnement que les tags) : aucun
-// gating par type ici.
+// gating par type ici. La mécanique insert/delete vit désormais dans `useAssignmentToggle` (revue
+// de packaging, 2026-09-17) — la duplication qui a motivé ce commentaire est résorbée.
 //
 // ⚠️ `allowCreate={false}` — LISTE FERMÉE (décision Jérôme du 2026-09-17, contrairement aux tags
 // éditoriaux) : le référentiel `catalog_amenities` est peuplé uniquement par migration, jamais par
@@ -26,43 +25,23 @@ export function EstablishmentAmenitiesBlock({
   allAmenities: TagOption[];
   initialAmenityIds: string[];
 }) {
-  const [selectedAmenityIds, setSelectedAmenityIds] = useState(initialAmenityIds);
-
-  async function handleChange(nextIds: string[]) {
-    const supabase = createClient();
-    const added = nextIds.filter((id) => !selectedAmenityIds.includes(id));
-    const removed = selectedAmenityIds.filter((id) => !nextIds.includes(id));
-
-    if (added.length > 0) {
-      const { error: insertError } = await supabase
-        .from("establishment_amenity_assignments")
-        .insert(added.map((amenityId) => ({ establishment_id: establishmentId, amenity_id: amenityId })));
-      if (insertError) {
-        toast.danger("No se pudo añadir el equipamiento.");
-        return;
-      }
-      toast.success("Equipamiento añadido.");
-    }
-    if (removed.length > 0) {
-      const { error: deleteError } = await supabase
-        .from("establishment_amenity_assignments")
-        .delete()
-        .eq("establishment_id", establishmentId)
-        .in("amenity_id", removed);
-      if (deleteError) {
-        toast.danger("No se pudo quitar el equipamiento.");
-        return;
-      }
-      toast.success("Equipamiento quitado.");
-    }
-    setSelectedAmenityIds(nextIds);
-  }
+  const { selectedIds, handleChange } = useAssignmentToggle({
+    table: "establishment_amenity_assignments",
+    entityIdColumn: "establishment_id",
+    assignedIdColumn: "amenity_id",
+    entityId: establishmentId,
+    initialAssignedIds: initialAmenityIds,
+    addedMessage: "Equipamiento añadido.",
+    removedMessage: "Equipamiento quitado.",
+    addErrorMessage: "No se pudo añadir el equipamiento.",
+    removeErrorMessage: "No se pudo quitar el equipamiento.",
+  });
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
       <TagsMultiSelect
         availableTags={allAmenities}
-        selectedTagIds={selectedAmenityIds}
+        selectedTagIds={selectedIds}
         onChange={handleChange}
         allowCreate={false}
         label="Equipamiento"

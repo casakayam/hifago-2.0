@@ -1,15 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@hifago/supabase/client";
 import { Button, Checkbox, Input, Label, TextArea, TextField, cn, toast } from "@hifago/ui";
-import { mountAddressAutocomplete } from "@/components/address-autocomplete";
-
-// Miroir local du type Json généré par Supabase — même convention que NewEstablishmentForm.tsx.
-type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
-type DescriptionLang = "es" | "en";
+import { useAddressAutocomplete } from "@/components/use-address-autocomplete";
+import { useEstablishmentFieldsState } from "@/lib/establishments/useEstablishmentFieldsState";
+import { buildEstablishmentRpcParams } from "@/lib/establishments/establishmentPayload";
 
 // docs/specs/06-gestion-etablissement.md §5.1 — comble le gap cahier admin §3c ("toute la
 // présentation d'un établissement s'édite depuis l'admin") : jusqu'ici seules les photos étaient
@@ -38,40 +36,29 @@ export function EstablishmentEditBlock({
 }) {
   const router = useRouter();
 
+  // `nombre` reste hors du hook d'état partagé — même patron que NewEstablishmentForm.tsx.
   const [nombre, setNombre] = useState(initialNameEs);
-  const [operatedDirectly, setOperatedDirectly] = useState(initialOperatedDirectly);
-  const [descriptionEs, setDescriptionEs] = useState(initialDescriptionEs);
-  const [descriptionEn, setDescriptionEn] = useState(initialDescriptionEn);
-  const [descriptionLang, setDescriptionLang] = useState<DescriptionLang>("es");
-  const [address, setAddress] = useState(initialAddress);
-  const [lat, setLat] = useState(initialLat);
-  const [lon, setLon] = useState(initialLon);
+  // State partagé avec NewEstablishmentForm.tsx (revue de packaging admin, 2026-09-17) — `initialLat`/
+  // `initialLon` passent tels quels (déjà des chaînes sérialisées par page.tsx) : le hook accepte
+  // `string | number | null` pour lat/lon précisément pour ça (cf. son commentaire).
+  const fields = useEstablishmentFieldsState({
+    descriptionEs: initialDescriptionEs,
+    descriptionEn: initialDescriptionEn,
+    address: initialAddress,
+    lat: initialLat || null,
+    lon: initialLon || null,
+    operatedDirectly: initialOperatedDirectly,
+  });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const addressSearchRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const container = addressSearchRef.current;
-    if (!container) return;
-    return mountAddressAutocomplete(container, (place) => {
-      setAddress(place.address);
-      if (place.lat !== null && place.lon !== null) {
-        setLat(String(place.lat));
-        setLon(String(place.lon));
-      }
-    });
-  }, []);
-
-  function buildDescription(): Json | undefined {
-    const es = descriptionEs.trim();
-    const en = descriptionEn.trim();
-    if (!es && !en) return undefined;
-    const value: { [key: string]: Json } = {};
-    if (es) value.es = es;
-    if (en) value.en = en;
-    return value;
-  }
+  const addressSearchRef = useAddressAutocomplete((place) => {
+    fields.setAddress(place.address);
+    if (place.lat !== null && place.lon !== null) {
+      fields.setLat(String(place.lat));
+      fields.setLon(String(place.lon));
+    }
+  });
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -84,14 +71,11 @@ export function EstablishmentEditBlock({
     setIsSubmitting(true);
 
     const supabase = createClient();
+    // Dédoublonnage payload établissement (chantier 2026-09-17) — même builder que
+    // NewEstablishmentForm.tsx.
     const { data, error: rpcError } = await supabase.rpc("update_establishment", {
       p_establishment_id: establishmentId,
-      p_name: { es: nombre.trim() } as Json,
-      p_description: buildDescription(),
-      p_address: address.trim() || undefined,
-      p_lat: lat.trim() ? Number(lat) : undefined,
-      p_lon: lon.trim() ? Number(lon) : undefined,
-      p_operated_directly: operatedDirectly,
+      ...buildEstablishmentRpcParams(nombre, fields),
     });
 
     setIsSubmitting(false);
@@ -140,8 +124,8 @@ export function EstablishmentEditBlock({
 
         <Checkbox
           data-testid="edit-operated-directly-checkbox"
-          isSelected={operatedDirectly}
-          onChange={setOperatedDirectly}
+          isSelected={fields.operatedDirectly}
+          onChange={fields.setOperatedDirectly}
         >
           <Checkbox.Content>
             <Checkbox.Control>
@@ -153,9 +137,9 @@ export function EstablishmentEditBlock({
 
         <TextField
           fullWidth
-          value={descriptionLang === "es" ? descriptionEs : descriptionEn}
+          value={fields.descriptionLang === "es" ? fields.descriptionEs : fields.descriptionEn}
           onChange={(value) =>
-            descriptionLang === "es" ? setDescriptionEs(value) : setDescriptionEn(value)
+            fields.descriptionLang === "es" ? fields.setDescriptionEs(value) : fields.setDescriptionEn(value)
           }
         >
           <div className="flex items-center justify-between">
@@ -166,10 +150,10 @@ export function EstablishmentEditBlock({
                   key={lang}
                   type="button"
                   data-testid={`edit-description-lang-${lang}`}
-                  onClick={() => setDescriptionLang(lang)}
+                  onClick={() => fields.setDescriptionLang(lang)}
                   className={cn(
                     "rounded px-2 py-0.5 text-xs font-medium uppercase",
-                    descriptionLang === lang
+                    fields.descriptionLang === lang
                       ? "bg-accent text-accent-foreground"
                       : "text-muted hover:bg-muted/50",
                   )}
@@ -191,8 +175,8 @@ export function EstablishmentEditBlock({
           <Label htmlFor="edit-address">Dirección</Label>
           <Input
             id="edit-address"
-            value={address}
-            onChange={(event) => setAddress(event.target.value)}
+            value={fields.address}
+            onChange={(event) => fields.setAddress(event.target.value)}
             data-testid="edit-address-input"
           />
         </div>
@@ -202,8 +186,8 @@ export function EstablishmentEditBlock({
             <Label htmlFor="edit-lat">Latitud</Label>
             <Input
               id="edit-lat"
-              value={lat}
-              onChange={(event) => setLat(event.target.value)}
+              value={fields.lat}
+              onChange={(event) => fields.setLat(event.target.value)}
               data-testid="edit-lat-input"
             />
           </div>
@@ -211,8 +195,8 @@ export function EstablishmentEditBlock({
             <Label htmlFor="edit-lon">Longitud</Label>
             <Input
               id="edit-lon"
-              value={lon}
-              onChange={(event) => setLon(event.target.value)}
+              value={fields.lon}
+              onChange={(event) => fields.setLon(event.target.value)}
               data-testid="edit-lon-input"
             />
           </div>

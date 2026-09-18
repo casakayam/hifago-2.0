@@ -1,8 +1,7 @@
 "use client";
 
-import { useRef, useEffect } from "react";
 import { Input, Label, TextField } from "@hifago/ui";
-import { mountAddressAutocomplete } from "@/components/address-autocomplete";
+import { useAddressAutocomplete } from "@/components/use-address-autocomplete";
 import type { TransportInfoFields } from "@/lib/products/transportInfo";
 import type { ProductTypeFieldsState } from "@/lib/products/useProductTypeFieldsState";
 
@@ -16,65 +15,46 @@ import type { ProductTypeFieldsState } from "@/lib/products/useProductTypeFields
 // `address`/`lat`/`lon` (retiré d'`hasLocationAndTags` pour ce type) : un trajet a DEUX extrémités,
 // et une seule convention de nommage doit porter un seul concept.
 export function TransportFields({ state }: { state: ProductTypeFieldsState }) {
-  // ⚠️ DEUX refs et DEUX effets distincts, jamais un seul mutualisé. Deux raisons, et les deux sont
-  // des bugs silencieux :
-  //  1. un ref unique serait écrasé par le dernier `<div ref>` rendu, donc un widget se monterait
-  //     dans le mauvais conteneur ;
-  //  2. un effet unique gardé sur une seule condition ne se relancerait pas systématiquement au
-  //     montage de chaque widget — chaque effet garde donc sa propre ref dans ses dépendances,
-  //     mais tourne inconditionnellement puisque ce composant entier n'existe QUE pour `isTransport`.
-  const departureSearchRef = useRef<HTMLDivElement | null>(null);
-  const arrivalSearchRef = useRef<HTMLDivElement | null>(null);
-
   // Forme FONCTIONNELLE du setter (`(prev) => …`), pas `{ ...state.transportInfo, … }` : le
   // callback du widget Google arrive de façon asynchrone, longtemps après le render qui l'a monté,
   // et fermerait sinon sur un `transportInfo` périmé.
   const setTransport = (patch: Partial<TransportInfoFields>) =>
     state.setTransportInfo((prev) => ({ ...prev, ...patch }));
 
-  useEffect(() => {
-    const container = departureSearchRef.current;
-    if (!container) return;
-    return mountAddressAutocomplete(
-      container,
-      (place) => {
-        setTransport({
-          departureAddress: place.address,
-          ...(place.lat !== null && place.lon !== null
-            ? { departureLat: String(place.lat), departureLon: String(place.lon) }
-            : {}),
-        });
-      },
-      {
-        testId: "departure-address-autocomplete",
-        ariaLabel: "Lugar de salida",
-        placeholder: "Empieza a escribir el lugar de salida…",
-      },
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- state est un objet stable de setters, jamais recréé entre renders utiles
-  }, []);
+  // ⚠️ DEUX refs distinctes (un `useAddressAutocomplete` chacune), jamais une seule mutualisée :
+  // un ref unique serait écrasé par le dernier `<div ref>` rendu, donc un widget se monterait dans
+  // le mauvais conteneur.
+  const departureSearchRef = useAddressAutocomplete(
+    (place) => {
+      setTransport({
+        departureAddress: place.address,
+        ...(place.lat !== null && place.lon !== null
+          ? { departureLat: String(place.lat), departureLon: String(place.lon) }
+          : {}),
+      });
+    },
+    {
+      testId: "departure-address-autocomplete",
+      ariaLabel: "Lugar de salida",
+      placeholder: "Empieza a escribir el lugar de salida…",
+    },
+  );
 
-  useEffect(() => {
-    const container = arrivalSearchRef.current;
-    if (!container) return;
-    return mountAddressAutocomplete(
-      container,
-      (place) => {
-        setTransport({
-          arrivalAddress: place.address,
-          ...(place.lat !== null && place.lon !== null
-            ? { arrivalLat: String(place.lat), arrivalLon: String(place.lon) }
-            : {}),
-        });
-      },
-      {
-        testId: "arrival-address-autocomplete",
-        ariaLabel: "Lugar de llegada",
-        placeholder: "Empieza a escribir el lugar de llegada…",
-      },
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- idem : seuls des setters sont capturés
-  }, []);
+  const arrivalSearchRef = useAddressAutocomplete(
+    (place) => {
+      setTransport({
+        arrivalAddress: place.address,
+        ...(place.lat !== null && place.lon !== null
+          ? { arrivalLat: String(place.lat), arrivalLon: String(place.lon) }
+          : {}),
+      });
+    },
+    {
+      testId: "arrival-address-autocomplete",
+      ariaLabel: "Lugar de llegada",
+      placeholder: "Empieza a escribir el lugar de llegada…",
+    },
+  );
 
   return (
     <>

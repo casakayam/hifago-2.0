@@ -1,19 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { Button, Checkbox, ImageCrop, Input, Label, Modal, TextArea, TextField, cn, toast } from "@hifago/ui";
 import Link from "next/link";
 import { SearchableCombobox } from "@/components/searchable-combobox";
-import { mountAddressAutocomplete } from "@/components/address-autocomplete";
+import { useAddressAutocomplete } from "@/components/use-address-autocomplete";
 import { TagsMultiSelect, type TagOption } from "@/components/tags-multiselect";
+import { useEstablishmentFieldsState } from "@/lib/establishments/useEstablishmentFieldsState";
+import { buildEstablishmentRpcParams } from "@/lib/establishments/establishmentPayload";
 
 type Partner = { id: string; display_name: string };
-// Miroir local du type Json généré par Supabase (packages/supabase/src/database.types.ts) — pas
-// réexporté par client.ts/server.ts, même convention que NewPartnerForm.tsx.
-type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
-type DescriptionLang = "es" | "en";
 
 // docs/specs/04-gestion-images.md — remplace le bucket/mécanisme provisoire de la spec 03
 // (photo_urls, déprécié par 20260815110000_gestion_images.sql). Bucket unique pour tout le
@@ -44,9 +42,9 @@ export function NewEstablishmentForm({
 }) {
   const router = useRouter();
 
-  // Identidad
+  // Identidad — `nombre` reste hors du hook d'état partagé, même patron que `name`/`description`
+  // côté produit (useProductTypeFieldsState) : possédé par le composant, jamais localisé.
   const [nombre, setNombre] = useState("");
-  const [operatedDirectly, setOperatedDirectly] = useState(false);
 
   // Rattachement partenaire — préréempli depuis ?partner_id= (docs/specs/05-invitations-onboarding-
   // dashboard-partenaire.md §5.6), ex. depuis le badge « Falta establecimiento » de
@@ -54,35 +52,25 @@ export function NewEstablishmentForm({
   // initiale, pas un verrouillage.
   const [partnerId, setPartnerId] = useState<string | null>(defaultPartnerId);
 
-  // Presentación
-  const [descriptionEs, setDescriptionEs] = useState("");
-  const [descriptionEn, setDescriptionEn] = useState("");
-  const [descriptionLang, setDescriptionLang] = useState<DescriptionLang>("es");
-  const [address, setAddress] = useState("");
-  const [lat, setLat] = useState("");
-  const [lon, setLon] = useState("");
+  // Presentación — description ES/EN + bascule de langue, adresse/lat/lon, operatedDirectly,
+  // équipements stagés : state partagé avec EstablishmentEditBlock.tsx (revue de packaging admin,
+  // 2026-09-17), même hook que useProductTypeFieldsState côté produit.
+  const fields = useEstablishmentFieldsState();
   const [photos, setPhotos] = useState<{ path: string; url: string }[]>([]);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
-  const [selectedAmenityIds, setSelectedAmenityIds] = useState<string[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const addressSearchRef = useRef<HTMLDivElement | null>(null);
-
   // Même widget que la création partenaire (docs/specs/01-admin-creation-partenaire.md §5) —
   // repli manuel toujours possible, no-op silencieux si la clé Google Maps est absente.
-  useEffect(() => {
-    const container = addressSearchRef.current;
-    if (!container) return;
-    return mountAddressAutocomplete(container, (place) => {
-      setAddress(place.address);
-      if (place.lat !== null && place.lon !== null) {
-        setLat(String(place.lat));
-        setLon(String(place.lon));
-      }
-    });
-  }, []);
+  const addressSearchRef = useAddressAutocomplete((place) => {
+    fields.setAddress(place.address);
+    if (place.lat !== null && place.lon !== null) {
+      fields.setLat(String(place.lat));
+      fields.setLon(String(place.lon));
+    }
+  });
 
   // L'établissement n'a pas encore d'id à ce stade du formulaire : le Route Handler d'upload
   // n'a besoin que du type d'entité pour choisir le dossier de rangement (§7 du spec 04), pas
@@ -128,16 +116,6 @@ export function NewEstablishmentForm({
     setPhotos((prev) => prev.filter((photo) => photo.path !== path));
   }
 
-  function buildDescription(): Json | undefined {
-    const es = descriptionEs.trim();
-    const en = descriptionEn.trim();
-    if (!es && !en) return undefined;
-    const value: { [key: string]: Json } = {};
-    if (es) value.es = es;
-    if (en) value.en = en;
-    return value;
-  }
-
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
@@ -148,21 +126,13 @@ export function NewEstablishmentForm({
 
     setIsSubmitting(true);
 
-    // name reste jsonb multilingue en base (même pattern que products.name), mais le formulaire
-    // n'expose qu'un seul champ : un nom d'établissement est un nom propre, généralement pas
-    // traduit (décision Jérôme, spec §3). Le repli de resolveLocalizedField renvoie déjà cette
-    // valeur pour un lecteur EN en l'absence de clé "en".
-    const name: Json = { es: nombre.trim() };
-
     const supabase = createClient();
+    // Dédoublonnage payload établissement (chantier 2026-09-17) — même builder que
+    // EstablishmentEditBlock.tsx, signatures RPC vérifiées contre la base avant extraction (cf.
+    // establishmentPayload.ts).
     const { data: establishmentId, error: rpcError } = await supabase.rpc("create_establishment", {
       p_partner_id: partnerId,
-      p_name: name,
-      p_description: buildDescription(),
-      p_address: address.trim() || undefined,
-      p_lat: lat.trim() ? Number(lat) : undefined,
-      p_lon: lon.trim() ? Number(lon) : undefined,
-      p_operated_directly: operatedDirectly,
+      ...buildEstablishmentRpcParams(nombre, fields),
     });
 
     if (rpcError || !establishmentId) {
@@ -195,10 +165,10 @@ export function NewEstablishmentForm({
     // Équipements structurés — rattachés après coup comme les photos ci-dessus (establishment_id
     // n'existe qu'une fois create_establishment résolu), non bloquant : un échec ici laisse
     // l'établissement créé sans équipements, corrigible depuis EstablishmentAmenitiesBlock.
-    if (selectedAmenityIds.length > 0) {
+    if (fields.selectedAmenityIds.length > 0) {
       const { error: amenitiesError } = await supabase
         .from("establishment_amenity_assignments")
-        .insert(selectedAmenityIds.map((amenityId) => ({ establishment_id: establishmentId, amenity_id: amenityId })));
+        .insert(fields.selectedAmenityIds.map((amenityId) => ({ establishment_id: establishmentId, amenity_id: amenityId })));
       if (amenitiesError) {
         toast.danger("El establecimiento se creó, pero el equipamiento no se pudo asociar.");
       }
@@ -227,8 +197,8 @@ export function NewEstablishmentForm({
 
         <Checkbox
           data-testid="operated-directly-checkbox"
-          isSelected={operatedDirectly}
-          onChange={setOperatedDirectly}
+          isSelected={fields.operatedDirectly}
+          onChange={fields.setOperatedDirectly}
         >
           <Checkbox.Content>
             <Checkbox.Control>
@@ -265,9 +235,9 @@ export function NewEstablishmentForm({
 
         <TextField
           fullWidth
-          value={descriptionLang === "es" ? descriptionEs : descriptionEn}
+          value={fields.descriptionLang === "es" ? fields.descriptionEs : fields.descriptionEn}
           onChange={(value) =>
-            descriptionLang === "es" ? setDescriptionEs(value) : setDescriptionEn(value)
+            fields.descriptionLang === "es" ? fields.setDescriptionEs(value) : fields.setDescriptionEn(value)
           }
         >
           <div className="flex items-center justify-between">
@@ -278,10 +248,10 @@ export function NewEstablishmentForm({
                   key={lang}
                   type="button"
                   data-testid={`description-lang-${lang}`}
-                  onClick={() => setDescriptionLang(lang)}
+                  onClick={() => fields.setDescriptionLang(lang)}
                   className={cn(
                     "rounded px-2 py-0.5 text-xs font-medium uppercase",
-                    descriptionLang === lang
+                    fields.descriptionLang === lang
                       ? "bg-accent text-accent-foreground"
                       : "text-muted hover:bg-muted/50",
                   )}
@@ -304,8 +274,8 @@ export function NewEstablishmentForm({
           <Label htmlFor="address">Dirección</Label>
           <Input
             id="address"
-            value={address}
-            onChange={(event) => setAddress(event.target.value)}
+            value={fields.address}
+            onChange={(event) => fields.setAddress(event.target.value)}
             placeholder="Se completa al elegir una sugerencia arriba, o escribe aquí directamente"
             data-testid="address-input"
           />
@@ -314,11 +284,11 @@ export function NewEstablishmentForm({
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="lat">Latitud — detectada o manual</Label>
-            <Input id="lat" value={lat} onChange={(event) => setLat(event.target.value)} data-testid="lat-input" />
+            <Input id="lat" value={fields.lat} onChange={(event) => fields.setLat(event.target.value)} data-testid="lat-input" />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="lon">Longitud — detectada o manual</Label>
-            <Input id="lon" value={lon} onChange={(event) => setLon(event.target.value)} data-testid="lon-input" />
+            <Input id="lon" value={fields.lon} onChange={(event) => fields.setLon(event.target.value)} data-testid="lon-input" />
           </div>
         </div>
 
@@ -394,8 +364,8 @@ export function NewEstablishmentForm({
         <legend className="text-lg font-semibold">Equipamiento — opcional</legend>
         <TagsMultiSelect
           availableTags={allAmenities}
-          selectedTagIds={selectedAmenityIds}
-          onChange={setSelectedAmenityIds}
+          selectedTagIds={fields.selectedAmenityIds}
+          onChange={fields.setSelectedAmenityIds}
           allowCreate={false}
           label="Equipamiento"
           placeholder="Buscar equipamiento…"
