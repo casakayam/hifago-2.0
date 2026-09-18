@@ -6,13 +6,13 @@ import { type LobbyRoomOption } from "@/components/lobby-option-picker";
 import { SlotRulesEditor } from "@/components/slot-rules-editor";
 import { PriceTiersEditor } from "@/components/price-tiers-editor";
 import { productTypeGating, type ProductType, type ProductTypeFieldsState } from "@/lib/products/useProductTypeFieldsState";
-import { LobbyLinkFields } from "./LobbyLinkFields";
-import { LocationAndTagsFields } from "./LocationAndTagsFields";
-import { TransportFields } from "./TransportFields";
-import { LodgingFields } from "./LodgingFields";
-import { CampFields } from "./CampFields";
-import { EventoFields } from "./EventoFields";
-import { VitrineFields } from "./VitrineFields";
+import { LobbyLinkFields } from "./lobby-link-fields";
+import { LocationAndTagsFields } from "./location-and-tags-fields";
+import { TransportFields } from "./transport-fields";
+import { LodgingFields } from "./lodging-fields";
+import { CampFields } from "./camp-fields";
+import { EventoFields } from "./evento-fields";
+import { VitrineFields } from "./vitrine-fields";
 
 // Découpage des god components (2026-09-17, revue de packaging admin) — ce fichier (1156 lignes à
 // l'origine) est désormais le point d'entrée qui compose les blocs par type, extraits chacun dans
