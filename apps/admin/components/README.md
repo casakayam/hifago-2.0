@@ -31,9 +31,33 @@ naturel ici.
 
 **Un sous-dossier se justifie uniquement pour un groupe de fichiers qui appartiennent ensemble** —
 typiquement un composant volumineux découpé en plusieurs fichiers avec un point d'entrée unique
-(`index.tsx`). `product-type-fields/` (chantier de découpage des god components, 2026-09-17) en est
-le premier exemple. On ne remonte JAMAIS un sous-dossier par anticipation, même esprit que
-`packages/` (CLAUDE.md §2.1).
+(`index.tsx`). `product-type-fields/` (découpage des god components, 2026-09-17 — 1156 lignes →
+`index.tsx` + 7 sous-composants par bloc conditionnel) en est le premier exemple réel, pas un cas
+hypothétique. On ne remonte JAMAIS un sous-dossier par anticipation, même esprit que `packages/`
+(CLAUDE.md §2.1).
+
+## Hooks partagés — vérifier ici avant d'en recréer un
+
+Deux hooks vivent directement dans `components/` (pas de sous-dossier : chacun est un seul fichier,
+pas un groupe) — nés de la même revue que le point ci-dessus, en réutilisant un patron déjà écrit
+plutôt qu'en le recopiant une 6ᵉ fois :
+
+- **`use-address-autocomplete.ts`** — widget Google Places (`mountAddressAutocomplete`) posé sur un
+  `ref`. Consommé par `product-type-fields/LocationAndTagsFields.tsx`,
+  `product-type-fields/TransportFields.tsx` (×2, départ/arrivée),
+  `app/admin/establishments/new/NewEstablishmentForm.tsx`,
+  `app/admin/establishments/[id]/EstablishmentEditBlock.tsx`. Tout futur champ adresse (produit ou
+  établissement) passe par là — jamais un nouveau `useRef`+`useEffect(mountAddressAutocomplete)`.
+- **`use-assignment-toggle.ts`** — state + insert/delete sur une table de jointure (tags,
+  équipements) + toasts. Consommé par `EstablishmentTagsBlock.tsx`, `ProductTagsBlock.tsx`,
+  `EstablishmentAmenitiesBlock.tsx`, `ProductAmenitiesBlock.tsx` : les 4 blocs à bascule immédiate
+  du catalogue. Un futur type d'assignation (ex. un 5ᵉ rattachement à sauvegarde immédiate) l'étend
+  plutôt que d'en recopier la mécanique.
+
+Le state établissement (`lib/establishments/useEstablishmentFieldsState.ts` +
+`establishmentPayload.ts`, miroir de `lib/products/useProductTypeFieldsState.ts` +
+`productCreationPayload.ts`/`productEditPayload.ts`) vit dans `lib/`, pas `components/` — cité ici
+seulement pour qu'un futur champ établissement le trouve d'un coup d'œil.
 
 ## Composant lié à une seule route
 
