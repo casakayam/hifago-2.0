@@ -5,7 +5,7 @@
 > Un seul fichier à ouvrir pour savoir ce qui existe : celui-ci.
 
 ## Cadrage — architecture, modèle de données, cahiers des charges
-- [Audit du modèle de données cible — entités partagées](00-modele-de-donnees.md) · maj 2026-09-16
+- [Audit du modèle de données cible — entités partagées](00-modele-de-donnees.md) · maj 2026-09-17
 - [Cahier des charges — portail client (marketplace global, Guatapé = première localisation)](01-cahier-des-charges-client.md) · maj 2026-09-16
 - [Cahier des charges — portail socio (aujourd'hui /partner)](02-cahier-des-charges-socio.md) · maj 2026-09-07
 - [Cahier des charges — back-office admin (aujourd'hui /admin)](03-cahier-des-charges-admin.md) · maj 2026-09-07
@@ -27,7 +27,7 @@
 - [Admin : parcours unifié création/édition d'une activité — i18n nom/description, lieu, photos dès la création, module de créneaux horaires récurrents](specs/11-admin-activite-parcours-unifie-creneaux.md) — **Implémenté** · maj 2026-08-16
 - [Admin : active products.type='lodging' (« house ») dans le parcours produit — check-in/check-out, capacité, extras de tarification (saison, week-end, dépôt, inclusiones)](specs/12-admin-alojamiento-house.md) — **Implémenté** · maj 2026-09-16
 - [Admin : active products.type='hotel' — un hôtel a plusieurs sous-produits qui sont des chambres, chacune avec son propre prix/capacité](specs/13-admin-hotel-habitaciones.md) — **Supprimée** (reste : Supprimée le 2026-08-27 (T3 de la spec 24) — l'étage hôtel n'existe plus, ni en code ni…) · maj 2026-09-07
-- [Admin : active products.type='transport' dans le parcours produit — lieu + tags + prix par tramos de capacité de véhicule, réutilisation intégrale du ProductForm unifié](specs/14-admin-transporte.md) — **Implémenté** · maj 2026-09-16
+- [Admin : active products.type='transport' dans le parcours produit — lieu + tags + prix par tramos de capacité de véhicule, réutilisation intégrale du ProductForm unifié](specs/14-admin-transporte.md) — **Implémenté** · maj 2026-09-17
 - [Socio : proposer la création d'une nouvelle fiche produit](specs/15-socio-creation-produit.md) — **Implémenté** · maj 2026-09-07
 - [Notifications toast succès/échec sur toute création/édition/suppression (admin + socio)](specs/16-notifications-toast.md) — **Implémenté** · maj 2026-09-07
 - [Calendrier/disponibilité — audit complet + refonte phasée (Tranches 0-2 prêtes à coder)](specs/17-calendrier-disponibilite-refonte.md) — **Partiel** (reste : Tranche 1 (crash price_cop null, Mis Reservas) et Tranche 2 (SVAR, moteur unifié…) · maj 2026-09-07
@@ -50,14 +50,14 @@
 - [Compte client : « Mis reservas », la liste et le détail](specs/34-compte-mes-reservations.md) — **Implémenté** · maj 2026-09-11
 - [Compte client : profil, édition, déconnexion, suppression](specs/35-compte-profil.md) — **Implémenté** · maj 2026-09-12
 - [Remise par seuil de remplissage cumulé (camps)](specs/36-remise-remplissage-camp.md) — **Implémenté** · maj 2026-09-14
-- [Programme jour par jour d'un camp](specs/37-programme-camp.md) — **Implémenté** · maj 2026-09-16
-- [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-16
+- [Programme jour par jour d'un camp](specs/37-programme-camp.md) — **Implémenté** · maj 2026-09-17
+- [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-17
 - [Gabarit de spec de feature (à copier, ne décrit aucune feature réelle)](specs/_modele.md) — **modele** · maj 2026-08-16
 - [Avant d'écrire une spec — poser les bonnes questions](specs/avant-la-spec.md) — **modele** · maj 2026-08-16
 
 ## Journal — historique chronologique (jamais chargé automatiquement)
-- [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-16
-- [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-16
+- [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-17
+- [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-17
 - [Journal hifago — août 2026](journal/2026-08.md) · maj 2026-09-01
-- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-16
+- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-17
 - [Pièges empiriques hifago — index numéroté](pieges-empiriques.md) · maj 2026-09-09

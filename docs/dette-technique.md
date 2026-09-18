@@ -127,3 +127,15 @@ Historique complet de chaque point (comment on y est arrivé) : `docs/journal/<m
 - **`products.unit` (`per_person`/`per_house`) n'est PAS saisissable pour un transport** — mesuré en e2e le 2026-09-17 : le champ est lodging-only dans `product-type-fields.tsx`, donc un transport créé depuis l'admin n'a JAMAIS d'unité de prix et son prix s'affiche nu (« 210.000 COP »). Or c'est précisément l'information que le texte legacy insistait à donner : « El precio es **por pasajero, ida y vuelta** » (Aeroturex) contre « **por trayecto (solo ida)** y por vehículo, hasta 4 o 7 pasajeros » (Gotravel) — deux modèles de prix qu'on ne peut pas distinguer aujourd'hui. Les 6 mocks, eux, renseignent `unit` à la main, ce qui masque le trou en local. Le geste manquant est d'ajouter `unit` au gating transport (le suffixe, lui, s'affiche déjà correctement en mode vitrine depuis ce lot).
 - **Le bouton de contact d'un transport s'appelle « Reservar »** (clé `reserveExternal`, partagée avec les eventos en vitrine) alors qu'il ouvre WhatsApp — le pied de page dit « Escríbenos por WhatsApp » pour la même action. Pas corrigé : la clé est partagée par toutes les vitrines, changer son libellé est une décision d'écriture, pas un correctif local.
 - **La mention « Una cancelación o una ausencia de tu parte nunca es reembolsada » s'affiche sous le bouton de contact** d'un produit qu'on ne peut pas réserver en ligne. Comportement préexistant de toutes les vitrines, rendu visible par le passage des transports en vitrine — à trancher avec le libellé ci-dessus.
+
+## Dette trouvée en découpant `product-type-fields.tsx`, le 2026-09-17
+
+- **Un `transport` affiche deux champs « Precio (COP) »** — le champ générique
+  (`!isEvento && !hasLocationAndTags`) ET celui de `PriceTiersEditor` (`hasPriceQtyFields`) se
+  rendent tous les deux, tous deux liés à `state.priceCop`. Régression du 2026-09-16 : quand
+  `hasLocationAndTags` a perdu `isTransport` (`transport_departure_*` remplace le trio générique
+  adresse), la condition `!hasLocationAndTags` du champ générique est redevenue vraie pour ce type
+  sans que quiconque la corrige en miroir. Pas de perte de donnée (même state), juste un doublon
+  visuel. Trouvé en extrayant `product-type-fields/index.tsx` en sous-composants (revue de
+  packaging admin) — préservé à l'identique dans l'extraction (pure, zéro changement de
+  comportement), documenté en tête du fichier hôte plutôt que corrigé en silence.
