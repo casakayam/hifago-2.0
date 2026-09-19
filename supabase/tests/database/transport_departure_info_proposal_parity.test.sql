@@ -266,6 +266,16 @@ select is(
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- F. Les 6 CHECK — la base refuse ce que l'écran refuse déjà (CLAUDE.md §11.20)
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
+-- Tout produit créé plus haut dans ce fichier est 'transport' — le premier CHECK ci-dessous cible
+-- `where type = 'activity'` sans qu'AUCUNE ligne n'y corresponde jamais : l'UPDATE touchait donc
+-- zéro ligne, ne levait rien, et `throws_ok` échouait pour une raison sans rapport avec le CHECK
+-- lui-même (trouvé le 2026-09-19, masqué jusque-là par un job CI en échec en amont qui empêchait
+-- celui-ci de tourner). Fixture minimale, dédiée à cette seule assertion.
+insert into products (id, partner_id, establishment_id, type, name, slug, sellable, price_cop) values
+  ('77770000-0000-4000-8000-000000000098', '77770000-0000-4000-8000-000000000001',
+   '77770000-0000-4000-8000-000000000011', 'activity',
+   jsonb_build_object('es', 'Actividad no transporte'), 'transport-check-no-transporte', true, 30000);
+
 select throws_ok(
   $$ update products set transport_first_departure_time = '07:00',
                          transport_last_departure_time = '07:45'

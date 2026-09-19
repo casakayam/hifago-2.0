@@ -7,11 +7,25 @@ begin;
 select plan(4);
 
 -- Fixture : une identité anonyme (aucun partner_id, comme toute session anonyme — décision ④) et
--- un vrai operator existant du seed (a0000000-0000-4000-8000-000000000003), pour prouver le refus
--- ET l'absence de régression avec le MÊME compte que /partner/account utilise en réel.
+-- un operator dédié à ce fichier, pour prouver le refus ET l'absence de régression.
+-- ⚠️ UUID PROPRE à ce fichier, jamais un UUID réel de seed.sql (a0000000-…-000000000003, utilisé
+-- jusqu'au 2026-09-19) : ce job pgTAP tourne délibérément SANS seed
+-- (`.github/workflows/hifago-ci.yml`, job `db`), mais rien n'empêche `npx supabase test db` de
+-- tourner en local sur une base DÉJÀ seedée (`db:setup`) — réutiliser cet UUID y aurait levé un
+-- conflit de clé sur `auth.users`. `update_my_account_profile`/`set_my_payout_account` ne testent
+-- que « une ligne `partner_accounts` existe », jamais un rôle précis : un compte synthétique
+-- prouve exactement la même chose qu'un compte réel.
 insert into auth.users (id, instance_id, aud, role, is_anonymous, created_at, updated_at) values
   ('99993000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000',
-   'authenticated', 'authenticated', true, now(), now());
+   'authenticated', 'authenticated', true, now(), now()),
+  ('99993000-0000-4000-8000-000000000002', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', false, now(), now());
+insert into partners (id, display_name) values
+  ('99993000-0000-4000-8000-000000000011', 'Liste Blanche Tranche 3 Operator');
+update partner_accounts set partner_id = '99993000-0000-4000-8000-000000000011'
+ where id = '99993000-0000-4000-8000-000000000002';
+insert into partner_capabilities (partner_id, role, source, status) values
+  ('99993000-0000-4000-8000-000000000011', 'referrer', 'migration', 'active');
 
 set local role authenticated;
 select set_config(
@@ -32,18 +46,18 @@ select throws_ok(
 
 select set_config(
   'request.jwt.claims',
-  '{"sub":"a0000000-0000-4000-8000-000000000003","role":"authenticated"}', true
+  '{"sub":"99993000-0000-4000-8000-000000000002","role":"authenticated"}', true
 );
 
 select is(
   (select update_my_account_profile('Operador Actualizado') ->> 'ok'),
   'true',
-  'update_my_account_profile réussit toujours pour un vrai operator — aucune régression'
+  'update_my_account_profile réussit toujours pour un compte partenaire — aucune régression'
 );
 select is(
   (select set_my_payout_account('CBU-REAL-789') ->> 'ok'),
   'true',
-  'set_my_payout_account réussit toujours pour un vrai operator (refactor partner_id_for_account) — aucune régression'
+  'set_my_payout_account réussit toujours pour un compte partenaire (refactor partner_id_for_account) — aucune régression'
 );
 
 reset role;

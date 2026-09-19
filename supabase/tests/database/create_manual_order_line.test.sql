@@ -37,7 +37,18 @@ insert into establishments (id, partner_id, name) values
 insert into auth.users (id, email) values
   ('88950000-0000-4000-8000-000000000021', 'manual-own@test.local'),
   ('88950000-0000-4000-8000-000000000022', 'manual-other@test.local'),
-  ('88950000-0000-4000-8000-000000000023', 'manual-admin@test.local');
+  ('88950000-0000-4000-8000-000000000023', 'manual-admin@test.local'),
+  -- Compte TECHNIQUE fixe des réservations walk-in (`v_technical_account_id`, cette RPC,
+  -- 20260910140000) — un UUID constant que create_manual_order_line écrit sur CHAQUE commande
+  -- qu'elle crée. Provisionné ailleurs par `seed_auth_users.mjs`, jamais par ce fichier ; ce job
+  -- pgTAP tourne délibérément SANS seed (`.github/workflows/hifago-ci.yml`, job `db`). Sans cette
+  -- ligne, le tout premier appel de la RPC ci-dessous violait `orders_account_id_fkey` — trouvé le
+  -- 2026-09-19, masqué jusque-là par un autre job CI en échec qui empêchait celui-ci de tourner.
+  -- `on conflict do nothing` : cette base peut aussi être une base de DEV déjà seedée
+  -- (`db:setup`/`seed_auth_users.mjs`), où ce même UUID technique existe déjà — jamais un doublon
+  -- à lever en erreur ici, contrairement aux autres UUID de ce fichier qui, eux, sont propres.
+  ('e0000000-0000-4000-8000-000000000001', 'reserva-manual@hifago.local')
+on conflict (id) do nothing;
 update partner_accounts set partner_id = '88950000-0000-4000-8000-000000000001'
  where id = '88950000-0000-4000-8000-000000000021';
 update partner_accounts set partner_id = '88950000-0000-4000-8000-000000000002'

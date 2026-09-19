@@ -38,7 +38,16 @@ insert into establishments (id, partner_id, name) values
   ('88960000-0000-4000-8000-000000000011', '88960000-0000-4000-8000-000000000001',
    jsonb_build_object('es', 'Establecimiento Holder Contact'));
 insert into auth.users (id, email) values
-  ('88960000-0000-4000-8000-000000000021', 'holder-contact-op@test.local');
+  ('88960000-0000-4000-8000-000000000021', 'holder-contact-op@test.local'),
+  -- Compte TECHNIQUE fixe des réservations walk-in (`v_technical_account_id`,
+  -- create_manual_order_line, 20260910140000) — provisionné ailleurs par `seed_auth_users.mjs`,
+  -- jamais par ce fichier ; ce job pgTAP tourne délibérément SANS seed
+  -- (`.github/workflows/hifago-ci.yml`, job `db`). Sans cette ligne, le cas
+  -- create_manual_order_line plus bas violait `orders_account_id_fkey`.
+  -- `on conflict do nothing` : cette base peut aussi être une base de DEV déjà seedée, où ce même
+  -- UUID technique existe déjà — jamais un doublon à lever en erreur ici.
+  ('e0000000-0000-4000-8000-000000000001', 'reserva-manual@hifago.local')
+on conflict (id) do nothing;
 update partner_accounts set partner_id = '88960000-0000-4000-8000-000000000001'
  where id = '88960000-0000-4000-8000-000000000021';
 -- L'identité du client « achat direct » plus bas (RÉVISÉ 2026-09-10, cf. entête).

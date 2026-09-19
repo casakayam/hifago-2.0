@@ -41,7 +41,17 @@ insert into auth.users (id, email) values
   -- l'Order A ci-dessous a désormais besoin d'une identité réelle (distincte du buyer 032, pour ne
   -- pas fausser les cas qui comptent les commandes PAR compte), même si aucun de ces tests ne
   -- dépend d'elle étant spécifiquement anonyme (déjà couvert par create_order.test.sql).
-  ('88970000-0000-4000-8000-000000000035', 'payments-guest@test.local');
+  ('88970000-0000-4000-8000-000000000035', 'payments-guest@test.local'),
+  -- Compte TECHNIQUE fixe des réservations walk-in (`v_technical_account_id`,
+  -- create_manual_order_line, 20260910140000) — un UUID constant, PROVISIONNÉ ailleurs par
+  -- `seed_auth_users.mjs`, jamais par ce fichier. Ce job pgTAP tourne délibérément SANS seed
+  -- (`.github/workflows/hifago-ci.yml`, job `db`) : sans cette ligne, l'Order J ci-dessous violait
+  -- la contrainte `orders_account_id_fkey` — trouvé le 2026-09-19, masqué jusque-là par un autre
+  -- job CI en échec qui empêchait celui-ci de tourner.
+  -- `on conflict do nothing` : cette base peut aussi être une base de DEV déjà seedée, où ce même
+  -- UUID technique existe déjà — jamais un doublon à lever en erreur ici.
+  ('e0000000-0000-4000-8000-000000000001', 'reserva-manual@hifago.local')
+on conflict (id) do nothing;
 insert into partner_capabilities (account_id, role, source, status)
 values ('88970000-0000-4000-8000-000000000031', 'admin', 'migration', 'active');
 insert into partner_capabilities (partner_id, role, source, status)
