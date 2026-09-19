@@ -1,4 +1,11 @@
-import { addDaysIso, joursDansLeMois } from "../time/bogotaDates";
+// ⚠️ Extension `.ts` OBLIGATOIRE, et elle manquait ici — corrigé le 2026-09-17. Deno résout les
+// imports par URL : sans elle, le worker Edge ne boote pas du tout (BOOT_ERROR, « Module not
+// found … Maybe add a '.ts' extension »). Le défaut était INVISIBLE jusqu'ici parce qu'aucune
+// Edge Function n'importait ce module — les trois existantes ne tirent que lobbyClient,
+// detectTraslado et les parseurs, qui l'avaient. ⚠️ `deno check` NE L'ATTRAPE PAS (il résout à
+// la TypeScript), donc le job `functions` de la CI passait au vert : seul un boot réel le
+// révèle, ce que fait désormais tests/pms-integration/pms_sync_availability.integration.mjs.
+import { addDaysIso, joursDansLeMois } from "../time/bogotaDates.ts";
 import { getLobbyAvailableRooms } from "./lobbyClient.ts";
 import { hasActiveRestriction, parseLobbyNightCatalog, type LobbyNightRestrictions } from "./parseLobbyNightCatalog.ts";
 import { alignLobbyCatalogEntries, type NightCatalogRow } from "./alignLobbyCatalogEntries.ts";

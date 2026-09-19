@@ -21,6 +21,7 @@ export * from "./pms/parseLobbyRooms";
 export * from "./pms/parseLobbyServices";
 export * from "./pms/buildLobbyBookingNote";
 export * from "./pms/fetchLobbyPhoto";
+export * from "./pms/toMirrorRows";
 export * from "./products/lodgingKind";
 export * from "./products/lodgingUnit";
 export * from "./products/lodgingCupos";

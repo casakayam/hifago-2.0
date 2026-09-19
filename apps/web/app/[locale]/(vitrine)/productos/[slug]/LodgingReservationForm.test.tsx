@@ -207,12 +207,19 @@ describe("LodgingReservationForm — reprise après un échec Lobby", () => {
     renderPmsForm();
 
     await waitFor(() => expect(screen.getByTestId("pms-availability-retry")).toBeTruthy());
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // DEUX appels, pas un : depuis le 2026-09-17 le formulaire précharge aussi le mois SUIVANT,
+    // parce que la grille en affiche toujours les premiers jours (`showOutsideDays`) et qu'ils
+    // étaient désactivés en silence faute de données. Ce n'est donc pas un appel parasite — et
+    // l'assertion sur les deux mois distincts, juste en dessous, est là pour qu'un futur lecteur
+    // ne « corrige » pas ce 2 en 1.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const moisDemandes = fetchMock.mock.calls.map((appel) => String(appel[0]).split("month=")[1]);
+    expect(new Set(moisDemandes).size).toBe(2);
 
     fireEvent.click(screen.getByTestId("pms-availability-retry"));
     // Sans le correctif, loadedMonthsRef avait déjà marqué le mois chargé et l'effet ne repartait
-    // jamais : le compteur resterait à 1.
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    // jamais : le compteur resterait où il était.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
     vi.unstubAllGlobals();
   });
 

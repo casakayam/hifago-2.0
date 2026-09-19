@@ -51,6 +51,7 @@
 - [Compte client : profil, édition, déconnexion, suppression](specs/35-compte-profil.md) — **Implémenté** · maj 2026-09-12
 - [Remise par seuil de remplissage cumulé (camps)](specs/36-remise-remplissage-camp.md) — **Implémenté** · maj 2026-09-14
 - [Programme jour par jour d'un camp](specs/37-programme-camp.md) — **Implémenté** · maj 2026-09-17
+- [Remise en route de la suite E2E Playwright](specs/38-remise-en-route-suite-e2e.md) — **Brouillon** · maj 2026-09-17
 - [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-17
 - [Gabarit de spec de feature (à copier, ne décrit aucune feature réelle)](specs/_modele.md) — **modele** · maj 2026-08-16
 - [Avant d'écrire une spec — poser les bonnes questions](specs/avant-la-spec.md) — **modele** · maj 2026-08-16

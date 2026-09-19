@@ -63,6 +63,7 @@ function renderTransporte(transporte: DatosTransporte | null) {
     transporte,
     alojamiento: null,
     disponibilidad: [],
+    restriccionesPms: [],
     tarifas: [],
     franjas: [],
     establecimiento: null,

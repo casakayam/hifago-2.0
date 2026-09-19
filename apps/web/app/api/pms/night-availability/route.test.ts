@@ -39,7 +39,14 @@ interface FakeEstablishment {
 const products = new Map<string, FakeProduct>();
 const establishments = new Map<string, FakeEstablishment>();
 
-// Reproduit la seule forme de requête que la route émet : .from().select().eq()…maybeSingle().
+// Lot B (20260918170000) : la route appelle désormais aussi `service.rpc("sync_pms_availability_month", …)`
+// sur une réponse Lobby fraîche — capturé ici pour être affirmé, jamais juste ignoré (un vrai client
+// Supabase ne lève jamais synchronement sur un `.rpc()` inconnu ; c'est cette réalité que le `try/
+// catch` de la route protège, pas seulement ce faux client de test).
+let rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
+
+// Reproduit la seule forme de requête que la route émet : .from().select().eq()…maybeSingle() et
+// .rpc(nom, args).
 vi.mock("@hifago/supabase/service", () => ({
   createServiceRoleClient: () => ({
     from(table: string) {
@@ -64,6 +71,10 @@ vi.mock("@hifago/supabase/service", () => ({
         },
       };
       return builder;
+    },
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      rpcCalls.push({ name, args });
+      return { error: null };
     },
   }),
 }));
@@ -127,6 +138,39 @@ afterAll(async () => {
 beforeEach(() => {
   resetPmsFixtureCalls();
   setPmsFixtureScenario({ catalogCategoryIds: [CATEGORY, OTHER_CATEGORY] });
+  rpcCalls = [];
+});
+
+describe("lot B — la réponse Lobby fraîche nourrit le miroir de disponibilité", () => {
+  it("une réponse fraîche (cache miss) écrit le miroir AVEC les lignes du catalogue Lobby", async () => {
+    const establishmentId = freshEstablishment();
+    const productId = addProduct(establishmentId);
+    const month = monthAhead(1);
+
+    expect((await call(productId, month)).status).toBe(200);
+
+    const writes = rpcCalls.filter((c) => c.name === "sync_pms_availability_month");
+    expect(writes).toHaveLength(1);
+    expect(writes[0].args.p_establishment_id).toBe(establishmentId);
+    expect(writes[0].args.p_month).toBe(month);
+    const rows = writes[0].args.p_rows as { category_id: number; date: string }[];
+    // Toutes les catégories cotées par Lobby, pas seulement celle du produit demandé — c'est le
+    // même catalogue que le cron écrirait, jamais une vue partielle réservée à ce visiteur.
+    expect(rows.some((r) => r.category_id === CATEGORY)).toBe(true);
+    expect(rows.some((r) => r.category_id === OTHER_CATEGORY)).toBe(true);
+  });
+
+  it("un second appel servi par le cache (même établissement, même mois) n'écrit PAS de nouveau", async () => {
+    const establishmentId = freshEstablishment();
+    const first = addProduct(establishmentId);
+    const second = addProduct(establishmentId, { lobby_category_id: OTHER_CATEGORY });
+    const month = monthAhead(1);
+
+    await call(first, month);
+    await call(second, month);
+
+    expect(rpcCalls.filter((c) => c.name === "sync_pms_availability_month")).toHaveLength(1);
+  });
 });
 
 describe("le cache porte l'établissement et le mois, plus le produit", () => {

@@ -327,6 +327,7 @@ export function FichaProducto({
               lodgingKind={alojamiento.lodgingKind as never}
               isPmsBacked={alojamiento.esPmsBacked}
               availability={ficha.disponibilidad}
+              restrictedNights={ficha.restriccionesPms}
               rates={ficha.tarifas}
             />
           ) : ficha.modoReserva === "slot" ? (

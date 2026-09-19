@@ -9,6 +9,7 @@ import {
   pickCategoryNights,
   isMonthWithinHorizon,
   todayInBogota,
+  toMirrorRows,
   type NightAvailabilityRow,
   type NightCatalogRow,
   type PmsFailure,
@@ -29,6 +30,11 @@ import { createServiceRoleClient } from "@hifago/supabase/service";
 // prix côté hifago (cf. packages/domain/src/pms/buildEvenRatesPerDay.ts) — product_date_rates/
 // price_tiers restent la seule source de prix, y compris pour un produit PMS-backed.
 export const runtime = "nodejs";
+
+// `MirrorRow` (packages/domain) n'a pas de signature d'index : la forme locale à ce cast, reprise
+// telle quelle d'`apps/web/lib/orders/getOrderByToken.ts` et de trois écrans admin, plutôt qu'un
+// import de `@hifago/supabase` — la seule chose demandée ici est que `p_rows` soit accepté en jsonb.
+type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
 interface ProductRow {
   id: string;
@@ -206,6 +212,33 @@ export async function GET(request: Request) {
         );
         throw new PmsAvailabilityError(window.failure);
       }
+
+      // LOT B (20260918170000). Cette route obtient parfois une réponse Lobby FRAÎCHE là où le
+      // miroir de disponibilité ne l'a pas encore — connecteur tout juste activé, ou mois dont le
+      // cron n'a pas réussi le sync. La reverser dans le miroir répare ce trou sans attendre son
+      // prochain passage (jusqu'à 24 h), et coûte ZÉRO appel Lobby de plus : c'est la même réponse,
+      // déjà en main, aplatie par le même `toMirrorRows` que le cron. `try/catch` PROPRE, jamais
+      // laissé remonter au catch englobant : un défaut du canal miroir ne doit jamais dégrader
+      // l'affichage du calendrier que cette route sert en premier lieu.
+      try {
+        const { error: mirrorError } = await service.rpc("sync_pms_availability_month", {
+          p_establishment_id: establishment.id,
+          p_month: month,
+          p_rows: toMirrorRows(window.nights) as unknown as Json,
+        });
+        if (mirrorError) {
+          console.error(
+            `GET /api/pms/night-availability — écriture du miroir a échoué (établissement ${establishment.id}, mois ${month})`,
+            mirrorError
+          );
+        }
+      } catch (mirrorException) {
+        console.error(
+          `GET /api/pms/night-availability — écriture du miroir a levé (établissement ${establishment.id}, mois ${month})`,
+          mirrorException
+        );
+      }
+
       return window.nights;
     });
 

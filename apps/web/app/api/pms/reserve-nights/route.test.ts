@@ -129,7 +129,11 @@ describe("Lobby accepte", () => {
     const response = await appeler();
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true });
-    expect(rpcAppels).toEqual([]);
+    // Migration 20260918170000 : une nuit réservée invalide le mois du miroir de disponibilité —
+    // sinon jusqu'à 24 h de retard avant que la recherche/fiche le sache.
+    expect(rpcAppels).toEqual([
+      { nom: "mark_pms_sync_due", args: { p_establishment_id: "etab", p_from: "2028-09-01", p_to: "2028-09-03" } },
+    ]);
     expect(reconciliations).toEqual([]);
   });
 
@@ -210,7 +214,11 @@ describe("une ACTIVITÉ refusée ne relâche jamais la commande", () => {
     const response = await appeler();
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true });
-    expect(rpcAppels).toEqual([]);
+    // La nuit, elle, a bien été réservée chez Lobby : le miroir doit être invalidé pour ELLE, même
+    // si l'activité attachée au même booking échoue à côté.
+    expect(rpcAppels).toEqual([
+      { nom: "mark_pms_sync_due", args: { p_establishment_id: "etab", p_from: "2028-09-01", p_to: "2028-09-03" } },
+    ]);
     // …et l'échec de l'activité part bien en réconciliation, comme avant ce lot.
     expect(reconciliations).toHaveLength(1);
     expect(reconciliations[0]).toMatchObject({ order_line_id: ACTIVITY_LINE });

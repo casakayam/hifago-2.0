@@ -2,6 +2,8 @@ import { cache } from "react";
 import {
   asLocalizedField,
   asLodgingKind,
+  cuposPerUnit,
+  hasActiveRestriction,
   isPmsBacked,
   lastBookableDateIso,
   resolveLocalizedField,
@@ -56,7 +58,7 @@ function recortarHora(hora: string | null): string | null {
 //
 // `establishment(...)` ne demande JAMAIS `photo_urls` : la colonne est hors du GRANT SELECT public
 // (20260819110000), et la demander ferait échouer la requête ENTIÈRE — pas seulement ce champ.
-const COLUMNAS_PRODUCTO = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, capacity, unit_count, lodging_kind, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, duration_days, program, group_discount_threshold_qty, group_discount_pct, lobby_category_id, online_bookable, evento_capacity_mode, is_free, evento_payment_mode, transport_first_departure_time, transport_last_departure_time, transport_seats_per_departure, transport_departure_address, transport_departure_lat, transport_departure_lon, transport_arrival_address, transport_arrival_lat, transport_arrival_lon, transport_contact_phone, establishment:establishments(id, slug, name, description, address)`;
+const COLUMNAS_PRODUCTO = `id, slug, name, description, price_cop, price_tiers, min_qty, max_qty, unit, capacity, unit_count, lodging_kind, type, price_label, external_booking_url, occurrence_type, occurrence_date, recurrence_frequency_days, recurrence_end_date, recurrence_end_count, start_time, duration_minutes, duration_days, program, group_discount_threshold_qty, group_discount_pct, lobby_category_id, online_bookable, evento_capacity_mode, is_free, evento_payment_mode, transport_first_departure_time, transport_last_departure_time, transport_seats_per_departure, transport_departure_address, transport_departure_lat, transport_departure_lon, transport_arrival_address, transport_arrival_lat, transport_arrival_lon, transport_contact_phone, establishment:establishments(id, slug, name, description, address, lobby_last_synced_at)`;
 
 /**
  * ⚠️ Mémoïsé par `cache` de React, et ce n'est pas une optimisation : `generateMetadata` et le
@@ -98,6 +100,16 @@ export const getProductoPorSlug = cache(
       lobbyCategoryId: producto.lobby_category_id,
     });
 
+    // LOT B (20260918170000). Un miroir jamais synchronisé pour cet établissement (connecteur tout
+    // juste activé) ou silencieusement arrêté (le cron a tourné à vide 8 jours en août sans que
+    // personne ne le voie) ne doit JAMAIS être semé tel quel : le client le prendrait pour un
+    // calendrier à jour et ne redemanderait rien. Ne rien semer force le fetch de repli côté client
+    // (`LodgingReservationForm`, `loadedMonthsRef` vide pour ce mois), qui reverse sa réponse dans
+    // le miroir (`night-availability/route.ts`) — la panne se répare au premier visiteur au lieu de
+    // rester invisible jusqu'au retour du cron. Garantie extraite en fonction PURE (`esMiroirFresco`
+    // ci-dessous) pour être testée sans mock de Supabase — même idiome que `resolverUrlContacto`.
+    const miroirFresco = esMiroirFresco(producto.establishment?.lobby_last_synced_at ?? null, Date.now());
+
     // « Aujourd'hui » = le jour civil à GUATAPÉ, jamais celui d'UTC. Un serveur réglé en UTC fait
     // basculer la date à 19 h heure locale : les `gte("date", …)` retiraient alors du catalogue les
     // créneaux et tarifs de la soirée en cours (lot fuseau, 2026-08-28). Dérivé UNE fois, réutilisé
@@ -107,14 +119,38 @@ export const getProductoPorSlug = cache(
     // Un helper par requête plutôt qu'un ternaire dans le tableau : TypeScript infère alors le type
     // de chaque branche ligne par ligne, sans annotation manuelle — et chaque appel démarre sa
     // requête au même tick, donc en vrai parallèle malgré l'`await` interne.
+    // ⚠️ UN LOGEMENT PMS-BACKED NE LIT PAS `product_availability` — elle est structurellement vide
+    // pour lui (`create_order` saute verrou et décrément, 20260819130000, et le garde-fou
+    // 20260913100100 interdit même de l'y matérialiser). Jusqu'au 2026-09-18 il recevait donc un
+    // tableau vide et le calendrier arrivait ENTIÈREMENT GRISÉ le temps d'un aller-retour vers
+    // LobbyPMS — une fiche qui a l'air complète alors qu'elle charge.
+    //
+    // Il lit désormais le MIROIR (20260917140000), rafraîchi par cron : une requête SQL locale, dans
+    // le même `Promise.all` que le reste de la fiche, donc AUCUN appel réseau supplémentaire et
+    // aucune latence ajoutée. Le calendrier est juste dès la première image.
+    //
+    // La barrière de réservation, elle, ne change pas d'un iota : `POST /api/pms/reserve-nights`
+    // interroge Lobby À CHAUD avant toute confirmation et refuse si ça ne colle plus (spec 24 §0 —
+    // ce miroir sert à AFFICHER, jamais à décider).
     const leerDisponibilidad = async () =>
       esEvento
         ? { data: [] }
-        : await supabase
-            .from("product_availability")
-            .select("date, capacity, booked")
-            .eq("product_id", producto.id)
-            .order("date");
+        : esPmsBacked
+          ? miroirFresco
+            ? await supabase
+                .from("pms_availability_mirror")
+                .select("date, available_units, min_stay, max_stay, lead_days")
+                .eq("establishment_id", producto.establishment?.id ?? "")
+                .eq("lobby_category_id", producto.lobby_category_id ?? -1)
+                .gte("date", hoyIso)
+                .lte("date", lastBookableDateIso(hoyIso))
+                .order("date")
+            : { data: [] }
+          : await supabase
+              .from("product_availability")
+              .select("date, capacity, booked")
+              .eq("product_id", producto.id)
+              .order("date");
 
     // ⚠️ Le conditionnel est VOLONTAIREMENT différent de celui ci-dessus (`esAlojamiento` en plus) :
     // un hébergement a toujours son écran dédié, quel que soit le nombre de règles de créneaux
@@ -328,7 +364,48 @@ export const getProductoPorSlug = cache(
       // crawler comme pour un visiteur qui n'a rien cliqué. `disponibilidad` est déjà filtrée sur
       // `gte("date", hoyIso)` et triée par date plus haut : on prend la première, sans refiltrer.
       primeraSalidaIso: (disponibilidad ?? [])[0]?.date ?? null,
-      disponibilidad: (disponibilidad ?? []) as FilaDisponibilidad[],
+      // CONVERSION UNITÉS LOBBY → CUPOS pour un PMS-backed, exactement la même règle que
+      // /api/pms/night-availability : `available_units` compte des chambres/tentes/lits-unités,
+      // tout le reste de hifago compte des cupos (`qty`, `min_qty`/`max_qty`, `price_tiers`). Elle
+      // est appliquée PAR PRODUIT, jamais en amont — deux produits liés à la même catégorie Lobby
+      // peuvent avoir des `lodging_kind`/`capacity` différents, et le miroir est partagé par
+      // établissement+catégorie. `booked: 0` parce que le miroir porte déjà le RESTANT, pas un
+      // compteur (la soustraction est faite chez Lobby).
+      // Seules les nuits sous contrainte NON NULLE, via le même prédicat que la route publique
+      // (`hasActiveRestriction`) — jamais une contrainte inventée pour une nuit qui n'en porte pas.
+      // Vide sur tous les comptes observés à ce jour, et c'est précisément ce qui rend ce branchement
+      // sûr à poser maintenant.
+      restriccionesPms: esPmsBacked
+        ? (disponibilidad ?? [])
+            .map((fila) => {
+              const brut = fila as {
+                date: string;
+                min_stay: number | null;
+                max_stay: number | null;
+                lead_days: number | null;
+              };
+              return {
+                date: brut.date,
+                restrictions: {
+                  minStay: brut.min_stay,
+                  maxStay: brut.max_stay,
+                  leadDays: brut.lead_days,
+                },
+              };
+            })
+            .filter((fila) => hasActiveRestriction(fila.restrictions))
+        : [],
+      disponibilidad: esPmsBacked
+        ? (disponibilidad ?? []).map((fila) => {
+            const unites = (fila as { date: string; available_units: number }).available_units;
+            return {
+              date: fila.date,
+              capacity:
+                unites * cuposPerUnit(asLodgingKind(producto.lodging_kind), producto.capacity),
+              booked: 0,
+            };
+          })
+        : ((disponibilidad ?? []) as FilaDisponibilidad[]),
       tarifas: (tarifas ?? []) as FilaTarifa[],
       franjas: (franjas ?? []) as FilaFranja[],
       establecimiento: establecimiento
@@ -388,6 +465,24 @@ export const getProductoPorSlug = cache(
  * Priorité : l'URL propre du transporteur (son site de réservation) > son WhatsApp > celui de
  * Hifago. Pour tout autre type, le comportement est inchangé : `external_booking_url` ou `null`.
  */
+// Seuil de fraîcheur du miroir de disponibilité LobbyPMS (20260918170000) — DÉLIBÉRÉMENT le même
+// que le repli de `search_catalog` (20260917150000, même colonne `lobby_last_synced_at`) : un
+// partenaire qui réapparaît dans la recherche mais dont la fiche continue de semer un calendrier
+// vieux de plusieurs jours serait pire que les deux dégradés séparément.
+const SEUIL_FRAICHEUR_MIROIR_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Le miroir de disponibilité (`pms_availability_mirror`) doit-il être semé côté serveur, ou
+ * laissé vide pour forcer le fetch de repli côté client ? `ahoraMs` est un paramètre plutôt qu'un
+ * `Date.now()` interne — déterministe, donc testable sans faux timers, même choix que
+ * `todayInBogota()` ailleurs dans le domaine. Duration entre deux INSTANTS, jamais un jour civil :
+ * hors du périmètre de `check-timezone.sh`, qui ne vise que la dérivation d'« aujourd'hui ».
+ */
+export function esMiroirFresco(lastSyncedAtIso: string | null, ahoraMs: number): boolean {
+  if (lastSyncedAtIso == null) return false;
+  return ahoraMs - new Date(lastSyncedAtIso).getTime() < SEUIL_FRAICHEUR_MIROIR_MS;
+}
+
 export function resolverUrlContacto({
   esTransporte,
   urlExterna,

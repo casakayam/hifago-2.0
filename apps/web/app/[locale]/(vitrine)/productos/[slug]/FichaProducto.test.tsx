@@ -71,6 +71,7 @@ function renderView(overrides: {
       amenidades: overrides.amenidades ?? [],
     },
     disponibilidad: [],
+    restriccionesPms: [],
     tarifas: [],
     franjas: [],
     establecimiento: {

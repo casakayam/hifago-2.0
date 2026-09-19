@@ -259,6 +259,19 @@ export async function POST(request: Request) {
         }
         await service.from("order_lines").update({ pms_booking_id: String(parsed.bookingId) }).eq("id", line.id);
         primaryBookingId ??= parsed.bookingId;
+        // Le miroir de disponibilité (20260917140000) ne saurait sinon rien de CE booking avant sa
+        // prochaine fenêtre de fraîcheur (jusqu'à 24 h) — hifago vient pourtant d'occuper ces nuits
+        // chez Lobby À L'INSTANT. Best-effort et non bloquant : un échec ici ne doit jamais faire
+        // échouer une réservation déjà actée chez Lobby, juste retarder son reflet dans le miroir
+        // (migration 20260918170000).
+        const { error: markDueError } = await service.rpc("mark_pms_sync_due", {
+          p_establishment_id: product.establishment_id,
+          p_from: line.date,
+          p_to: line.end_date,
+        });
+        if (markDueError) {
+          console.error(`reserve-nights : mark_pms_sync_due a échoué (order_line ${line.id})`, markDueError);
+        }
       } catch (error) {
         lodgingFailures.push({ lineId: line.id, detail: `createLobbyBooking a levé — ${String(error)}` });
       }

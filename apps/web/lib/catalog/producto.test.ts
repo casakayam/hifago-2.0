@@ -1,6 +1,39 @@
 import { describe, expect, it } from "vitest";
-import { resolverModoReserva, resolverUrlContacto } from "./producto";
+import { esMiroirFresco, resolverModoReserva, resolverUrlContacto } from "./producto";
 import { TELEFONO_HIFAGO, urlDeContacto } from "@/lib/contacto/whatsapp";
+
+// Lot B (20260918170000) : le miroir de disponibilité LobbyPMS ne doit JAMAIS être semé côté
+// serveur quand il est périmé — un connecteur tout juste activé (jamais synchronisé) ou un cron
+// mort (arrêté 8 jours en août sans que personne ne le voie) afficherait sinon un calendrier faux
+// que le client prendrait pour à jour. `getProductoPorSlug` n'a pas de test dédié (aucune
+// fonction du fichier ne l'a jamais eu — pas de mock Supabase dans ce fichier), donc la garantie
+// est extraite en fonction pure, testée ici sans base, comme `resolverUrlContacto` juste en dessous.
+describe("esMiroirFresco", () => {
+  const maintenant = Date.UTC(2026, 8, 18, 12, 0, 0);
+
+  it("jamais synchronisé (établissement connecté à l'instant) → périmé", () => {
+    expect(esMiroirFresco(null, maintenant)).toBe(false);
+  });
+
+  it("synchronisé il y a 1 minute → frais", () => {
+    expect(esMiroirFresco(new Date(maintenant - 60_000).toISOString(), maintenant)).toBe(true);
+  });
+
+  it("synchronisé il y a 5 h 59 → encore frais, juste sous le seuil", () => {
+    const cinqH59 = (5 * 60 + 59) * 60_000;
+    expect(esMiroirFresco(new Date(maintenant - cinqH59).toISOString(), maintenant)).toBe(true);
+  });
+
+  it("synchronisé il y a EXACTEMENT 6 h → périmé (borne exclusive, comme search_catalog)", () => {
+    const sixH = 6 * 60 * 60_000;
+    expect(esMiroirFresco(new Date(maintenant - sixH).toISOString(), maintenant)).toBe(false);
+  });
+
+  it("le cron arrêté 8 jours (grief réel d'août 2026) → périmé", () => {
+    const huitJours = 8 * 24 * 60 * 60_000;
+    expect(esMiroirFresco(new Date(maintenant - huitJours).toISOString(), maintenant)).toBe(false);
+  });
+});
 
 // Décision Jérôme du 2026-09-17 : un transport ne se réserve pas en ligne, on écrit au
 // transporteur. Ces tests prouvent la GARANTIE qui le rend vrai — sans eux, « un transport n'a

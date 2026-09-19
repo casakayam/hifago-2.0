@@ -38,9 +38,11 @@ const MOTIF_HORODATAGE = "1[0-9]{12}";
 /**
  * Supprime les entités créées par les specs e2e, dans l'ordre qu'imposent les clés étrangères.
  *
- * ⚠️ L'ORDRE N'EST PAS NÉGOCIABLE et vient de `pg_constraint`, pas d'une intuition : quatre tables
+ * ⚠️ L'ORDRE N'EST PAS NÉGOCIABLE et vient de `pg_constraint`, pas d'une intuition : CINQ tables
  * référencent `products` en `NO ACTION` et bloquent donc la suppression — `order_lines`,
- * `product_availability`, `product_calendar`, `product_proposals`. Les cinq autres
+ * `product_availability`, `product_calendar`, `product_proposals` et `cart_items` (cette dernière
+ * née avec le panier en base le 2026-09-10, oubliée ici jusqu'au 2026-09-17 : la purge entière
+ * échouait alors en silence, cf. le commentaire de l'étape 2). Les cinq autres
  * (`product_media`, `product_tag_assignments`, `product_date_rates`, `product_slot_rules`,
  * `product_slot_availability`) sont en CASCADE et partent d'elles-mêmes. Avant d'ajouter une table
  * liée ici, la vérifier de la même façon — c'est la règle de `.claude/rules/tests.md`.
@@ -105,8 +107,18 @@ export async function purgerDonneesDeTest(): Promise<{
         );
       }
 
-      // 2. Les quatre tables en NO ACTION qui bloquent la suppression du produit.
-      for (const table of ["product_availability", "product_calendar", "product_proposals"]) {
+      // 2. Les tables en NO ACTION qui bloquent la suppression du produit (`order_lines` est
+      // traitée juste au-dessus, avec les commandes).
+      //
+      // ⚠️ `cart_items` AJOUTÉE LE 2026-09-17, après un échec réel du teardown. Elle est née avec
+      // le panier en base (spec 32, 2026-09-10) et personne ne l'a ajoutée ici — invisible pendant
+      // une semaine parce que la suite e2e est en pause depuis le 2026-09-09. Le symptôme est
+      // trompeur : le teardown échoue APRÈS que tous les tests sont passés, donc la suite rougit
+      // sur un test qui a réussi, et la base garde TOUS ses résidus (le catch englobe la purge
+      // entière). Liste revérifiée dans `pg_constraint` le 2026-09-17 — cinq FK en NO ACTION vers
+      // `products`, pas quatre. Toute table liée ajoutée plus tard se vérifie de la même façon,
+      // jamais en la devinant.
+      for (const table of ["product_availability", "product_calendar", "product_proposals", "cart_items"]) {
         await client.query(`delete from ${table} where product_id = any($1)`, [idsProduits]);
       }
 

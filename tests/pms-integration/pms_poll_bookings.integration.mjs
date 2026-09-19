@@ -71,6 +71,15 @@ async function purgeFixtures(client) {
     "delete from pms_reconciliation_entries where order_line_id in (select id from order_lines where order_id = $1)",
     [ORDER_ID]
   );
+  // ⚠️ AJOUTÉ LE 2026-09-17. Ce test fait passer une ligne en `cancelled_by_provider`, ce qui
+  // DÉCLENCHE le trigger `order_lines_enqueue_pms_cancellation` (20260827160000) et laisse une
+  // entrée `pending` derrière lui. Le résidu est invisible ici — mais il fait échouer
+  // `pms_cancellation_queue.test.sql`, dont le tout premier test est « la file est vide tant que
+  // rien n'est annulé ». Constaté en lançant les deux suites à la suite. La file référence le
+  // booking par son identifiant texte, pas par une FK : rien ne la purgeait en cascade.
+  await client.query("delete from pms_cancellation_queue where pms_booking_id = any($1::text[])", [
+    [String(CANCELLED_BOOKING_ID), String(FULFILLED_BOOKING_ID)],
+  ]);
   await client.query("delete from order_lines where order_id = $1", [ORDER_ID]);
   await client.query("delete from orders where id = $1", [ORDER_ID]);
   await client.query("delete from products where id = $1", [PRODUCT_ID]);

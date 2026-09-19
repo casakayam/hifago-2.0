@@ -1,0 +1,91 @@
+---
+id: specs-remise-en-route-suite-e2e
+titre: "Remise en route de la suite E2E Playwright"
+theme: specs
+public: [ia, dev, jerome]
+langue: fr
+statut: brouillon
+maj: 2026-09-17
+resume: >
+  Sortie de docs/backlog.md le 2026-09-17, où elle occupait à elle seule un paragraphe de 1888
+  caractères alors que le fichier plafonne à 60 lignes et prescrit « 1 ligne par point, jamais de
+  récit ». Le backlog le disait lui-même : « chacun demande son diagnostic, c'est un chantier à
+  part ». Porte l'état exact des rouges au moment de la mise en pause (2026-09-09, décision
+  Jérôme), ce qui est déjà réglé et ne doit pas être re-diagnostiqué, et ce qui s'est aggravé
+  depuis sans que personne ne puisse le voir — une suite en pause ne signale plus rien.
+mots_cles: [e2e, playwright, tests, suite en pause, regression, globalTeardown, p_lines]
+repond_a:
+  - "Pourquoi la suite E2E ne tourne-t-elle plus ?"
+  - "Quels tests sont rouges, et lesquels sont de vrais défauts ?"
+  - "Qu'est-ce qui a déjà été diagnostiqué et ne doit pas l'être une seconde fois ?"
+---
+
+# Remise en route de la suite E2E
+
+> **Statut : à faire.** Réactivation complète = ce document archivé et la ligne de renvoi retirée
+> de `docs/backlog.md`.
+
+## 1. L'état au moment de la mise en pause
+
+**Mise en pause le 2026-09-09, décision de Jérôme.** La suite ne tourne plus ni dans `/hifago-test`
+par défaut, ni en CI — qui n'en a d'ailleurs jamais eu de job. `npm run test:e2e` reste lançable à
+la main, et un fichier isolé aussi (c'est ce qui a été fait le 2026-09-17 pour
+`reserve-lodging-pms-availability.spec.ts`).
+
+État relevé le 2026-09-09 : **19 rouges sur 120** — 17/82 en `apps/admin`, 2/38 en `apps/web`.
+
+| Origine | Nombre | Nature |
+|---|---|---|
+| `apps/admin` | 17 | **De vrais défauts.** Mesuré le 2026-09-08 : 16 des 18 échouaient aussi en `--workers=1` — donc ni parallélisme, ni pollution. Natures : 4 navigations qui n'aboutissent pas (`toHaveURL`), 5 éléments absents, 4 timeouts, 3 textes faux. Chacun demande son propre diagnostic. |
+| `apps/web` | 2 | `attribution.spec.ts` passe SEUL et échoue en suite (pollution). `reserve-lodging-pms-availability.spec.ts` était rouge même isolé — ✅ **RÉPARÉ le 2026-09-17**, voir §3. |
+
+## 2. Ce qui s'est aggravé PENDANT la pause
+
+C'est le coût réel d'une suite à l'arrêt : elle cesse de signaler, donc les ruptures s'accumulent en
+silence.
+
+- **Cinq fichiers d'`apps/admin` passent `p_lines` à `create_order`** (`admin-order-status`,
+  `admin-ledger`, `admin-modify-order-line`, `admin-product-price-tiers`, `admin-product-delete`) —
+  paramètre supprimé par la spec 32 le 2026-09-10, soit le lendemain de la mise en pause. Ils ne
+  peuvent PAS passer. Non comptés dans les 19 ci-dessus. Trouvés le 2026-09-11 en remplaçant
+  `cancel-order.spec.ts`, qui portait la même rupture. `apps/web/e2e/mis-reservas.spec.ts` est dans
+  le même cas.
+- **Le `globalTeardown` ne purgeait plus rien du 2026-09-10 au 2026-09-17** : `cart_items`, née avec
+  le panier en base, manquait à sa liste de FK en NO ACTION vers `products`. Le symptôme est
+  trompeur — le teardown échoue APRÈS que les tests sont passés, donc la suite rougit sur un test
+  qui a réussi, et le `catch` englobant fait que la base garde TOUS ses résidus. Corrigé le
+  2026-09-17 ; au run suivant il a purgé 14 produits accumulés. Liste revérifiée dans
+  `pg_constraint` : **cinq** FK en NO ACTION, pas quatre.
+
+## 3. Ce qui est RÉGLÉ — ne pas re-diagnostiquer
+
+- **L'authentification** : plus aucun échec. C'était un deadlock, pas le chiffrement des secrets
+  (détail au journal).
+- **L'accumulation de résidus entre exécutions** : `globalTeardown`, posé le 2026-09-08 et réparé le
+  2026-09-17 (voir §2). Il ne traite pas la concurrence intra-suite, qui reste ouverte.
+- **Le panneau `ServerFilters` cliqué avant hydratation** après un rechargement GET : helper
+  `abrirFiltros`, 8 specs.
+- **`reserve-lodging-pms-availability.spec.ts`** (2026-09-17) : ce n'était pas un défaut produit
+  mais un test qui affirmait un comportement supprimé le 2026-08-29 (une plage ne peut plus enjamber
+  une nuit pleine, commit `bccd9a8`) — il cliquait un bouton devenu `disabled` et attendait qu'il
+  s'active. Réécrit pour affirmer la règle actuelle ; la règle métier elle-même est désormais tenue
+  en Vitest, où elle est éprouvable par mutation.
+
+## 4. Ordre de reprise proposé
+
+1. **Les ruptures mécaniques d'abord** : les six fichiers qui passent `p_lines` (§2). Ce sont des
+   corrections de signature, pas des diagnostics — elles dégagent le terrain.
+2. **Relever l'état réel** en une exécution complète, `--workers=1`, après ces corrections. Le
+   chiffre de 19 date du 2026-09-09 et n'a plus de valeur : huit jours de chantier front ont passé.
+3. **Diagnostiquer les rouges d'`apps/admin` un par un**, en commençant par les 4 timeouts (les plus
+   susceptibles d'être, comme le spec PMS, des tests qui affirment un monde révolu).
+4. **La concurrence intra-suite** en dernier (`cart-multi-establishment`, `attribution`,
+   `admin-reconciliation`, `admin-home-navigation` : ils passent seuls, échouent en suite) — il
+   faudrait des données scopées par test, c'est un changement de méthode, pas un correctif.
+
+## 5. Point ouvert
+
+La CI n'a **jamais** eu de job e2e. Remettre la suite au vert sans l'y brancher la laisserait
+retomber en silence — c'est exactement ce qui s'est produit ici (`CLAUDE.md` §11.20 : une règle que
+rien ne vérifie est un souhait). À trancher avec Jérôme au moment de la réactivation : job CI
+bloquant, ou nocturne non bloquant.

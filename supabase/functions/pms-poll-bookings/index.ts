@@ -65,6 +65,11 @@ Deno.serve(async () => {
           .eq("id", row.order_line_id)
           .eq("status", "reserved");
         await supabase.from("pms_reconciliation_entries").insert({ order_line_id: row.order_line_id });
+        // Le staff Lobby a annulé cette réservation directement dans son logiciel : des nuits
+        // viennent d'être libérées côté PMS. Le miroir de disponibilité (20260917140000) ne
+        // l'apprendrait sinon qu'à sa prochaine fenêtre de fraîcheur (jusqu'à 24 h) — ce poll le
+        // sait maintenant, autant le lui dire tout de suite (migration 20260918170000).
+        await supabase.rpc("mark_pms_sync_due_for_order_line", { p_order_line_id: row.order_line_id });
         summary.cancelled++;
         continue;
       }

@@ -92,12 +92,27 @@ fraîche) — aucune n'est une régression de ce lot, toutes hors de son périm�
 - **`cart-multi-establishment.spec.ts` (test 1) : `countOrdersByPhone` compare une chaîne exacte**,
   alors que `PhoneField` (2026-09-10) normalise en E.164 compact — un numéro de test écrit avec des
   espaces ne retrouve jamais sa commande. Aucune commande n'est perdue en réalité (vérifié en base),
-  seul le test se trompe de format.
-- **`reserve-lodging-pms-availability.spec.ts` : timeout au clic d'une seconde date de plage** sur
-  un calendrier PMS-backed, reproductible même isolé sur base fraîche — cause non investiguée.
+  seul le test se trompe de format.- **`scripts/check-timezone.sh` est ROUGE en CI depuis le 2026-09-13** — deux migrations de ce jour
+  (`20260913100000_lodging_default_availability.sql:81` et son garde PMS `20260913100100:23`)
+  utilisent `current_date` nu dans un `generate_series`, là où le dépôt impose
+  `public.today_in_bogota()` (`current_date` rend la date du fuseau de la SESSION, UTC sur
+  Supabase). Trouvé le 2026-09-18 en lançant le script sur un lot sans rapport. Soit les corriger,
+  soit les exempter NOMMÉMENT dans `est_exempte()` avec leur raison — mais pas les laisser rouges,
+  sinon le garde-fou entier cesse d'être lu.
+- **Trois constats de `/simplify` (2026-09-18) volontairement non appliqués**, tous réels :
+  (a) les deux `tests/pms-integration/*.mjs` réécrivent un serveur de fixtures LobbyPMS que
+  `packages/e2e-support/src/pmsFixtureServer.ts` sert déjà — le blocage est que `node` nu ne sait
+  pas importer du `.ts` (`--experimental-strip-types` ou conversion des scripts) ;
+  (b) le pipeline unités→cupos + filtre des restrictions existe en DEUX exemplaires
+  (`apps/web/lib/catalog/producto.ts` et `apps/web/app/api/pms/night-availability/route.ts`) qui
+  alimentent le MÊME composant dans la même session — une fonction de domaine partagée les
+  réunirait ;
+  (c) `invoke_pms_sync_availability` est la 5ᵉ copie octet-pour-octet du wrapper Vault +
+  `net.http_post` — une `invoke_pms_function(p_name)` unique remplacerait les cinq, au prix d'une
+  migration qui réécrit quatre entrées `cron.job`.
 
 ## Dette QA/UI mineure connue
-les tests e2e parallèles se disputent encore les 8 places d'une section pendant une MÊME exécution (`cart-multi-establishment` passe seul, échoue en suite) — le `globalTeardown` ajouté le 2026-09-08 empêche l'accumulation ENTRE exécutions, pas la concurrence intra-suite ; il faudrait des données scopées par test · le fil d'Ariane HeroUI rend la page courante en `<span role="link" aria-disabled>` : un lecteur d'écran annonce « lien désactivé », anti-motif WAI-ARIA — `aria-current` est correct, le reste vient du socle · Palette SVAR non harmonisée avec HeroUI · pas de refetch agenda au changement de vue · e2e spec 18 (créneaux horaires) absents · tri/filtre catalogue par tag manquant · Tranche 4 spec 17, Tranche 2 specs 11/12/13 · `waitForLoadState` sur `admin-camp-booking.spec.ts` · `LocalizedTextField` lot 2 établissement · `admin-evento-vitrine.spec.ts` (`#name-es`) · sidebar admin non repliée sous `md` · activer les créneaux jetski réels via `set_product_slot_capacity` · 6 fichiers pgTAP sensibles au volume de données locales accumulées (`audit_log` non scopé) · `admin-reconciliation.spec.ts`/`admin-home-navigation.spec.ts` fragiles en exécution parallèle · échec Vitest non identifié, DEUX fois le 2026-09-07 (1 puis 2 tests), toujours dans un `npm run test` monorepo enchaîné après typecheck+lint, jamais reproduit ensuite en ~15 exécutions — nom jamais capturé, sortie non conservée · `campaign_engine.test.sql` cas 23 (« completed » une fois les cibles pending traitées) échoue seul, reproductible en isolation, aucun rapport avec `today_in_bogota()`/`search_catalog` (grep vide) — trouvé le 2026-09-15 en lançant la suite complète pour un lot sans rapport (tri des evento), cause non investiguée.
+les tests e2e parallèles se disputent encore les 8 places d'une section pendant une MÊME exécution (`cart-multi-establishment` passe seul, échoue en suite) — le `globalTeardown` ajouté le 2026-09-08 empêche l'accumulation ENTRE exécutions (⚠️ il ne purgeait plus rien du 2026-09-10 au 2026-09-17, `cart_items` manquant à sa liste de FK), pas la concurrence intra-suite ; il faudrait des données scopées par test · le fil d'Ariane HeroUI rend la page courante en `<span role="link" aria-disabled>` : un lecteur d'écran annonce « lien désactivé », anti-motif WAI-ARIA — `aria-current` est correct, le reste vient du socle · Palette SVAR non harmonisée avec HeroUI · pas de refetch agenda au changement de vue · e2e spec 18 (créneaux horaires) absents · tri/filtre catalogue par tag manquant · Tranche 4 spec 17, Tranche 2 specs 11/12/13 · `waitForLoadState` sur `admin-camp-booking.spec.ts` · `LocalizedTextField` lot 2 établissement · `admin-evento-vitrine.spec.ts` (`#name-es`) · sidebar admin non repliée sous `md` · activer les créneaux jetski réels via `set_product_slot_capacity` · 6 fichiers pgTAP sensibles au volume de données locales accumulées (`audit_log` non scopé) · `admin-reconciliation.spec.ts`/`admin-home-navigation.spec.ts` fragiles en exécution parallèle · échec Vitest non identifié, DEUX fois le 2026-09-07 (1 puis 2 tests), toujours dans un `npm run test` monorepo enchaîné après typecheck+lint, jamais reproduit ensuite en ~15 exécutions — nom jamais capturé, sortie non conservée · `campaign_engine.test.sql` cas 23 (« completed » une fois les cibles pending traitées) échoue seul, reproductible en isolation, aucun rapport avec `today_in_bogota()`/`search_catalog` (grep vide) — trouvé le 2026-09-15 en lançant la suite complète pour un lot sans rapport (tri des evento), cause non investiguée.
 
 Historique complet de chaque point (comment on y est arrivé) : `docs/journal/<mois>.md`.
 

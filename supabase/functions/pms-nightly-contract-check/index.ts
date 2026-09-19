@@ -284,7 +284,14 @@ Deno.serve(async (req: Request) => {
   // quota étant muet, savoir exactement ce qu'on a consommé est la seule façon de ne pas
   // rediagnostiquer un « horizon de calendrier » qui n'existe pas.
   let probeCalls = 0;
-  for (const establishment of establishments ?? []) {
+  // ⚠️ 20260918170000 : le chemin NOMINAL (1 GET /rooms + 1 GET /available-rooms par établissement
+  // connecté) tirait ses 2N appels EN RAFALE, sans le `PROBE_SPACING_MS` déjà posé pour les sondes
+  // opt-in. Sans mesure du seau (par jeton ou par IP, point ouvert), c'est le seul poste de ce
+  // dossier dont le coût croît AVEC le nombre d'établissements — les trois autres crons PMS sont
+  // bornés par un lot fixe (claim_pms_sync_batch, claim_pms_poll_batch, claim_pms_cancellation_batch).
+  // Espacer coûte une nuit plus longue (jamais un problème, `0 7 * * *`), jamais un appel de plus.
+  for (const [index, establishment] of (establishments ?? []).entries()) {
+    if (index > 0) await sleep(PROBE_SPACING_MS);
     if (!establishment.lobby_api_token) continue;
     let knownCategoryIds: number[] = [];
     try {

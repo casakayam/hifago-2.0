@@ -1496,6 +1496,47 @@ export type Database = {
           },
         ]
       }
+      pms_availability_mirror: {
+        Row: {
+          available_units: number
+          date: string
+          establishment_id: string
+          lead_days: number | null
+          lobby_category_id: number
+          max_stay: number | null
+          min_stay: number | null
+          synced_at: string
+        }
+        Insert: {
+          available_units: number
+          date: string
+          establishment_id: string
+          lead_days?: number | null
+          lobby_category_id: number
+          max_stay?: number | null
+          min_stay?: number | null
+          synced_at?: string
+        }
+        Update: {
+          available_units?: number
+          date?: string
+          establishment_id?: string
+          lead_days?: number | null
+          lobby_category_id?: number
+          max_stay?: number | null
+          min_stay?: number | null
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pms_availability_mirror_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pms_cancellation_queue: {
         Row: {
           attempts: number
@@ -1593,6 +1634,47 @@ export type Database = {
             columns: ["resolved_by"]
             isOneToOne: false
             referencedRelation: "partner_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pms_sync_state: {
+        Row: {
+          attempts: number
+          claimed_at: string | null
+          establishment_id: string
+          invalidated_at: string | null
+          last_error: string | null
+          month: string
+          next_attempt_at: string | null
+          synced_at: string | null
+        }
+        Insert: {
+          attempts?: number
+          claimed_at?: string | null
+          establishment_id: string
+          invalidated_at?: string | null
+          last_error?: string | null
+          month: string
+          next_attempt_at?: string | null
+          synced_at?: string | null
+        }
+        Update: {
+          attempts?: number
+          claimed_at?: string | null
+          establishment_id?: string
+          invalidated_at?: string | null
+          last_error?: string | null
+          month?: string
+          next_attempt_at?: string | null
+          synced_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pms_sync_state_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
             referencedColumns: ["id"]
           },
         ]
@@ -2332,6 +2414,19 @@ export type Database = {
           pms_booking_id: string
         }[]
       }
+      claim_pms_sync_batch: {
+        Args: {
+          p_fresh_far?: string
+          p_fresh_near?: string
+          p_limit?: number
+          p_visibility?: string
+        }
+        Returns: {
+          establishment_id: string
+          lobby_api_token: string
+          month: string
+        }[]
+      }
       client_key_for_order: {
         Args: {
           p_account_id: string
@@ -2465,6 +2560,15 @@ export type Database = {
         }[]
       }
       expire_stale_payment_orders: { Args: never; Returns: undefined }
+      fail_pms_sync: {
+        Args: {
+          p_error: string
+          p_establishment_id: string
+          p_month: string
+          p_retry_after_seconds?: number
+        }
+        Returns: undefined
+      }
       get_event_occurrence_availability: {
         Args: { p_from: string; p_product_id: string; p_to: string }
         Returns: {
@@ -2512,6 +2616,7 @@ export type Database = {
       invoke_pms_cancel_bookings: { Args: never; Returns: undefined }
       invoke_pms_nightly_contract_check: { Args: never; Returns: undefined }
       invoke_pms_poll_bookings: { Args: never; Returns: undefined }
+      invoke_pms_sync_availability: { Args: never; Returns: undefined }
       invoke_send_notification_emails: { Args: never; Returns: undefined }
       is_admin: { Args: { uid: string }; Returns: boolean }
       is_anonymous_session: { Args: never; Returns: boolean }
@@ -2626,6 +2731,14 @@ export type Database = {
       }
       mark_notification_email_sent: {
         Args: { p_id: string; p_provider_message_id: string }
+        Returns: undefined
+      }
+      mark_pms_sync_due: {
+        Args: { p_establishment_id: string; p_from: string; p_to: string }
+        Returns: undefined
+      }
+      mark_pms_sync_due_for_order_line: {
+        Args: { p_order_line_id: string }
         Returns: undefined
       }
       moderate_establishment_proposal: {
@@ -2943,6 +3056,10 @@ export type Database = {
       }
       submit_product_proposal: {
         Args: { p_payload: Json; p_product_id: string }
+        Returns: Json
+      }
+      sync_pms_availability_month: {
+        Args: { p_establishment_id: string; p_month: string; p_rows: Json }
         Returns: Json
       }
       today_in_bogota: { Args: never; Returns: string }

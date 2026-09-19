@@ -68,7 +68,10 @@ réelles. Règle d'échappement : au-delà de 100 lignes, le piège le plus anci
 - **Une Edge Function ou un cron n'existe pas tant qu'il n'est pas déployé ET que ses secrets sont
   posés côté Supabase** (`supabase secrets list`, Vault) : les crons ont tourné à vide en silence
   du 19 au 27/08. Vérifier les trois couches, jamais supposer. Import Deno sans extension `.ts` =
-  boot cassé, invisible au typecheck, au lint et aux tests.
+  boot cassé, invisible au typecheck, au lint et aux tests. En LOCAL, le runtime Edge ne voit pas un
+  module `packages/domain/` fraîchement CRÉÉ (un module modifié se propage, un nouveau fichier
+  non — 2026-09-18, `toMirrorRows.ts`) : `Module not found` malgré un `docker restart` du conteneur
+  `edge_runtime` seul — `npx supabase stop && npx supabase start` complet est nécessaire.
 - **LobbyPMS** : `end_date` est INCLUSIF ; la date d'une ligne vient de la RÉPONSE, jamais de la
   date demandée (`alignLobbyCatalogEntries` échoue bruyamment plutôt que de compter les rangs) ; une
   disponibilité illisible vaut « non cotée », jamais « complet » ; le succès se lit dans le CORPS,

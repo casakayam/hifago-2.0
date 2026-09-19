@@ -43,7 +43,18 @@ select is(
         'invoke_pms_poll_bookings',
         'invoke_pms_cancel_bookings',
         'invoke_pms_nightly_contract_check',
-        'invoke_send_notification_emails'
+        'invoke_pms_sync_availability',
+        'invoke_send_notification_emails',
+        -- Miroir de disponibilité LobbyPMS (20260917140000). `claim_pms_sync_batch` renvoie le
+        -- JETON LOBBY EN CLAIR — c'est la plus sensible des trois. Les deux autres écrivent le
+        -- miroir et son état de synchronisation, que rien d'autre que le cron n'a à toucher.
+        'claim_pms_sync_batch',
+        'sync_pms_availability_month',
+        'fail_pms_sync',
+        -- Invalidation du miroir depuis un événement hifago (20260918170000). Ni l'une ni l'autre
+        -- ne vérifie l'appelant en SQL — leur seule barrière est le grant.
+        'mark_pms_sync_due',
+        'mark_pms_sync_due_for_order_line'
       )
       and (
         has_function_privilege('anon', p.oid, 'EXECUTE')

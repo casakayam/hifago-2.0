@@ -75,6 +75,12 @@ jobs:
         run: bash scripts/check-data-layer.sh
       - name: Navigation localisée (tout lien interne via @/i18n/navigation)
         run: bash scripts/check-i18n-links.sh
+      # ⚠️ Ce contrôle N'EST PAS redondant avec le job `functions` : `deno check` résout à la
+      # TypeScript et passe au vert sur un import relatif sans extension, alors que le worker Edge,
+      # lui, ne boote pas du tout (mesuré le 2026-09-17, BOOT_ERROR). Seul un boot réel — ou ce
+      # script — le révèle.
+      - name: Imports Deno (extension obligatoire sur tout module atteint par une Edge Function)
+        run: bash scripts/check-deno-imports.sh
       # Le manifeste docs/ai-index.json est ce que lisent les agents pour s'orienter : périmé, il
       # les envoie lire le mauvais document. `npm run docs:index` le régénère.
       - name: Manifeste documentaire à jour

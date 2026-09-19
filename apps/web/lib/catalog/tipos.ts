@@ -362,6 +362,20 @@ export type FichaProducto = {
    */
   primeraSalidaIso: string | null;
   disponibilidad: FilaDisponibilidad[];
+  /**
+   * Restrictions LobbyPMS des nuits semées, pour un logement PMS-backed uniquement — vide partout
+   * ailleurs. Ne porte QUE les nuits réellement sous contrainte : l'absence d'une nuit EST
+   * l'information « rien à appliquer ici », ce qui évite trente objets nuls par mois.
+   *
+   * ⚠️ La forme est REDÉCLARÉE ici plutôt qu'importée de `@hifago/domain` (`LobbyNightRestrictions`,
+   * structurellement identique), parce que ce fichier ne dépend de RIEN — c'est ce qui lui permet
+   * d'être lu depuis un Server Component sans traîner de graphe de modules (en-tête de ce fichier).
+   * Une divergence casserait la compilation au premier point de passage, dans `producto.ts`.
+   */
+  restriccionesPms: {
+    date: string;
+    restrictions: { minStay: number | null; maxStay: number | null; leadDays: number | null };
+  }[];
   tarifas: FilaTarifa[];
   franjas: FilaFranja[];
   establecimiento: ResumenEstablecimiento | null;
