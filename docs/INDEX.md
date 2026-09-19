@@ -51,14 +51,14 @@
 - [Compte client : profil, édition, déconnexion, suppression](specs/35-compte-profil.md) — **Implémenté** · maj 2026-09-12
 - [Remise par seuil de remplissage cumulé (camps)](specs/36-remise-remplissage-camp.md) — **Implémenté** · maj 2026-09-14
 - [Programme jour par jour d'un camp](specs/37-programme-camp.md) — **Implémenté** · maj 2026-09-17
-- [Remise en route de la suite E2E Playwright](specs/38-remise-en-route-suite-e2e.md) — **Brouillon** · maj 2026-09-17
-- [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-17
+- [Remise en route de la suite E2E Playwright](specs/38-remise-en-route-suite-e2e.md) — **Brouillon** · maj 2026-09-18
+- [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-18
 - [Gabarit de spec de feature (à copier, ne décrit aucune feature réelle)](specs/_modele.md) — **modele** · maj 2026-08-16
 - [Avant d'écrire une spec — poser les bonnes questions](specs/avant-la-spec.md) — **modele** · maj 2026-08-16
 
 ## Journal — historique chronologique (jamais chargé automatiquement)
-- [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-17
-- [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-17
+- [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-18
+- [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-18
 - [Journal hifago — août 2026](journal/2026-08.md) · maj 2026-09-01
-- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-17
+- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-18
 - [Pièges empiriques hifago — index numéroté](pieges-empiriques.md) · maj 2026-09-09

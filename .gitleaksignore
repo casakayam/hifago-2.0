@@ -9,6 +9,7 @@
 # qui. Elle ne donne accès à rien d'autre qu'à un conteneur Docker sur 127.0.0.1.
 4b36522b39a1edc07cd9b0908ab207c3469d7532:tests/notification-integration/send_notification_emails.integration.mjs:jwt:19
 207698f4551fc57bb76d170c704c871d39615017:tests/pms-integration/pms_poll_bookings.integration.mjs:jwt:22
+3a55671ba850ee38fc6bb24662a192cd6f2678d0:tests/pms-integration/pms_sync_availability.integration.mjs:jwt:24
 
 # Secret TOTP du compte seedé admin@hifago.test, nécessairement identique à celui de seed.sql
 # pour que les tests e2e passent la 2FA. Base locale recréée à chaque `db setup`.

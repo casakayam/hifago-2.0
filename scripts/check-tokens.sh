@@ -42,6 +42,13 @@ est_exempte() {
     # choisie), et `rgb(255,255,255)` le repli blanc sur lequel empiler les fonds `soft`
     # semi-transparents pour calculer un ratio réel. Aucune de ces deux valeurs n'est peinte.
     apps/web/components/atoms/Button.stories.tsx) return 0 ;;
+
+    # SIMULATEUR de la page Checkout Pro EXTERNE de Mercado Pago (mode dev, jamais en prod —
+    # cf. l'en-tête du fichier). Il ne fait délibérément PAS partie de la vitrine hifago : il en
+    # sort exprès (même raisonnement que l'en-tête du fichier pour la frontière Server/Client et
+    # les règles i18n/@hifago/ui). Reprendre les jetons sémantiques du thème habillerait un site
+    # tiers simulé aux couleurs de hifago — le rendrait FAUX comme simulateur, pas plus fidèle.
+    apps/web/app/api/payments/mock-checkout/route.ts) return 0 ;;
   esac
   return 1
 }

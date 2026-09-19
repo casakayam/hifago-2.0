@@ -100,6 +100,14 @@ est_exempte() {
     # défaut est corrigé par 20260828150000_dates_civiles_en_heure_de_bogota.sql, qui remplace la
     # fonction. Cette entrée doit rester : le fichier, lui, ne changera plus jamais.
     supabase/migrations/20260819210000_clients_admin_rpc.sql) return 0 ;;
+
+    # Deux migrations HISTORIQUES, rouges depuis le 2026-09-13 (dette signalée dans
+    # docs/dette-technique.md, corrigée le 2026-09-19). `open_default_lodging_availability`
+    # utilisait `current_date` nu — corrigé en suivi par 20260919100000_lodging_default_
+    # availability_bogota_date.sql, qui remplace la fonction (même patron que l'entrée
+    # ci-dessus). Ces deux fichiers, eux, ne changeront plus jamais.
+    supabase/migrations/20260913100000_lodging_default_availability.sql) return 0 ;;
+    supabase/migrations/20260913100100_lodging_default_availability_pms_guard.sql) return 0 ;;
   esac
   return 1
 }
