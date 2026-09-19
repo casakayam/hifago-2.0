@@ -154,3 +154,28 @@ Historique complet de chaque point (comment on y est arrivé) : `docs/journal/<m
   visuel. Trouvé en extrayant `product-type-fields/index.tsx` en sous-composants (revue de
   packaging admin) — préservé à l'identique dans l'extraction (pure, zéro changement de
   comportement), documenté en tête du fichier hôte plutôt que corrigé en silence.
+
+## Data/config en écart, déplacée du backlog le 2026-09-19
+Même motif que les déplacements des 2026-09-08 et 2026-09-10 : `docs/backlog.md` avait atteint
+60/60 lignes, son propre plafond, et la règle du projet (mettre le backlog à jour en fin de
+session) allait donc rendre la CI rouge au prochain ajout. Ces points ne sont pas des
+arbitrages — rien n'y attend une décision de Jérôme.
+
+- `alojamiento-pms-backed-demo` reste `sellable` en préprod alors qu'il est invendable (PMS-backed sans vraie disponibilité).
+- `caminata-mirador-penon` (produit utilisé par les précédents smoke tests manuels) n'a plus aucune date ouverte sur 3 mois glissants, vérifié le 2026-09-10 — utiliser un autre produit du seed (`kayak-embalse-guatape` a une date ouverte le 2026-10-05) pour tout nouveau test manuel du parcours panier.
+- **Les 7 transports déjà en base n'ont PAS d'horaires** malgré l'enrichissement d'`aeroturex-bus-compartido.json` (2026-09-16) : `seed-mock-data.mjs` est create-only et ignore un produit existant. Leurs deux LIEUX, eux, sont bien arrivés (migration de données de `20260916150000`). Un `update` manuel ou un `db reset` est nécessaire pour voir la fenêtre de départs sur un environnement déjà seedé — le lot n'est pas cassé.
+- `MERCADOPAGO_WEBHOOK_SECRET` toujours manquant → paiement webhook jamais testé en conditions réelles (tunnel ou déploiement requis). Et la signature HMAC des vraies livraisons Checkout Pro échouait en local malgré un secret identique (piège 19, cause non élucidée côté MP) : si ça se reproduit en staging, contacter le support Mercado Pago avant la prod — plus d'accès shell pour rejouer le webhook. ⚠️ Point NON résolu par `MERCADOPAGO_MOCK_MODE` (2026-09-14, journal) : ce flag contourne le trou pour le dev quotidien local, ne le teste pas.
+
+## Fragilités des contrôles CI, relevées par la revue du 2026-09-19
+Trouvées en auditant `scripts/check-*.sh`, toutes VÉRIFIÉES en différentiel mais AUCUNE ne se
+déclenche sur l'arbre actuel. Elles sont ici pour ne pas être re-diagnostiquées le jour où un
+run vire au rouge sans faute réelle.
+
+- `check-data-layer.sh` — le motif `\.from\(` matche `Array.from(` autant que `supabase.from(` : un `Array.from({length: n})` dans un `page.tsx` (idiome courant pour une grille de squelettes) rendrait le script rouge sans faute réelle.
+- `check-seo.sh` — le filtre de commentaires n'écarte que ceux en DÉBUT de ligne : un `{/* aggregateRating */}` (commentaire JSX) ou un commentaire de fin de ligne fait échouer le contrôle. C'est le seul des cinq scripts à ne pas passer par `sans-commentaires.pl`.
+- `check-seo.sh` — faux négatif symétrique et silencieux : si une zone `(tunnel)`/`(cuenta)`/`(auth)` est renommée, le `grep -r` échoue, le `2>/dev/null || true` avale l'erreur et le contrôle passe au VERT.
+- `check-design-system.sh` — trois de ses cinq blocs ne filtrent pas les commentaires : un commentaire citant `from "@heroui/react"` suffit à les faire échouer. Et la comparaison `head -n1` contre `"use client";` casse sur un fichier portant un bandeau de commentaire, un BOM ou un CRLF.
+- `check-design-system.sh:41` — ce `find` ne `prune` ni `node_modules` ni `.next`, contrairement aux quatre autres du même fichier : il traverse ~11 600 fichiers pour rien à chaque run.
+- `check-deno-imports.sh` — seul script à utiliser des tableaux bash sous `set -u` : deux idiomes y sont fatals en bash 3.2 (le `/bin/bash` de macOS) et légaux depuis 4.4. Inoffensif sur la forme actuelle du dépôt, et ne pourrait casser qu'en LOCAL, jamais en CI (Ubuntu a bash 5.x).
+- `check-i18n-links.sh` / `check-tokens.sh` / `check-data-layer.sh` — parcourent l'arbre 3, 2 et 2 fois respectivement (une passe par règle), soit ~2 700 `fork` de `perl`+`grep`. Factoriser en une seule traversée rendrait `npm run verify` sensiblement plus rapide.
+

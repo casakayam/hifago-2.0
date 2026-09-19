@@ -25,6 +25,16 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 SANS_COMMENTAIRES="scripts/lib/sans-commentaires.pl"
+# ⚠️ Garde-fou de VÉRACITÉ, pas de confort (revue de CI du 2026-09-19). Le motif employé plus bas
+# est `perl "$SANS_COMMENTAIRES" "$f" | grep -nE '…' || true` : si ce filtre devient absent ou
+# illisible, `perl` échoue, `grep` reçoit du vide, le `|| true` neutralise `pipefail` — et TOUS les
+# fichiers passent. Le script sort 0 en n'ayant rien lu. Un contrôle qui peut passer au vert sans
+# rien vérifier est pire qu'un contrôle absent : il inspire une confiance que rien ne soutient,
+# ce que CLAUDE.md §11.20 nomme exactement. Code 2, distinct du 1 des vraies violations.
+if [ ! -r "$SANS_COMMENTAIRES" ]; then
+  echo "✗ $SANS_COMMENTAIRES introuvable ou illisible — contrôle impossible, pas \"aucune violation\"." >&2
+  exit 2
+fi
 fail=0
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────

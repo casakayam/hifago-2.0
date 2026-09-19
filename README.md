@@ -16,6 +16,24 @@ ouvert ou bloqué : `docs/backlog.md`.
 **Pour démarrer** : `/hifago-dev` (Supabase local + les deux apps) ou lire `CLAUDE.md` en entier
 d'abord si c'est une première session — il tient sous 200 lignes.
 
+## Avant de pousser
+
+`npm run verify` lance en ~35 s les 12 contrôles du job `lint` de la CI — **exactement les mêmes,
+dans le même script** (`scripts/verify.sh`), et sans s'arrêter au premier échec : un seul passage
+donne la liste complète de ce qu'il faut corriger.
+
+Deux hooks git le posent automatiquement. Ils s'installent tout seuls au premier `npm install`
+(script `prepare`) ; à la main c'est `git config core.hooksPath scripts/git-hooks`.
+
+| Hook | Ce qu'il fait | Contournement |
+|---|---|---|
+| `pre-commit` | Régénère `docs/ai-index.json` et `docs/INDEX.md` dès qu'un `docs/**/*.md` est commité | `git commit --no-verify` |
+| `pre-push` | Lance `npm run verify` | `git push --no-verify` |
+
+Les deux restent contournables : ce sont des filets, pas des barrières. Ils existent parce que la
+CI passait 65 % de son temps en rouge (39 runs sur 60 au 2026-09-19) pour des défauts que ces
+35 secondes auraient montrés — le détail de ce diagnostic est au journal du 2026-09-19.
+
 ## Carte du dossier
 
 | Dossier | Contenu |

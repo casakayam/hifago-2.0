@@ -341,6 +341,71 @@ ${parThe.journal.map(ligne).join('\n')}
 `;
 }
 
+/**
+ * Écarts NOMMÉS entre le tableau `documents` committé et celui qu'on vient de reconstruire.
+ *
+ * POURQUOI (revue de CI du 2026-09-19) : `--check` se contentait d'un `JSON.stringify(a) !== b`
+ * et imprimait « ne correspond plus aux documents » — sans dire QUEL document ni QUEL champ.
+ * `docs:check` est la 2ᵉ cause d'échec de la CI (3 des 15 derniers échecs du job lint), et chaque
+ * diagnostic demandait de régénérer puis lire un `git diff` pour comprendre. Le voici dit tout de
+ * suite. Le contrôle est strictement le même — seul le message change.
+ */
+function ecartsDocuments(actuels, attendus) {
+  const ecarts = [];
+  const bref = (v) => {
+    if (v === undefined) return '(absent)';
+    const s = typeof v === 'string' ? v : JSON.stringify(v);
+    return s.length > 60 ? s.slice(0, 59) + '…' : s;
+  };
+  const parChemin = (l) => new Map(l.map((d) => [d.chemin, d]));
+  const a = parChemin(actuels);
+  const b = parChemin(attendus);
+
+  for (const chemin of b.keys()) {
+    if (!a.has(chemin)) ecarts.push(`${chemin} — document absent du manifeste (nouveau document)`);
+  }
+  for (const chemin of a.keys()) {
+    if (!b.has(chemin)) ecarts.push(`${chemin} — encore listé mais introuvable (supprimé ou renommé)`);
+  }
+  for (const [chemin, attendu] of b) {
+    const actuel = a.get(chemin);
+    if (!actuel) continue;
+    for (const champ of new Set([...Object.keys(attendu), ...Object.keys(actuel)])) {
+      if (JSON.stringify(actuel[champ]) !== JSON.stringify(attendu[champ])) {
+        ecarts.push(`${chemin} — ${champ} : ${bref(actuel[champ])} → ${bref(attendu[champ])}`);
+      }
+    }
+  }
+  // Même contenu mais ordre différent : invisible ci-dessus, et pourtant le manifeste diffère.
+  if (!ecarts.length && JSON.stringify(actuels) !== JSON.stringify(attendus)) {
+    ecarts.push("l'ordre des documents diffère de l'ordre généré");
+  }
+  return ecarts;
+}
+
+/**
+ * Écarts d'EN-TÊTE (`routage`, `themes`, `protocole_ia`, `statuts_specs`, `version`).
+ *
+ * ⚠️ `maj` est volontairement EXCLU : c'est la date de génération, réécrite à chaque `--build`.
+ * La comparer rendrait le contrôle rouge tous les jours à minuit sans qu'aucun fichier n'ait bougé.
+ *
+ * POURQUOI ce contrôle existe : `--check` ne regardait QUE `documents`. Modifier ROUTAGE ou THEMES
+ * dans ce script laissait donc le manifeste committé périmé avec un check au VERT — une dérive
+ * silencieuse, exactement le contraire de ce que CLAUDE.md §11.20 demande.
+ */
+function ecartsEntete(actuel, attendu) {
+  const ecarts = [];
+  const sansMaj = ({ maj, documents, ...reste }) => reste;
+  const a = sansMaj(actuel);
+  const b = sansMaj(attendu);
+  for (const champ of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (JSON.stringify(a[champ]) !== JSON.stringify(b[champ])) {
+      ecarts.push(`en-tête — « ${champ} » diffère de ce que génère scripts/docs_index.js`);
+    }
+  }
+  return ecarts;
+}
+
 const mode = process.argv.includes('--check') ? 'check' : 'build';
 refuseSiSuperficiel();
 const { docs, problemes } = collect();
@@ -350,9 +415,12 @@ if (mode === 'check') {
   if (!fs.existsSync(OUT)) ecarts.push('docs/ai-index.json est absent');
   else {
     const actuel = JSON.parse(fs.readFileSync(OUT, 'utf8'));
-    if (JSON.stringify(actuel.documents) !== JSON.stringify(build(docs).documents)) {
-      ecarts.push('docs/ai-index.json ne correspond plus aux documents');
-    }
+    const attendu = build(docs);
+    const detail = [
+      ...ecartsDocuments(actuel.documents || [], attendu.documents),
+      ...ecartsEntete(actuel, attendu),
+    ];
+    for (const d of detail) ecarts.push(`docs/ai-index.json : ${d}`);
   }
   if (!fs.existsSync(OUT_HUMAIN)) ecarts.push('docs/INDEX.md est absent');
   else if (fs.readFileSync(OUT_HUMAIN, 'utf8') !== construireIndexHumain(docs)) {
@@ -362,7 +430,8 @@ if (mode === 'check') {
   if (tout.length) {
     console.error('Base documentaire hifago/ — problèmes détectés :\n');
     for (const p of tout) console.error(`  ✗ ${p}`);
-    console.error('\nCorriger, puis lancer : npm run docs:index');
+    console.error('\nRégénérer : npm run docs:index  (puis committer ai-index.json et INDEX.md)');
+    console.error('Ce geste est automatisé par le hook pre-commit — voir scripts/git-hooks/pre-commit.');
     process.exit(1);
   }
   console.log(`Base documentaire hifago/ OK — ${docs.length} documents indexés, manifeste et index à jour.`);
