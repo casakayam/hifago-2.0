@@ -42,8 +42,13 @@ repond_a:
 16. Importer `@hifago/ui` depuis `page.tsx`/`layout.tsx` casse `next build` → `.claude/rules/apps.md`
 17. `supabase db push --include-seed` n'a pas les droits de `postgres` → `/hifago-seed`
 18. `projects api-keys` affiche `service_role` en clair → `CLAUDE.md` §8.4
-19. Signature HMAC Mercado Pago valide au simulateur, pas en livraison réelle → récit
-    `docs/journal/2026-08.md` (2026-08-24), suivi dans `docs/backlog.md`
+19. Signature HMAC Mercado Pago valide au simulateur, pas en livraison réelle — **RÉSOLU le
+    2026-09-20** : MP signe avec la clé de l'APPLICATION QUI ENCAISSE. Le token appartenait à un
+    compte vendeur de test (`user_id` 3627131944) tandis que la clé venait du panneau du compte de
+    développement (225649476) ; le simulateur, lui, signe avec la clé du compte connecté — d'où
+    « simulateur OK, réel KO ». Discriminant : comparer le `user_id` du corps de la notification au
+    suffixe du token `APP_USR-…-<userId>` → énigme `docs/journal/2026-08.md` (2026-08-24),
+    résolution `docs/journal/2026-09.md` (2026-09-20)
 20. **Une règle documentée que rien ne vérifie n'est pas une règle : c'est un souhait** (2026-08-28,
     fuseau — `"America/Bogota"` n'existait dans aucun code, dix sites calculaient « aujourd'hui »
     en UTC, et les tests portaient la même faute). Toute règle de ce projet qui peut être vérifiée

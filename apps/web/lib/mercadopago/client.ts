@@ -18,6 +18,21 @@ function getConfig(): MercadoPagoConfig {
   return cachedConfig;
 }
 
+/**
+ * Marge sous la fenêtre d'expiration des commandes (30 min après `orders.created_at`, cf.
+ * `expire_stale_payment_orders`, migration 20260915130000). La préférence doit mourir AVANT que la
+ * base n'annule la commande — jamais l'inverse.
+ *
+ * POURQUOI (incident du 2026-09-20) : une préférence Checkout Pro sans date d'expiration reste
+ * payable indéfiniment. Le lien `init_point` survivait donc à l'annulation de la commande : un
+ * client qui laissait l'onglet Mercado Pago ouvert puis payait 40 minutes plus tard voyait son
+ * argent encaissé pour une réservation déjà détruite, sans qu'aucun chemin de remboursement
+ * n'existe. Deux minutes de marge suffisent : elles couvrent l'écart entre l'acceptation chez
+ * Mercado Pago et l'arrivée de la notification.
+ */
+export const PREFERENCE_EXPIRY_MARGIN_MINUTES = 2;
+export const ORDER_EXPIRY_MINUTES = 30;
+
 export interface CreateCheckoutPreferenceInput {
   /** payments.id — sert à la fois d'external_reference ET de clé d'idempotence SDK. */
   paymentId: string;
@@ -27,6 +42,13 @@ export interface CreateCheckoutPreferenceInput {
   pendingUrl: string;
   failureUrl: string;
   notificationUrl: string;
+  /**
+   * Instant (ISO 8601 avec décalage explicite) au-delà duquel Mercado Pago refuse le paiement.
+   * Calculé depuis `orders.created_at`, jamais depuis « maintenant » : la préférence est créée au
+   * clic sur « Payer », qui peut survenir vingt minutes après la commande — une fenêtre glissante
+   * dépasserait alors l'expiration côté base, ce qui est exactement le trou à fermer.
+   */
+  expiresAt: string;
 }
 
 export interface CheckoutPreferenceResult {
@@ -54,6 +76,10 @@ export async function createCheckoutPreference(
         },
       ],
       external_reference: input.paymentId,
+      // Voir PREFERENCE_EXPIRY_MARGIN_MINUTES : sans ces deux champs, le lien de paiement survit à
+      // l'annulation de la commande et produit un encaissement irrattrapable.
+      expires: true,
+      expiration_date_to: input.expiresAt,
       payer: input.payerEmail ? { email: input.payerEmail } : undefined,
       back_urls: {
         success: input.successUrl,

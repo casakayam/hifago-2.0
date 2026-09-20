@@ -22,6 +22,7 @@ repond_a:
 > partir en spec ou en ticket séparé plutôt que de rester ici.
 
 ## Arbitrage Jérôme requis
+- 🔴 **Paiement : garantir la confirmation quand le client NE REVIENT PAS** (question Jérôme du 2026-09-20, incident réel HFG-000013). Aujourd'hui `expire_stale_payment_orders` annule une commande dont l'argent est encaissé sans jamais interroger Mercado Pago. À trancher : unifier les deux crons pour que la réconciliation (`/v1/payments/search?external_reference=`) PILOTE l'expiration (`cron.unschedule('expire-stale-payment-orders')`), plafond des paiements `pending` (proposition 2 h), et chemin de remboursement (inexistant). Détail : `docs/journal/2026-09.md` (2026-09-20), `docs/dette-technique.md`.
 - **Trou (a)** — rien ne libère un cupo/place quand une commande EXPIRE (jamais payée) ; seul `cancel_order` le fait. Un créneau reste immobilisé pour toujours si personne n'annule explicitement.
 - **Trou (b)** — le marquage des catégories qui refusent en 422 Lobby reste MANUEL, volontairement : Lobby ne distingue pas "pas réservable" de "requête mal formée" dans son code d'erreur.
 - LobbyPMS spec 21 §10 points 3-5 non tranchés : traslado↔commission hifago, valeur exacte de `orders.status` en cas d'échec PMS post-confirmation, chiffrement du token.

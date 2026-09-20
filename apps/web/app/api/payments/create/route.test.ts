@@ -18,7 +18,12 @@ const ACCESS_TOKEN = "0123456789abcdef0123456789abcdef";
 const ORIGINAL_ENV = { ...process.env };
 
 let preferenceInput: Record<string, unknown> | null = null;
-let orderRow: { access_token: string } | null = { access_token: ACCESS_TOKEN };
+type OrderRow = { access_token: string; created_at: string };
+/** Commande créée il y a une minute : largement dans la fenêtre d'expiration de 30 min. */
+function commandeRecente(): OrderRow {
+  return { access_token: ACCESS_TOKEN, created_at: new Date(Date.now() - 60_000).toISOString() };
+}
+let orderRow: OrderRow | null = commandeRecente();
 
 // Le Route Handler lit `payments` AVEC l'embed PostgREST `orders(access_token)` — une seule
 // requête, via la FK `payments.order_id → orders.id`. Le mock rend donc la commande imbriquée,
@@ -50,6 +55,8 @@ vi.mock("@/lib/mercadopago/client", () => ({
     preferenceInput = input;
     return { initPoint: "https://mercadopago.com/checkout/fake" };
   },
+  ORDER_EXPIRY_MINUTES: 30,
+  PREFERENCE_EXPIRY_MARGIN_MINUTES: 2,
 }));
 
 const { POST } = await import("./route");
@@ -65,7 +72,7 @@ function requete(origin = "https://hifago.test") {
 describe("POST /api/payments/create — la back_url de retour", () => {
   beforeEach(() => {
     preferenceInput = null;
-    orderRow = { access_token: ACCESS_TOKEN };
+    orderRow = commandeRecente();
   });
 
   it("renvoie le client sur l'adresse propre à sa commande, jamais sur /pago", async () => {
@@ -131,7 +138,7 @@ describe("POST /api/payments/create — la back_url de retour", () => {
 describe("POST /api/payments/create — mode mock (MERCADOPAGO_MOCK_MODE)", () => {
   beforeEach(() => {
     preferenceInput = null;
-    orderRow = { access_token: ACCESS_TOKEN };
+    orderRow = commandeRecente();
   });
 
   afterEach(() => {
@@ -153,5 +160,35 @@ describe("POST /api/payments/create — mode mock (MERCADOPAGO_MOCK_MODE)", () =
     process.env.VERCEL_ENV = "production";
     await POST(requete());
     expect(preferenceInput).not.toBeNull();
+  });
+
+  // Incident du 2026-09-20 : une préférence sans date d'expiration reste payable des heures après
+  // que `expire_stale_payment_orders` a annulé la commande — argent encaissé, réservation détruite,
+  // aucun chemin de remboursement. L'ancre doit être `orders.created_at`, jamais l'instant du clic.
+  it("fait expirer la préférence AVANT la commande, ancrée sur orders.created_at", async () => {
+    const createdAt = new Date(Date.now() - 10 * 60_000).toISOString(); // commande de 10 min
+    orderRow = { access_token: ACCESS_TOKEN, created_at: createdAt };
+
+    await POST(requete());
+
+    const expiresAt = new Date(String(preferenceInput?.expiresAt)).getTime();
+    const attendu = new Date(createdAt).getTime() + 28 * 60_000;
+    expect(expiresAt).toBe(attendu);
+    // Et surtout : strictement avant les 30 minutes qui déclenchent l'annulation en base.
+    expect(expiresAt).toBeLessThan(new Date(createdAt).getTime() + 30 * 60_000);
+  });
+
+  it("refuse d'ouvrir un paiement sur une commande qui va expirer (échec fermé)", async () => {
+    orderRow = {
+      access_token: ACCESS_TOKEN,
+      created_at: new Date(Date.now() - 29 * 60_000).toISOString(),
+    };
+
+    const response = await POST(requete());
+    const body = (await response.json()) as { ok: boolean; reason?: string };
+
+    expect(response.status).toBe(409);
+    expect(body.reason).toBe("order_expiring");
+    expect(preferenceInput).toBeNull();
   });
 });
