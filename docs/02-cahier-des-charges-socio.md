@@ -47,9 +47,10 @@ Ajoutés par la relecture intégrale du 2026-09-07 :
   affiche (`apps/admin/app/partner/(app)/reservations/`, liste et détail). Confirmé par
   `docs/specs/24-modele-hebergement-et-surface-lobbypms.md` §10.C, qui s'appuie dessus pour envoyer
   les coordonnées dans la note du booking Lobby. La pièce d'identité, elle, reste exclue.
-  ⚠️ Deux specs antérieures portent encore l'ancienne règle et sont périmées sur ce point précis :
-  `17-calendrier-disponibilite-refonte.md` (§ invariants, « PII minimale côté socio ») et
-  `20-agenda-reservations-socio.md` (l.73).
+  ✅ **Corrigé le 2026-09-21/22** dans les deux specs qui portaient encore l'ancienne règle :
+  `17-calendrier-disponibilite-refonte.md` (§ invariants, « Mis Reservas ») et
+  `20-agenda-reservations-socio.md` (l.73) — les deux décrivent désormais `holder_phone`/
+  `holder_email` exposés, avec renvoi à la migration `20260819180000` et à cette entrée.
 - **§3d, « Cupos par créneau ... (matin/après-midi) » — contredit par
   `docs/specs/18-creneaux-horaires-reservables.md`.** Le principe (la capacité vaut par créneau, pas
   par jour) est conservé ; c'est la granularité binaire qui est fausse — `product_slot_rules` définit

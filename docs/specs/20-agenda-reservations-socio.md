@@ -70,7 +70,11 @@ Aucune nouvelle table.
 - Tout événement `allDay` porte un `end` en borne **exclusive** (jour suivant le dernier jour occupé) — constaté en lisant le bundle réel de `@svar-ui/calendar-store` (`MonthViewModel.mapToPrimitive` calcule `end.getTime() - 1` pour localiser la dernière cellule ; un `end` égal à `start` retombe sur la veille, largeur nulle, événement invisible). `end_date` (hôtel/lodging) est déjà exclusif tel quel dans le modèle de données ; la branche "un seul jour" et la branche camp ajoutent +1 jour explicitement.
 - `create_manual_order_line` refuse `products.type in ('hotel', 'lodging', 'camp')` — hôtel/lodging : choix de chambre, tarif par nuit hors périmètre d'un ajout rapide agenda ; camp : ressource partagée multi-jours (`provider_resource_calendar`/`availability_blocks`), non répliquée dans cette RPC plus légère que `create_order` — l'autoriser silencieusement créerait un vrai trou anti-survente sur la ressource partagée.
 - `create_manual_order_line` ne calcule ni attribution référent ni commission app : `referrer_partner_id = null`, `commission_case = 'operator_manual'`, `referrer_pct = app_pct = acompte_pct = 0`.
-- Fiche de réservation (`holder_name` seul exposé) : jamais `holder_email`/`holder_phone` du client, jamais les colonnes de commission internes — même restriction PII que « Mis Reservas » (spec 17).
+- Fiche de réservation : `holder_name`, `holder_phone`, `holder_email` exposés (RENVERSÉ le
+  2026-08-19, migration `20260819180000`, cahier `02` § Écarts connus — le socio a besoin de
+  contacter son client), jamais les colonnes de commission internes ni la pièce d'identité. ⚠️
+  **Périmé** — décrivait `holder_name` seul, « même restriction PII que « Mis Reservas » (spec 17) »
+  quand cette dernière portait encore l'ancienne règle.
 - `modify_order_line` reste refusée pour toute ligne à créneau horaire (`slot_start_time is not null`), operator compris — pas d'extension créneau dans cette spec.
 
 ### Cas limites
