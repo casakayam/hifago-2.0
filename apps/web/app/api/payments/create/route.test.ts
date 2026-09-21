@@ -24,6 +24,8 @@ function commandeRecente(): OrderRow {
   return { access_token: ACCESS_TOKEN, created_at: new Date(Date.now() - 60_000).toISOString() };
 }
 let orderRow: OrderRow | null = commandeRecente();
+/** Ce que la route écrit sur `payments` après la création de la préférence (spec 39). */
+let paymentUpdate: Record<string, unknown> | null = null;
 
 // Le Route Handler lit `payments` AVEC l'embed PostgREST `orders(access_token)` — une seule
 // requête, via la FK `payments.order_id → orders.id`. Le mock rend donc la commande imbriquée,
@@ -31,6 +33,12 @@ let orderRow: OrderRow | null = commandeRecente();
 vi.mock("@hifago/supabase/service", () => ({
   createServiceRoleClient: () => ({
     from: () => ({
+      update: (values: Record<string, unknown>) => ({
+        eq: async () => {
+          paymentUpdate = values;
+          return { error: null };
+        },
+      }),
       select: () => ({
         eq: () => ({
           maybeSingle: async () => ({
@@ -53,7 +61,11 @@ vi.mock("@hifago/supabase/service", () => ({
 vi.mock("@/lib/mercadopago/client", () => ({
   createCheckoutPreference: async (input: Record<string, unknown>) => {
     preferenceInput = input;
-    return { initPoint: "https://mercadopago.com/checkout/fake" };
+    return {
+      initPoint: "https://mercadopago.com/checkout/fake",
+      preferenceId: "pref-fake-1",
+      collectorId: "3627131944",
+    };
   },
   ORDER_EXPIRY_MINUTES: 30,
   PREFERENCE_EXPIRY_MARGIN_MINUTES: 2,
@@ -72,6 +84,7 @@ function requete(origin = "https://hifago.test") {
 describe("POST /api/payments/create — la back_url de retour", () => {
   beforeEach(() => {
     preferenceInput = null;
+    paymentUpdate = null;
     orderRow = commandeRecente();
   });
 
@@ -138,6 +151,7 @@ describe("POST /api/payments/create — la back_url de retour", () => {
 describe("POST /api/payments/create — mode mock (MERCADOPAGO_MOCK_MODE)", () => {
   beforeEach(() => {
     preferenceInput = null;
+    paymentUpdate = null;
     orderRow = commandeRecente();
   });
 
@@ -190,5 +204,16 @@ describe("POST /api/payments/create — mode mock (MERCADOPAGO_MOCK_MODE)", () =
     expect(response.status).toBe(409);
     expect(body.reason).toBe("order_expiring");
     expect(preferenceInput).toBeNull();
+  });
+});
+
+describe("POST /api/payments/create — identité du compte qui encaisse (spec 39)", () => {
+  it("persiste la préférence et le collector_id sur payments", async () => {
+    paymentUpdate = null;
+    orderRow = commandeRecente();
+    const response = await POST(requete());
+
+    expect(response.status).toBe(200);
+    expect(paymentUpdate).toEqual({ mp_preference_id: "pref-fake-1", mp_collector_id: "3627131944" });
   });
 });

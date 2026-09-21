@@ -19,6 +19,58 @@ describe("deriveOrderState", () => {
     ).toBe("awaiting");
   });
 
+  // Spec 39 D3 (2026-09-22) — trois cas que la revue adversariale du Lot B a fait entrer ici.
+  it("rend « paid_not_honored » quand le client a payé une commande morte, AVANT « awaiting »", () => {
+    // Order L du Lot A : paiement local resté `pending`, lignes expirées, entrée refund_required.
+    expect(
+      deriveOrderState({
+        paymentStatus: "pending",
+        lines: [{ status: "expired" }],
+        acompteCop: 0,
+        paymentReceivedNotHonored: true,
+      })
+    ).toBe("paid_not_honored");
+  });
+
+  it("ne rend jamais « awaiting » pour une commande sans ligne vivante — « se actualiza sola » pour toujours", () => {
+    expect(
+      deriveOrderState({ paymentStatus: "pending", lines: [{ status: "cancelled_by_client" }], acompteCop: 0 })
+    ).toBe("cancelled");
+    expect(
+      deriveOrderState({ paymentStatus: "pending", lines: [{ status: "expired" }], acompteCop: 0 })
+    ).toBe("expired");
+  });
+
+  it("rend « refunded » dès que l'argent est rendu, par le job ou hors hifago", () => {
+    expect(
+      deriveOrderState({
+        paymentStatus: "unpaid",
+        lines: [{ status: "expired" }],
+        acompteCop: 0,
+        paymentReceivedNotHonored: false,
+        refundStatus: "approved",
+      })
+    ).toBe("refunded");
+    expect(
+      deriveOrderState({ paymentStatus: "refunded", lines: [{ status: "reserved" }], acompteCop: 17000 })
+    ).toBe("refunded");
+  });
+
+  it("un remboursement en attente ou refusé laisse le client sur « te contactamos »", () => {
+    expect(
+      deriveOrderState({
+        paymentStatus: "unpaid", lines: [{ status: "expired" }], acompteCop: 0,
+        paymentReceivedNotHonored: true, refundStatus: "pending",
+      })
+    ).toBe("paid_not_honored");
+    expect(
+      deriveOrderState({
+        paymentStatus: "unpaid", lines: [{ status: "expired" }], acompteCop: 0,
+        paymentReceivedNotHonored: true, refundStatus: "rejected",
+      })
+    ).toBe("paid_not_honored");
+  });
+
   it("rend « unpaid » tant qu'une prestation est encore vivante ET qu'un acompte est réellement dû en ligne", () => {
     expect(
       deriveOrderState({ paymentStatus: "unpaid", lines: [{ status: "reserved" }], acompteCop: 17000 })

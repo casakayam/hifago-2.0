@@ -131,7 +131,7 @@ export async function POST(request: Request) {
   };
 
   try {
-    const { initPoint } = await createCheckoutPreference({
+    const { initPoint, preferenceId, collectorId } = await createCheckoutPreference({
       paymentId: payment.id,
       amountCop: payment.amount_cop,
       payerEmail: payment.payer_email,
@@ -141,6 +141,17 @@ export async function POST(request: Request) {
       notificationUrl: `${origin}/api/payments/webhook`,
       expiresAt,
     });
+    // Spec 39 (2026-09-21) : la préférence et le compte qui ENCAISSE sont persistés. Le job de
+    // réconciliation refuse de décider quoi que ce soit si le token qu'il porte n'appartient pas à
+    // `mp_collector_id` (piège 19 : deux comptes MP, une recherche vide ≠ « pas payé »). Meilleur
+    // effort : un échec d'écriture n'empêche jamais le client de payer, il se voit en log.
+    const { error: persistError } = await service
+      .from("payments")
+      .update({ mp_preference_id: preferenceId, mp_collector_id: collectorId })
+      .eq("id", payment.id);
+    if (persistError) {
+      console.error("payments.mp_preference_id/mp_collector_id : écriture échouée", persistError);
+    }
     return Response.json({ ok: true, init_point: initPoint });
   } catch (error) {
     // Échec fermé (spec §0 Tranche 1) : Mercado Pago indisponible/mal configuré n'annule jamais la

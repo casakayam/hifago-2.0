@@ -5,13 +5,13 @@
 > Un seul fichier à ouvrir pour savoir ce qui existe : celui-ci.
 
 ## Cadrage — architecture, modèle de données, cahiers des charges
-- [Audit du modèle de données cible — entités partagées](00-modele-de-donnees.md) · maj 2026-09-17
-- [Cahier des charges — portail client (marketplace global, Guatapé = première localisation)](01-cahier-des-charges-client.md) · maj 2026-09-16
-- [Cahier des charges — portail socio (aujourd'hui /partner)](02-cahier-des-charges-socio.md) · maj 2026-09-07
-- [Cahier des charges — back-office admin (aujourd'hui /admin)](03-cahier-des-charges-admin.md) · maj 2026-09-07
+- [Audit du modèle de données cible — entités partagées](00-modele-de-donnees.md) · maj 2026-09-20
+- [Cahier des charges — portail client (marketplace global, Guatapé = première localisation)](01-cahier-des-charges-client.md) · maj 2026-09-20
+- [Cahier des charges — portail socio (aujourd'hui /partner)](02-cahier-des-charges-socio.md) · maj 2026-09-20
+- [Cahier des charges — back-office admin (aujourd'hui /admin)](03-cahier-des-charges-admin.md) · maj 2026-09-20
 - [Choix de stack et architecture cible](04-architecture-cible.md) · maj 2026-09-07
 - [Référence technique — patterns validés et extensions requises](05-reference-technique.md) · maj 2026-08-16
-- [Emails transactionnels — les 8 envois possibles, leur déclencheur et leur destinataire](06-emails-transactionnels.md) · maj 2026-09-01
+- [Emails transactionnels — les 11 envois possibles, leur déclencheur et leur destinataire](06-emails-transactionnels.md) · maj 2026-09-20
 
 ## Specs — features prêtes à coder ou livrées
 - [Admin crée un partenaire](specs/01-admin-creation-partenaire.md) — **Implémenté** · maj 2026-08-15
@@ -32,11 +32,11 @@
 - [Notifications toast succès/échec sur toute création/édition/suppression (admin + socio)](specs/16-notifications-toast.md) — **Implémenté** · maj 2026-09-07
 - [Calendrier/disponibilité — audit complet + refonte phasée (Tranches 0-2 prêtes à coder)](specs/17-calendrier-disponibilite-refonte.md) — **Partiel** (reste : Tranche 1 (crash price_cop null, Mis Reservas) et Tranche 2 (SVAR, moteur unifié…) · maj 2026-09-07
 - [Créneaux horaires réellement réservables (product_slot_rules)](specs/18-creneaux-horaires-reservables.md) — **Implémenté** · maj 2026-09-07
-- [Paiement en ligne Mercado Pago — acompte obligatoire, ledger de règlement, virement automatique au référent](specs/19-paiement-mercadopago-acompte-ledger.md) — **Partiel** (reste : Tranche 1 (capture d'acompte, CheckoutForm branché, ledger) livrée et vérifiée en…) · maj 2026-09-07
+- [Paiement en ligne Mercado Pago — acompte obligatoire, ledger de règlement, virement automatique au référent](specs/19-paiement-mercadopago-acompte-ledger.md) — **Partiel** (reste : Tranche 1 (capture d'acompte, CheckoutForm branché, ledger) livrée et vérifiée en…) · maj 2026-09-20
 - [Agenda de réservations socio (vue jour/semaine/mois)](specs/20-agenda-reservations-socio.md) — **Implémenté** · maj 2026-09-07
 - [Connecteur LobbyPMS — contrat générique multi-prestataire](specs/21-connecteur-lobbypms.md) — **Partiel** (reste : Tranche 1 implémentée le 2026-08-19, disponibilité live côté client comblée le…) · maj 2026-09-07
 - [Vue référent restreinte — pas d'établissement/mis reservas, liste des ventes attribuées](specs/22-vue-referent-restreinte.md) — **Implémenté** (reste : Validé par Jérôme le 2026-08-20.) · maj 2026-09-07
-- [Notifications email transactionnelles (invitation, modération, paiement, réconciliation)](specs/23-notifications-email-transactionnelles.md) — **Implémenté** (reste : Tranche 1 + Tranche 2 livrées. Envoi réel Resend confirmé le 2026-08-31 (8 emails reçus…) · maj 2026-09-07
+- [Notifications email transactionnelles (invitation, modération, paiement, réconciliation)](specs/23-notifications-email-transactionnelles.md) — **Implémenté** (reste : Tranche 1 + Tranche 2 livrées. Envoi réel Resend confirmé le 2026-08-31 (8 emails reçus…) · maj 2026-09-20
 - [Surface LobbyPMS exploitée, parcours front d'un produit lié, et cible du modèle hébergement](specs/24-modele-hebergement-et-surface-lobbypms.md) — **Partiel** (reste : Lot A implémenté le 2026-08-26 ; Lot B gelé (observation préprod requise) ; T1/T2/T3 de…) · maj 2026-09-07
 - [Propagation d'une annulation hifago vers LobbyPMS (C2)](specs/25-propagation-annulation-lobbypms.md) — **Implémenté** (reste : Vérifiée en conditions réelles le 2026-08-27 (booking créé puis annulé chez Casa Kayam)…) · maj 2026-09-07
 - [Référencement de la vitrine : Google et moteurs de réponse IA](specs/26-referencement-seo-et-moteurs-ia.md) — **Implémenté** (reste : Vérifiée en local le 2026-09-01 (build, serveur réel, 3 e2e). Validation par un outil…) · maj 2026-09-07
@@ -46,13 +46,14 @@
 - [Vitrine : les fiches produit et établissement](specs/30-vitrine-fiches-produit-et-etablissement.md) — **Implémenté** · maj 2026-09-08
 - [Identité anonyme de l'invité](specs/31-identite-anonyme.md) — **Brouillon** · maj 2026-09-10
 - [Panier en base](specs/32-panier-en-base.md) — **Implémenté** · maj 2026-09-13
-- [L'écran de résultat de paiement et la fermeture du tunnel](specs/33-resultat-paiement-et-fermeture-du-tunnel.md) — **Implémenté** · maj 2026-09-11
+- [L'écran de résultat de paiement et la fermeture du tunnel](specs/33-resultat-paiement-et-fermeture-du-tunnel.md) — **Implémenté** · maj 2026-09-20
 - [Compte client : « Mis reservas », la liste et le détail](specs/34-compte-mes-reservations.md) — **Implémenté** · maj 2026-09-11
 - [Compte client : profil, édition, déconnexion, suppression](specs/35-compte-profil.md) — **Implémenté** · maj 2026-09-12
 - [Remise par seuil de remplissage cumulé (camps)](specs/36-remise-remplissage-camp.md) — **Implémenté** · maj 2026-09-14
 - [Programme jour par jour d'un camp](specs/37-programme-camp.md) — **Implémenté** · maj 2026-09-17
 - [Remise en route de la suite E2E Playwright](specs/38-remise-en-route-suite-e2e.md) — **Brouillon** · maj 2026-09-18
-- [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-18
+- [Garantir la confirmation d'un paiement quand le client ne revient pas](specs/39-garantie-confirmation-paiement.md) — **Partiel** (reste : Lot A + B1 + B2 livrés et vérifiés en local le 2026-09-22 (§C). Restent : validation par…) · maj 2026-09-20
+- [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-20
 - [Gabarit de spec de feature (à copier, ne décrit aucune feature réelle)](specs/_modele.md) — **modele** · maj 2026-08-16
 - [Avant d'écrire une spec — poser les bonnes questions](specs/avant-la-spec.md) — **modele** · maj 2026-08-16
 

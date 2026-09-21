@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   if (
     typeof paymentId !== "string" ||
     typeof returnUrl !== "string" ||
-    (outcome !== "approved" && outcome !== "rejected")
+    (outcome !== "approved" && outcome !== "rejected" && outcome !== "pending")
   ) {
     return new Response("Bad request", { status: 400 });
   }
@@ -64,5 +64,10 @@ export async function POST(request: Request) {
   // Même paramètre `?payment=` que les trois back_urls du vrai Mercado Pago (create/route.ts) —
   // ici posé au moment du clic plutôt qu'à la création de la préférence, faute d'issue connue avant.
   target.searchParams.set("payment", outcome);
+  // Spec 39 : la raison rendue par la RPC (paid_after_expiry, double_payment, already_cancelled…)
+  // est relayée pour que les tests et l'œil humain voient ce que la garde a décidé — le vrai
+  // Mercado Pago ne la connaît pas, l'écran ne la lit jamais pour décider (orderState.ts).
+  const reason = (result as { reason?: string } | null)?.reason;
+  if (reason) target.searchParams.set("reason", reason);
   return Response.redirect(target.toString(), 303);
 }

@@ -12,7 +12,7 @@ revise:
   - "docs/00-modele-de-donnees.md#6"
   - "docs/02-cahier-des-charges-socio.md#1"
   - "docs/03-cahier-des-charges-admin.md#2"
-maj: 2026-08-24
+maj: 2026-09-20
 resume: >
   Premier fournisseur email applicatif du projet (Resend) : file Postgres + journal d'envoi +
   Edge Function, sur le même patron que le connecteur LobbyPMS. Tranche 1 (4 événements, aucune
@@ -160,8 +160,14 @@ cf. §10 point 0 pour pourquoi).
   attendu, ex. invitation sans email) — no-op silencieux.
 - `apply_payment_webhook` reste idempotent après cette spec : `p_status='approved'` rejoué sur un
   paiement déjà `approved` retourne `already_applied` **avant** d'atteindre les 3 nouveaux enqueue.
+  Depuis le 2026-09-20 (`20260920120000`), la garde « rien à honorer » retourne de même AVANT les
+  3 enqueue (`paid_after_expiry`/`double_payment`) : aucun e-mail « reserva confirmada » ne part
+  pour une commande expirée, annulée ou déjà payée.
 - Les 2 emails admin (nouvelle proposition, exception réconciliation) restent minimaux :
-  identifiant + lien vers l'écran admin existant, jamais le contenu intégral.
+  identifiant + lien vers l'écran admin existant, jamais le contenu intégral. Précisé le
+  2026-09-20 pour l'exception de paiement : numéro de commande + montant dans le libellé, lien
+  ABSOLU via le secret Vault `admin_app_public_url` (le lien relatif était mort en boîte mail),
+  sujet dédié pour `kind = 'refund_required'` — `docs/06-emails-transactionnels.md` n°3.
 - `claim_notification_email_batch` ne laisse jamais une ligne bloquée indéfiniment à `sending`
   (§8.4) — reprise après 10 min, envoi physique protégé par `Idempotency-Key` Resend.
 - La réponse HTTP de `send-notification-emails` ne contient jamais de PII (§8.6).
@@ -344,7 +350,9 @@ partenaire + un lien vers `/admin/proposals/[id]`.
 
 **Exception de réconciliation (Tranche 1)** : une ligne apparaît dans
 `payment_reconciliation_entries`/`pms_reconciliation_entries` (webhook Mercado Pago en échec, ou
-poll LobbyPMS détectant une dérive) → trigger → email admin minimal + lien `/admin/reconciliation`.
+poll LobbyPMS détectant une dérive) → trigger → email admin minimal + lien `/admin/reconciliation`
+(absolu depuis le 2026-09-20 ; l'écran liste les deux files depuis ce jour-là aussi — avant, il ne
+montrait que le PMS).
 
 **Paiement/commission/confirmation client (Tranche 2)** : le webhook Mercado Pago confirme
 `p_status='approved'` → `apply_payment_webhook` marque `orders.payment_status='paid'` → 3 enqueue
@@ -604,7 +612,8 @@ happy-path ne peut prouver un `exception when others/query_canceled` réellement
    notification "réservé" pour une commande qui expire ensuite silencieusement côté client — un
    comportement déjà présent aujourd'hui indépendamment de cette spec (le blocage est
    inconditionnel depuis sa création, spec 20), donc pas un écart introduit ici, mais à vérifier
-   par Jérôme si ce n'était pas déjà connu.
+   par Jérôme si ce n'était pas déjà connu. → C'est le « Trou (a) » du backlog ; la libération à
+   l'expiration est la décision D1-bis de `docs/specs/39-garantie-confirmation-paiement.md`.
 4. **Dédup de `notification_emails` par `coalesce(recipient_account_id, uuid nul)`** plutôt qu'un
    index unique brut sur la colonne — Postgres ne considère jamais deux `NULL` comme égaux dans un
    index unique.
@@ -650,7 +659,7 @@ happy-path ne peut prouver un `exception when others/query_canceled` réellement
 | §0/§7 — proposition traitée | `supabase/migrations/20260818170000_camp_tags_and_room_photos.sql` (dernière définition live de `moderate_product_proposal`), `supabase/migrations/20260819200000_establishment_creation_proposal_photos.sql` (dernière définition live de `moderate_establishment_proposal`) — **pas** les migrations d'origine (20260813240500/20260815170000), obsolètes pour cette RPC précise |
 | §0/§7 — exception réconciliation | `supabase/migrations/20260818210000_payment_reconciliation_entries.sql`, `20260814210000_pms_reconciliation_entries.sql` (triggers ajoutés) |
 | §0/§7 — dispatch | `supabase/migrations/20260819140000_pms_jobs_cron.sql` (squelette copié), `supabase/functions/pms-poll-bookings/index.ts` (squelette Edge Function copié), nouveau `supabase/functions/send-notification-emails/index.ts` |
-| §7 (Tranche 2) — paiement/commission/confirmation client | `supabase/migrations/20260818220000_apply_payment_webhook.sql` (étendue) |
+| §7 (Tranche 2) — paiement/commission/confirmation client | `supabase/migrations/20260818220000_apply_payment_webhook.sql` (étendue) ; définition vivante : `20260920120000_harden_apply_payment_webhook.sql` |
 | §7 (Tranche 2) — blocage camp/evento | `supabase/migrations/20260818140000_create_order_ledger_entry.sql` (dernière définition live de `create_order` au moment d'écrire cette spec — à revérifier avant d'implémenter, `create_order` a déjà été redéfinie 14 fois d'après son propre commentaire de tête) |
 | §9 — tests | `docs/05-reference-technique.md` §2 (squelette de concurrence copié pour `claim_notification_email_batch`), `tests/pms-integration/` (squelette d'intégration Edge Function copié) |
 

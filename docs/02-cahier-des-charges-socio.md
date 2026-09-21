@@ -3,7 +3,7 @@ id: refonte-cdc-socio
 titre: "Cahier des charges — portail socio (aujourd'hui /partner)"
 theme: cadrage
 statut: brouillon
-maj: 2026-08-13
+maj: 2026-09-20
 resume: >
   Comportement métier cible du portail partenaire (référent/prestataire), dérivé du comportement
   réel actuel et challengé section par section avec Jérôme avant reprise dans la refonte.
@@ -27,6 +27,15 @@ repond_a:
   Pago ; le MOMENT du virement (après réalisation de la prestation) ne change pas. §3g ci-dessous
   n'a pas été réécrit — cette ligne en tient lieu tant que la relecture intégrale (docs/backlog.md)
   n'a pas eu lieu.
+- **§1, notifications « Pago confirmado » / « Nueva comisión asignada »** (livrées par
+  `docs/specs/23-notifications-email-transactionnelles.md`, envoyées par `apply_payment_webhook`) —
+  **précisé le 2026-09-20** (migration `20260920120000`, incident HFG-000013) : elles ne partent
+  QUE si la commande a encore une prestation à honorer. Un paiement approuvé par Mercado Pago après
+  l'expiration ou l'annulation de la commande, ou en double sur une commande déjà payée, ne
+  déclenche aucune notification partenaire : il ouvre une exception de paiement côté admin
+  (`refund_required`). Le partenaire ne voit donc jamais un « pago confirmado » pour une prestation
+  qui n'aura pas lieu. Suite (remboursement, réconciliation qui pilote l'expiration) :
+  `docs/specs/39-garantie-confirmation-paiement.md`, arbitrage Jérôme.
 
 Ajoutés par la relecture intégrale du 2026-09-07 :
 

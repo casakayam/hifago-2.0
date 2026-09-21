@@ -7,13 +7,16 @@ langue: fr
 statut: partiel
 reste: >
   Tranche 1 (capture d'acompte, CheckoutForm branché, ledger) livrée et vérifiée en paiement réel.
-  Tranche 2 (remboursement) non commencée — cf. docs/backlog.md. MERCADOPAGO_WEBHOOK_SECRET
-  toujours manquant : webhook jamais testé en conditions réelles.
+  Webhook vérifié en LIVRAISON RÉELLE le 2026-09-20 (piège 19 résolu : la clé de signature est
+  celle du compte qui encaisse) et RPC durcie le même jour (migration 20260920120000 — verrou
+  `orders` d'abord, garde « rien à honorer », entrée `refund_required` idempotente). Tranche 2
+  (remboursement) non commencée : reprise par docs/specs/39-garantie-confirmation-paiement.md
+  (arbitrage D3 de Jérôme).
 revise:
   - "docs/01-cahier-des-charges-client.md"
   - "docs/02-cahier-des-charges-socio.md#3g"
   - "docs/03-cahier-des-charges-admin.md#3g"
-maj: 2026-08-18
+maj: 2026-09-20
 resume: >
   Rouvre explicitement le « hors périmètre v1 » du paiement en ligne (décidé 2026-08-11/12) :
   Mercado Pago remplace Wompi comme gateway cible. Le client paie l'acompte (moteur 17/10/7 déjà
@@ -50,6 +53,10 @@ repond_a:
 > **Tranche 2 non commencée** (remboursement annulation établissement). Testé avec un vrai compte
 > sandbox Mercado Pago Colombia (identifiants fournis par Jérôme) — webhook non encore testé en
 > conditions réelles, `MERCADOPAGO_WEBHOOK_SECRET` pas encore configuré.
+> **Périmé depuis le 2026-09-20** : premier paiement confirmé de bout en bout en préprod (piège 19
+> résolu), puis `apply_payment_webhook` durcie (`20260920120000`, cf. §0 révisé ci-dessous) après
+> l'incident HFG-000013 ; la suite (réconciliation qui pilote l'expiration, remboursement) est
+> l'objet de la spec 39.
 
 ## Sommaire et statut
 
@@ -198,7 +205,11 @@ table en direct, le statut passe par `GET /api/payments/[orderId]/status`.
 **Table `payment_reconciliation_entries`** (livrée) : proche de `pms_reconciliation_entries`
 (`20260814210000`), mêmes 4 statuts `open/retrying/resolved/permanently_failed`, mais `payment_id`
 **nullable** (un webhook peut échouer avant toute corrélation possible) + `mp_payment_id`/
-`external_reference`/`raw_event`/`failure_reason` dédiés. RPC
+`external_reference`/`raw_event`/`failure_reason` dédiés. **Ajout 2026-09-20** (`20260920120000`) :
+colonne `kind` (`webhook_failure` = bruit à diagnostiquer, défaut ; `refund_required` = argent
+encaissé chez MP sans prestation à honorer, action admin requise) et index unique partiel
+`(mp_payment_id) where kind = 'refund_required'` — une seule entrée par paiement MP quel que soit
+le nombre de livraisons/retentatives. RPC
 `resolve_payment_reconciliation_entry` (admin-only, motif obligatoire) — même patron que
 `resolve_reconciliation_entry`. INSERT jamais via RPC : le Route Handler webhook écrit directement
 avec `service_role` (déjà grantée par défaut, cf. `20260813163456_identity_rls.sql`).
@@ -247,7 +258,18 @@ comparaison à temps constant déjà intégrée, plus une fenêtre de tolérance
 maintenu par Mercado Pago lui-même plutôt que réimplémenté ici. `select ... for update` sur
 `payments where id = p_external_reference`. Si `status` déjà `'approved'` → no-op idempotent. Si
 transition vers `'approved'` pour la 1ʳᵉ fois → `orders.payment_status := 'paid'`. Si
-`'rejected'`/`'cancelled'` → `orders.payment_status := 'unpaid'`. Le Route Handler ajoute une
+`'rejected'`/`'cancelled'` → `orders.payment_status := 'unpaid'`.
+**RÉVISÉ 2026-09-20** (`20260920120000_harden_apply_payment_webhook.sql`, incident HFG-000013) :
+(1) verrou `orders` D'ABORD puis `payments` (ordre du cron, piège 21) ; (2) garde « rien à
+honorer » — un `approved` sur un paiement `cancelled`, sur une commande sans ligne
+`reserved`/`fulfilled`/`no_show`, ou déjà payée par un autre `payments`, ne touche ni
+`payments.status` ni `orders`, n'envoie aucun e-mail, crée UNE entrée `kind='refund_required'`
+(motif dérivé des statuts réels) et répond `{ok:true, reason:'paid_after_expiry'|'double_payment'}`
+(200, MP ne retente pas) ; (3) après approbation, les autres `payments` `pending`/`rejected` de la
+commande passent `cancelled` ; (4) tout non-`approved` sur un paiement `cancelled` →
+`already_cancelled`, et un `rejected` ne rétrograde jamais une commande qu'un autre paiement porte.
+Preuves : `payments.test.sql` cas 28-36 (mutation), `apply_payment_webhook_vs_expiry.concurrency.mjs`.
+Le Route Handler ajoute une
 **défense en profondeur non prévue au plan initial** : avant d'appeler cette RPC avec `'approved'`,
 il compare `transaction_amount` (réponse Mercado Pago re-confirmée) à `payments.amount_cop` — un
 écart n'approuve jamais automatiquement, atterrit en `payment_reconciliation_entries` à la place.
@@ -296,7 +318,9 @@ ne crée jamais deux préférences distinctes.
   toujours le montant plein enregistré dans `ledger_entries.amount_cop`.
 - Traitement webhook idempotent par construction : `select ... for update` sur `payments` +
   vérification `status` avant toute écriture — un webhook dupliqué ou reçu hors-ordre ne produit
-  jamais un double crédit.
+  jamais un double crédit. Depuis le 2026-09-20 : jamais non plus une commande `paid` sur des
+  lignes `expired`/annulées, ni deux `approved` sur une même commande (double paiement
+  inter-`external_reference` → `refund_required`).
 - Corrélation paiement↔commande par `external_reference = payments.id` (généré avant tout appel
   Mercado Pago), jamais par `mp_payment_id` seul (pas encore connu à la création de l'intent pour
   Checkout Pro).
@@ -329,7 +353,8 @@ ne crée jamais deux préférences distinctes.
   dernier recours.
 - Montant Mercado Pago re-confirmé ≠ `payments.amount_cop` attendu (falsification de préférence,
   bug client, ou coupon appliqué côté Mercado Pago) → **jamais approuvé automatiquement** (webhook
-  route), atterrit en `payment_reconciliation_entries` pour résolution manuelle admin.
+  route), atterrit en `payment_reconciliation_entries` pour résolution manuelle admin — typé
+  `kind = 'refund_required'` depuis le 2026-09-20 (l'argent est encaissé au mauvais montant).
 
 **Fichiers livrés (Tranche 1)** : migrations `20260818200000_payments.sql` (table `payments` +
 `orders.payment_status` + `create_payment_intent`), `20260818210000_payment_reconciliation_entries.sql`
@@ -377,6 +402,11 @@ non purgées avant le `delete` — `ledger_entries` datait de la Tranche 0, pas 
 ---
 
 ### Tranche 2 — Remboursement (annulation établissement) + redistribution ledger
+
+> **2026-09-20** : jamais commencée. Le contrat ci-dessous (table `payment_refunds`, deux RPC) est
+> repris tel quel par `docs/specs/39-garantie-confirmation-paiement.md` D3, qui l'élargit aux trois
+> cas « argent encaissé, rien honoré » (payé après expiration/annulation, écart de montant, double
+> paiement) — arbitrage Jérôme en attente.
 
 **Table `payment_refunds`** (nouvelle) : `id`, `payment_id → payments`, `order_line_id →
 order_lines`, `amount_cop`, `mp_refund_id text`, `status check('pending','approved','rejected')`,

@@ -4,7 +4,7 @@ titre: "Dette technique et QA/UI connue — hifago"
 theme: journal
 statut: vivant
 langue: fr
-maj: 2026-09-16
+maj: 2026-09-22
 resume: >
   Dette signalée et non corrigée du chantier hifago — technique, puis QA/UI mineure. Sortie de
   docs/backlog.md le 2026-09-08 : ce fichier-là plafonne à 60 lignes et prescrit lui-même qu'un
@@ -164,7 +164,7 @@ arbitrages — rien n'y attend une décision de Jérôme.
 - `alojamiento-pms-backed-demo` reste `sellable` en préprod alors qu'il est invendable (PMS-backed sans vraie disponibilité).
 - `caminata-mirador-penon` (produit utilisé par les précédents smoke tests manuels) n'a plus aucune date ouverte sur 3 mois glissants, vérifié le 2026-09-10 — utiliser un autre produit du seed (`kayak-embalse-guatape` a une date ouverte le 2026-10-05) pour tout nouveau test manuel du parcours panier.
 - **Les 7 transports déjà en base n'ont PAS d'horaires** malgré l'enrichissement d'`aeroturex-bus-compartido.json` (2026-09-16) : `seed-mock-data.mjs` est create-only et ignore un produit existant. Leurs deux LIEUX, eux, sont bien arrivés (migration de données de `20260916150000`). Un `update` manuel ou un `db reset` est nécessaire pour voir la fenêtre de départs sur un environnement déjà seedé — le lot n'est pas cassé.
-- **Paiement Mercado Pago — webhook : RÉSOLU le 2026-09-20**, premier paiement confirmé de bout en bout (piège 19 refermé). La clé de signature doit venir de l'application QUI ENCAISSE — ici celle du compte vendeur de test, pas celle du compte de développement. ⚠️ Restent ouverts : (a) la variable partagée d'équipe `MERCADOPAGO_WEBHOOK_SECRET` porte encore l'ancienne valeur, surchargée par une variable de projet sur `hifago-web` — à nettoyer ; (b) deux paiements encaissés sur commandes annulées (`00bd6fbb`, `e153dea0`) qu'une retentative MP transformerait en commandes fantômes ; (c) **la confirmation n'est garantie que tant que le webhook fonctionne** — si le client ne revient pas et que le webhook retombe, rien ne rattrape, et `expire_stale_payment_orders` annule une commande payée sans jamais interroger MP. Arbitrage Jérôme requis — `docs/journal/2026-09.md` (2026-09-20), `docs/backlog.md`.
+- **Paiement Mercado Pago — webhook : RÉSOLU le 2026-09-20**, premier paiement confirmé de bout en bout (piège 19 refermé). La clé de signature doit venir de l'application QUI ENCAISSE — ici celle du compte vendeur de test, pas celle du compte de développement. ⚠️ Restent ouverts : (a) la variable partagée d'équipe `MERCADOPAGO_WEBHOOK_SECRET` porte encore l'ancienne valeur, surchargée par une variable de projet sur `hifago-web` — à nettoyer ; (b) deux paiements encaissés sur commandes annulées (`00bd6fbb`, `e153dea0`) qu'une retentative MP transformerait en commandes fantômes ; (c) ~~la confirmation n'est garantie que tant que le webhook fonctionne~~ — **REFERMÉ le 2026-09-22** en local (spec 39 B1/B2 : `expire_stale_payment_orders` supprimée, `payments-reconcile` interroge MP avant toute expiration, remboursement par le job, client prévenu) ; reste le déploiement préprod (spec 39 §C).
 
 ## Fragilités des contrôles CI, relevées par la revue du 2026-09-19
 Trouvées en auditant `scripts/check-*.sh`, toutes VÉRIFIÉES en différentiel mais AUCUNE ne se
@@ -179,3 +179,23 @@ run vire au rouge sans faute réelle.
 - `check-deno-imports.sh` — seul script à utiliser des tableaux bash sous `set -u` : deux idiomes y sont fatals en bash 3.2 (le `/bin/bash` de macOS) et légaux depuis 4.4. Inoffensif sur la forme actuelle du dépôt, et ne pourrait casser qu'en LOCAL, jamais en CI (Ubuntu a bash 5.x).
 - `check-i18n-links.sh` / `check-tokens.sh` / `check-data-layer.sh` — parcourent l'arbre 3, 2 et 2 fois respectivement (une passe par règle), soit ~2 700 `fork` de `perl`+`grep`. Factoriser en une seule traversée rendrait `npm run verify` sensiblement plus rapide.
 
+## Faits déplacés du backlog le 2026-09-20
+Même motif que les déplacements précédents : `docs/backlog.md` à 59/60 lignes. Un fait à ne pas
+re-découvrir, pas un arbitrage.
+
+- **`client_key_for_order` perd 2 de ses 3 branches en usage réel** (mesuré le 2026-09-10, conséquence de `account_id` NOT NULL) — `coalesce(account_id, email, téléphone, order_id)` résout désormais TOUJOURS via `account_id` pour ses deux seuls appelants (`list_clients`, `list_client_orders`) : les replis email/téléphone/order_id sont inatteignables par une vraie ligne `orders`. Pas une régression (l'admin ne tape jamais un email à la main, toujours un client_key déjà résolu) — juste un fait à ne pas re-découvrir en confusion. Fonction non modifiée ; sa couverture vit dans `list_client_orders_rpc.test.sql` en appelant la fonction pure directement.
+
+## Dette trouvée en livrant la spec 39 (Lot B), les 2026-09-21/22
+- **Deux fonctions insèrent une ligne fille pendant qu'une autre tient la ligne parente** : le
+  `KEY SHARE` d'un `insert into order_lines` sur `orders` a interbloqué `modify_order_line` avec
+  `expire_payment_order` (3 `40P01` sur 12, reproduit avant correctif, `20260921100200`). Toute
+  future RPC qui insère des `order_lines` dans une commande EXISTANTE doit verrouiller `orders`
+  d'abord (`create_manual_order_line` crée sa propre commande : hors cause). Piège 22.
+- **Codes d'erreur Mercado Pago des remboursements jamais observés en réel** : la fixture
+  d'intégration rejoue des corps supposés (`Payment-too-old-to-be-refunded`) ; à remplacer par des
+  captures préprod avant de faire confiance au mapping 4xx → `rejected` (spec 39 §10.5).
+- **`/admin/reconciliation` sans pagination** : deux listes en cartes (PMS, Pagos) qui grandissent
+  avec l'historique (`Reembolsados` compris) — passer en `DataList` quand le volume le justifiera.
+- **Aucun écran ne lit `job_heartbeats`** : l'admin apprend qu'un job est arrêté par e-mail
+  (`admin_job_stalled`), pas par un voyant. Un bloc « santé des jobs » sur l'accueil admin serait la
+  suite naturelle (RLS admin déjà posée).

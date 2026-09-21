@@ -35,6 +35,12 @@ function deliveryEvidence(request: Request, url: URL): Json {
   };
 }
 
+/**
+ * `kind` (migration 20260920120000) : `webhook_failure` = bruit à diagnostiquer (signature,
+ * re-confirmation, corrélation) ; `refund_required` = l'argent est encaissé chez Mercado Pago et
+ * rien ne sera honoré — l'admin doit agir. C'est la seule valeur que l'écran de réconciliation
+ * filtre pour distinguer les deux.
+ */
 async function recordFailure(params: {
   paymentId?: string | null;
   mpPaymentId?: string | null;
@@ -42,9 +48,10 @@ async function recordFailure(params: {
   body: Json;
   delivery: Json;
   failureReason: string;
+  kind?: "webhook_failure" | "refund_required";
 }) {
   const service = createServiceRoleClient();
-  await service.from("payment_reconciliation_entries").insert({
+  const { error } = await service.from("payment_reconciliation_entries").insert({
     payment_id: params.paymentId ?? null,
     mp_payment_id: params.mpPaymentId ?? null,
     external_reference: params.externalReference ?? null,
@@ -52,7 +59,14 @@ async function recordFailure(params: {
     // `delivery` ajoute de quoi rejouer la vérification de signature plus tard.
     raw_event: { body: params.body, delivery: params.delivery },
     failure_reason: params.failureReason,
+    kind: params.kind ?? "webhook_failure",
   });
+  // 23505 = l'index unique partiel sur (mp_payment_id) where kind = 'refund_required' : Mercado
+  // Pago livre `created` puis `updated`, puis retente — une seule entrée (et une seule salve
+  // d'e-mails admin) par paiement MP, les livraisons suivantes sont un no-op silencieux.
+  if (error && error.code !== "23505") {
+    console.error("payment_reconciliation_entries : insertion échouée", error);
+  }
 }
 
 export async function POST(request: Request) {
@@ -155,6 +169,9 @@ export async function POST(request: Request) {
     typeof mpAmount === "number" &&
     Math.round(mpAmount) !== knownPayment.amount_cop
   ) {
+    // L'argent EST encaissé (au mauvais montant) et le paiement reste `pending` jusqu'à ce que
+    // l'expiration le reprenne : c'est un remboursement à décider, pas un simple échec de
+    // webhook — `kind: refund_required`, comme la garde de apply_payment_webhook (20260920120000).
     await recordFailure({
       paymentId: knownPayment.id,
       mpPaymentId: dataId,
@@ -162,6 +179,7 @@ export async function POST(request: Request) {
       body: rawBody,
       delivery: deliveryEvidence(request, url),
       failureReason: `montant Mercado Pago (${mpAmount}) ≠ amount_cop attendu (${knownPayment.amount_cop})`,
+      kind: "refund_required",
     });
     return new Response(null, { status: 200 }); // Corrélé mais suspect : jamais un retry MP en boucle.
   }

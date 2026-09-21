@@ -57,6 +57,9 @@ export type MyOrder = {
    */
   acompteCop: number;
   lines: MyOrderLine[];
+  /** Spec 39 D3 — mêmes clés que `OrderForDisplay`, même dérivation (`orderState.ts`). */
+  paymentReceivedNotHonored: boolean;
+  refundStatus: string | null;
 };
 
 /** Les deux groupes, dans l'ordre où l'écran les rend. Décidés en base, pas ici. */
@@ -99,6 +102,8 @@ type RpcOrder = {
   acompte_cop: number;
   group: "upcoming" | "past";
   lines: RpcLine[];
+  payment_received_not_honored?: boolean;
+  refund_status?: string | null;
 };
 
 type RpcResult = { ok: boolean; reason?: string; orders?: RpcOrder[] };
@@ -122,6 +127,8 @@ export async function getMyOrders(locale: Locale): Promise<MyOrders | null> {
     paymentStatus: order.payment_status,
     acompteCop: order.acompte_cop,
     group: order.group,
+    paymentReceivedNotHonored: order.payment_received_not_honored === true,
+    refundStatus: order.refund_status ?? null,
     lines: (order.lines ?? []).map((line) => ({
       id: line.id,
       // Les libellés sortent bruts de la base : la résolution dans la locale du visiteur se fait

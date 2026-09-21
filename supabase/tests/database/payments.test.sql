@@ -1,13 +1,13 @@
 -- Spec 19 §0 Tranche 1 — create_payment_intent, apply_payment_webhook (grant service_role
 -- uniquement), payment_reconciliation_entries/resolve_payment_reconciliation_entry,
--- expire_stale_payment_orders (job pg_cron). Migrations 20260818200000/210000/220000/230000,
+-- expire_stale_payment_orders (job pg_cron, SUPPRIMÉ le 2026-09-21). Migrations 20260818200000/210000/220000/230000,
 -- seules sources de vérité pour les messages/logique. apply_payment_webhook n'a AUCUN check
 -- interne d'identité (cf. commentaire de la migration) : sa sécurité repose entièrement sur le
 -- GRANT — vérifié ici via has_function_privilege (métadonnée ACL) ET un appel réel sous
 -- `set local role authenticated` (le vrai rôle Postgres change, contrairement à test_login qui ne
 -- simule qu'un claim JWT), pas seulement l'un ou l'autre.
 begin;
-select plan(43);
+select plan(65);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -251,6 +251,22 @@ values
    'Holder Payments Webhook OK', 'webhook-ok@test.local'),
   ('88970000-0000-4000-8000-000000000045', '88970000-0000-4000-8000-000000000032',
    'Holder Payments Webhook Rejected', 'webhook-rejected@test.local');
+-- RÉVISÉ 2026-09-20 (durcissement 20260920120000) : ces deux commandes n'avaient AUCUNE ligne —
+-- un raccourci de fixture impossible en réel (create_payment_intent exige une ligne reserved avec
+-- acompte dû). Depuis la garde « rien à honorer », un paiement sur une commande sans ligne vivante
+-- est refusé (refund_required) : la fixture porte donc désormais la ligne reserved qu'elle aurait
+-- toujours dû avoir. Trouvé en faisant rougir ce fichier, pas supposé.
+insert into order_lines (
+  id, order_id, account_id, product_id, date, qty, status, holder_name,
+  price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
+  acompte_cop, referrer_commission_cop, app_commission_cop
+) values
+  ('88970000-0000-4000-8000-000000000057', '88970000-0000-4000-8000-000000000044',
+   '88970000-0000-4000-8000-000000000032', '88970000-0000-4000-8000-000000000021',
+   '2028-12-07', 1, 'reserved', 'Holder Payments Webhook OK', 100000, 100000, 'direct', 0.25, 0, 0.25, 25000, 0, 25000),
+  ('88970000-0000-4000-8000-000000000058', '88970000-0000-4000-8000-000000000045',
+   '88970000-0000-4000-8000-000000000032', '88970000-0000-4000-8000-000000000021',
+   '2028-12-08', 1, 'reserved', 'Holder Payments Webhook Rejected', 100000, 100000, 'direct', 0.3, 0, 0.3, 30000, 0, 30000);
 insert into payments (id, order_id, status, amount_cop)
 values
   ('88970000-0000-4000-8000-000000000071', '88970000-0000-4000-8000-000000000044', 'pending', 25000),
@@ -359,138 +375,350 @@ select throws_ok(
 reset role;
 
 ------------------------------------------------------------------------------------------------
--- expire_stale_payment_orders — job pg_cron (30 minutes, §10 point 14).
+-- apply_payment_webhook — durcissement 20260920120000 (incident HFG-000013 du 2026-09-20) :
+-- garde « rien à honorer », double paiement, idempotence de l'entrée, clôture des autres
+-- paiements de la commande. Chaque cas ci-dessous correspond à un état RÉELLEMENT observé ou
+-- reproductible en préprod, jamais à une hypothèse. Vérifiés par mutation le 2026-09-20 (journal).
 ------------------------------------------------------------------------------------------------
 
--- Order F : pending, 31 minutes, 1 ligne external_referrer + créance ledger estimated → doit
--- expirer ET voider la créance référent (même effet que set_order_line_status(...,'expired',...)).
-insert into orders (id, account_id, holder_name, holder_email, payment_status, created_at)
-values ('88970000-0000-4000-8000-000000000046', '88970000-0000-4000-8000-000000000032',
-        'Holder Expire Referrer', 'expire-referrer@test.local', 'pending', now() - interval '31 minutes');
+-- Order K : le cron d'expiration est passé — ligne `expired`, paiement `cancelled`, commande
+-- `unpaid`. C'est l'état exact de HFG-000013 au moment où Mercado Pago aurait retenté l'`approved`.
+insert into orders (id, account_id, holder_name, holder_email, payment_status)
+values ('88970000-0000-4000-8000-0000000000a1', '88970000-0000-4000-8000-000000000032',
+        'Holder Paid After Expiry', 'paid-after-expiry@test.local', 'unpaid');
 insert into order_lines (
   id, order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
-  acompte_cop, referrer_commission_cop, app_commission_cop, referrer_partner_id
+  acompte_cop, referrer_commission_cop, app_commission_cop
 ) values (
-  '88970000-0000-4000-8000-000000000081', '88970000-0000-4000-8000-000000000046',
+  '88970000-0000-4000-8000-0000000000b1', '88970000-0000-4000-8000-0000000000a1',
   '88970000-0000-4000-8000-000000000032', '88970000-0000-4000-8000-000000000021',
-  '2028-12-10', 1, 'reserved', 'Holder Expire Referrer', 100000, 100000, 'external_referrer',
-  0.17, 0.10, 0.07, 17000, 10000, 7000, '88970000-0000-4000-8000-000000000002'
-);
-insert into ledger_entries (id, order_line_id, beneficiary_type, referrer_partner_id, entry_type, amount_cop, status)
-values (
-  '88970000-0000-4000-8000-000000000091', '88970000-0000-4000-8000-000000000081',
-  'referrer', '88970000-0000-4000-8000-000000000002', 'referral_earned', 10000, 'estimated'
+  '2028-12-20', 1, 'expired', 'Holder Paid After Expiry', 100000, 100000, 'direct', 0.17, 0, 0.17, 17000, 0, 17000
 );
 insert into payments (id, order_id, status, amount_cop)
-values ('88970000-0000-4000-8000-000000000073', '88970000-0000-4000-8000-000000000046', 'pending', 17000);
+values ('88970000-0000-4000-8000-0000000000c1', '88970000-0000-4000-8000-0000000000a1', 'cancelled', 17000);
 
--- Order G : unpaid (jamais d'intent créé), 31 minutes → doit aussi expirer (condition élargie,
--- cf. commentaire de la migration : couvre le cas où create_payment_intent n'a jamais été appelé).
-insert into orders (id, account_id, holder_name, holder_email, payment_status, created_at)
-values ('88970000-0000-4000-8000-000000000047', '88970000-0000-4000-8000-000000000032',
-        'Holder Expire Unpaid', 'expire-unpaid@test.local', 'unpaid', now() - interval '31 minutes');
+-- Order L : lignes passées `expired` par un opérateur (set_order_line_status) alors que le paiement
+-- est encore `pending` — la garde ne dépend pas du statut du paiement, seulement des lignes.
+insert into orders (id, account_id, holder_name, holder_email, payment_status)
+values ('88970000-0000-4000-8000-0000000000a2', '88970000-0000-4000-8000-000000000032',
+        'Holder Expired Lines Pending', 'expired-lines@test.local', 'pending');
 insert into order_lines (
   id, order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values (
-  '88970000-0000-4000-8000-000000000082', '88970000-0000-4000-8000-000000000047',
+  '88970000-0000-4000-8000-0000000000b2', '88970000-0000-4000-8000-0000000000a2',
   '88970000-0000-4000-8000-000000000032', '88970000-0000-4000-8000-000000000021',
-  '2028-12-11', 1, 'reserved', 'Holder Expire Unpaid', 100000, 100000, 'direct', 0.17, 0, 0.17, 17000, 0, 17000
+  '2028-12-21', 1, 'expired', 'Holder Expired Lines Pending', 100000, 100000, 'direct', 0.17, 0, 0.17, 17000, 0, 17000
 );
+insert into payments (id, order_id, status, amount_cop)
+values ('88970000-0000-4000-8000-0000000000c2', '88970000-0000-4000-8000-0000000000a2', 'pending', 17000);
 
--- Order H : pending mais SEULEMENT 5 minutes → dans la fenêtre de grâce, ne doit jamais expirer.
-insert into orders (id, account_id, holder_name, holder_email, payment_status, created_at)
-values ('88970000-0000-4000-8000-000000000048', '88970000-0000-4000-8000-000000000032',
-        'Holder Fresh Pending', 'fresh-pending@test.local', 'pending', now() - interval '5 minutes');
+-- Order M : le client a annulé toutes ses prestations (cancel_order_line) AVANT que l'acompte ne
+-- soit encaissé — même garde, mais le motif doit dire « annulation client », pas « expiration ».
+insert into orders (id, account_id, holder_name, holder_email, payment_status)
+values ('88970000-0000-4000-8000-0000000000a3', '88970000-0000-4000-8000-000000000032',
+        'Holder Cancelled Then Paid', 'cancelled-then-paid@test.local', 'pending');
 insert into order_lines (
   id, order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values (
-  '88970000-0000-4000-8000-000000000083', '88970000-0000-4000-8000-000000000048',
+  '88970000-0000-4000-8000-0000000000b3', '88970000-0000-4000-8000-0000000000a3',
   '88970000-0000-4000-8000-000000000032', '88970000-0000-4000-8000-000000000021',
-  '2028-12-12', 1, 'reserved', 'Holder Fresh Pending', 100000, 100000, 'direct', 0.17, 0, 0.17, 17000, 0, 17000
+  '2028-12-22', 1, 'cancelled_by_client', 'Holder Cancelled Then Paid', 100000, 100000, 'direct', 0.17, 0, 0.17, 17000, 0, 17000
 );
+insert into payments (id, order_id, status, amount_cop)
+values ('88970000-0000-4000-8000-0000000000c3', '88970000-0000-4000-8000-0000000000a3', 'pending', 17000);
 
--- Order I : déjà paid, 31 minutes → jamais touché même si vieux (le paiement a bien abouti, une
--- ligne reserved qui attend juste sa date de prestation n'est jamais une expiration de paiement).
-insert into orders (id, account_id, holder_name, holder_email, payment_status, created_at)
-values ('88970000-0000-4000-8000-000000000049', '88970000-0000-4000-8000-000000000032',
-        'Holder Already Paid', 'already-paid@test.local', 'paid', now() - interval '31 minutes');
+-- Order N : prestation déjà `fulfilled` (réalisée avant que le webhook n'arrive — set_order_line_
+-- status ne conditionne pas `fulfilled` au paiement). Aucune ligne `reserved`, et pourtant l'argent
+-- est dû : la garde ne doit PAS se déclencher (attaque retenue de la revue adversariale).
+insert into orders (id, account_id, holder_name, holder_email, payment_status)
+values ('88970000-0000-4000-8000-0000000000a4', '88970000-0000-4000-8000-000000000032',
+        'Holder Fulfilled Late Webhook', 'fulfilled-late@test.local', 'pending');
 insert into order_lines (
   id, order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values (
-  '88970000-0000-4000-8000-000000000084', '88970000-0000-4000-8000-000000000049',
+  '88970000-0000-4000-8000-0000000000b4', '88970000-0000-4000-8000-0000000000a4',
   '88970000-0000-4000-8000-000000000032', '88970000-0000-4000-8000-000000000021',
-  '2028-12-13', 1, 'reserved', 'Holder Already Paid', 100000, 100000, 'direct', 0.17, 0, 0.17, 17000, 0, 17000
+  '2028-12-23', 1, 'fulfilled', 'Holder Fulfilled Late Webhook', 100000, 100000, 'direct', 0.17, 0, 0.17, 17000, 0, 17000
 );
+insert into payments (id, order_id, status, amount_cop)
+values ('88970000-0000-4000-8000-0000000000c4', '88970000-0000-4000-8000-0000000000a4', 'pending', 17000);
 
--- Order J (régression 2026-08-18, corrigée 2026-08-24, cf. migration
--- 20260824010000_expire_stale_payment_orders_exempt_manual) : réservation walk-in
--- (commission_case='operator_manual', payment_status resté à son défaut 'unpaid' — create_manual_
--- order_line ne le touche jamais), 31 minutes → ne doit JAMAIS expirer, un walk-in n'attend
--- structurellement aucun paiement en ligne.
--- RÉVISÉ 2026-09-10 (spec 31, Tranche 2) : account_id null remplacé par le compte technique
--- fixe — c'est littéralement ce que représente ce scénario (walk-in), invariant 8.
-insert into orders (id, account_id, holder_name, holder_email, payment_status, created_at)
-values ('88970000-0000-4000-8000-000000000050', 'e0000000-0000-4000-8000-000000000001',
-        'Holder Walk-in Manual', 'reserva-manual@hifago.local', 'unpaid', now() - interval '31 minutes');
+-- Order O : carte refusée (P1 `rejected`), nouvel intent (P2 `pending`). P2 est payé ; puis Mercado
+-- Pago livre un `approved` sur P1 (retentative dans la même session Checkout Pro, même
+-- external_reference) — c'est le double paiement inter-external_reference.
+insert into orders (id, account_id, holder_name, holder_email, payment_status)
+values ('88970000-0000-4000-8000-0000000000a5', '88970000-0000-4000-8000-000000000032',
+        'Holder Double Payment', 'double-payment@test.local', 'pending');
 insert into order_lines (
   id, order_id, account_id, product_id, date, qty, status, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
   acompte_cop, referrer_commission_cop, app_commission_cop
 ) values (
-  '88970000-0000-4000-8000-000000000085', '88970000-0000-4000-8000-000000000050',
-  'e0000000-0000-4000-8000-000000000001', '88970000-0000-4000-8000-000000000021',
-  '2028-12-14', 1, 'reserved', 'Holder Walk-in Manual', 100000, 100000, 'operator_manual', 0, 0, 0, 0, 0, 0
+  '88970000-0000-4000-8000-0000000000b5', '88970000-0000-4000-8000-0000000000a5',
+  '88970000-0000-4000-8000-000000000032', '88970000-0000-4000-8000-000000000021',
+  '2028-12-24', 1, 'reserved', 'Holder Double Payment', 100000, 100000, 'direct', 0.17, 0, 0.17, 17000, 0, 17000
 );
+insert into payments (id, order_id, status, amount_cop)
+values
+  ('88970000-0000-4000-8000-0000000000c5', '88970000-0000-4000-8000-0000000000a5', 'rejected', 17000),
+  ('88970000-0000-4000-8000-0000000000c6', '88970000-0000-4000-8000-0000000000a5', 'pending', 17000);
 
-select expire_stale_payment_orders();
+-- Order P : P1 `rejected`, P2 `pending` — un `rejected` EN RETARD sur P1 ne doit pas rétrograder la
+-- commande à `unpaid` pendant que P2 est en cours.
+insert into orders (id, account_id, holder_name, holder_email, payment_status)
+values ('88970000-0000-4000-8000-0000000000a6', '88970000-0000-4000-8000-000000000032',
+        'Holder Late Rejected', 'late-rejected@test.local', 'pending');
+insert into order_lines (
+  id, order_id, account_id, product_id, date, qty, status, holder_name,
+  price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
+  acompte_cop, referrer_commission_cop, app_commission_cop
+) values (
+  '88970000-0000-4000-8000-0000000000b6', '88970000-0000-4000-8000-0000000000a6',
+  '88970000-0000-4000-8000-000000000032', '88970000-0000-4000-8000-000000000021',
+  '2028-12-25', 1, 'reserved', 'Holder Late Rejected', 100000, 100000, 'direct', 0.17, 0, 0.17, 17000, 0, 17000
+);
+insert into payments (id, order_id, status, amount_cop)
+values
+  ('88970000-0000-4000-8000-0000000000c7', '88970000-0000-4000-8000-0000000000a6', 'rejected', 17000),
+  ('88970000-0000-4000-8000-0000000000c8', '88970000-0000-4000-8000-0000000000a6', 'pending', 17000);
 
+-- Cas 28 : Order K — `approved` sur un paiement `cancelled` par le cron → refusé, rien ne bouge,
+-- une entrée refund_required, aucun e-mail client. LE POINT DU LOT.
+set local role service_role;
 select is(
-  (select status from order_lines where id = '88970000-0000-4000-8000-000000000081'),
-  'expired',
-  'cas 15a : Order F (pending, 31 min, external_referrer) → ligne expirée'
+  (select apply_payment_webhook(
+     'mp-k1', '88970000-0000-4000-8000-0000000000c1'::uuid, 'approved',
+     jsonb_build_object('id', 'mp-k1', 'status', 'approved')
+   )),
+  jsonb_build_object('ok', true, 'reason', 'paid_after_expiry'),
+  'cas 28a : approved sur un paiement cancelled → ok:true, reason paid_after_expiry (200, pas de retry MP)'
 );
+reset role;
 select is(
-  (select status from ledger_entries where id = '88970000-0000-4000-8000-000000000091'),
-  'void',
-  'cas 15b : créance référent estimated → void (même effet que set_order_line_status expired)'
-);
-select is(
-  (select status::text from payments where id = '88970000-0000-4000-8000-000000000073'),
+  (select status::text from payments where id = '88970000-0000-4000-8000-0000000000c1'),
   'cancelled',
-  'cas 15c : payments pending → cancelled'
+  'cas 28b : payments.status reste cancelled — jamais réécrit approved'
 );
 select is(
-  (select payment_status from orders where id = '88970000-0000-4000-8000-000000000046'),
+  (select payment_status from orders where id = '88970000-0000-4000-8000-0000000000a1'),
   'unpaid',
-  'cas 15d : orders.payment_status repasse à unpaid'
+  'cas 28c : orders.payment_status reste unpaid — pas de commande fantôme'
 );
 select is(
-  (select status from order_lines where id = '88970000-0000-4000-8000-000000000082'),
-  'expired',
-  'cas 16 : Order G (unpaid, jamais d''intent, 31 min) → expire aussi (condition élargie)'
+  (select count(*)::int from notification_emails
+    where event_type = 'client_order_confirmed'
+      and related_id = '88970000-0000-4000-8000-0000000000a1'),
+  0,
+  'cas 28d : aucun e-mail « reserva confirmada » pour une commande expirée'
 );
 select is(
-  (select status from order_lines where id = '88970000-0000-4000-8000-000000000083'),
-  'reserved',
-  'cas 17 : Order H (pending, 5 min, dans la fenêtre de grâce) → jamais touché'
+  (select count(*)::int from payment_reconciliation_entries
+    where payment_id = '88970000-0000-4000-8000-0000000000c1' and kind = 'refund_required'),
+  1,
+  'cas 28e : une entrée de réconciliation kind=refund_required est créée'
 );
 select is(
-  (select status from order_lines where id = '88970000-0000-4000-8000-000000000084'),
-  'reserved',
-  'cas 18 : Order I (déjà paid, 31 min) → jamais touché même vieux'
+  (select failure_reason from payment_reconciliation_entries
+    where payment_id = '88970000-0000-4000-8000-0000000000c1' and kind = 'refund_required'),
+  'paiement approuvé après expiration de la commande',
+  'cas 28f : le motif est dérivé du statut réel des lignes (expired)'
 );
 select is(
-  (select status from order_lines where id = '88970000-0000-4000-8000-000000000085'),
-  'reserved',
-  'cas 19 : Order J (walk-in operator_manual, unpaid, 31 min) → jamais touché (régression 2026-08-18)'
+  (select mp_payment_id from payments where id = '88970000-0000-4000-8000-0000000000c1'),
+  'mp-k1',
+  'cas 28g : mp_payment_id conservé sur le paiement (de quoi rembourser plus tard)'
 );
+
+-- Cas 29 : REJEU de la même livraison (Mercado Pago livre created puis updated, puis retente) →
+-- toujours refusé, toujours UNE entrée, UNE seule salve d'e-mails admin.
+set local role service_role;
+select is(
+  (select apply_payment_webhook(
+     'mp-k1', '88970000-0000-4000-8000-0000000000c1'::uuid, 'approved',
+     jsonb_build_object('id', 'mp-k1', 'status', 'approved', 'replay', true)
+   ) ->> 'reason'),
+  'paid_after_expiry',
+  'cas 29a : rejeu de la même livraison → même refus, idempotent'
+);
+reset role;
+select is(
+  (select count(*)::int from payment_reconciliation_entries
+    where mp_payment_id = 'mp-k1' and kind = 'refund_required'),
+  1,
+  'cas 29b : toujours une seule entrée refund_required pour ce paiement MP (index unique partiel)'
+);
+select is(
+  (select count(*)::int from notification_emails ne
+    where ne.event_type = 'admin_new_reconciliation_exception'
+      and ne.related_table = 'payment_reconciliation_entries'
+      and ne.related_id = (select id from payment_reconciliation_entries
+                            where mp_payment_id = 'mp-k1' and kind = 'refund_required')),
+  (select count(*)::int from partner_capabilities where role = 'admin' and status = 'active'),
+  'cas 29c : une seule salve d''e-mails admin (un par admin actif), pas une par livraison'
+);
+
+-- Cas 30 : Order L — paiement encore `pending`, lignes déjà `expired` → même garde.
+set local role service_role;
+select is(
+  (select apply_payment_webhook(
+     'mp-l1', '88970000-0000-4000-8000-0000000000c2'::uuid, 'approved', '{}'::jsonb
+   ) ->> 'reason'),
+  'paid_after_expiry',
+  'cas 30a : approved sur un paiement pending dont les lignes sont expired → refusé'
+);
+reset role;
+select is(
+  (select status::text from payments where id = '88970000-0000-4000-8000-0000000000c2'),
+  'pending',
+  'cas 30b : le statut du paiement n''est pas touché par la garde'
+);
+
+-- Cas 31 : Order M — lignes annulées par le client → refusé, motif « annulation client ».
+set local role service_role;
+select is(
+  (select apply_payment_webhook(
+     'mp-m1', '88970000-0000-4000-8000-0000000000c3'::uuid, 'approved', '{}'::jsonb
+   ) ->> 'reason'),
+  'paid_after_expiry',
+  'cas 31a : approved sur une commande entièrement annulée par le client → refusé'
+);
+reset role;
+select is(
+  (select failure_reason from payment_reconciliation_entries where mp_payment_id = 'mp-m1'),
+  'paiement approuvé après annulation par le client',
+  'cas 31b : le motif dit « annulation client », pas « expiration »'
+);
+
+-- Cas 32 : Order N — ligne `fulfilled`, aucune `reserved` → HONORABLE, le paiement s'applique.
+set local role service_role;
+select is(
+  (select apply_payment_webhook(
+     'mp-n1', '88970000-0000-4000-8000-0000000000c4'::uuid, 'approved', '{}'::jsonb
+   )),
+  jsonb_build_object('ok', true),
+  'cas 32a : approved sur une prestation déjà réalisée → appliqué normalement (pas de garde)'
+);
+reset role;
+select is(
+  (select payment_status from orders where id = '88970000-0000-4000-8000-0000000000a4'),
+  'paid',
+  'cas 32b : la commande passe paid'
+);
+select is(
+  (select count(*)::int from payment_reconciliation_entries where mp_payment_id = 'mp-n1'),
+  0,
+  'cas 32c : aucune entrée de réconciliation pour un paiement légitime'
+);
+
+-- Cas 33 : Order O — P2 (pending) approuvé → commande payée, P1 (rejected) clôturé en cancelled.
+set local role service_role;
+select is(
+  (select apply_payment_webhook(
+     'mp-o2', '88970000-0000-4000-8000-0000000000c6'::uuid, 'approved', '{}'::jsonb
+   ) ->> 'ok'),
+  'true',
+  'cas 33a : approved sur P2 → ok'
+);
+reset role;
+select is(
+  (select payment_status from orders where id = '88970000-0000-4000-8000-0000000000a5'),
+  'paid',
+  'cas 33b : commande payée par P2'
+);
+select is(
+  (select status::text from payments where id = '88970000-0000-4000-8000-0000000000c5'),
+  'cancelled',
+  'cas 33c : P1 (rejected) est clôturé en cancelled par l''approbation de P2'
+);
+select is(
+  (select count(*)::int from notification_emails
+    where event_type = 'client_order_confirmed'
+      and related_id = '88970000-0000-4000-8000-0000000000a5'),
+  1,
+  'cas 33d : un seul e-mail de confirmation client'
+);
+
+-- Cas 34 : puis `approved` sur P1 (retentative Mercado Pago dans la même session) → DOUBLE
+-- PAIEMENT : refusé, entrée refund_required, commande inchangée, pas de second e-mail.
+set local role service_role;
+select is(
+  (select apply_payment_webhook(
+     'mp-o1b', '88970000-0000-4000-8000-0000000000c5'::uuid, 'approved', '{}'::jsonb
+   )),
+  jsonb_build_object('ok', true, 'reason', 'double_payment'),
+  'cas 34a : approved sur P1 alors que P2 a payé → double_payment'
+);
+reset role;
+select is(
+  (select payment_status from orders where id = '88970000-0000-4000-8000-0000000000a5'),
+  'paid',
+  'cas 34b : la commande reste paid (une seule fois)'
+);
+select is(
+  (select failure_reason from payment_reconciliation_entries
+    where mp_payment_id = 'mp-o1b' and kind = 'refund_required'),
+  'double paiement : la commande est déjà payée par le paiement 88970000-0000-4000-8000-0000000000c6',
+  'cas 34c : entrée refund_required « double paiement » nommant le paiement qui a réglé la commande'
+);
+select is(
+  (select count(*)::int from notification_emails
+    where event_type = 'client_order_confirmed'
+      and related_id = '88970000-0000-4000-8000-0000000000a5'),
+  1,
+  'cas 34d : toujours un seul e-mail de confirmation client (pas de second envoi)'
+);
+select is(
+  (select status::text from payments where id = '88970000-0000-4000-8000-0000000000c5'),
+  'cancelled',
+  'cas 34e : P1 reste cancelled, jamais approved'
+);
+
+-- Cas 35 : Order K — un `pending` (PSE tardif) sur un paiement cancelled → no-op.
+set local role service_role;
+select is(
+  (select apply_payment_webhook(
+     'mp-k1', '88970000-0000-4000-8000-0000000000c1'::uuid, 'pending', '{}'::jsonb
+   )),
+  jsonb_build_object('ok', true, 'reason', 'already_cancelled'),
+  'cas 35a : pending sur un paiement cancelled → already_cancelled, no-op'
+);
+reset role;
+select is(
+  (select status::text from payments where id = '88970000-0000-4000-8000-0000000000c1'),
+  'cancelled',
+  'cas 35b : le paiement reste cancelled — une commande morte ne ressuscite pas'
+);
+
+-- Cas 36 : Order P — `rejected` en retard sur P1 pendant que P2 est pending → la commande reste
+-- pending (jamais rétrogradée à unpaid tant qu'un autre paiement la porte).
+set local role service_role;
+select is(
+  (select apply_payment_webhook(
+     'mp-p1', '88970000-0000-4000-8000-0000000000c7'::uuid, 'rejected', '{}'::jsonb
+   ) ->> 'ok'),
+  'true',
+  'cas 36a : rejected en retard sur P1 → ok'
+);
+reset role;
+select is(
+  (select payment_status from orders where id = '88970000-0000-4000-8000-0000000000a6'),
+  'pending',
+  'cas 36b : orders.payment_status reste pending — P2 est encore en cours'
+);
+
+------------------------------------------------------------------------------------------------
+-- expire_stale_payment_orders — SUPPRIMÉE le 2026-09-21 (20260921100100, spec 39 D1) : l'expiration
+-- est désormais décidée par expire_payment_order, appelée par le job de réconciliation après avoir
+-- interrogé Mercado Pago. Ses cas F-J (référent voidé, impayée sans intent, fenêtre de grâce, déjà
+-- payée, walk-in) vivent dans payments_reconcile.test.sql (B6, B11, B7, C4, C5).
+------------------------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------------------------
 -- payment_reconciliation_entries / resolve_payment_reconciliation_entry

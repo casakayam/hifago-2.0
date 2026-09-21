@@ -641,6 +641,36 @@ export type Database = {
           },
         ]
       }
+      job_heartbeats: {
+        Row: {
+          alerted_at: string | null
+          created_at: string
+          job_name: string
+          last_error: string | null
+          last_ok_at: string | null
+          last_run_at: string | null
+          stats: Json
+        }
+        Insert: {
+          alerted_at?: string | null
+          created_at?: string
+          job_name: string
+          last_error?: string | null
+          last_ok_at?: string | null
+          last_run_at?: string | null
+          stats?: Json
+        }
+        Update: {
+          alerted_at?: string | null
+          created_at?: string
+          job_name?: string
+          last_error?: string | null
+          last_ok_at?: string | null
+          last_run_at?: string | null
+          stats?: Json
+        }
+        Relationships: []
+      }
       ledger_entries: {
         Row: {
           amount_cop: number
@@ -906,6 +936,8 @@ export type Database = {
           id: string
           marketing_consent: boolean
           payment_status: string
+          reconcile_checked_at: string | null
+          reconcile_claimed_at: string | null
           reference: string
           referrer_partner_id: string | null
           status: string
@@ -922,6 +954,8 @@ export type Database = {
           id?: string
           marketing_consent?: boolean
           payment_status?: string
+          reconcile_checked_at?: string | null
+          reconcile_claimed_at?: string | null
           reference?: string
           referrer_partner_id?: string | null
           status?: string
@@ -938,6 +972,8 @@ export type Database = {
           id?: string
           marketing_consent?: boolean
           payment_status?: string
+          reconcile_checked_at?: string | null
+          reconcile_claimed_at?: string | null
           reference?: string
           referrer_partner_id?: string | null
           status?: string
@@ -1393,10 +1429,12 @@ export type Database = {
           external_reference: string | null
           failure_reason: string
           id: string
+          kind: string
           last_attempt_at: string | null
           mp_payment_id: string | null
           payment_id: string | null
           raw_event: Json
+          reason_code: string | null
           resolution_note: string | null
           resolved_at: string | null
           resolved_by: string | null
@@ -1408,10 +1446,12 @@ export type Database = {
           external_reference?: string | null
           failure_reason: string
           id?: string
+          kind?: string
           last_attempt_at?: string | null
           mp_payment_id?: string | null
           payment_id?: string | null
           raw_event: Json
+          reason_code?: string | null
           resolution_note?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
@@ -1423,10 +1463,12 @@ export type Database = {
           external_reference?: string | null
           failure_reason?: string
           id?: string
+          kind?: string
           last_attempt_at?: string | null
           mp_payment_id?: string | null
           payment_id?: string | null
           raw_event?: Json
+          reason_code?: string | null
           resolution_note?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
@@ -1449,12 +1491,93 @@ export type Database = {
           },
         ]
       }
+      payment_refunds: {
+        Row: {
+          amount_cop: number
+          attempts: number
+          created_at: string
+          entry_id: string
+          id: string
+          last_error: string | null
+          mp_payment_id: string
+          mp_refund_id: string | null
+          next_attempt_at: string | null
+          note: string | null
+          payment_id: string | null
+          raw_response: Json | null
+          requested_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cop: number
+          attempts?: number
+          created_at?: string
+          entry_id: string
+          id?: string
+          last_error?: string | null
+          mp_payment_id: string
+          mp_refund_id?: string | null
+          next_attempt_at?: string | null
+          note?: string | null
+          payment_id?: string | null
+          raw_response?: Json | null
+          requested_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cop?: number
+          attempts?: number
+          created_at?: string
+          entry_id?: string
+          id?: string
+          last_error?: string | null
+          mp_payment_id?: string
+          mp_refund_id?: string | null
+          next_attempt_at?: string | null
+          note?: string | null
+          payment_id?: string | null
+          raw_response?: Json | null
+          requested_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_refunds_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "payment_reconciliation_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_refunds_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_refunds_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "partner_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount_cop: number
           created_at: string
           id: string
+          mp_cancel_attempts: number
+          mp_collector_id: string | null
+          mp_last_checked_at: string | null
+          mp_last_status: string | null
           mp_payment_id: string | null
+          mp_preference_id: string | null
           order_id: string
           payer_email: string | null
           provider: string
@@ -1466,7 +1589,12 @@ export type Database = {
           amount_cop: number
           created_at?: string
           id?: string
+          mp_cancel_attempts?: number
+          mp_collector_id?: string | null
+          mp_last_checked_at?: string | null
+          mp_last_status?: string | null
           mp_payment_id?: string | null
+          mp_preference_id?: string | null
           order_id: string
           payer_email?: string | null
           provider?: string
@@ -1478,7 +1606,12 @@ export type Database = {
           amount_cop?: number
           created_at?: string
           id?: string
+          mp_cancel_attempts?: number
+          mp_collector_id?: string | null
+          mp_last_checked_at?: string | null
+          mp_last_status?: string | null
           mp_payment_id?: string | null
+          mp_preference_id?: string | null
           order_id?: string
           payer_email?: string | null
           provider?: string
@@ -2365,6 +2498,16 @@ export type Database = {
         }
         Returns: Json
       }
+      apply_payment_webhook_checked: {
+        Args: {
+          p_external_reference: string
+          p_mp_payment_id: string
+          p_raw_event: Json
+          p_status: string
+          p_transaction_amount: number
+        }
+        Returns: Json
+      }
       attach_orders_to_account: { Args: never; Returns: Json }
       cancel_order_line: { Args: { p_line_id: string }; Returns: Json }
       check_partner_invitation: { Args: { p_token: string }; Returns: Json }
@@ -2393,6 +2536,34 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      claim_orders_to_reconcile: {
+        Args: { p_limit?: number }
+        Returns: {
+          claimed_at: string
+          created_at: string
+          order_id: string
+          payment_status: string
+          payments: Json
+        }[]
+      }
+      claim_payment_refunds: {
+        Args: { p_limit?: number }
+        Returns: {
+          amount_cop: number
+          attempts: number
+          claimed_at: string
+          mp_payment_id: string
+          refund_id: string
+        }[]
+      }
+      claim_payments_to_watch: {
+        Args: { p_limit?: number }
+        Returns: {
+          claimed_at: string
+          order_id: string
+          payment_id: string
+        }[]
       }
       claim_pms_cancellation_batch: {
         Args: { p_limit?: number; p_max_attempts?: number }
@@ -2559,7 +2730,14 @@ export type Database = {
           slot_start_time: string
         }[]
       }
-      expire_stale_payment_orders: { Args: never; Returns: undefined }
+      expire_payment_order: {
+        Args: { p_checked_at: string; p_force?: boolean; p_order_id: string }
+        Returns: Json
+      }
+      fail_payment_refund: {
+        Args: { p_error: string; p_refund_id: string }
+        Returns: undefined
+      }
       fail_pms_sync: {
         Args: {
           p_error: string
@@ -2568,6 +2746,16 @@ export type Database = {
           p_retry_after_seconds?: number
         }
         Returns: undefined
+      }
+      finalize_payment_refund: {
+        Args: {
+          p_error?: string
+          p_mp_refund_id?: string
+          p_outcome: string
+          p_raw?: Json
+          p_refund_id: string
+        }
+        Returns: Json
       }
       get_event_occurrence_availability: {
         Args: { p_from: string; p_product_id: string; p_to: string }
@@ -2613,6 +2801,11 @@ export type Database = {
         Args: { p_lat1: number; p_lat2: number; p_lon1: number; p_lon2: number }
         Returns: number
       }
+      heartbeat_job: {
+        Args: { p_error?: string; p_job: string; p_ok: boolean; p_stats?: Json }
+        Returns: undefined
+      }
+      invoke_payments_reconcile: { Args: never; Returns: undefined }
       invoke_pms_cancel_bookings: { Args: never; Returns: undefined }
       invoke_pms_nightly_contract_check: { Args: never; Returns: undefined }
       invoke_pms_poll_bookings: { Args: never; Returns: undefined }
@@ -2706,6 +2899,10 @@ export type Database = {
           total_count: number
         }[]
       }
+      lock_order_capacity_rows: {
+        Args: { p_line_ids: string[] }
+        Returns: undefined
+      }
       log_admin_action: {
         Args: {
           p_action: string
@@ -2724,6 +2921,10 @@ export type Database = {
           p_note: string
         }
         Returns: Json
+      }
+      mark_mp_cancel_attempt: {
+        Args: { p_mp_status_after: string; p_payment_id: string }
+        Returns: undefined
       }
       mark_notification_email_failed: {
         Args: { p_error: string; p_id: string; p_max_attempts?: number }
@@ -2814,6 +3015,7 @@ export type Database = {
         Returns: Json
       }
       partner_id_for_account: { Args: { uid: string }; Returns: string }
+      payments_reconcile_watchdog: { Args: never; Returns: undefined }
       process_campaign_batch: {
         Args: { p_batch_size?: number; p_campaign_id: string }
         Returns: Json
@@ -2823,9 +3025,31 @@ export type Database = {
         Returns: undefined
       }
       purge_expired_anonymous_identities: { Args: never; Returns: Json }
+      reconcile_order: {
+        Args: {
+          p_checked_at: string
+          p_collector_id: string
+          p_expiry_margin?: string
+          p_mp_payments: Json
+          p_order_id: string
+        }
+        Returns: Json
+      }
+      record_mp_payment_status: {
+        Args: {
+          p_checked_at: string
+          p_mp_payments: Json
+          p_payment_id: string
+        }
+        Returns: Json
+      }
       release_order_after_pms_refusal: {
         Args: { p_order_id: string; p_reason: string }
         Returns: Json
+      }
+      release_order_line_capacity: {
+        Args: { p_line_id: string }
+        Returns: undefined
       }
       reorder_gallery: {
         Args: {
@@ -2833,6 +3057,10 @@ export type Database = {
           p_entity_type: string
           p_ordered_media_ids: string[]
         }
+        Returns: Json
+      }
+      request_payment_refund: {
+        Args: { p_entry_id: string; p_note: string }
         Returns: Json
       }
       requeue_pms_cancellation: {

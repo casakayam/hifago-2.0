@@ -53,6 +53,14 @@ export interface CreateCheckoutPreferenceInput {
 
 export interface CheckoutPreferenceResult {
   initPoint: string;
+  /** `id` de la préférence — de quoi la retrouver dans le panel MP (spec 39). */
+  preferenceId: string | null;
+  /**
+   * `collector_id` : le compte MP qui ENCAISSE. Le job de réconciliation compare `GET /users/me`
+   * à cette valeur avant de décider quoi que ce soit — une recherche vide avec le token d'un autre
+   * compte est exactement l'incident du 2026-09-20 (piège 19).
+   */
+  collectorId: string | null;
 }
 
 // Checkout Pro par simple redirection (pas de bouton/brique intégrée) : aucun besoin du SDK client
@@ -114,7 +122,13 @@ export async function createCheckoutPreference(
   if (!response.init_point) {
     throw new Error("Mercado Pago n'a renvoyé aucun init_point pour cette préférence.");
   }
-  return { initPoint: response.init_point };
+  return {
+    initPoint: response.init_point,
+    preferenceId: response.id ?? null,
+    collectorId: response.collector_id === undefined || response.collector_id === null
+      ? null
+      : String(response.collector_id),
+  };
 }
 
 // Re-confirmation serveur-à-serveur GET /v1/payments/{id} — jamais sur la seule foi du corps du

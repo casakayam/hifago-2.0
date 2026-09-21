@@ -3,7 +3,7 @@ id: refonte-modele-donnees
 titre: "Audit du modèle de données cible — entités partagées"
 theme: cadrage
 statut: brouillon
-maj: 2026-09-14
+maj: 2026-09-22
 resume: >
   Audit champ par champ des entités centrales (établissement, chambre, produit, compte,
   code partenaire), croisé avec le code actuel et les décisions déjà prises côté client/socio.
@@ -27,6 +27,22 @@ repond_a:
 Relevés par la relecture intégrale du 2026-09-07. Les sections ci-dessous ne sont pas réécrites —
 ces lignes en tiennent lieu. §2 fait exception : il a bien été réécrit le 2026-08-27.
 
+- **§6, paiements — Lot B de la spec 39, 2026-09-21/22** : `payments` + `mp_preference_id`,
+  `mp_collector_id`, `mp_last_status`, `mp_last_checked_at`, `mp_cancel_attempts`, statuts
+  `refunded`/`charged_back` ; `orders` + `reconcile_claimed_at`, `reconcile_checked_at` ;
+  `payment_reconciliation_entries` + `reason_code`, kind `refunded_externally` ; nouvelles tables
+  `job_heartbeats` (premier heartbeat de cron) et `payment_refunds` (un remboursement vivant par
+  entrée, index partiel) ; `products` : trigger gelant `lobby_category_id`/`evento_capacity_mode`/
+  `evento_occupies_resource` tant qu'une ligne est `reserved`. Migrations `20260921100000`,
+  `20260922100000`.
+- **§6, `payment_reconciliation_entries` — colonne `kind` ajoutée le 2026-09-20** (migration
+  `20260920120000_harden_apply_payment_webhook.sql`, incident HFG-000013) : `text not null default
+  'webhook_failure' check (kind in ('webhook_failure','refund_required'))` + index unique partiel
+  `(mp_payment_id) where kind = 'refund_required'`. Le seul discriminant existant était
+  `failure_reason`, une phrase libre ; `refund_required` = argent encaissé chez Mercado Pago sans
+  prestation à honorer (payé après expiration/annulation, écart de montant, double paiement), lu par
+  l'écran admin et les tests. `payments.status` n'a toujours pas de valeur `refunded` — c'est la
+  décision D3 de `docs/specs/39-garantie-confirmation-paiement.md`.
 - **§4 (produit), ligne « Prix par palier de quantité/personnes » — mise à jour.** Révisé par
   `docs/specs/36-remise-remplissage-camp.md` (2026-09-14) : le modèle "seuil + pourcentage" que
   cette ligne disait jamais construit l'est désormais, pour `camp` uniquement

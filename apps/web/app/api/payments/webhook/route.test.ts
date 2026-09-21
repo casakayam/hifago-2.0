@@ -32,13 +32,15 @@ let inserts: Insert[] = [];
 let rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
 let mpStatus = "approved";
 let mpAmount: number | null = 3400;
+/** Erreur renvoyée par l'insert de réconciliation (null = succès) — sert au cas « rejeu 23505 ». */
+let insertError: { code: string; message: string } | null = null;
 
 vi.mock("@hifago/supabase/service", () => ({
   createServiceRoleClient: () => ({
     from: (table: string) => ({
       insert: async (row: Insert) => {
         inserts.push({ table, ...row });
-        return { error: null };
+        return { error: insertError };
       },
       select: () => ({
         eq: () => ({
@@ -108,6 +110,7 @@ describe("POST /api/payments/webhook", () => {
     rpcCalls = [];
     mpStatus = "approved";
     mpAmount = 3400;
+    insertError = null;
     process.env.MERCADOPAGO_WEBHOOK_SECRET = SECRET;
   });
 
@@ -136,6 +139,8 @@ describe("POST /api/payments/webhook", () => {
     expect(rpcCalls).toHaveLength(0);
     expect(inserts).toHaveLength(1);
     expect(inserts[0].failure_reason).toBe("signature invalide (SignatureMismatch)");
+    // Bruit à diagnostiquer, jamais un remboursement à décider (migration 20260920120000).
+    expect(inserts[0].kind).toBe("webhook_failure");
 
     // Le matériel de rejeu — absent avant le 2026-09-20, ce qui avait rendu les 8 livraisons
     // réelles de l'incident invérifiables hors ligne.
@@ -173,5 +178,24 @@ describe("POST /api/payments/webhook", () => {
     expect(response.status).toBe(200);
     expect(rpcCalls).toHaveLength(0);
     expect(String(inserts[0].failure_reason)).toContain("≠ amount_cop attendu");
+    // L'argent est encaissé au mauvais montant : c'est un remboursement à décider par l'admin,
+    // pas un échec de webhook — l'écran de réconciliation ne filtre que sur cette valeur.
+    expect(inserts[0].kind).toBe("refund_required");
+  });
+
+  it("absorbe le rejeu d'un écart de montant (23505 sur l'index unique partiel) sans erreur", async () => {
+    // Mercado Pago livre `created` puis `updated`, puis retente : la seconde insertion heurte
+    // l'index unique (mp_payment_id) where kind = 'refund_required' — un no-op, jamais un 500 qui
+    // ferait retenter Mercado Pago indéfiniment.
+    mpAmount = 9999;
+    insertError = { code: "23505", message: "duplicate key value violates unique constraint" };
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const response = await POST(requete());
+
+    expect(response.status).toBe(200);
+    expect(rpcCalls).toHaveLength(0);
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 });
