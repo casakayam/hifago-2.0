@@ -54,6 +54,11 @@ function makeBarrier(count) {
 async function resetAll(seed) {
   // Enfants avant parents (FK). Les entrées de réconciliation et e-mails portent une FK/related_id
   // vers les paiements/commandes de ce fichier.
+  // Les e-mails du trigger d'entrée (client « pago recibido », admin) portent related_id = id de
+  // l'ENTRÉE, pas une commande de ce fichier : à purger AVANT les entrées, sinon ils restent
+  // `pending` et faussent claim_notification_email_batch.concurrency.mjs (rouge en CI le 2026-09-22).
+  await seed.query(`delete from notification_emails where related_id in
+    (select id from payment_reconciliation_entries where payment_id::text like '${P}%')`);
   await seed.query(`delete from payment_reconciliation_entries where payment_id::text like '${P}%'`);
   await seed.query(`delete from notification_emails where related_id::text like '${P}%'`);
   await seed.query(`delete from payments where order_id::text like '${P}%'`);

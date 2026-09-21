@@ -125,6 +125,8 @@ function startFixtureServer() {
 
 async function purge(client) {
   await client.query(`delete from payment_refunds where payment_id::text like '${P}%'`);
+  await client.query(`delete from notification_emails where related_id in
+    (select id from payment_reconciliation_entries where payment_id::text like '${P}%')`);
   await client.query(`delete from payment_reconciliation_entries where payment_id::text like '${P}%'`);
   await client.query(`delete from notification_emails where related_id::text like '${P}%'`);
   await client.query(`delete from payments where order_id::text like '${P}%'`);

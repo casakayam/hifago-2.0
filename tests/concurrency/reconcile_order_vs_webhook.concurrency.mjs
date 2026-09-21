@@ -52,6 +52,8 @@ const withTimeout = (promise, label, ms = 20000) =>
 
 async function purgeAll(seed) {
   await seed.query(`delete from payment_refunds where payment_id::text like '${P}%'`);
+  await seed.query(`delete from notification_emails where related_id in
+    (select id from payment_reconciliation_entries where payment_id::text like '${P}%')`);
   await seed.query(`delete from payment_reconciliation_entries where payment_id::text like '${P}%'`);
   await seed.query(`delete from notification_emails where related_id::text like '${P}%' or recipient_account_id in ($1, $2)`, [BUYER_ID, ADMIN_ID]);
   await seed.query(`delete from payments where order_id::text like '${P}%'`);
