@@ -111,9 +111,12 @@ sous-route de `products/`) :
   `establishment_id` appartient à un établissement du partenaire connecté (RLS existante
   `order_lines_select`/`products_select_public` à vérifier, sinon nouvelle policy lecture seule),
   `status <> 'hold'`, triées `date desc`, limite 100.
-- Colonnes : date, créneau (si applicable), produit (nom localisé), `holder_name` **uniquement**
-  (jamais `holder_phone`/`holder_email` — PII minimale, reprise du comportement v1), qty, total_cop,
-  statut.
+- Colonnes : date, créneau (si applicable), produit (nom localisé), `holder_name`, qty, total_cop,
+  statut. ⚠️ **Périmé** — décrivait `holder_name` **uniquement** (jamais `holder_phone`/`holder_email`,
+  PII minimale reprise du comportement v1) ; RENVERSÉ par une décision de Jérôme du 2026-08-19
+  (migration `20260819180000_order_lines_holder_contact_operator.sql`, cahier `02` § Écarts connus) —
+  le socio a désormais besoin de contacter son client, `holder_phone`/`holder_email` sont exposés.
+  La pièce d'identité reste exclue.
 
 **Admin — filtre produit sur `/admin/orders`** :
 - `apps/admin/lib/lists/filters.ts` : ajouter `product_id` à `ORDERS_FILTER_DEFINITIONS`.
@@ -242,8 +245,10 @@ chambre le même soir sur la même fenêtre), cf. §10.
   `product_calendar` — jamais une ligne pré-générée par jour.
 - `modify_order_line` ne modifie jamais une ligne en place : elle la remplace, historique et
   snapshots financiers d'origine intacts.
-- PII minimale côté socio (jamais téléphone/email dans « Mis Reservas »), pleine visibilité côté
-  admin (déjà le cas dans `/admin/orders`).
+- ⚠️ **Périmé** — décrivait « PII minimale côté socio (jamais téléphone/email dans « Mis
+  Reservas »), pleine visibilité côté admin (déjà le cas dans `/admin/orders`) » ; RENVERSÉ le
+  2026-08-19 (migration `20260819180000`, cahier `02` § Écarts connus) — le socio voit désormais
+  `holder_phone`/`holder_email`, comme l'admin.
 
 ### Cas limites (toutes tranches)
 

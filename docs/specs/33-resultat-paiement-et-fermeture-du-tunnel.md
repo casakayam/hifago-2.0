@@ -5,7 +5,7 @@ theme: specs
 public: [ia, dev, jerome]
 langue: fr
 statut: implemente
-maj: 2026-09-10
+maj: 2026-09-20
 revise: docs/01-cahier-des-charges-client.md#2b.9
 resume: >
   Donne une adresse propre à chaque commande — /reserva/<jeton>, rechargeable sans limite de temps
@@ -308,6 +308,9 @@ absent et aucun identifiant sandbox n'est configuré, donc `startPayment` échou
 indisponible » avant toute redirection. **Le filet de cette spec est un e2e qui simule le retour,
 jamais un parcours manuel** — c'est exactement le segment que la machine locale ne peut pas exercer,
 et la raison pour laquelle ce trou a survécu.
+
+> **Périmé le 2026-09-20** : `MERCADOPAGO_WEBHOOK_SECRET` est configuré en préprod et le premier
+> paiement réel a été confirmé de bout en bout (piège 19). Le e2e simulé reste le filet local.
 
 ### Ce qui part quand même, et ce qui ne part pas
 

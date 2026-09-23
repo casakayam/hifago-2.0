@@ -34,6 +34,15 @@ repond_a:
 > **✅ Implémentée le 2026-09-08** — les trois tranches. Ce que le code a corrigé du texte est en
 > §10bis (Tranches 1a/1b), §10ter (Tranche 2) et §10quater (Tranche 3) : deux décisions de la
 > spec ont été renversées en codant, et arbitrées avant d'être écrites.
+>
+> ⚠️ **PÉRIMÉE depuis le 2026-09-14** (chantier « catégories partout », commit `8d4849eb`,
+> `docs/journal/2026-09.md`) — le système décrit ici (index de tuiles vides réservé à `activity`,
+> `search_catalog_tags`, route `[tag]`) a été **remplacé**, pas seulement retouché : un index de
+> catégories généralisé aux CINQ types, sur demande explicite de Jérôme (*« pas que l'alojamiento
+> doit avoir des cate tout doit pouvoir en avoir »*). Le §0 ci-dessous est corrigé pour décrire le
+> système ACTUEL — tout le reste du document (§1-§10quater) reste la trace historique de la
+> décision du 2026-09-08, à lire comme un historique, pas comme le contrat courant. Détail complet
+> du remplacement : **§10quinquies**.
 
 ## Sommaire et statut
 
@@ -63,17 +72,28 @@ Toutes sous `app/[locale]/(vitrine)/`. Zone vitrine, **indexables**, rendu **dyn
 
 | URL | Fichier | Contenu |
 |---|---|---|
-| `/[locale]/actividades` | `actividades/page.tsx` | **index de catégories**, aucune offre |
-| `/[locale]/actividades/[tag]` | `actividades/[tag]/page.tsx` | les offres d'une catégorie |
-| `/[locale]/actividades/otras` | *(la même route `[tag]`)* | les activités **sans aucun tag** |
-| `/[locale]/alojamientos` | `alojamientos/page.tsx` | les offres du type |
-| `/[locale]/transportes` | `transportes/page.tsx` | les offres du type |
-| `/[locale]/camps` | `camps/page.tsx` | les offres du type |
-| `/[locale]/eventos` | `eventos/page.tsx` | les offres du type |
-| `/api/catalogo/listado` | `app/api/catalogo/listado/route.ts` | le pont du défilement infini |
+⚠️ **Périmé — table corrigée le 2026-09-21/22, voir §10quinquies.** Les URL et fichiers restent
+exacts (à un renommage de segment près) ; c'est le CONTENU de l'index qui a changé pour les cinq
+types, plus le nom du segment dynamique.
 
-`otras` est un **slug réservé** : une contrainte l'interdit à `catalog_tags` (§6). Sans elle, une
-catégorie nommée « Otras » masquerait la page des activités non classées, en silence.
+| URL | Fichier | Contenu |
+|---|---|---|
+| `/[locale]/actividades` | `actividades/page.tsx` | index de catégories **avec un aperçu de 6 offres par catégorie** (`POR_CATEGORIA`), plus « Ver más » si elle en a plus |
+| `/[locale]/actividades/[categoria]` | `actividades/[categoria]/page.tsx` | les offres d'une catégorie (renommé depuis `[tag]`, cosmétique) |
+| `/[locale]/actividades/otras` | *(la même route `[categoria]`)* | les activités **sans aucun tag** |
+| `/[locale]/alojamientos` (+`/[categoria]`) | `alojamientos/{page,[categoria]/page}.tsx` | **même patron que `/actividades` désormais** — plus un simple listing plat |
+| `/[locale]/transportes` (+`/[categoria]`) | `transportes/{page,[categoria]/page}.tsx` | idem |
+| `/[locale]/camps` (+`/[categoria]`) | `camps/{page,[categoria]/page}.tsx` | idem |
+| `/[locale]/eventos` (+`/[categoria]`) | `eventos/{page,[categoria]/page}.tsx` | idem |
+| `/api/catalogo/listado` | `app/api/catalogo/listado/route.ts` | le pont du défilement infini, pages `[categoria]` seulement |
+
+`otras` est un **slug réservé** (constante `SLUG_SIN_TAG`, `lib/catalog/buscar.ts`) : une contrainte
+l'interdit à `catalog_tags` (§6). Sans elle, une catégorie nommée « Otras » masquerait la page des
+offres non classées, en silence. Généralisé aux cinq types depuis le 2026-09-14 (§10quinquies).
+
+⚠️ Le paramètre de critère `?tag=` (recherche libre, `lib/catalog/criterios.ts`) **n'a pas été
+renommé** et reste distinct du segment de route `[categoria]` — sur une page de catégorie, le
+filtre vient du SEGMENT, un `?tag=` de l'URL est ignoré (même règle que `?tipo=` sur un listing).
 
 ### Paramètres d'URL
 
@@ -97,65 +117,77 @@ tout paramètre invalide de ce dépôt — jamais une erreur.
 
 ### Arbre des pages
 
+⚠️ **Périmé — remplacé le 2026-09-14, voir §10quinquies.** `IndiceCategorias` et `TarjetaCategoria`
+sont supprimés (commit `8d4849eb`) ; l'index réutilise désormais `SeccionOfertas`, le composant de
+l'accueil. Arbre actuel :
+
 ```
 (vitrine)/layout.tsx              SiteHeader · SiteFooter        (spec 27 — ne pose PAS <main>)
 │
-├─ actividades/page.tsx                        Server Component
-│  ├─ listarTagsConOferta("activity", …)       LA seule requête
-│  ├─ generateMetadata + JsonLd BreadcrumbList
-│  └─ PageShell variant="large"                pose l'unique <main>
-│     ├─ Migas                     Inicio / Actividades
-│     ├─ <h1> VISIBLE              « Actividades »
-│     ├─ BuscadorInicio            "use client" — atajosTipo={[]}, écrit vers `/`
-│     └─ IndiceCategorias
-│        ├─ TarjetaCategoria × n   image · nom · texte
-│        └─ TarjetaCategoria       « Otras actividades » (conditionnelle, en dernier)
+├─ {actividades,alojamientos,transportes,camps,eventos}/page.tsx   Server Component, MINCE
+│  └─ IndiceCategoriasConOfertas(tipo, locale, searchParams)       corps PARTAGÉ des cinq index
+│     ├─ buscarCategorias(tipo, criterios, {porCategoria: 6, locale})   LA seule requête
+│     ├─ generateMetadata + JsonLd BreadcrumbList
+│     └─ PageShell variant="large"
+│        ├─ Migas                     Inicio / Actividades
+│        ├─ <h1> VISIBLE              « Actividades » (ou le titre du type)
+│        ├─ BuscadorInicio            "use client" — atajosTipo={[]}, écrit vers `/`
+│        └─ une SeccionOfertas PAR CATÉGORIE (même composant que l'accueil)
+│           ├─ titulo = nom de la catégorie, variante="carrusel"
+│           ├─ tarjetas = ses 6 premières offres candidates (plafonné EN SQL, §10quinquies)
+│           └─ mostrarVerMas = total > 6 (contrairement à l'accueil, toujours vrai)
+│           (la catégorie "sans tag" ferme la liste, jamais dans l'ordre alphabétique)
 │
-├─ actividades/[tag]/page.tsx      ─┐
-├─ alojamientos/page.tsx            │  toutes rendent le même
-├─ transportes/page.tsx             ├─ ListadoTipo (colocalisé, Server Component)
-├─ camps/page.tsx                   │
-└─ eventos/page.tsx                ─┘
-   ├─ buscarTipo(tipo, criterios, …)           LA seule requête
-   ├─ generateMetadata + JsonLd BreadcrumbList
-   └─ PageShell variant="large"
-      ├─ Migas                     Inicio / Actividades / Kayak
-      ├─ <h1> VISIBLE              le nom du type, ou celui de la catégorie
-      ├─ <p> descriptif            catégorie seulement, quand elle en a un
-      ├─ BuscadorInicio            "use client"
-      └─ ListadoInfinito           "use client" — reçoit les cartes de la 1re page rendues serveur
-         ├─ TarjetaOferta × n
-         ├─ sentinelle             IntersectionObserver
-         ├─ bouton « Cargar más »  repli clavier / lecteur d'écran, toujours rendu
-         └─ role="status"          rendu en permanence, vide au repos (spec 28 §10quater)
+└─ {actividades,alojamientos,transportes,camps,eventos}/[categoria]/page.tsx  (renommé depuis [tag])
+   ├─ resolverCategoria(tipo, slug, locale)     404 si catégorie inconnue/vidée
+   └─ ListadoTipo(tipo, locale, searchParams, categoria)   — INCHANGÉ dans son rôle
+      ├─ buscarTipo(tipo, criterios, …)         LA seule requête, fonction inchangée
+      ├─ generateMetadata + JsonLd BreadcrumbList
+      └─ PageShell variant="large"
+         ├─ Migas                     Inicio / Actividades / Kayak
+         ├─ <h1> VISIBLE              le nom du type, ou celui de la catégorie
+         ├─ <p> descriptif            catégorie seulement, quand elle en a un
+         ├─ BuscadorInicio            "use client"
+         └─ ListadoInfinito           "use client" — reçoit les cartes de la 1re page rendues serveur
+            ├─ TarjetaOferta × n
+            ├─ sentinelle             IntersectionObserver
+            ├─ bouton « Cargar más »  repli clavier / lecteur d'écran, toujours rendu
+            └─ role="status"          rendu en permanence, vide au repos (spec 28 §10quater)
 ```
 
 ### Données
 
+⚠️ **Périmé — voir §10quinquies.** `CategoriaConOferta` est remplacé par `CategoriaConTarjetas`, qui
+porte aussi les offres elles-mêmes (l'index les affiche désormais, il ne se contente plus de
+compter) :
+
 ```ts
-// NOUVEAU — lib/catalog/tipos.ts
-type CategoriaConOferta = {
-  slug: string;                  // `kayak` | `otras`
-  href: string;                  // `/actividades/kayak`
-  nombre: string;                // déjà résolu dans la locale
-  descripcion: string | null;    // déjà résolue, `null` si la catégorie n'en a pas
-  foto: FotoTarjeta | null;      // URL publique déjà résolue, `null` → aplat
-  esSinTag: boolean;             // vrai pour la seule tuile « Otras actividades »
+// lib/catalog/tipos.ts — remplace CategoriaConOferta
+type CategoriaConTarjetas = {
+  slug: string; href: string; nombre: string; descripcion: string | null;
+  foto: FotoTarjeta | null; esSinTag: boolean; localesNativas: string[];
+  tarjetas: TarjetaOferta[];     // NOUVEAU — les offres de la catégorie, plafonnées EN SQL
+  total: number;                 // NOUVEAU — pilote `mostrarVerMas`
   testId: string;                // `categoria-<slug>`
 };
 ```
 
-Un seul appel par page :
-
 | Page | Appel |
 |---|---|
-| `/actividades` | `listarTagsConOferta("activity", criterios, { locale })` → `CategoriaConOferta[]` |
-| les six autres | `buscarTipo(tipo, criterios, { limite, desplazamiento: 0, locale, sinTag? })` |
+| Les cinq index (`/actividades`, `/alojamientos`, …) | `buscarCategorias(tipo, criterios, { porCategoria, locale })` → `CategoriaConTarjetas[]` (remplace `listarTagsConOferta`, généralisée aux 5 types) |
+| Les cinq pages de catégorie (`/[type]/[categoria]`) | `resolverCategoria(tipo, slug, locale)` (existence, 404 sinon) **puis** `buscarTipo(tipo, criterios, { limite, desplazamiento: 0, locale, sinTag? })` (offres) — `buscarTipo` inchangée, deux lectures distinctes (motif déjà au §10ter point 3) |
 
-⚠️ **`nombre` et `descripcion` de la tuile « Otras actividades » ne viennent PAS de la base** — ce
-n'est pas une ligne de `catalog_tags`. Ils viennent des messages next-intl, donc de la page. La
-couche `lib/catalog/` rend `esSinTag: true` et laisse `nombre`/`descripcion` vides : elle ne
-traduit rien, comme elle ne compose déjà aucun libellé de suggestion (spec 28 §10ter).
+⚠️ **`foto`/`descripcion` existent dans le type mais ne sont consommés NULLE PART sur l'index**
+depuis le 2026-09-14 : `IndiceCategoriasConOfertas`/`SeccionOfertas` ne passent que `titulo` (le
+nom) et la grille d'offres — ni l'image ni le texte éditorial de `catalog_tags` n'y apparaissent
+(§10quinquies, choix produit non validé par Jérôme). `descripcion` reste affiché sur la page de
+catégorie elle-même (§5b, inchangé) ; **l'image, elle, n'est affichée nulle part** dans le code
+actuel — vérifié par lecture de `IndiceCategoriasConOfertas.tsx` et `SeccionOfertas.tsx`, à
+signaler plutôt qu'à laisser découvrir.
+
+**`nombre` et `descripcion` de la catégorie « sans tag » (`SLUG_SIN_TAG = "otras"`) ne viennent
+toujours PAS de la base** — ils viennent des messages next-intl (`ListadoPage.json`, clés
+`sinTag.${tipo}.nombre`/`.descripcion`, une entrée par type depuis la généralisation).
 
 ### Modèle de données (delta)
 
@@ -165,7 +197,8 @@ traduit rien, comme elle ne compose déjà aucun libellé de suggestion (spec 28
 | `catalog_tags.image_path text` | **à créer** | nullable, chemin dans le bucket `catalog-media`, dossier `tags/` |
 | contrainte `catalog_tags_slug_reservado` | **à créer** | `check (slug <> 'otras')` |
 | fonction `search_catalog(…)` | **à republier** | `drop` + `create` : nouveau paramètre `p_sin_tag`, et le tag inconnu devient ignoré. Rien d'autre ne bouge |
-| fonction `search_catalog_tags(…)` | **à créer** | **appelle `search_catalog`** ; rend les catégories ayant au moins une offre candidate, plus la ligne `es_sin_tag` |
+| fonction `search_catalog_tags(…)` | **créée puis SUPPRIMÉE** | créée en Tranche 2 (2026-09-08, appelait `search_catalog`, rendait les catégories sans leurs offres) ; `drop` le 2026-09-14 (migration `20260914120000`), plus aucun appelant TypeScript — voir §10quinquies |
+| fonction `search_catalog_categorias(…)` | **créée le 2026-09-14, hors périmètre de cette spec** | remplace `search_catalog_tags`, généralisée aux 5 types, rend chaque catégorie AVEC ses offres plafonnées EN SQL (`p_por_categoria`) — signature et détail au §10quinquies |
 | `CatalogImageFolder` | **à étendre** | `"products" \| "establishments"` gagne `"tags"` |
 | `/api/upload/[entity]` | **à étendre** | accepte `entity === "tag"` |
 
@@ -279,10 +312,10 @@ franchement plutôt qu'à découvrir.
 
 ### Hors périmètre, et pourquoi
 
-- **Un filtre par catégorie sur les quatre autres listings.** `product_tag_assignments` accepte
-  n'importe quel produit, et `?tag=` reste un critère valide partout — mais rien ne fabrique un
-  tel lien, et le cahier §2a ne prévoit un index de catégories que pour les activités. Reste au
-  backlog (« tri/filtre catalogue par tag »).
+- ~~**Un filtre par catégorie sur les quatre autres listings.**~~ — **FAIT le 2026-09-14**, hors
+  périmètre de cette spec : les cinq types ont désormais un index de catégories généralisé, sur
+  demande explicite de Jérôme (§10quinquies). Ce que le cahier §2a ne prévoyait que pour les
+  activités a été étendu sans réouverture formelle du cahier.
 - **Un `ItemList` JSON-LD sur les listings.** Il ne décrirait que la première page, alors que la
   règle SEO 6 exige qu'un JSON-LD décrive **exactement** ce que la page affiche. Le maillage passe
   déjà par les liens des cartes et par le sitemap.
@@ -372,35 +405,38 @@ Google → /es/actividades/kayak
 
 ### 5a. L'index de catégories — `/es/actividades`
 
+⚠️ **Périmé depuis le 2026-09-14 — voir §10quinquies.** Ce qui suit décrit l'index de TUILES validé
+le 2026-09-08 (`TarjetaCategoria`, une grille sans offre). Il a été remplacé par un index de
+SECTIONS (chaque catégorie rend `SeccionOfertas`, le composant de l'accueil, avec un aperçu de ses
+offres) — conservé ici comme trace de la décision d'origine, plus valide comme description du code.
+
 **Le fil d'Ariane** : `Inicio / Actividades`. Le dernier élément n'est pas un lien (c'est la page
-courante) et porte `aria-current="page"`.
+courante) et porte `aria-current="page"`. *(toujours vrai)*
 
 **Le titre**, visible, en `<h1>` : « Actividades ». Il vient de next-intl, pas de la base — c'est
-un libellé d'interface.
+un libellé d'interface. *(toujours vrai)*
 
 **Le bloc de recherche** : le même `BuscadorInicio` que l'accueil, avec `atajosTipo={[]}`. Les
 raccourcis de type n'ont pas de sens ici (la page ne connaît qu'un type et n'a pas compté les
 autres) ; les suggestions du catalogue, à partir de deux caractères, fonctionnent normalement.
-Toute soumission navigue vers `/` avec les critères (décision 10).
+Toute soumission navigue vers `/` avec les critères (décision 10). *(toujours vrai)*
 
-**La grille de catégories.** Une colonne en mobile, deux à `md`, trois à `lg` — les mêmes classes
-que `SeccionOfertas`, écrites en toutes lettres (Tailwind v4 scanne le texte source ; une classe
-interpolée n'est pas générée, et la grille retombe en une colonne sans que rien ne le signale).
-
-**Une tuile** (`TarjetaCategoria`) : une image, un nom, un texte de deux ou trois lignes. Elle
-reprend l'atome `Card` — donc le motif du lien étiré : **seul le nom est un lien**, son `::after`
-recouvre la tuile. Le nom accessible du lien est le nom de la catégorie, pas la concaténation de
-son texte descriptif.
-
-**La tuile « Otras actividades »** est rendue en **dernier**, et seulement si au moins une activité
-publiée ne porte aucun tag. Elle a la même forme que les autres — aplat à la place de l'image, nom
-et texte venus de `messages/` — parce qu'une grille où une tuile détonne se lit comme un défaut
-d'affichage.
+~~**La grille de catégories.** Une colonne en mobile, deux à `md`, trois à `lg`… **Une tuile**
+(`TarjetaCategoria`) : une image, un nom, un texte de deux ou trois lignes… **La tuile « Otras
+actividades »** est rendue en dernier…~~ — remplacé par une **section par catégorie**
+(`SeccionOfertas`, `variante="carrusel"`), chacune avec son titre (nom de la catégorie), ses 6
+premières offres candidates et un « Ver más » **conditionnel** (`total > 6`, contrairement à
+l'accueil où il est toujours rendu). Ni image ni texte éditorial de la catégorie ne sont affichés
+ici (§10quinquies). La catégorie « sans tag » (ex-« Otras actividades ») ferme toujours la liste.
 
 **L'état vide** : `EstadoVacio`, le composant de l'accueil. Il apparaît quand aucune catégorie ne
-répond aux critères **et** qu'il n'y a pas d'activité sans tag. La barre reste au-dessus, utilisable.
+répond aux critères **et** qu'il n'y a pas d'offre sans tag. La barre reste au-dessus, utilisable.
+*(principe inchangé)*
 
-### 5b. La page d'une catégorie — `/es/actividades/[tag]`
+### 5b. La page d'une catégorie — `/es/actividades/[categoria]`
+
+⚠️ Route renommée depuis `/es/actividades/[tag]` (cosmétique, §10quinquies) ; le contenu ci-dessous
+reste exact et généralisé aux 5 types.
 
 Le fil d'Ariane gagne un niveau : `Inicio / Actividades / Kayak`. Le `<h1>` est le **nom de la
 catégorie**, résolu dans la locale. Sous lui, son texte, dans un `<p>` — s'il en a un.
@@ -408,11 +444,18 @@ catégorie**, résolu dans la locale. Sous lui, son texte, dans un `<p>` — s'i
 Puis le bloc de recherche, puis la liste (§5d). `/es/actividades/otras` rend exactement le même
 écran : son nom et son texte viennent de `messages/`, son fil d'Ariane est identique.
 
-### 5c. Les quatre listings — `/es/alojamientos`, `/transportes`, `/camps`, `/eventos`
+### 5c. Les quatre autres types — `/es/alojamientos`, `/transportes`, `/camps`, `/eventos`
 
-`Inicio / Alojamientos`, un `<h1>` qui reprend le titre de la section correspondante de l'accueil
+⚠️ **Périmé depuis le 2026-09-14 — voir §10quinquies.** Décrivait ces quatre routes comme de
+simples listings plats, sans index de catégories. Elles suivent désormais **le même patron que
+`/actividades`** : `/es/alojamientos` (et les trois autres) sont devenues des index de catégories
+(§5a généralisé), et `/es/alojamientos/[categoria]` (et les trois autres) sont devenues des pages
+de catégorie (§5b généralisé). Le texte ci-dessous décrivait l'ancien listing plat, remplacé par
+l'index :
+
+~~`Inicio / Alojamientos`, un `<h1>` qui reprend le titre de la section correspondante de l'accueil
 (**la même clé de traduction** — deux libellés parallèles divergeraient à la première retouche),
-pas de texte descriptif, puis le bloc de recherche et la liste.
+pas de texte descriptif, puis le bloc de recherche et la liste.~~
 
 ### 5d. La liste, et son défilement
 
@@ -546,6 +589,10 @@ and (
 
 ### 6d. L'index de catégories
 
+⚠️ **Périmé — `search_catalog_tags` supprimée le 2026-09-14, remplacée par
+`search_catalog_categorias`, voir §10quinquies pour sa signature exacte.** Conservé ci-dessous comme
+trace de la Tranche 2 d'origine (2026-09-08) :
+
 ```sql
 create function public.search_catalog_tags(
   p_tipo     text default 'activity',
@@ -616,8 +663,11 @@ story. À dire plutôt qu'à laisser découvrir.
 
 ### 7a. `lib/catalog/`
 
+⚠️ **Périmé — `listarTagsConOferta` remplacée le 2026-09-14 par `buscarCategorias`, voir
+§10quinquies.** `buscarTipo` n'a pas bougé :
+
 ```ts
-// buscar.ts — étendue
+// buscar.ts — inchangée depuis la Tranche 1
 export async function buscarTipo(
   tipo: TipoOferta,
   criterios: Criterios,
@@ -626,7 +676,7 @@ export async function buscarTipo(
   }
 ): Promise<{ tarjetas: TarjetaOferta[]; total: number; hayMas: boolean }>;
 
-// buscar.ts — nouvelle
+// buscar.ts — REMPLACÉE le 2026-09-14 par buscarCategorias (§10quinquies)
 export async function listarTagsConOferta(
   tipo: TipoOferta,
   criterios: Criterios,
@@ -636,11 +686,11 @@ export async function listarTagsConOferta(
 
 ⚠️ **`sinTag` est une option, jamais un critère.** Il vient du segment d'URL `otras`, pas d'un
 paramètre ; le mettre dans `Criterios` le ferait écrire dans les liens par `escribirCriterios`.
+*(toujours vrai)*
 
-⚠️ **Écart assumé avec la spec 27 §0**, qui annonçait `listarTagsConOferta(tipo)`. La signature
-gagne les critères et la locale : la décision 3 (l'index respecte la recherche) l'exige, et la
-décision 4 (tri alphabétique dans la langue affichée) exige la locale. La spec 27 est à corriger
-sur cette ligne — comme elle l'a déjà été pour le `<main>` de `PageShell`.
+⚠️ **Écart assumé avec la spec 27 §0**, qui annonçait `listarTagsConOferta(tipo)`. Doublement
+périmé depuis : la fonction elle-même a été remplacée le 2026-09-14. La spec 27 est à corriger sur
+cette ligne — comme elle l'a déjà été pour le `<main>` de `PageShell`.
 
 ### 7b. `lib/catalog/criterios.ts`
 
@@ -669,13 +719,18 @@ verte pendant que le rendu partait en `TypeError`.
 
 ### 7d. Les composants
 
+⚠️ **Périmé — `TarjetaCategoria` et `IndiceCategorias` supprimés le 2026-09-14** (commit `8d4849eb`,
+§10quinquies), remplacés par la réutilisation de `SeccionOfertas` (déjà le composant de l'accueil,
+pas un nouveau composant). Table corrigée :
+
 | Composant | Où | `"use client"` | Pourquoi |
 |---|---|---|---|
-| `TarjetaCategoria` | `molecules/` | **oui** | importe `Card` et `Image`, donc `@hifago/ui` |
+| ~~`TarjetaCategoria`~~ | — | — | **supprimé 2026-09-14**, sans remplaçant dédié |
 | `Migas` | `molecules/` | **oui** | `Breadcrumbs` de HeroUI v3, via `@hifago/ui` |
-| `IndiceCategorias` | `organisms/` | **non** | une grille et des tuiles, aucun état — comme `SeccionOfertas` |
+| ~~`IndiceCategorias`~~ | — | — | **supprimé 2026-09-14** → `IndiceCategoriasConOfertas` (colocalisé `(vitrine)/`, non client, appelle `buscarCategorias` puis rend des `SeccionOfertas`) |
+| `SeccionOfertas` | `organisms/` | **oui** | déjà le composant de section de l'accueil ; réutilisé tel quel pour chaque catégorie de l'index depuis le 2026-09-14 |
 | `ListadoInfinito` | `organisms/` | **oui** | l'observateur, l'état de la liste, `replaceState` |
-| `ListadoTipo` | colocalisé `(vitrine)/` | **non** | Server Component : il appelle `buscarTipo` |
+| `ListadoTipo` | colocalisé `(vitrine)/` | **non** | Server Component : il appelle `buscarTipo` — inchangé |
 
 ⚠️ `Breadcrumbs` existe bien dans HeroUI v3 (`node_modules/@heroui/react/dist/components/breadcrumbs`)
 — donc il **doit** passer par `packages/ui` : jamais un fil d'Ariane maison à côté du design system
@@ -927,6 +982,107 @@ Les objets téléversés pendant cette vérification ont été supprimés par l'
 suppression SQL directe est refusée par `storage.protect_delete()`), et `image_path` remis à `null` :
 la base locale est restée alignée sur le seed.
 
+## 10quinquies. Ce qui a remplacé ce lot le 2026-09-14 (chantier « catégories partout »)
+
+⚠️ **Ce n'est pas une tranche de cette spec** : c'est un lot ultérieur, non tracé par une spec
+dédiée (`docs/dette-technique.md` le signalait comme tel), qui a remplacé une bonne partie du
+système décrit aux §0/§5/§6d/§7. Reconstitué le 2026-09-21/22 par lecture du journal
+(`docs/journal/2026-09.md`, entrée « 2026-09-14 (suite 3) », commit `8d4849eb`) et du code réel —
+pas depuis mémoire.
+
+**Déclencheur** : demande explicite de Jérôme, citée dans le journal — *« pas que l'alojamiento
+doit avoir des cate tout doit pouvoir en avoir »*. Catégorie = tag éditorial libre, comme pour les
+activités, mais pour les cinq types. Le comportement visé : `/alojamientos`, `/actividades`,
+`/transportes`, `/camps`, `/eventos` doivent « ressembler à l'accueil — liste de catégories, chacune
+avec un aperçu d'offres et un "Ver más" SI BESOIN ».
+
+**Ce qui a changé, précisément** :
+
+1. **L'index n'est plus une grille de tuiles vides : c'est une section par catégorie**, le même
+   composant `SeccionOfertas` que l'accueil, avec un aperçu d'offres. `SeccionOfertas` gagne une
+   prop `mostrarVerMas?: boolean` (défaut `true`, l'accueil ne change pas) ; le nouveau pattern par
+   catégorie la pose à `total > tarjetas.length` — contrairement à l'accueil qui rend son « Ver más »
+   inconditionnellement.
+2. **`IndiceCategoriasConOfertas.tsx`** (nouveau fichier colocalisé `(vitrine)/`, non client) devient
+   le corps partagé des CINQ index. `IndiceCategorias.tsx` et `TarjetaCategoria.tsx` (+ leurs test et
+   story) sont supprimés — commit `8d4849eb`.
+3. **`POR_CATEGORIA = 6`** (`IndiceCategoriasConOfertas.tsx:42`) — plafond d'offres par catégorie sur
+   l'index, plafonné **en SQL** (fenêtre `rango_categoria`, jamais un `.slice()` côté TypeScript).
+   Qualifié d'« arbitraire » par le journal lui-même — voir point 7.
+4. **`search_catalog_tags` supprimée, remplacée par `search_catalog_categorias`**
+   (`supabase/migrations/20260914120000_search_catalog_categorias.sql`, `drop` puis `create`) :
+   ```sql
+   create function public.search_catalog_categorias(
+     p_tipo          text,
+     p_query         text default null,
+     p_personas      int  default null,
+     p_desde         date default null,
+     p_hasta         date default null,
+     p_por_categoria int  default null
+   )
+   returns table (
+     categoria_slug text, categoria_label jsonb, categoria_description jsonb,
+     categoria_image_path text, es_sin_tag boolean, total_categoria bigint,
+     rango_categoria bigint,
+     -- + les colonnes carte habituelles : tipo, es_establecimiento, id, slug, nombre,
+     -- descripcion, precio_cop, precio_desde, precio_label, establecimiento, fotos, n_alojamientos
+   )
+   language sql stable set search_path = ''
+   ```
+   Appelle `search_catalog(p_limite => 1000000, …)` en interne — les six prédicats de filtre restent
+   dans une seule fonction (§6b, principe inchangé). Construit une ligne par `(candidat, tag)` via une
+   CTE, plafonne PAR CATÉGORIE avec `row_number() over (partition by … order by …) as rango_categoria`
+   filtré par `p_por_categoria`, et ajoute une branche `es_sin_tag = true` — la généralisation
+   d'« Otras actividades » à tout type. Ne trie pas par libellé (locale inconnue côté SQL, tri fait en
+   TypeScript, comme avant).
+5. **`search_catalog` bifurque désormais la résolution du tag selon la forme de la ligne**
+   (`supabase/migrations/20260914110000_search_catalog_tag_bifurcation.sql`, signature INCHANGÉE,
+   `create or replace`) : une carte GROUPÉE (établissement `lodging` à ≥ 2 unités) lit son tag dans la
+   nouvelle table `establishment_tag_assignments` (même calibrage RLS que `product_tag_assignments`) ;
+   toute autre ligne le lit dans `product_tag_assignments`, comme avant. Sans cette bifurcation,
+   l'index aurait pu montrer une catégorie que sa propre page de détail (qui appelle `buscarTipo` →
+   `search_catalog`) aurait rendue vide.
+6. **`lib/catalog/buscar.ts` gagne `buscarCategorias`** (remplace `listarTagsConOferta`), signature :
+   ```ts
+   export async function buscarCategorias(
+     tipo: TipoOferta, criterios: Criterios,
+     { porCategoria, locale }: { porCategoria: number; locale: string }
+   ): Promise<CategoriaConTarjetas[]>
+   ```
+   Appelle `search_catalog_categorias`, trie en TypeScript via `Intl.Collator(locale)`, place
+   toujours la catégorie « sans tag » en dernier. Servie avec deux usages : l'index (`porCategoria`
+   élevé, ex. 6) et la résolution d'une page de catégorie (`porCategoria: 1`, juste pour savoir si
+   elle existe). `buscarTipo` n'a pas changé.
+7. **Deux choix produit pris SANS confirmation explicite de Jérôme**, à revalider (le journal et le
+   backlog le disent explicitement tous les deux) :
+   - L'image et le texte éditorial d'une catégorie (`catalog_tags.description`/`image_path`, saisis
+     via l'écran admin de la Tranche 3, §10quater) **ne s'affichent plus nulle part sur l'index** —
+     seulement le nom. Confirmé par lecture du code : ni `IndiceCategoriasConOfertas.tsx` ni
+     `SeccionOfertas.tsx` ne lisent `foto`/`descripcion`. Le texte reste affiché sur la page de
+     catégorie (§5b) ; **l'image, elle, n'est affichée nulle part dans le code actuel**, ni sur
+     l'index ni sur la page de catégorie — un vrai trou fonctionnel, pas seulement une simplification
+     de l'index, à signaler si la spec ou l'écran admin de la Tranche 3 laisse croire le contraire.
+   - `POR_CATEGORIA = 6` est une valeur choisie sans qu'aucune ait été donnée par Jérôme dans la
+     demande d'origine.
+8. **Renommage cosmétique** : segment de route `[tag]` → `[categoria]` sur les cinq types
+   (`resolverCategoria`/`metadataCategoria` généralisés dans `ListadoTipo.tsx`, qui étaient câblés en
+   dur sur `"activity"`). Le paramètre de critère `?tag=` (recherche libre, distinct du segment) n'est
+   **pas** renommé — pas de `?categoria=` dans le code.
+9. **`SLUG_SIN_TAG = "otras"`** (`lib/catalog/buscar.ts`) généralise le slug réservé aux 5 types ;
+   servie par la même route `[categoria]` que n'importe quelle autre catégorie.
+
+**Fichiers touchés** (chemins confirmés par le code et/ou le commit `8d4849eb`) —
+**créés** : `IndiceCategoriasConOfertas.tsx`, les 4 routes `{alojamientos,transportes,camps,eventos}/[categoria]/page.tsx`, `establishment_tag_assignments` (table), `EstablishmentTagsBlock.tsx` (admin, copie de `ProductTagsBlock.tsx`), `search_catalog_categorias.test.sql` (14 assertions pgTAP), migrations `20260914100000`/`20260914110000`/`20260914120000` —
+**supprimés** : `IndiceCategorias.tsx`, `TarjetaCategoria.tsx` (+ test + story), `search_catalog_tags.test.sql` —
+**modifiés** : `SeccionOfertas.tsx` (+2 tests), `ListadoTipo.tsx` (`resolverCategoria`/`metadataCategoria` généralisés), les 5 `{type}/page.tsx` (mince wrapper vers `IndiceCategoriasConOfertas`), `lib/catalog/{buscar,tipos}.ts`, `search_catalog.test.sql` (+5 assertions), `e2e/categorias.spec.ts` (réécrit), `e2e/listados.spec.ts` —
+**doc, non faite à l'époque** : `docs/dette-technique.md` (note de péremption posée le jour même),
+`docs/backlog.md` (les 2 choix non validés) — **cette spec elle-même, corrigée seulement le
+2026-09-21/22**.
+
+**Ce que ce lot n'a pas touché** : `ListadoInfinito`, le pont `/api/catalogo/listado`, `buscarTipo`,
+le fil d'Ariane, le JSON-LD `BreadcrumbList`, les invariants et règles SEO du §8 — tout ce qui régit
+la page de catégorie individuelle (§5b, §5d) reste exact.
+
 ## 11. Annexe — traçabilité
 
 | Sujet | Sources |
@@ -943,6 +1099,7 @@ la base locale est restée alignée sur le seed.
 | Pipeline image, bucket, Route Handler d'upload | `apps/admin/lib/media/catalogImage.ts`, `app/api/upload/[entity]/route.ts`, spec 04 |
 | Sitemap, hreflang, canonical, JSON-LD | `apps/web/app/sitemap.ts`, `.claude/rules/seo.md`, spec 26 |
 | Carte, lien étiré, grille, conventions de composants | `components/atoms/Card.tsx`, `components/organisms/SeccionOfertas.tsx`, `components/README.md` |
+| Chantier « catégories partout » qui remplace §0/§5/§6d/§7 (2026-09-14) | §10quinquies, `docs/journal/2026-09.md` (« suite 3 »), commit `8d4849eb`, migrations `20260914{100000,110000,120000}` |
 
 ## 12. Documents liés
 

@@ -89,8 +89,10 @@ export function OrderResult({ order, locale, isRealAccount, paymentOutcome }: Or
   // L'état de la COMMANDE et l'incident de PAIEMENT sont deux choses distinctes : les mélanger
   // faisait réécrire trois fois les mêmes conditions (et rendait `isPayable` vrai sur une commande
   // déjà payée dont un paiement de trop avait échoué).
-  const isAwaiting = order.paymentStatus === "pending";
   const orderState = deriveOrderState(order);
+  // Spec 39 : on ne sonde que s'il reste réellement quelque chose à confirmer (`awaiting`), jamais
+  // une commande morte dont le paiement local est resté `pending`.
+  const isAwaiting = orderState === "awaiting";
 
   const state = paymentError ? "failed" : orderState;
   const isPayable = orderState === "unpaid";
@@ -186,7 +188,7 @@ export function OrderResult({ order, locale, isRealAccount, paymentOutcome }: Or
           "flex flex-col gap-1 rounded-lg border p-4",
           state === "paid"
             ? "border-success bg-success/10"
-            : state === "failed" || state === "expired" || state === "cancelled"
+            : state === "failed" || state === "expired" || state === "cancelled" || state === "paid_not_honored"
               ? "border-danger bg-danger/10"
               : "border"
         )}

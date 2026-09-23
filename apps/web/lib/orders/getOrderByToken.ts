@@ -68,6 +68,9 @@ export type OrderForDisplay = {
   totalCop: number;
   acompteCop: number;
   lines: OrderLineForDisplay[];
+  /** Spec 39 D3 — cf. `OrderStateInput`. */
+  paymentReceivedNotHonored: boolean;
+  refundStatus: string | null;
 };
 
 // Miroir local de ce que la RPC construit (`jsonb_build_object`), parce que `Returns: Json` est
@@ -107,6 +110,8 @@ type RpcResult = {
     total_cop: number;
     acompte_cop: number;
     lines: RpcLine[];
+    payment_received_not_honored?: boolean;
+    refund_status?: string | null;
   };
 };
 
@@ -134,6 +139,8 @@ export async function getOrderByToken(
     holderEmail: order.holder_email,
     totalCop: order.total_cop,
     acompteCop: order.acompte_cop,
+    paymentReceivedNotHonored: order.payment_received_not_honored === true,
+    refundStatus: order.refund_status ?? null,
     lines: (order.lines ?? []).map((line) => ({
       id: line.id,
       productName: resolveLocalizedField(asLocalizedField(line.product_name), locale) ?? "",

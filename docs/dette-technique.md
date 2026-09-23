@@ -4,7 +4,7 @@ titre: "Dette technique et QA/UI connue — hifago"
 theme: journal
 statut: vivant
 langue: fr
-maj: 2026-09-16
+maj: 2026-09-22
 resume: >
   Dette signalée et non corrigée du chantier hifago — technique, puis QA/UI mineure. Sortie de
   docs/backlog.md le 2026-09-08 : ce fichier-là plafonne à 60 lignes et prescrit lui-même qu'un
@@ -33,7 +33,6 @@ repond_a:
 - La garde de `(cuenta)` redirige vers `/entrar` SANS `?next=` : un layout serveur ne connaît pas le chemin courant, et la « ligne dans `proxy.ts` » annoncée par la spec 27 §5 n'en est pas une (un middleware ne peut pas poser d'en-tête de REQUÊTE sur une réponse construite par `intlMiddleware`). Sans effet tant qu'il n'existe qu'un écran de compte — vrai déclencheur : le lot qui ajoute `/cuenta` et `/cuenta/perfil`.
 - Remplacer une image du catalogue laisse l'ancien objet dans le bucket `catalog-media` — vrai pour `product_media`/`establishment_media` depuis la spec 04, et vrai pour l'image de catégorie que la spec 29 ajoute. À traiter globalement ou pas du tout : le corriger pour une seule entité créerait une incohérence de plus.
 - Bricoles signalées, non reprises : `createTtlCache` ne purge jamais les entrées expirées (Map non bornée) · `addDaysIso` (`bogotaDates.ts:56`) porte le débordement d'année déjà corrigé ailleurs · `partner-agenda.spec.ts` ne nettoie pas derrière lui et se sabote après plusieurs runs · sonde à un appel LobbyPMS sur `start_date == end_date` jamais vérifiée.
-- Specs 17 (§ invariants) et 20 (l.73) portent encore la règle « PII minimale côté socio » (jamais `holder_phone`/`holder_email`), renversée par Jérôme le 2026-08-19 (migration `20260819180000`) — signalée dans les « Écarts connus » du cahier 02, pas encore corrigée dans le texte des deux specs.
 - Les quatre cahiers (00-03) portent leurs écarts en en-tête « Écarts connus » plutôt que dans leurs sections : réécrire les sections elles-mêmes est un geste de fond à valider avec Jérôme, section par section (statut de validation à reprendre).
 - **Recadrage "carrito"→"Mi viaje" (2026-09-15) : 3 restes volontairement non traités**, hors du périmètre validé par Jérôme (texte + URL + icône seulement) — `pathnames` next-intl par locale (l'anglais garde un segment espagnol, `/en/mi-viaje`, décision SEO déjà documentée) ; libellés d'exemple "Carrito"/"Añadir al carrito" dans `Button.stories.tsx`/`IconButton.stories.tsx`/`LinkButton.stories.tsx`/`IconButton.test.tsx`/`IconLink.test.tsx` (non lus par next-intl, aucun test réel n'en dépend) ; `OrderResultPage`/`AccountOrdersPage` gardent "pedido"/"reserva" (contexte d'une commande déjà créée, pas le tunnel panier visé).
 
@@ -127,7 +126,14 @@ Historique complet de chaque point (comment on y est arrivé) : `docs/journal/<m
 - **Un evento reste le seul type dont l'URL de vitrine n'est pas modifiable** — ni côté admin (bloc `isEvento ? {} : …` de product-form.tsx et productEditPayload.ts), ni donc côté socio. Le cas NON-evento a été refermé le 2026-09-09 (whitelist SQL élargie, migration 20260909180000) ; la whitelist accepte désormais ces clés pour TOUS les types, il ne reste que le geste d'écran.
 - **Rien ne teste la création admin d'un produit** — ni `buildProductCreationPayload` ni `product-form.tsx` n'ont de test unitaire, et la seule couverture réelle (`admin-product-create.spec.ts`) est dans la suite e2e en pause. Le correctif vitrine du 2026-09-09 n'est donc protégé par rien (§11.20).
 - ⚠️ **La suite pgTAP est INEXPLOITABLE après une exécution e2e** (constaté deux fois le 2026-09-08) : six fichiers comptent `audit_log` en absolu, et tout e2e admin y écrit. `npm run db:setup` la referme. Ce n'est pas une régression — c'est la même dette que la ligne « 6 fichiers pgTAP sensibles au volume » ci-dessous, mais sa CONSÉQUENCE méritait d'être nommée : un chiffre pgTAP mesuré après des e2e ne veut rien dire.
-- ⚠️ **`docs/specs/29-vitrine-listings-et-index-de-categories.md` est PÉRIMÉE depuis le 2026-09-14** (chantier "catégories partout") : elle documente encore l'index de tuiles vides réservé à `activity` et les quatre listings plats — remplacés par un index de sections « comme l'accueil » (`SeccionOfertas` par catégorie, `IndiceCategoriasConOfertas.tsx`) généralisé aux cinq types, `search_catalog_tags` remplacée par `search_catalog_categorias`, nouvelles tables/routes `[categoria]`. Code et tests à jour (`CLAUDE.md`/journal du 2026-09-14) ; la spec elle-même n'a pas été réécrite — à faire avant qu'un futur lot s'y fie.
+- ~~`docs/specs/29-vitrine-listings-et-index-de-categories.md` est PÉRIMÉE depuis le 2026-09-14~~ —
+  **corrigée le 2026-09-21/22** : §0 (contrat compact), §2, §5a/c, §6d, §7a/d réécrits ou annotés
+  `⚠️ Périmé`, nouvelle section §10quinquies documentant le remplacement en détail (signature de
+  `search_catalog_categorias`, `POR_CATEGORIA = 6`, fichiers créés/supprimés/modifiés). Deux
+  constats faits en la corrigeant, pas seulement en la relisant : l'image de catégorie n'est
+  affichée NULLE PART dans le code actuel (ni index ni page de catégorie, pas seulement absente de
+  l'index comme on le pensait) ; les deux choix produit non validés par Jérôme (masquage
+  image/texte sur l'index, `POR_CATEGORIA` arbitraire) restent ouverts, cf. backlog.
 - ⚠️ **`Migas` rend des `<a href>` NATIFS, donc le fil d'Ariane provoque une navigation COMPLÈTE** — il viole l'invariant 9 de la spec 27 depuis sa création (`Breadcrumbs.Item` étend le `Link` de react-aria, pas celui de `@/i18n/navigation`). Invisible sur un listing, ~~sérieux sur une fiche : **cliquer le fil vide le panier**, tenu en mémoire~~ — ⚠️ **cette conséquence est PÉRIMÉE depuis la spec 32** (2026-09-10) : le panier vit en base, une navigation complète ne le perd plus. Le défaut lui-même reste réel (une navigation complète là où l'app devrait rester client-side), mais il est redevenu un point de performance, pas une perte de données — requalifié le 2026-09-10 en écrivant la spec 33. Deux corrections possibles, aucune triviale : un `RouterProvider` react-aria (ABSENT de la version installée, vérifié le 2026-09-08) ou le panier persistant (cahier §2b.6, déjà décidé, spec à écrire). En attendant, la fiche produit garde son lien « ← Volver al catálogo », qui est le seul lien client-side vers l'accueil — ne pas le supprimer en le prenant pour un doublon.
 
 ## Dette trouvée en livrant le transport informatif, le 2026-09-16
@@ -154,3 +160,48 @@ Historique complet de chaque point (comment on y est arrivé) : `docs/journal/<m
   visuel. Trouvé en extrayant `product-type-fields/index.tsx` en sous-composants (revue de
   packaging admin) — préservé à l'identique dans l'extraction (pure, zéro changement de
   comportement), documenté en tête du fichier hôte plutôt que corrigé en silence.
+
+## Data/config en écart, déplacée du backlog le 2026-09-19
+Même motif que les déplacements des 2026-09-08 et 2026-09-10 : `docs/backlog.md` avait atteint
+60/60 lignes, son propre plafond, et la règle du projet (mettre le backlog à jour en fin de
+session) allait donc rendre la CI rouge au prochain ajout. Ces points ne sont pas des
+arbitrages — rien n'y attend une décision de Jérôme.
+
+- `alojamiento-pms-backed-demo` reste `sellable` en préprod alors qu'il est invendable (PMS-backed sans vraie disponibilité).
+- `caminata-mirador-penon` (produit utilisé par les précédents smoke tests manuels) n'a plus aucune date ouverte sur 3 mois glissants, vérifié le 2026-09-10 — utiliser un autre produit du seed (`kayak-embalse-guatape` a une date ouverte le 2026-10-05) pour tout nouveau test manuel du parcours panier.
+- **Les 7 transports déjà en base n'ont PAS d'horaires** malgré l'enrichissement d'`aeroturex-bus-compartido.json` (2026-09-16) : `seed-mock-data.mjs` est create-only et ignore un produit existant. Leurs deux LIEUX, eux, sont bien arrivés (migration de données de `20260916150000`). Un `update` manuel ou un `db reset` est nécessaire pour voir la fenêtre de départs sur un environnement déjà seedé — le lot n'est pas cassé.
+- **Paiement Mercado Pago — webhook : RÉSOLU le 2026-09-20**, premier paiement confirmé de bout en bout (piège 19 refermé). La clé de signature doit venir de l'application QUI ENCAISSE — ici celle du compte vendeur de test, pas celle du compte de développement. ⚠️ Restent ouverts : (a) la variable partagée d'équipe `MERCADOPAGO_WEBHOOK_SECRET` porte encore l'ancienne valeur, surchargée par une variable de projet sur `hifago-web` — à nettoyer ; (b) deux paiements encaissés sur commandes annulées (`00bd6fbb`, `e153dea0`) qu'une retentative MP transformerait en commandes fantômes ; (c) ~~la confirmation n'est garantie que tant que le webhook fonctionne~~ — **REFERMÉ le 2026-09-22** en local (spec 39 B1/B2 : `expire_stale_payment_orders` supprimée, `payments-reconcile` interroge MP avant toute expiration, remboursement par le job, client prévenu) ; reste le déploiement préprod (spec 39 §C).
+
+## Fragilités des contrôles CI, relevées par la revue du 2026-09-19
+Trouvées en auditant `scripts/check-*.sh`, toutes VÉRIFIÉES en différentiel mais AUCUNE ne se
+déclenche sur l'arbre actuel. Elles sont ici pour ne pas être re-diagnostiquées le jour où un
+run vire au rouge sans faute réelle.
+
+- `check-data-layer.sh` — le motif `\.from\(` matche `Array.from(` autant que `supabase.from(` : un `Array.from({length: n})` dans un `page.tsx` (idiome courant pour une grille de squelettes) rendrait le script rouge sans faute réelle.
+- `check-seo.sh` — le filtre de commentaires n'écarte que ceux en DÉBUT de ligne : un `{/* aggregateRating */}` (commentaire JSX) ou un commentaire de fin de ligne fait échouer le contrôle. C'est le seul des cinq scripts à ne pas passer par `sans-commentaires.pl`.
+- `check-seo.sh` — faux négatif symétrique et silencieux : si une zone `(tunnel)`/`(cuenta)`/`(auth)` est renommée, le `grep -r` échoue, le `2>/dev/null || true` avale l'erreur et le contrôle passe au VERT.
+- `check-design-system.sh` — trois de ses cinq blocs ne filtrent pas les commentaires : un commentaire citant `from "@heroui/react"` suffit à les faire échouer. Et la comparaison `head -n1` contre `"use client";` casse sur un fichier portant un bandeau de commentaire, un BOM ou un CRLF.
+- `check-design-system.sh:41` — ce `find` ne `prune` ni `node_modules` ni `.next`, contrairement aux quatre autres du même fichier : il traverse ~11 600 fichiers pour rien à chaque run.
+- `check-deno-imports.sh` — seul script à utiliser des tableaux bash sous `set -u` : deux idiomes y sont fatals en bash 3.2 (le `/bin/bash` de macOS) et légaux depuis 4.4. Inoffensif sur la forme actuelle du dépôt, et ne pourrait casser qu'en LOCAL, jamais en CI (Ubuntu a bash 5.x).
+- `check-i18n-links.sh` / `check-tokens.sh` / `check-data-layer.sh` — parcourent l'arbre 3, 2 et 2 fois respectivement (une passe par règle), soit ~2 700 `fork` de `perl`+`grep`. Factoriser en une seule traversée rendrait `npm run verify` sensiblement plus rapide.
+
+## Faits déplacés du backlog le 2026-09-20
+Même motif que les déplacements précédents : `docs/backlog.md` à 59/60 lignes. Un fait à ne pas
+re-découvrir, pas un arbitrage.
+
+- **`client_key_for_order` perd 2 de ses 3 branches en usage réel** (mesuré le 2026-09-10, conséquence de `account_id` NOT NULL) — `coalesce(account_id, email, téléphone, order_id)` résout désormais TOUJOURS via `account_id` pour ses deux seuls appelants (`list_clients`, `list_client_orders`) : les replis email/téléphone/order_id sont inatteignables par une vraie ligne `orders`. Pas une régression (l'admin ne tape jamais un email à la main, toujours un client_key déjà résolu) — juste un fait à ne pas re-découvrir en confusion. Fonction non modifiée ; sa couverture vit dans `list_client_orders_rpc.test.sql` en appelant la fonction pure directement.
+
+## Dette trouvée en livrant la spec 39 (Lot B), les 2026-09-21/22
+- **Deux fonctions insèrent une ligne fille pendant qu'une autre tient la ligne parente** : le
+  `KEY SHARE` d'un `insert into order_lines` sur `orders` a interbloqué `modify_order_line` avec
+  `expire_payment_order` (3 `40P01` sur 12, reproduit avant correctif, `20260921100200`). Toute
+  future RPC qui insère des `order_lines` dans une commande EXISTANTE doit verrouiller `orders`
+  d'abord (`create_manual_order_line` crée sa propre commande : hors cause). Piège 22.
+- **Codes d'erreur Mercado Pago des remboursements jamais observés en réel** : la fixture
+  d'intégration rejoue des corps supposés (`Payment-too-old-to-be-refunded`) ; à remplacer par des
+  captures préprod avant de faire confiance au mapping 4xx → `rejected` (spec 39 §10.5).
+- **`/admin/reconciliation` sans pagination** : deux listes en cartes (PMS, Pagos) qui grandissent
+  avec l'historique (`Reembolsados` compris) — passer en `DataList` quand le volume le justifiera.
+- **Aucun écran ne lit `job_heartbeats`** : l'admin apprend qu'un job est arrêté par e-mail
+  (`admin_job_stalled`), pas par un voyant. Un bloc « santé des jobs » sur l'accueil admin serait la
+  suite naturelle (RLS admin déjà posée).

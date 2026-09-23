@@ -8,13 +8,20 @@ import { Button, Label, Modal, TextArea, TextField, toast } from "@hifago/ui";
 // dialogue contrôlé, motif obligatoire vérifié côté client (message immédiat) ET côté
 // serveur (resolve_reconciliation_entry, feature 22), onSuccess/onOpenChange remontés au parent
 // plutôt qu'un router.refresh() — la liste se met à jour par état local, pas par re-fetch complet.
+// 2026-09-20 : la RPC est un paramètre — `resolve_reconciliation_entry` (PMS, feature 22) et
+// `resolve_payment_reconciliation_entry` (paiement, spec 19) ont exactement la même forme
+// (p_entry_id, p_note, garde is_admin, motif obligatoire) ; un second dialogue serait une copie.
+export type ResolveEntryRpc = "resolve_reconciliation_entry" | "resolve_payment_reconciliation_entry";
+
 export function ResolveEntryDialog({
   entryId,
+  rpcName = "resolve_reconciliation_entry",
   open,
   onOpenChange,
   onSuccess,
 }: {
   entryId: string;
+  rpcName?: ResolveEntryRpc;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
@@ -39,7 +46,7 @@ export function ResolveEntryDialog({
 
     setIsSubmitting(true);
     const supabase = createClient();
-    const { data, error: rpcError } = await supabase.rpc("resolve_reconciliation_entry", {
+    const { data, error: rpcError } = await supabase.rpc(rpcName, {
       p_entry_id: entryId,
       p_note: note.trim(),
     });

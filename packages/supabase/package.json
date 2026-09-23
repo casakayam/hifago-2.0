@@ -17,5 +17,8 @@
     "@types/node": "^20",
     "next": "16.3.4",
     "typescript": "^5"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
   }
 }

@@ -37,6 +37,11 @@ réelles. Règle d'échappement : au-delà de 100 lignes, le piège le plus anci
    `drop function` explicite d'abord. Pour modifier une RPC longue et critique (`create_order`,
    `apply_payment_webhook`), extraire la définition vivante par `pg_get_functiondef` et remplacer
    par occurrences comptées — jamais retaper à la main.
+8. Toute fonction qui verrouille, écrit `orders`/`payments`/`order_lines`, OU **insère une ligne
+   fille d'une commande existante** (l'`insert` prend un verrou de clé sur `orders`, piège 22) prend
+   **`orders` d'abord, toujours** — `for update` explicite avant tout autre verrou (2026-09-20/21 :
+   `apply_payment_webhook` puis `modify_order_line`, interblocages reproduits puis prouvés absents par
+   `tests/concurrency/apply_payment_webhook_vs_expiry` et `reconcile_order_vs_webhook.concurrency.mjs`).
 
 ## Pièges vérifiés — prescription ici, récit dans `docs/journal/`
 
