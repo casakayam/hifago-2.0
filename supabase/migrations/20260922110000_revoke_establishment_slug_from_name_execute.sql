@@ -1,0 +1,26 @@
+-- Faille signalée par l'audit du 2026-09-09, reproduite en réel le 2026-09-22 (docs/backlog.md §
+-- « Oracles de lecture ») : establishment_slug_from_name(p_name jsonb, p_exclude uuid) porte le
+-- grant EXECUTE par défaut de PostgreSQL (accordé à PUBLIC sur toute nouvelle fonction, cf.
+-- .claude/rules/supabase.md « Grants par défaut, sens INVERSE selon table ou fonction »), donc
+-- appelable directement par n'importe quel visiteur anonyme via PostgREST — vérifié en local sous
+-- `set local role anon` : répond un slug candidat pour n'importe quel nom fourni, ce qui énumère
+-- l'existence d'établissements que la RLS masque autrement (non publiés/inactifs) via le suffixe
+-- -2/-3 renvoyé quand le slug de base est déjà pris.
+--
+-- Contrairement aux 4 autres fonctions-oracle listées par le même audit (is_admin, has_capability,
+-- has_admin_capability, partner_id_for_account), celle-ci n'a AUCUN appelant RPC direct légitime :
+-- grep exhaustif sur apps/ et packages/ (2026-09-22), zéro occurrence de
+-- `rpc("establishment_slug_from_name"`. Son seul appelant est set_establishment_slug() (trigger
+-- `establishments_set_slug`, security definer, propriétaire postgres) — un revoke total est donc
+-- sans risque : le trigger continue de fonctionner, il l'appelle depuis un contexte owner, jamais
+-- via un rôle API. Vérifié en transaction annulée avant d'écrire cette migration :
+-- `insert into establishments` (name seul, slug omis) sous role authenticated pose toujours un
+-- slug correct après ce revoke.
+--
+-- Les 4 autres fonctions restent hors de cette migration : leur cas est différent et plus délicat
+-- (des policies RLS les appellent avec auth.uid() y compris pour une session anonyme, ex.
+-- products_select_public — un revoke anon les casserait, prouvé en local le 2026-09-22). Elles
+-- nécessitent de retirer leur paramètre uuid pour lire auth.uid() en interne plutôt qu'un simple
+-- revoke — chantier séparé, plus large, pas traité ici.
+
+revoke all on function public.establishment_slug_from_name(jsonb, uuid) from public, anon, authenticated;

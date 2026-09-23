@@ -53,11 +53,19 @@ select is(
         -- Prédicats appelés DANS des policies RLS : une policy s'évalue avec les droits du rôle
         -- appelant, donc leur EXECUTE par anon/authenticated est nécessaire au fonctionnement de
         -- la RLS elle-même. Toutes en lecture seule.
+        --
+        -- ⚠️ establishment_slug_from_name EN A ÉTÉ RETIRÉE le 2026-09-22 : elle n'a jamais été
+        -- appelée depuis une policy RLS (grep vérifié — son seul appelant est le trigger
+        -- set_establishment_slug, exécuté en contexte owner), classée ici par erreur avec les 4
+        -- vraies prédicats lors de l'audit du 2026-08-28. Exploitable en réel par un visiteur
+        -- anonyme (énumération de slugs masqués par la RLS, reproduit le 2026-09-22) — EXECUTE
+        -- révoqué de anon ET authenticated (20260922110000), elle ne devrait donc plus jamais
+        -- matcher ce filtre. Si elle réapparaît ici, c'est qu'un grant a été réintroduit sans
+        -- raison : ne pas la rajouter à cette liste, corriger le grant.
         'is_admin',
         'has_admin_capability',
         'has_capability',
         'partner_id_for_account',
-        'establishment_slug_from_name',
         -- Publique par conception : vérifie un jeton d'invitation AVANT toute inscription, donc
         -- nécessairement appelable sans compte (spec 05).
         'check_partner_invitation',
