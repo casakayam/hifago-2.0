@@ -1,11 +1,11 @@
 ---
 id: refonte-emails-transactionnels
-titre: "Emails transactionnels — les 8 envois possibles, leur déclencheur et leur destinataire"
+titre: "Emails transactionnels — les 11 envois possibles, leur déclencheur et leur destinataire"
 theme: cadrage
 statut: "vérifié en envoi RÉEL le 2026-08-31 — les 8 emails sont partis chez Resend depuis la stack locale et reçus en boîte ; secrets Resend posés en préprod, aucun envoi réel en préprod à ce jour"
-maj: 2026-08-31
+maj: 2026-09-22
 resume: >
-  Table de référence des 8 seuls emails que hifago peut envoyer (liste fermée par la contrainte
+  Table de référence des 11 seuls emails que hifago peut envoyer (liste fermée par la contrainte
   check sur notification_emails.event_type) : ce qui les déclenche, à qui ils partent, leur objet
   et leur corps exacts. Décrit le comportement réel du code, pas une cible.
 mots_cles: [email, notification, resend, destinataire, declencheur, notification_emails, spec 23]
@@ -15,7 +15,7 @@ repond_a:
   - "Quel email part au client, lequel part au socio, lequel part à l'admin ?"
 ---
 
-# Emails transactionnels — les 8 envois possibles
+# Emails transactionnels — les 11 envois possibles
 
 > Liste **fermée** : la contrainte `check` sur `notification_emails.event_type`
 > (`supabase/migrations/20260824020000_notification_emails.sql`) n'autorise que ces 8 valeurs.
@@ -31,12 +31,15 @@ repond_a:
 |---|---|---|---|---|
 | 1 | `partner_invitation` | Un admin crée une invitation **et** remplit le champ « Correo (opcional) » | L'adresse saisie par l'admin | `Invitación a unirte a Hifago` |
 | 2 | `admin_new_proposal` | Un socio soumet une proposition de produit ou d'établissement | **Tous les admins actifs**, un email chacun | `Nueva propuesta de producto pendiente de moderación` / `…de establecimiento…` |
-| 3 | `admin_new_reconciliation_exception` | Une exception de réconciliation est créée (PMS ou paiement) | **Tous les admins actifs**, un email chacun | `Nueva excepción de reconciliación PMS` / `…de pago` |
+| 3 | `admin_new_reconciliation_exception` | Une exception de réconciliation est créée (PMS ou paiement) | **Tous les admins actifs**, un email chacun | `Nueva excepción de reconciliación PMS` / `…de pago` / `Pago recibido sin reserva que honrar — reembolso requerido` (entrée `kind = 'refund_required'`, 2026-09-20) |
 | 4 | `partner_proposal_decided` | Un admin approuve ou rejette une proposition | Le compte socio qui l'a soumise | `Tu propuesta fue aprobada` / `Tu propuesta fue rechazada` |
 | 5 | `partner_commission_earned` | Le paiement d'une commande est confirmé | Chaque **compte référent distinct** ayant une ligne en `commission_case = 'external_referrer'` | `Nueva comisión asignada` |
 | 6 | `partner_payment_confirmed` | Le paiement d'une commande est confirmé | Chaque **compte propriétaire distinct** des produits commandés | `Pago confirmado` |
 | 7 | `client_order_confirmed` | Le paiement d'une commande est confirmé | Le client, sur `orders.holder_email` — un seul email par commande | `Reserva confirmada` |
 | 8 | `partner_camp_evento_blocked` | Une commande contenant une ligne `camp` est créée — **à la réservation, avant le paiement** | Chaque compte du partenaire propriétaire du camp/evento | `Reserva confirmada — recurso bloqueado` |
+| 9 | `client_payment_received_not_honored` | Une entrée `refund_required` de `reason_code` `paid_after_expiry` ou `amount_mismatch` est créée (le client a payé, rien n'est honoré) — spec 39 D3, 2026-09-22 | Le client, sur `orders.holder_email` — **un seul e-mail par entrée** (dédup sur `related_id`) | `Recibimos tu pago — tu reserva <HFG-n> no pudo confirmarse` |
+| 10 | `client_duplicate_payment_refund` | Une entrée `refund_required` de `reason_code` `double_payment` est créée (la réservation EST confirmée, le doublon sera remboursé) | Le client, un e-mail par entrée | `Recibimos un pago duplicado para tu reserva <HFG-n>` |
+| 11 | `admin_job_stalled` | Le watchdog constate que le job `payments-reconcile` n'a pas battu depuis 15 min (`job_heartbeats`) — une seule fois tant qu'il ne repart pas | **Tous les admins actifs**, un email chacun | `El job de conciliación de pagos no responde desde hace 15 min` |
 
 Les emails 5, 6 et 7 partent tous les trois du **même événement** : `apply_payment_webhook` en
 branche `approved`. Un paiement confirmé peut donc générer plusieurs emails d'un coup.
@@ -53,6 +56,8 @@ branche `approved`. Un paiement confirmé peut donc générer plusieurs emails d
 | 6 | `apply_payment_webhook` | idem |
 | 7 | `apply_payment_webhook` | idem |
 | 8 | `create_order`, branche `camp` | `supabase/migrations/20260824110000_notify_partner_camp_evento_blocked.sql` |
+| 9-10 | trigger `notify_client_refund_required` sur `payment_reconciliation_entries` (`when new.kind = 'refund_required'`) | `supabase/migrations/20260922100000_payment_refunds.sql` |
+| 11 | `payments_reconcile_watchdog` (pg_cron `*/15`) | `supabase/migrations/20260921100000_payments_reconcile.sql` |
 
 Tous passent par `enqueue_notification_email` (ou `notify_all_admins` pour les deux emails admin),
 qui empile dans `notification_emails`. L'envoi physique est fait plus tard par l'Edge Function
@@ -70,9 +75,15 @@ Nom de l'entité proposée (ou « Sin nombre ») + « Propuesto por: <socio> » 
 + lien *Ver propuesta* vers `/admin/proposals/<id>`.
 
 **3 · `admin_new_reconciliation_exception`**
-Libellé de l'entrée : nom du produit pour une exception PMS, « Pedido de <nom> » pour une exception
-de paiement, ou « Pedido no identificado » si le webhook n'a jamais pu être corrélé à un paiement
-connu + lien *Ver reconciliaciones pendientes* vers `/admin/reconciliation`.
+Libellé de l'entrée : nom du produit pour une exception PMS, « Pedido <HFG-n> de <nom> — <montant>
+COP » pour une exception de paiement, ou « Pedido no identificado » si le webhook n'a jamais pu être
+corrélé à un paiement connu + lien *Ver reconciliaciones pendientes* vers `/admin/reconciliation`,
+**absolu** depuis le 2026-09-20 (secret Vault `admin_app_public_url`, même patron que l'invitation ;
+relatif en repli si le secret manque). Le détail (`failure_reason`, `raw_event`) reste réservé à
+l'écran. Une entrée `kind = 'refund_required'` (argent encaissé sans prestation à honorer —
+migration 20260920120000) porte le sujet dédié ci-dessus. ⚠️ Toujours un e-mail par admin et par
+entrée, sans dédup — la seule borne est l'index unique partiel « une entrée `refund_required` par
+paiement Mercado Pago ».
 
 **4 · `partner_proposal_decided`**
 « Tu propuesta para "<nom>" fue aprobada. » — ou, en cas de rejet, « …fue rechazada. » suivi de
@@ -136,3 +147,21 @@ Côté préprod, en revanche : les secrets `RESEND_API_KEY` et `NOTIFICATION_EMA
 depuis le 2026-08-31, mais **aucun envoi réel n'y a encore été observé**. Les 9 lignes empilées
 avant que les secrets soient posés y sont toutes en `abandoned` — état terminal, elles ne
 repartiront pas.
+
+**9 · `client_payment_received_not_honored`** — « Hola <nom>, Recibimos tu pago de $<montant> COP,
+pero tu reserva **<HFG-n>** no pudo confirmarse: la reserva ya había expirado o había sido anulada
+cuando llegó el pago. » (ou « el monto recibido no coincide con el anticipo de la reserva. » pour un
+écart de montant) « Te contactamos en las próximas horas para reembolsarte o volver a reservar. No
+necesitas hacer nada. » + lien *Ver tu reserva* (Vault `web_app_public_url`, omis si absent).
+⚠️ Texte proposé par l'agent le 2026-09-22, **à valider par Jérôme** (spec 39 §5/§10.6).
+
+**10 · `client_duplicate_payment_refund`** — « Tu reserva **<HFG-n>** está confirmada. Recibimos un
+segundo pago de $<montant> COP para la misma reserva: te lo reembolsaremos por el mismo medio de
+pago en los próximos días. » + lien. Même réserve de validation.
+
+**11 · `admin_job_stalled`** — dernière exécution réussie, dernier `last_error`, et le rappel que
+tant que le job est arrêté aucune réservation n'expire et aucun paiement tardif n'est concilié
+(vérifier secrets, déploiement de l'Edge Function, `net._http_response`).
+
+> Liste fermée de **11** événements depuis le 2026-09-22 (contrainte `notification_emails_event_type_check`,
+> migration `20260921100000`).

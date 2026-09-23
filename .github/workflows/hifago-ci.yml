@@ -32,88 +32,41 @@ jobs:
       # échouait donc à CHAQUE push, quoi qu'on corrige — 17 runs rouges d'affilée entre le
       # 2026-09-04 et le 2026-09-07 avant que quiconque regarde la CI. Le script refuse désormais
       # de tourner sur un clone superficiel plutôt que de mentir en silence.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run lint --workspaces --if-present
-      # Bloquant depuis le 2026-08-28 : le script tourne propre, et il couvre le piège
-      # Table.Body/Table.Content non sérialisable que le lint no-restricted-imports ne voit pas.
-      - name: Design system (HeroUI unique, composants sérialisables)
-        run: bash scripts/check-design-system.sh
-      # Bloquant depuis le 2026-08-28. La règle eslint (eslint.rules.mjs) ne couvre que les deux
-      # apps ; ce script couvre packages/, supabase/functions/ (Deno), tests/ et le SQL — c'est-à-
-      # dire l'angle mort où vivait le dixième site du lot fuseau (packages/e2e-support/src/date.ts).
-      - name: Fuseau de Guatapé (aucune date civile calculée en UTC)
-        run: bash scripts/check-timezone.sh
-      # Deux règles SEO que la relecture ne peut pas attraper : l'une porte sur une ABSENCE
-      # (aucune table d'avis n'existe, donc aucune note ne doit être émise), l'autre sur deux
-      # écritures visuellement identiques dont une seule échappe réellement le JSON-LD. Les deux
-      # branches du script ont été vérifiées PAR MUTATION, pas seulement observées vertes.
-      # `check-seo.sh` porte aussi, depuis le 2026-09-07, la troisième règle : les zones (tunnel),
-      # (cuenta) et (auth) sont noindex, et aucune route ne l'annule (spec 27 §0 invariant 6).
-      - name: Référencement (données structurées honnêtes, JSON-LD échappé, zones noindex)
-        run: bash scripts/check-seo.sh
-      # Bloquant depuis la revue de packaging admin (2026-09-17) — vérifié PAR MUTATION. Jusque-là,
-      # la convention kebab-case d'apps/admin/components/ n'était constatée qu'a posteriori dans le
-      # code (apps/web/components/README.md la mentionnait en passant), jamais outillée : exactement
-      # le cas que CLAUDE.md §11.20 nomme (« une règle que rien ne vérifie n'est pas une règle »).
-      - name: Nommage kebab-case d'apps/admin/components/
-        run: bash scripts/check-admin-components-naming.sh
-      # Les trois contrôles de la vitrine (spec 27 §8), tous vérifiés PAR MUTATION avant d'être
-      # posés. Ils existent parce que les règles qu'ils portent sont invisibles à la relecture et
-      # ne cassent rien tout de suite : une couleur en dur ne se voit qu'au jour de l'habillage,
-      # une requête dans un page.tsx qu'au deuxième écran qui la réécrit autrement, un lien non
-      # localisé qu'à l'analytics d'un anglophone renvoyé en espagnol.
-      - name: Jetons de couleur (aucune couleur en dur dans la vitrine)
-        run: bash scripts/check-tokens.sh
-      - name: Couche d'accès (aucune requête Supabase dans un fichier de route)
-        run: bash scripts/check-data-layer.sh
-      - name: Navigation localisée (tout lien interne via @/i18n/navigation)
-        run: bash scripts/check-i18n-links.sh
-      # ⚠️ Ce contrôle N'EST PAS redondant avec le job `functions` : `deno check` résout à la
-      # TypeScript et passe au vert sur un import relatif sans extension, alors que le worker Edge,
-      # lui, ne boote pas du tout (mesuré le 2026-09-17, BOOT_ERROR). Seul un boot réel — ou ce
-      # script — le révèle.
-      - name: Imports Deno (extension obligatoire sur tout module atteint par une Edge Function)
-        run: bash scripts/check-deno-imports.sh
-      # Le manifeste docs/ai-index.json est ce que lisent les agents pour s'orienter : périmé, il
-      # les envoie lire le mauvais document. `npm run docs:index` le régénère.
-      - name: Manifeste documentaire à jour
-        run: npm run docs:check
-      # Second filet (le premier est le hook PostToolUse local, cf. .claude/settings.json) contre
-      # la régression du 2026-08-15 → 2026-09-07 : CLAUDE.md avait déjà été vidé une fois puis
-      # regonflé à 569 lignes sans qu'aucun outil ne le signale pendant trois semaines.
-      - name: Corpus d'instructions (tailles, renvois CLAUDE.md §N, chemins cités)
-        run: npm run check:instructions
-      # `--omit=dev` depuis le 2026-09-01, décision de Jérôme, avec sa raison et son coût.
-      # RAISON : l'installation de Storybook (outil de playground local, jamais déployé) fait
-      # entrer 3 avis `high` sur `image-size` — déni de service par boucle infinie sur des parsers
-      # ICNS/JXL/HEIF — via `vite-plugin-storybook-nextjs`. `No fix available` : aucune version
-      # corrigée n'existe, donc ni `npm audit fix` ni un `overrides` ne peuvent y répondre.
-      # CE QU'ON PERD, et il faut le savoir : ce job ne contrôle plus AUCUNE dépendance de
-      # développement, pas seulement celle-ci. Il audite désormais ce qui est réellement déployé.
-      # À REVOIR : si `image-size` publie un correctif, retirer `--omit=dev` et revenir à l'audit
-      # complet — c'est le seul motif de cette restriction.
-      - name: Dépendances de production sans vulnérabilité haute ou critique
-        run: npm audit --omit=dev --audit-level=high
-      # Non bloquant, et c'est le but : l'étape ci-dessus ne regarde plus les devDependencies, donc
-      # une NOUVELLE faille dans vitest, playwright, eslint ou storybook passerait totalement
-      # inaperçue. Cette étape la laisse au moins visible dans les logs. Elle échouera tant que
-      # `image-size` n'aura pas de correctif — c'est attendu, ne pas la « réparer » en la retirant.
-      - name: Dépendances de développement — angle mort, pour information seulement
-        run: npm audit --audit-level=high || true
+      # UNE seule étape, et c'est tout l'intérêt (revue de CI du 2026-09-19). Ce job était une
+      # séquence de 13 étapes `run:` distinctes ; GitHub Actions arrête un job à la première qui
+      # sort non-zéro, donc un run rouge ne révélait QU'UN défaut et masquait les autres. Trois
+      # contrôles fautifs demandaient trois pushs rien que pour être découverts — cf. le commit
+      # 604011d, « l'un masquant l'autre », et check-timezone.sh resté rouge six jours en masquant
+      # check-tokens.sh. Mesure : 39 runs rouges sur 60, dont 15 des 20 derniers échecs ici.
+      #
+      # `scripts/verify.sh` lance les 12 contrôles SANS s'arrêter au premier échec et récapitule.
+      # Le détail de chaque contrôle — ce qu'il porte, depuis quand, vérifié par quelle mutation —
+      # a suivi le code : il est en commentaire au-dessus de chaque `lancer` dans ce script.
+      #
+      # C'est le MÊME script que lance le hook pre-push local (scripts/git-hooks/pre-push), en
+      # ~35 s : ce qui est vert avant de pousser est vert ici.
+      #
+      # L'ancienne étape « Dépendances de développement — angle mort, pour information seulement »
+      # (`npm audit || true`) est SUPPRIMÉE : un signal qui ne peut pas échouer n'est pas lu, et
+      # celui-là avait fini par masquer trois vulnérabilités réparables (image-size, js-yaml,
+      # @vitest/mocker — corrigées le 2026-09-19). L'audit de `verify` porte désormais sur tout.
+      - name: Contrôles (ESLint, design system, fuseau, SEO, i18n, docs, audit)
+        run: npm run verify
 
   typecheck:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -124,8 +77,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -139,10 +92,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Pas de commentaire automatique sur les PR : ça demanderait `pull-requests: write`,
@@ -153,8 +106,13 @@ jobs:
   # rls_rpc_only_checklist.test.sql, qui vérifie sur TOUT le schéma public que chaque fonction
   # SECURITY DEFINER fixe search_path='', qu'aucune fonction appelée dans une policy n'est
   # VOLATILE, et que auth.uid() est toujours enveloppé.
+  # ⚠️ PAS de `needs:` (revue du 2026-09-19). Ce job dépendait de [lint, typecheck, unit], si bien
+  # qu'une couleur en dur dans un simulateur de paiement suffisait à SKIPPER les 62 fichiers pgTAP :
+  # sur les 20 derniers runs, chaque échec de `lint` a emporté `db`, `build` et `concurrence` avec
+  # lui. On ne savait donc jamais si la base était saine ni si les apps compilaient. Ces jobs sont
+  # indépendants par nature — les faire dépendre l'un de l'autre n'achetait que des minutes de
+  # runner, payées par la perte de toute information sur un run rouge.
   db:
-    needs: [lint, typecheck, unit]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -163,8 +121,8 @@ jobs:
       SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: ci-dummy.apps.googleusercontent.com
       SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: ci-dummy
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         # Version figée, jamais `latest` : sinon une release de la CLI casse la CI un mardi
         # matin sans qu'aucun commit de ce dépôt n'ait bougé.
         with:
@@ -189,7 +147,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
         with:
           deno-version: v2.x
@@ -202,6 +160,8 @@ jobs:
 
   # Preuve concurrente anti-survente (barrière de synchronisation, driver `pg` direct). Contrairement
   # au job `db`, celui-ci a besoin du seed : 6 des 10 tests s'appuient sur des données seedées.
+  # `needs: [db]` CONSERVÉ, contrairement aux deux autres : c'est une vraie dépendance. Inutile de
+  # payer une seconde stack Supabase complète si les migrations ne s'appliquent même pas.
   concurrence:
     needs: [db]
     runs-on: ubuntu-latest
@@ -211,13 +171,13 @@ jobs:
       SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: ci-dummy.apps.googleusercontent.com
       SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: ci-dummy
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1
+      - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
           version: 2.116.0
       - run: supabase start
@@ -225,8 +185,10 @@ jobs:
       - run: npm run db:setup
       - run: npm run test:concurrency
 
+  # Sans `needs:` lui non plus : ce job tourne sur des valeurs d'environnement FACTICES et ne touche
+  # jamais la base — il n'a jamais rien eu à attendre de `db`. Il attendait pourtant `db` (101 s),
+  # qui attendait `unit` (169 s) : il démarrait à 270 s alors qu'il tient en 67 s.
   build:
-    needs: [db]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Valeurs FACTICES, assumées : ce job vérifie que le code compile, pas qu'il est configuré —
@@ -239,8 +201,8 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm

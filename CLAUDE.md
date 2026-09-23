@@ -162,7 +162,7 @@ de la file de réconciliation/campagnes · fréquence du cron PMS et taille de l
 l'export comptable/fiscal · tout point listé dans `docs/backlog.md` § « Arbitrage Jérôme requis ».
 
 ## 11. Pièges empiriques — index déporté
-Les 20 pièges numérotés vivent dans `docs/pieges-empiriques.md` : la numérotation y fait foi et ne
+Les 22 pièges numérotés vivent dans `docs/pieges-empiriques.md` : la numérotation y fait foi et ne
 bouge JAMAIS, parce que le code, les migrations, `docs/specs/` et `docs/journal/` citent
 `CLAUDE.md §11.N`. Chacun est déjà prescrit dans la règle `.claude/rules/*` chargée quand on touche
 les fichiers concernés — cet index dit seulement où. Le seul qui gouverne tout le projet, et qui

@@ -13,5 +13,8 @@
     "@playwright/test": "^1.62.1",
     "@types/pg": "^8.21.0",
     "typescript": "^5"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
   }
 }

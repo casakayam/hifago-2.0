@@ -16,21 +16,57 @@ type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 // webhook (pattern anti-race-condition documenté par Mercado Pago). Toute étape qui échoue avant
 // d'appeler la RPC écrit dans payment_reconciliation_entries plutôt que de laisser l'échec
 // silencieux (même discipline que pms_reconciliation_entries).
+
+/**
+ * Matériel de rejeu d'une livraison, conservé DÉFINITIVEMENT dans `raw_event` (incident du
+ * 2026-09-20). Jusqu'ici seul le corps était stocké : les 8 livraisons réelles rejetées en
+ * `SignatureMismatch` ce jour-là étaient donc invérifiables hors ligne — impossible de tester un
+ * secret candidat sans redemander un vrai paiement. Rien ici n'est secret : `x-signature` ne porte
+ * qu'un horodatage et une EMPREINTE HMAC, jamais la clé. Le secret lui-même n'est évidemment
+ * jamais journalisé (CLAUDE.md §8.2).
+ */
+function deliveryEvidence(request: Request, url: URL): Json {
+  return {
+    signature: request.headers.get("x-signature"),
+    request_id: request.headers.get("x-request-id"),
+    query: url.search || null,
+    // Pas d'horodatage ici : `payment_reconciliation_entries.created_at` le porte déjà
+    // (default now()), et un `new Date()` applicatif tomberait sous le garde-fou fuseau.
+  };
+}
+
+/**
+ * `kind` (migration 20260920120000) : `webhook_failure` = bruit à diagnostiquer (signature,
+ * re-confirmation, corrélation) ; `refund_required` = l'argent est encaissé chez Mercado Pago et
+ * rien ne sera honoré — l'admin doit agir. C'est la seule valeur que l'écran de réconciliation
+ * filtre pour distinguer les deux.
+ */
 async function recordFailure(params: {
   paymentId?: string | null;
   mpPaymentId?: string | null;
   externalReference?: string | null;
-  rawEvent: Json;
+  body: Json;
+  delivery: Json;
   failureReason: string;
+  kind?: "webhook_failure" | "refund_required";
 }) {
   const service = createServiceRoleClient();
-  await service.from("payment_reconciliation_entries").insert({
+  const { error } = await service.from("payment_reconciliation_entries").insert({
     payment_id: params.paymentId ?? null,
     mp_payment_id: params.mpPaymentId ?? null,
     external_reference: params.externalReference ?? null,
-    raw_event: params.rawEvent,
+    // Enveloppe { body, delivery } : `body` garde exactement ce que MP a POSTé (forme historique),
+    // `delivery` ajoute de quoi rejouer la vérification de signature plus tard.
+    raw_event: { body: params.body, delivery: params.delivery },
     failure_reason: params.failureReason,
+    kind: params.kind ?? "webhook_failure",
   });
+  // 23505 = l'index unique partiel sur (mp_payment_id) where kind = 'refund_required' : Mercado
+  // Pago livre `created` puis `updated`, puis retente — une seule entrée (et une seule salve
+  // d'e-mails admin) par paiement MP, les livraisons suivantes sont un no-op silencieux.
+  if (error && error.code !== "23505") {
+    console.error("payment_reconciliation_entries : insertion échouée", error);
+  }
 }
 
 export async function POST(request: Request) {
@@ -46,6 +82,16 @@ export async function POST(request: Request) {
   } catch {
     // Corps vide/non-JSON : pas bloquant en soi (certaines notifications n'ont qu'une query string),
     // la vérification de signature ci-dessous reste la vraie porte.
+  }
+
+  // ⚠️ ORDRE VOULU : le tri par type passe AVANT la vérification de signature (inversé le
+  // 2026-09-20). Mercado Pago envoie pour un même paiement des notifications `merchant_order` que
+  // nous n'exploitons pas : les valider d'abord les faisait tomber en 401 et écrire une entrée de
+  // réconciliation — donc un e-mail à TOUS les admins (trigger 20260824060000) pour du bruit pur.
+  // Sur l'incident du 2026-09-20, 2 des 8 entrées étaient exactement ça. Ne rien authentifier ici
+  // est sans risque : la branche ne fait rien, ne lit rien, n'écrit rien.
+  if (notificationType !== "payment" || !dataId) {
+    return new Response(null, { status: 200 });
   }
 
   const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
@@ -64,18 +110,19 @@ export async function POST(request: Request) {
   } catch (error) {
     const reason =
       error instanceof InvalidWebhookSignatureError ? error.reason : "signature_validation_error";
+    // ⚠️ Cause déjà rencontrée en réel, à vérifier AVANT de soupçonner le manifeste (2026-09-20,
+    // piège 19 enfin élucidé) : un `SignatureMismatch` systématique signifie presque toujours que
+    // MERCADOPAGO_WEBHOOK_SECRET et MERCADOPAGO_ACCESS_TOKEN n'appartiennent pas à la même
+    // application/au même mode Mercado Pago. Le secret est propre au couple (application, mode) ;
+    // le simulateur du panel signe avec celui du compte où l'on est connecté, les livraisons
+    // réelles avec celui du compte qui ENCAISSE. Deux comptes = mismatch permanent.
     await recordFailure({
-      rawEvent: rawBody,
+      mpPaymentId: dataId,
+      body: rawBody,
+      delivery: deliveryEvidence(request, url),
       failureReason: `signature invalide (${reason})`,
     });
     return new Response(null, { status: 401 });
-  }
-
-  // Seules les notifications de paiement nous concernent (Mercado Pago envoie aussi des
-  // notifications merchant_order/chargebacks selon la configuration) — un type inconnu est un
-  // no-op silencieux CÔTÉ MÉTIER, mais toujours un 2xx (Mercado Pago retenterait indéfiniment sinon).
-  if (notificationType !== "payment" || !dataId) {
-    return new Response(null, { status: 200 });
   }
 
   let mpPayment;
@@ -85,7 +132,8 @@ export async function POST(request: Request) {
     console.error("Re-confirmation GET /v1/payments/{id} a échoué", error);
     await recordFailure({
       mpPaymentId: dataId,
-      rawEvent: rawBody,
+      body: rawBody,
+      delivery: deliveryEvidence(request, url),
       failureReason: "échec de la re-confirmation serveur-à-serveur GET /v1/payments/{id}",
     });
     return new Response(null, { status: 502 }); // Mercado Pago retentera.
@@ -95,7 +143,8 @@ export async function POST(request: Request) {
   if (!externalReference) {
     await recordFailure({
       mpPaymentId: dataId,
-      rawEvent: rawBody,
+      body: rawBody,
+      delivery: deliveryEvidence(request, url),
       failureReason: "external_reference absent de la réponse Mercado Pago re-confirmée",
     });
     return new Response(null, { status: 200 }); // Rien à corréler, pas la peine de faire retenter.
@@ -120,12 +169,17 @@ export async function POST(request: Request) {
     typeof mpAmount === "number" &&
     Math.round(mpAmount) !== knownPayment.amount_cop
   ) {
+    // L'argent EST encaissé (au mauvais montant) et le paiement reste `pending` jusqu'à ce que
+    // l'expiration le reprenne : c'est un remboursement à décider, pas un simple échec de
+    // webhook — `kind: refund_required`, comme la garde de apply_payment_webhook (20260920120000).
     await recordFailure({
       paymentId: knownPayment.id,
       mpPaymentId: dataId,
       externalReference,
-      rawEvent: rawBody,
+      body: rawBody,
+      delivery: deliveryEvidence(request, url),
       failureReason: `montant Mercado Pago (${mpAmount}) ≠ amount_cop attendu (${knownPayment.amount_cop})`,
+      kind: "refund_required",
     });
     return new Response(null, { status: 200 }); // Corrélé mais suspect : jamais un retry MP en boucle.
   }
@@ -141,7 +195,8 @@ export async function POST(request: Request) {
     await recordFailure({
       mpPaymentId: dataId,
       externalReference,
-      rawEvent: rawBody,
+      body: rawBody,
+      delivery: deliveryEvidence(request, url),
       failureReason: rpcError?.message ?? JSON.stringify(result),
     });
     return new Response(null, { status: 500 }); // Mercado Pago retentera.

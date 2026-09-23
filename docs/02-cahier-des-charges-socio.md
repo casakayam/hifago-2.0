@@ -3,7 +3,7 @@ id: refonte-cdc-socio
 titre: "Cahier des charges — portail socio (aujourd'hui /partner)"
 theme: cadrage
 statut: brouillon
-maj: 2026-08-13
+maj: 2026-09-20
 resume: >
   Comportement métier cible du portail partenaire (référent/prestataire), dérivé du comportement
   réel actuel et challengé section par section avec Jérôme avant reprise dans la refonte.
@@ -27,6 +27,15 @@ repond_a:
   Pago ; le MOMENT du virement (après réalisation de la prestation) ne change pas. §3g ci-dessous
   n'a pas été réécrit — cette ligne en tient lieu tant que la relecture intégrale (docs/backlog.md)
   n'a pas eu lieu.
+- **§1, notifications « Pago confirmado » / « Nueva comisión asignada »** (livrées par
+  `docs/specs/23-notifications-email-transactionnelles.md`, envoyées par `apply_payment_webhook`) —
+  **précisé le 2026-09-20** (migration `20260920120000`, incident HFG-000013) : elles ne partent
+  QUE si la commande a encore une prestation à honorer. Un paiement approuvé par Mercado Pago après
+  l'expiration ou l'annulation de la commande, ou en double sur une commande déjà payée, ne
+  déclenche aucune notification partenaire : il ouvre une exception de paiement côté admin
+  (`refund_required`). Le partenaire ne voit donc jamais un « pago confirmado » pour une prestation
+  qui n'aura pas lieu. Suite (remboursement, réconciliation qui pilote l'expiration) :
+  `docs/specs/39-garantie-confirmation-paiement.md`, arbitrage Jérôme.
 
 Ajoutés par la relecture intégrale du 2026-09-07 :
 
@@ -38,9 +47,10 @@ Ajoutés par la relecture intégrale du 2026-09-07 :
   affiche (`apps/admin/app/partner/(app)/reservations/`, liste et détail). Confirmé par
   `docs/specs/24-modele-hebergement-et-surface-lobbypms.md` §10.C, qui s'appuie dessus pour envoyer
   les coordonnées dans la note du booking Lobby. La pièce d'identité, elle, reste exclue.
-  ⚠️ Deux specs antérieures portent encore l'ancienne règle et sont périmées sur ce point précis :
-  `17-calendrier-disponibilite-refonte.md` (§ invariants, « PII minimale côté socio ») et
-  `20-agenda-reservations-socio.md` (l.73).
+  ✅ **Corrigé le 2026-09-21/22** dans les deux specs qui portaient encore l'ancienne règle :
+  `17-calendrier-disponibilite-refonte.md` (§ invariants, « Mis Reservas ») et
+  `20-agenda-reservations-socio.md` (l.73) — les deux décrivent désormais `holder_phone`/
+  `holder_email` exposés, avec renvoi à la migration `20260819180000` et à cette entrée.
 - **§3d, « Cupos par créneau ... (matin/après-midi) » — contredit par
   `docs/specs/18-creneaux-horaires-reservables.md`.** Le principe (la capacité vaut par créneau, pas
   par jour) est conservé ; c'est la granularité binaire qui est fausse — `product_slot_rules` définit

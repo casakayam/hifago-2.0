@@ -4,10 +4,11 @@
 // (aucune dépendance Node), réutilisable server ET client si besoin d'affichage — d'où sa place
 // dans @hifago/domain, jamais dans apps/web/lib/mercadopago (qui lui dépend du SDK/Node).
 //
-// refunded/charged_back retombent sur 'cancelled' pour ce Tranche 1 (paiement qui n'est plus
-// acquis) — le remboursement/litige DÉTAILLÉ (payment_refunds) est le sujet de la Tranche 2, pas
-// re-modélisé ici en aval.
-export type PaymentStatus = "pending" | "approved" | "rejected" | "cancelled";
+// refunded/charged_back : distincts depuis le 2026-09-21 (spec 39, migration 20260921100000). Les
+// replier sur 'cancelled' faisait rétrograder une commande PAYÉE à `unpaid`, lignes toujours
+// `reserved` ; apply_payment_webhook les traite désormais eux-mêmes (statuts `refunded`/
+// `charged_back`, entrée admin `refunded_externally`, reconnaissance de NOTRE remboursement).
+export type PaymentStatus = "pending" | "approved" | "rejected" | "cancelled" | "refunded" | "charged_back";
 
 export function mapMercadoPagoPaymentStatus(mpStatus: string | null | undefined): PaymentStatus {
   switch (mpStatus) {
@@ -16,9 +17,11 @@ export function mapMercadoPagoPaymentStatus(mpStatus: string | null | undefined)
     case "rejected":
       return "rejected";
     case "cancelled":
-    case "refunded":
-    case "charged_back":
       return "cancelled";
+    case "refunded":
+      return "refunded";
+    case "charged_back":
+      return "charged_back";
     case "pending":
     case "in_process":
     case "authorized":

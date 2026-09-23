@@ -5,6 +5,10 @@
   "status": {
     "paid": "¡Pago confirmado!",
     "paidDetail": "Tu reserva está confirmada. Te enviamos los detalles por correo electrónico.",
+    "paid_not_honored": "Recibimos tu pago, pero la reserva no pudo confirmarse",
+    "paid_not_honoredDetail": "El pago llegó cuando la reserva ya había expirado o había sido anulada. Te contactamos en las próximas horas para reembolsarte o volver a reservar; no necesitas hacer nada.",
+    "refunded": "Te reembolsamos el anticipo",
+    "refundedDetail": "El reembolso fue enviado a tu medio de pago. Puede tardar unos días en aparecer.",
     "awaiting": "Estamos confirmando tu pago",
     "awaitingDetail": "Puede tardar unos instantes. Esta página se actualiza sola.",
     "unpaid": "Tu reserva aún no está pagada",

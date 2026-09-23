@@ -1,5 +1,5 @@
 -- Fermeture de la fuite des colonnes de commission (docs/backlog.md, 2026-09-11) — site 6/10 :
--- partner_reservations_list (20260922170000) remplace la lecture directe de
+-- partner_reservations_list (20260922175000) remplace la lecture directe de
 -- apps/admin/app/partner/(app)/reservations/page.tsx (« Mis reservas »).
 begin;
 select plan(5);

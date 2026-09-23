@@ -1,11 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { parseLobbyNightCatalog } from "./parseLobbyNightCatalog";
+import { parseLobbyNightCatalog, type LobbyCatalogEntry } from "./parseLobbyNightCatalog";
 import { alignLobbyCatalogEntries } from "./alignLobbyCatalogEntries";
 import { pickCategoryNights } from "./getNightAvailabilityWindow";
 
 const GLAMPING = 29376;
 const VIDPOVO = 9631;
 const GUSTO = 36572;
+
+// Fabrique une entrée COMPLÈTE. `restrictionsByCategory` est devenu obligatoire sur
+// LobbyCatalogEntry le 2026-09-18 (miroir de disponibilité, commit 3a55671) ; les cas
+// d'alignement ci-dessous ne s'intéressent qu'aux dates et aux dispos, mais un littéral
+// incomplet ne compile pas. Le passer par ici évite de répéter une Map vide huit fois — et
+// évite surtout qu'un futur champ obligatoire demande huit corrections au lieu d'une.
+const entree = (
+  date: string | null,
+  availableByCategory: Map<number, number>
+): LobbyCatalogEntry => ({ date, availableByCategory, restrictionsByCategory: new Map() });
 
 // Réponse de PLAGE telle qu'elle est HYPOTHÉTIQUEMENT rendue si `available-rooms` honore vraiment
 // start_date/end_date (« over a date range » dans la doc, jamais essayé par personne — c'est ce que
@@ -48,8 +58,14 @@ describe("parseLobbyNightCatalog — le piège de l'index", () => {
 
     // TÉMOIN — l'ancien idiome, reproduit littéralement. Il rend un calendrier d'apparence
     // parfaitement normale : 5 nuits, toutes étiquetées, toutes « disponibles ». Et faux 4 fois sur 5.
+    type EnregistrementLobby = {
+      date: string;
+      categories: { category_id: number; available_rooms: number }[];
+    };
     const naif = dates.map((date) => {
-      const root = Array.isArray(body.data) ? body.data[0] : body;
+      // `as` assumé : on reproduit ici un idiome qui n'était JUSTEMENT pas typé — le réécrire
+      // proprement lui ferait perdre ce qu'il est là pour démontrer.
+      const root = (Array.isArray(body.data) ? body.data[0] : body) as EnregistrementLobby;
       const category = root.categories.find((entry) => entry.category_id === GLAMPING);
       return { date, available: category?.available_rooms ?? 0 };
     });
@@ -98,15 +114,15 @@ describe("parseLobbyNightCatalog — le piège de l'index", () => {
     // comporter autrement. La première version validait AVANT de filtrer, donc cette nuit-là
     // pouvait condamner le mois entier.
     const nights = ["2026-12-21", "2026-12-22"];
-    const bons = nights.map((date) => ({ date, availableByCategory: new Map([[GLAMPING, 3]]) }));
+    const bons = nights.map((date) => entree(date, new Map([[GLAMPING, 3]])));
 
     // (a) la nuit en trop n'est pas datée
     expect(
-      alignLobbyCatalogEntries([...bons, { date: null, availableByCategory: new Map() }], nights)
+      alignLobbyCatalogEntries([...bons, entree(null, new Map())], nights)
     ).toMatchObject({ ok: true });
 
     // (b) la nuit en trop est rendue DEUX FOIS
-    const surplus = { date: "2026-12-23", availableByCategory: new Map([[GLAMPING, 1]]) };
+    const surplus = entree("2026-12-23", new Map([[GLAMPING, 1]]));
     const aligned = alignLobbyCatalogEntries([...bons, surplus, surplus], nights);
     expect(aligned.ok).toBe(true);
     if (!aligned.ok) return;
@@ -114,7 +130,7 @@ describe("parseLobbyNightCatalog — le piège de l'index", () => {
   });
 
   it("mais un doublon sur une nuit DEMANDÉE échoue toujours — on ne parie pas sur une dispo", () => {
-    const doublon = { date: "2026-12-21", availableByCategory: new Map([[GLAMPING, 3]]) };
+    const doublon = entree("2026-12-21", new Map([[GLAMPING, 3]]));
     expect(alignLobbyCatalogEntries([doublon, doublon], ["2026-12-21"])).toMatchObject({
       ok: false,
       reason: "duplicate_date",
@@ -126,8 +142,8 @@ describe("parseLobbyNightCatalog — le piège de l'index", () => {
     // elle nomme la cause probable plutôt que de compter les enregistrements.
     const aligned = alignLobbyCatalogEntries(
       [
-        { date: "2026-12-21", availableByCategory: new Map([[GLAMPING, 3]]) },
-        { date: null, availableByCategory: new Map([[GLAMPING, 0]]) },
+        entree("2026-12-21", new Map([[GLAMPING, 3]])),
+        entree(null, new Map([[GLAMPING, 0]])),
       ],
       ["2026-12-21", "2026-12-22"]
     );

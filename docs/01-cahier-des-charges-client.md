@@ -3,7 +3,7 @@ id: refonte-cdc-client
 titre: "Cahier des charges — portail client (marketplace global, Guatapé = première localisation)"
 theme: cadrage
 statut: brouillon
-maj: 2026-09-16
+maj: 2026-09-22
 resume: >
   Comportement métier cible du portail de réservation client, dérivé du comportement réel actuel
   et challengé section par section avec Jérôme avant reprise dans la refonte.
@@ -25,6 +25,18 @@ repond_a:
   des lignes citées : §1 « Hors périmètre de ce portail : paiement en ligne (paiement à l'arrivée
   uniquement) », et §3f décision 4 (« des statuts de paiement ne seront introduits que lorsque le
   paiement en ligne sera réellement implémenté ») — la condition est remplie, ces statuts existent.
+  **Précisé le 2026-09-20** (`docs/specs/39-garantie-confirmation-paiement.md`, arbitrage en
+  attente) : la confirmation d'un paiement dont le client NE REVIENT PAS sur le site n'est **pas
+  encore garantie** — elle tient par le webhook seul, et l'expiration à 30 min (§3f) n'interroge
+  jamais Mercado Pago. Depuis ce jour, un paiement approuvé après expiration ou annulation ne
+  confirme plus une commande morte (l'admin est prévenu, `kind = 'refund_required'`), mais rien ne
+  rembourse ni ne réhonore, et le client n'a aucun signal — trois décisions de Jérôme (D1/D2/D3).
+  **Tranché et livré en local le 2026-09-22** (spec 39 §C) : un job interroge Mercado Pago toutes
+  les 2 min et confirme sans retour du client ; l'expiration à 30 min (§3f) rend désormais les
+  places ; un paiement en attente (PSE) est toléré 2 h ; un paiement arrivé trop tard vaut un
+  e-mail immédiat au client (« recibimos tu pago… te contactamos ») et un remboursement à un clic
+  côté admin. Le « paiement jamais remboursé » de §7/A3 reste vrai pour une annulation ou une
+  absence du client — il ne s'applique pas à un paiement que hifago n'a rien à honorer.
 
 - **§2b.9 contrainte (a) — PÉRIMÉE le 2026-09-10**, révisée par
   `docs/specs/33-resultat-paiement-et-fermeture-du-tunnel.md` (statut `implemente`). Elle affirme que

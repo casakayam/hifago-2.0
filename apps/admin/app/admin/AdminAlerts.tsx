@@ -10,6 +10,8 @@ import { Card } from "@hifago/ui";
 export type AdminAlertsProps = {
   proposalsPending: number;
   reconciliationOpen: number;
+  /** payment_reconciliation_entries open/retrying — dont les `refund_required` (2026-09-20). */
+  paymentReconciliationOpen: number;
 };
 
 function AlertRow({ count, label, href, testId }: { count: number; label: string; href: string; testId: string }) {
@@ -26,8 +28,12 @@ function AlertRow({ count, label, href, testId }: { count: number; label: string
   );
 }
 
-export function AdminAlerts({ proposalsPending, reconciliationOpen }: AdminAlertsProps) {
-  const hasAny = proposalsPending > 0 || reconciliationOpen > 0;
+export function AdminAlerts({
+  proposalsPending,
+  reconciliationOpen,
+  paymentReconciliationOpen,
+}: AdminAlertsProps) {
+  const hasAny = proposalsPending > 0 || reconciliationOpen > 0 || paymentReconciliationOpen > 0;
   if (!hasAny) return null;
 
   return (
@@ -43,8 +49,14 @@ export function AdminAlerts({ proposalsPending, reconciliationOpen }: AdminAlert
           testId="alert-proposals"
         />
         <AlertRow
+          count={paymentReconciliationOpen}
+          label="Excepciones de pago (reembolsos, webhooks)"
+          href="/admin/reconciliation"
+          testId="alert-payment-reconciliation"
+        />
+        <AlertRow
           count={reconciliationOpen}
-          label="Excepciones de reconciliación"
+          label="Excepciones de reconciliación PMS"
           href="/admin/reconciliation"
           testId="alert-reconciliation"
         />

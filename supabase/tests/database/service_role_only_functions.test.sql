@@ -39,7 +39,8 @@ select is(
         -- directement monnayable si un client pouvait l'appeler avec l'UUID d'une commande.
         'release_order_after_pms_refusal',
         -- Fonctions de cron (`cron.schedule`) : aucun appelant humain légitime.
-        'expire_stale_payment_orders',
+        -- 'expire_stale_payment_orders' : supprimée le 2026-09-21 (20260921100100), remplacée par
+        -- expire_payment_order ci-dessous.
         'invoke_pms_poll_bookings',
         'invoke_pms_cancel_bookings',
         'invoke_pms_nightly_contract_check',
@@ -54,7 +55,27 @@ select is(
         -- Invalidation du miroir depuis un événement hifago (20260918170000). Ni l'une ni l'autre
         -- ne vérifie l'appelant en SQL — leur seule barrière est le grant.
         'mark_pms_sync_due',
-        'mark_pms_sync_due_for_order_line'
+        'mark_pms_sync_due_for_order_line',
+        -- Réconciliation Mercado Pago (20260921100000, spec 39). `release_order_line_capacity` et
+        -- `lock_order_capacity_rows` RENDENT DES PLACES sur simple UUID de ligne — les plus
+        -- monnayables du lot ; `expire_payment_order` et `reconcile_order` défont des commandes ;
+        -- les claims exposent l'état des paiements ; le wrapper et le watchdog sont du cron.
+        'heartbeat_job',
+        'lock_order_capacity_rows',
+        'release_order_line_capacity',
+        'expire_payment_order',
+        'apply_payment_webhook_checked',
+        'claim_orders_to_reconcile',
+        'claim_payments_to_watch',
+        'reconcile_order',
+        'mark_mp_cancel_attempt',
+        'record_mp_payment_status',
+        'invoke_payments_reconcile',
+        'payments_reconcile_watchdog',
+        -- Remboursements (20260922100000, D3) : exécutés par le job, jamais par un humain.
+        'claim_payment_refunds',
+        'finalize_payment_refund',
+        'fail_payment_refund'
       )
       and (
         has_function_privilege('anon', p.oid, 'EXECUTE')

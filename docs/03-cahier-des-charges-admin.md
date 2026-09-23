@@ -3,7 +3,7 @@ id: refonte-cdc-admin
 titre: "Cahier des charges — back-office admin (aujourd'hui /admin)"
 theme: cadrage
 statut: brouillon
-maj: 2026-08-13
+maj: 2026-09-22
 resume: >
   Comportement métier cible du back-office de pilotage, dérivé du comportement réel actuel et
   challengé section par section avec Jérôme avant reprise dans la refonte.
@@ -58,6 +58,17 @@ ces lignes en tiennent lieu.
   proposition à modérer et nouvelle exception de réconciliation sont branchées. Le troisième
   déclencheur listé ici, « demande d'ouverture prestataire en attente », ne l'est pas — il dépend
   d'un parcours self-service jamais construit (constat explicite de la spec 23).
+- **§3a, file de réconciliation — élargie aux exceptions de PAIEMENT** : depuis
+  `docs/specs/19-paiement-mercadopago-acompte-ledger.md` une seconde file existe
+  (`payment_reconciliation_entries`, webhook Mercado Pago en échec), mais l'écran
+  `/admin/reconciliation` ne montrait que le PMS jusqu'au **2026-09-20** (incident HFG-000013 :
+  l'e-mail d'alerte envoyait vers une page qui n'affichait pas l'entrée annoncée). Depuis ce jour,
+  l'écran porte deux sections « Pagos » / « PMS » ; une entrée de paiement `kind = 'refund_required'`
+  signifie « argent encaissé chez Mercado Pago sans prestation à honorer » — l'admin la résout avec
+  une note (réhonorage manuel) ou clique **« Reembolsar »** (livré le 2026-09-22, spec 39 D3) : la
+  demande est mise en file et exécutée par le job `payments-reconcile`, jamais par l'admin lui-même
+  (aucun token Mercado Pago dans `apps/admin`). Le job et son chien de garde n'ont pas encore
+  d'écran : l'admin apprend un arrêt par e-mail (`admin_job_stalled`).
 - **§7, point ouvert n°2 (« l'email groupé nécessite-t-il un vrai service d'envoi ? ») — tranché à
   moitié.** Le service d'envoi existe et est choisi (Resend, spec 23), avec sa file et son journal ;
   ce qui reste ouvert est le **groupé** : audiences, désabonnements, cadence. La question n'est plus

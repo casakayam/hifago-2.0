@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Hook git pre-push — lance `npm run verify` avant tout push (~35 s).
+#
+# POURQUOI (revue de CI du 2026-09-19). Rien ne vérifiait quoi que ce soit avant le push :
+# `.git/hooks/` ne contenait que des `.sample`, et les seuls hooks du dépôt étaient ceux de Claude
+# Code (`.claude/settings.json`), qui ne se déclenchent QUE quand un agent édite un fichier — jamais
+# au commit, jamais au push, jamais sur une édition à la main. Les 12 contrôles du job `lint` ne
+# tournaient donc que sur le runner GitHub, alors qu'ils passent en local en ~35 s. Résultat mesuré :
+# 39 runs rouges sur 60, la plupart pour des défauts qu'une exécution locale aurait montrés.
+#
+# PRE-PUSH ET NON PRE-COMMIT, délibérément : les check-*.sh lisent l'ARBRE DE TRAVAIL, pas l'index.
+# En pre-commit, un fichier partiellement mis en scène serait jugé sur sa version du disque — le
+# hook refuserait des commits corrects et en accepterait que la CI refuse. Au push, l'arbre et ce
+# qu'on envoie coïncident.
+#
+# C'EST UN FILET, PAS UNE PRISON : `git push --no-verify` le contourne. Un hook qu'on ne peut pas
+# contourner finit désinstallé.
+#
+# Installation : `npm install` le pose (script `prepare` du package.json racine), ou à la main :
+#   git config core.hooksPath scripts/git-hooks
+
+set -uo pipefail
+
+racine="$(git rev-parse --show-toplevel)"
+cd "$racine" || exit 0
+
+# Pas de node_modules (clone frais, machine d'un collègue) : on ne bloque pas un push pour ça.
+if [ ! -d node_modules ]; then
+  echo "pre-push : node_modules absent, contrôles sautés (lancer \`npm ci\` puis \`npm run verify\`)." >&2
+  exit 0
+fi
+
+echo "pre-push : npm run verify (~35 s) — \`git push --no-verify\` pour sauter."
+echo
+
+if npm run --silent verify; then
+  exit 0
+fi
+
+echo
+echo "╭──────────────────────────────────────────────────────────────────────────────╮"
+echo "│ Push interrompu : ces contrôles échoueraient aussi en CI.                    │"
+echo "│ Tout ce qu'il y a à corriger est listé ci-dessus, d'un seul coup.            │"
+echo "│ Pour pousser quand même : git push --no-verify                              │"
+echo "╰──────────────────────────────────────────────────────────────────────────────╯"
+exit 1

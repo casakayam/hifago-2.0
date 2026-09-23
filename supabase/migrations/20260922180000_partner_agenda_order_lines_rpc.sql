@@ -6,7 +6,7 @@
 --
 -- Scope établissement recalculé en SQL via has_capability(auth.uid(), 'operator', ...), jamais un
 -- paramètre d'établissements fourni par l'appelant — même discipline que
--- partner_reservations_list (20260922170000).
+-- partner_reservations_list (20260922175000).
 create or replace function public.partner_agenda_order_lines(p_date_from date, p_date_to date)
 returns table (
   id uuid,

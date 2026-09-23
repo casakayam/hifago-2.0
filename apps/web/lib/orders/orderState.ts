@@ -35,7 +35,15 @@ export function isDeadLine(status: string): boolean {
  * "unpaid"` (reserva/[token]/OrderResult.tsx) affichait un bouton « Pagar » qui échouait au clic
  * avec `nothing_to_pay` (create_payment_intent) — un dead-end UX, jamais un vrai chemin prévu.
  */
-export type OrderState = "paid" | "awaiting" | "unpaid" | "confirmed" | "expired" | "cancelled";
+export type OrderState =
+  | "paid"
+  | "refunded"
+  | "paid_not_honored"
+  | "awaiting"
+  | "unpaid"
+  | "confirmed"
+  | "expired"
+  | "cancelled";
 
 /** La forme minimale dont la dérivation a besoin — compatible avec `OrderForDisplay` et la liste. */
 export type OrderStateInput = {
@@ -43,6 +51,14 @@ export type OrderStateInput = {
   lines: { status: string }[];
   /** Somme des `acompte_cop` des lignes actives (`order_for_client_jsonb`, agrégat déjà rendu). */
   acompteCop: number;
+  /**
+   * Spec 39 D3 (2026-09-22) — le client a PAYÉ et rien n'est honoré (payé après expiration ou
+   * annulation, écart de montant) : une entrée `refund_required` est ouverte côté admin. Un double
+   * paiement ne lève PAS ce drapeau (sa réservation est honorée). Absent = faux.
+   */
+  paymentReceivedNotHonored?: boolean;
+  /** Dernier remboursement lié : `pending` | `approved` | `rejected` | null. */
+  refundStatus?: string | null;
 };
 
 /**
@@ -57,8 +73,16 @@ export type OrderStateInput = {
  */
 export function deriveOrderState(order: OrderStateInput): OrderState {
   if (order.paymentStatus === "paid") return "paid";
-  if (order.paymentStatus === "pending") return "awaiting";
-  if (order.lines.some((line) => !isDeadLine(line.status))) {
+  // Spec 39 D3 : l'argent est rendu (par le job ou hors hifago) — dit AVANT tout le reste.
+  if (order.paymentStatus === "refunded" || order.refundStatus === "approved") return "refunded";
+  // Spec 39 D3 : payé mais rien à honorer — jamais « esta reserva expiró, no se completó el pago ».
+  if (order.paymentReceivedNotHonored) return "paid_not_honored";
+  const hasLiveLine = order.lines.some((line) => !isDeadLine(line.status));
+  // « Estamos confirmando tu pago… se actualiza sola » n'a de sens que s'il reste quelque chose à
+  // confirmer : une commande morte avec un paiement local encore `pending` (client qui a tout
+  // annulé pendant le paiement) tombait ici pour toujours (attaque retenue de la revue du 09-21).
+  if (order.paymentStatus === "pending" && hasLiveLine) return "awaiting";
+  if (hasLiveLine) {
     return order.acompteCop > 0 ? "unpaid" : "confirmed";
   }
   if (order.lines.some((line) => line.status === "expired")) return "expired";
