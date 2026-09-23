@@ -3038,6 +3038,7 @@ export type Database = {
       record_mp_payment_status: {
         Args: {
           p_checked_at: string
+          p_collector_id: string
           p_mp_payments: Json
           p_payment_id: string
         }

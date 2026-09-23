@@ -14,7 +14,8 @@
 //   - le bearer est comparé à SUPABASE_SERVICE_ROLE_KEY (le `verify_jwt` par défaut accepte la clé
 //     anon publique — un job qui modifie des paiements ne doit pas être déclenchable par un visiteur) ;
 //   - MERCADOPAGO_ACCESS_TOKEN doit appartenir au MÊME compte MP que celui d'apps/web (piège 19) :
-//     `GET /users/me` le prouve à chaque run, `reconcile_order` refuse tout si l'id diverge ;
+//     `GET /users/me` le prouve à chaque run, `reconcile_order` ET `record_mp_payment_status`
+//     refusent tous deux si l'id diverge (20260922170000 — le second en était dépourvu) ;
 //   - MERCADOPAGO_API_BASE_URL est surchargeable (fixture HTTP des tests d'intégration) ;
 //   - aucun `new Date()` (scripts/check-timezone.sh) : l'horodatage de contrôle est `claimed_at`,
 //     rendu par la base au moment du claim ; les deltas se calculent sur des instants ISO.
@@ -347,13 +348,19 @@ Deno.serve(async (req) => {
     for (const w of (watched ?? []) as WatchedPayment[]) {
       try {
         const items = await searchByReference(w.payment_id);
-        const { error: recError } = await supabase.rpc("record_mp_payment_status", {
+        const { data: watchData, error: recError } = await supabase.rpc("record_mp_payment_status", {
           p_payment_id: w.payment_id,
           p_mp_payments: items,
           p_checked_at: w.claimed_at,
+          p_collector_id: collectorId,
         });
         if (recError) throw recError;
-        stats.watched++;
+        if ((watchData as Decision | null)?.action === "identity_mismatch") {
+          stats.identity_mismatch++;
+          identityMismatch = true;
+        } else {
+          stats.watched++;
+        }
       } catch (err) {
         if (err instanceof MpBudgetExceeded) {
           stats.budget_hit = true;

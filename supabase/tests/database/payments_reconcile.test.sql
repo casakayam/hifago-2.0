@@ -10,7 +10,7 @@ $$;
 create function test_logout() returns void language sql as $$
   reset request.jwt.claims;
 $$;
-select plan(119);
+select plan(129);
 
 -- Fixtures ------------------------------------------------------------------------------------
 insert into partners (id, display_name) values
@@ -278,6 +278,37 @@ select is((select apply_payment_webhook('mp-b3-1', '88980000-0000-4000-8000-0000
 reset role;
 select is((select status from payments where id = '88980000-0000-4000-8000-0000000000c9'), 'charged_back', 'F3b : payments charged_back (distinct d''un remboursement)');
 select is((select reason_code from payment_reconciliation_entries where mp_payment_id = 'mp-b3-1'), 'charged_back', 'F3c : entrée charged_back');
+-- F6 : trouvé en relecture de la PR #2 (20260922170000) — un « refunded » vu directement par
+-- reconcile_order (webhook jamais reçu, ni l'approbation ni le remboursement) devait jusqu'ici
+-- rester invisible : la boucle ne routait vers apply_payment_webhook_checked que le statut
+-- 'approved'. Le montant MP (17000) est identique à l'acompte attendu : si le statut réel n'était
+-- PAS transmis (régression du passage à un statut dynamique), ce paiement serait pris pour un
+-- 'approved' et la commande passerait payée à tort — F6b/F6c le détecteraient.
+select test_make_order('88980000-0000-4000-8000-0000000000f1', '88980000-0000-4000-8000-0000000000f2', 'pending', interval '10 minutes');
+insert into payments (id, order_id, status, amount_cop) values ('88980000-0000-4000-8000-0000000000f3', '88980000-0000-4000-8000-0000000000f1', 'pending', 17000);
+select is((select reconcile_order('88980000-0000-4000-8000-0000000000f1',
+  jsonb_build_array(test_mp('88980000-0000-4000-8000-0000000000f3', 'mp-f6', 'refunded', 17000)), now(), 'coll-1') ->> 'action'),
+  'kept', 'F6a : refunded jamais approuvé localement → aucune promotion à payée, on garde');
+select is((select payment_status from orders where id = '88980000-0000-4000-8000-0000000000f1'), 'pending', 'F6b : commande jamais passée payée sur un refunded');
+select is((select status from payments where id = '88980000-0000-4000-8000-0000000000f3'), 'pending', 'F6c : paiement local inchangé (jamais approved)');
+select is((select reason_code from payment_reconciliation_entries where mp_payment_id = 'mp-f6'), 'refunded_externally',
+  'F6d : entrée refunded_externally créée — invisible avant 20260922170000');
+-- F7 : même trou côté surveillance 48h (record_mp_payment_status). Paiement local déjà cancelled
+-- (jamais vu approved), MP répond directement charged_back.
+select test_make_order('88980000-0000-4000-8000-0000000000f4', '88980000-0000-4000-8000-0000000000f5', 'unpaid', interval '50 hours', 'expired');
+insert into payments (id, order_id, status, amount_cop, mp_collector_id) values ('88980000-0000-4000-8000-0000000000f6', '88980000-0000-4000-8000-0000000000f4', 'cancelled', 17000, 'coll-1');
+select is((select record_mp_payment_status('88980000-0000-4000-8000-0000000000f6',
+  jsonb_build_array(test_mp('88980000-0000-4000-8000-0000000000f6', 'mp-f7', 'charged_back', 17000)), now(), 'coll-1') ->> 'reason'),
+  'charged_back', 'F7a : contracargo vu en surveillance 48h → appliqué (jusqu''ici jamais atteint)');
+select is((select status from payments where id = '88980000-0000-4000-8000-0000000000f6'), 'cancelled', 'F7b : paiement local inchangé (jamais approved)');
+select is((select reason_code from payment_reconciliation_entries where mp_payment_id = 'mp-f7'), 'charged_back', 'F7c : entrée charged_back créée par le chemin de surveillance');
+select is((select mp_last_status from payments where id = '88980000-0000-4000-8000-0000000000f6'), 'charged_back', 'F7d : mp_last_status posé malgré le passage par la branche refunded/charged_back');
+-- F8 : identité du token côté surveillance 48h — absente avant 20260922170000 (asymétrie avec B8).
+select test_make_order('88980000-0000-4000-8000-0000000000f7', '88980000-0000-4000-8000-0000000000f8', 'unpaid', interval '50 hours', 'expired');
+insert into payments (id, order_id, status, amount_cop, mp_collector_id) values ('88980000-0000-4000-8000-0000000000f9', '88980000-0000-4000-8000-0000000000f7', 'cancelled', 17000, 'coll-1');
+select is((select record_mp_payment_status('88980000-0000-4000-8000-0000000000f9', '[]'::jsonb, now(), 'coll-AUTRE') ->> 'action'), 'identity_mismatch',
+  'F8a : token d''un autre compte → identity_mismatch, symétrique à B8 pour ce chemin');
+select is((select mp_last_status from payments where id = '88980000-0000-4000-8000-0000000000f9'), null, 'F8b : rien n''a bougé (aucun statut posé)');
 -- F4 : NOTRE remboursement (payment_refunds vivant) ne produit ni entrée ni changement ici.
 insert into payment_reconciliation_entries (id, payment_id, mp_payment_id, raw_event, failure_reason, kind, reason_code)
 values ('88980000-0000-4000-8000-0000000000d2', '88980000-0000-4000-8000-0000000000c8', 'mp-f4', '{}'::jsonb, 'test', 'refund_required', 'paid_after_expiry');
@@ -304,7 +335,7 @@ update payments set mp_last_checked_at = now() - interval '11 minutes' where id 
 select is((select count(*)::int from claim_payments_to_watch(50) where payment_id = '88980000-0000-4000-8000-0000000000cc'), 1,
   'G1 : un paiement annulé dont MP n''a rien dit reste surveillé');
 select is((select record_mp_payment_status('88980000-0000-4000-8000-0000000000cc',
-  jsonb_build_array(test_mp('88980000-0000-4000-8000-0000000000cc', 'mp-g1', 'approved', 17000)), now()) ->> 'reason'),
+  jsonb_build_array(test_mp('88980000-0000-4000-8000-0000000000cc', 'mp-g1', 'approved', 17000)), now(), 'coll-1') ->> 'reason'),
   'paid_after_expiry', 'G2a : approuvé après expiration → la garde du Lot A décide : paid_after_expiry');
 select is((select reason_code from payment_reconciliation_entries where mp_payment_id = 'mp-g1'), 'paid_after_expiry', 'G2b : entrée refund_required');
 select is((select status from order_lines where id = '88980000-0000-4000-8000-0000000000bc'), 'expired', 'G2c : la ligne reste expirée — jamais ressuscitée par un UPDATE direct');
