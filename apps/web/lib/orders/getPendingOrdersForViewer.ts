@@ -12,16 +12,14 @@ import { isDeadLine } from "./orderState";
 // l'onglet perd donc toute trace visible de sa commande sur `/mi-viaje`/`/pago`, alors qu'elle est
 // toujours là, retrouvable par son seul jeton (`/reserva/<jeton>`). Ce bloc lui redonne le chemin.
 //
-// ⚠️ Lit `orders`/`order_lines` en RLS DIRECTE (`orders_select` autorise déjà
-// `account_id = (select auth.uid())`, anonyme compris depuis la spec 31), jamais via
-// `list_my_orders` : cette RPC refuse explicitement une session anonyme
-// (`is_anonymous_session()`, migration 20260911100000) — un invité en a justement besoin ici.
-// `get_order_by_token` est gardée par le JETON, pas par l'identité : inutilisable pour « quelles
-// commandes m'appartiennent ».
+// ⚠️ Passe par la RPC `list_pending_orders_for_viewer` (20260922120000), jamais `list_my_orders` :
+// celle-ci refuse explicitement une session anonyme (`is_anonymous_session()`, migration
+// 20260911100000) — un invité en a justement besoin ici. `get_order_by_token` est gardée par le
+// JETON, pas par l'identité : inutilisable pour « quelles commandes m'appartiennent ».
 //
-// ⚠️ SELECT EXPLICITE, jamais `select("*")` : `order_lines_select` autorise la lecture de TOUTES
-// ses colonnes (commission comprise) pour le propriétaire — la liste blanche ci-dessous est le
-// seul rempart côté app, même discipline que `order_for_client_jsonb`.
+// La RPC ne renvoie que id/reference/access_token/statuts de lignes — jamais les colonnes de
+// commission d'order_lines : fermeture de la fuite documentée dans docs/backlog.md (2026-09-11),
+// `order_lines_select` autorisant sinon la lecture de TOUTES ses colonnes pour le propriétaire.
 
 /** Une commande encore ouverte, telle que ce bloc l'affiche — rien de plus. */
 export type PendingOrderForViewer = {
@@ -31,13 +29,6 @@ export type PendingOrderForViewer = {
   /** Le secret d'accès à `/reserva/<jeton>` — seul chemin vers le détail. */
   accessToken: string;
 };
-
-/**
- * `payment_status` n'est JAMAIS réécrit par `expire_stale_payment_orders` (reste `'unpaid'` même
- * après expiration) : ce filtre seul ne suffit pas à dire « en cours », cf. le filtre `isDeadLine`
- * appliqué plus bas sur les lignes.
- */
-const UNSETTLED_PAYMENT_STATUSES = ["unpaid", "pending"];
 
 /**
  * Les commandes de l'appelant encore ouvertes (paiement non conclu ET au moins une prestation
@@ -55,20 +46,14 @@ export async function getPendingOrdersForViewer(): Promise<PendingOrderForViewer
 
   if (!user) return [];
 
-  const { data, error } = await supabase
-    .from("orders")
-    .select("id, reference, access_token, order_lines(status)")
-    .eq("account_id", user.id)
-    .in("payment_status", UNSETTLED_PAYMENT_STATUSES)
-    .order("created_at", { ascending: false })
-    // Garde-fou : en pratique 0-2 lignes (cron toutes les 5 min, seuil 30 min), mais un job cassé
-    // ne doit pas transformer ce bloc en liste illimitée.
-    .limit(10);
+  // Garde-fou capacité : la RPC limite déjà à 10 commandes (cron toutes les 5 min, seuil 30 min),
+  // un job cassé ne doit pas transformer ce bloc en liste illimitée.
+  const { data, error } = await supabase.rpc("list_pending_orders_for_viewer");
 
   if (error || !data) return [];
 
   return data
-    .filter((order) => order.order_lines.some((line) => !isDeadLine(line.status)))
+    .filter((order) => order.line_statuses.some((status) => !isDeadLine(status)))
     .map((order) => ({
       id: order.id,
       reference: order.reference,

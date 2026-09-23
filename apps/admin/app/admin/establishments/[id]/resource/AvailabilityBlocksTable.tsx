@@ -1,6 +1,5 @@
 "use client";
 
-import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
 import {
   SimpleTable,
   SimpleTableBody,
@@ -15,17 +14,15 @@ import {
 // constaté empiriquement le 2026-08-20 en ajoutant AppNavShell au barrel) ; même patron que
 // LedgerLinesTable.tsx (../../orders/[id]) : page.tsx ne fait plus que fetcher et passer les données.
 
-export type BlockQueryRow = {
+export type AvailabilityBlockRow = {
   id: string;
-  start_date: string;
-  end_date: string;
-  order_line: {
-    order: { holder_name: string } | null;
-    product: { name: unknown } | null;
-  } | null;
+  startDate: string;
+  endDate: string;
+  productName: string;
+  holderName: string;
 };
 
-export function AvailabilityBlocksTable({ blocks }: { blocks: BlockQueryRow[] }) {
+export function AvailabilityBlocksTable({ blocks }: { blocks: AvailabilityBlockRow[] }) {
   return (
     <SimpleTable data-testid="availability-blocks-table" aria-label="Causa de los bloqueos">
       <SimpleTableHeader>
@@ -40,14 +37,10 @@ export function AvailabilityBlocksTable({ blocks }: { blocks: BlockQueryRow[] })
           blocks.map((block) => (
             <SimpleTableRow key={block.id} data-testid={`availability-block-row-${block.id}`}>
               <SimpleTableCell data-label="Plaza">
-                {block.start_date} → {block.end_date}
+                {block.startDate} → {block.endDate}
               </SimpleTableCell>
-              <SimpleTableCell data-label="Campamento">
-                {resolveLocalizedField(asLocalizedField(block.order_line?.product?.name), "es") ?? "—"}
-              </SimpleTableCell>
-              <SimpleTableCell data-label="Titular">
-                {block.order_line?.order?.holder_name ?? "—"}
-              </SimpleTableCell>
+              <SimpleTableCell data-label="Campamento">{block.productName}</SimpleTableCell>
+              <SimpleTableCell data-label="Titular">{block.holderName}</SimpleTableCell>
             </SimpleTableRow>
           ))
         ) : (

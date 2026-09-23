@@ -140,12 +140,14 @@ select throws_ok(
   'modify_order_line réservé au rôle admin (ou à l''operator du même établissement)',
   'cas 1 : appel non-admin → exception 42501'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88920000-0000-4000-8000-000000000051'),
   'reserved',
   'cas 1 : ligne inchangée après le refus non-admin'
 );
 
+set local role authenticated;
 select test_login('88920000-0000-4000-8000-000000000031'); -- admin pour le reste des cas
 
 -- Cas 2 : motif vide/null → exception.
@@ -187,11 +189,14 @@ select throws_ok(
   'P0001'::char(5), null,
   'cas 6 : produit type=camp → exception (hors périmètre v1)'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88920000-0000-4000-8000-000000000053'),
   'reserved',
   'cas 6 : ligne camp inchangée'
 );
+set local role authenticated;
+select test_login('88920000-0000-4000-8000-000000000031');
 
 -- Cas 7 : quantité hors bornes [min_qty, max_qty] du produit (021 : 1..5).
 select throws_ok(
@@ -224,6 +229,7 @@ select throws_ok(
 
 -- Vérification finale du groupe gardes : la ligne G n'a JAMAIS été modifiée par aucun des 10 cas
 -- ci-dessus, et la capacité de sa propre date (09-01) est restée à 1 (aucune écriture parasite).
+reset role;
 select is(
   (select jsonb_build_object('status', status, 'date', date, 'qty', qty)
      from order_lines where id = '88920000-0000-4000-8000-000000000051'),
@@ -265,6 +271,7 @@ select is(
   (select result->>'ok' from tmp_modify_a), 'true',
   'succès A : appel réussi (même date, qty 2→4)'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88920000-0000-4000-8000-000000000061'),
   'superseded',
@@ -351,6 +358,7 @@ create temp table tmp_modify_c as
   select modify_order_line(
     '88920000-0000-4000-8000-000000000063', '2028-10-10', 4, 'Grupo más grande'
   ) as result;
+reset role;
 select is(
   (select jsonb_build_object('price_cop', price_cop, 'total_cop', total_cop)
      from order_lines where id = (select (result->>'order_line_id')::uuid from tmp_modify_c)),
@@ -466,12 +474,15 @@ select throws_ok(
   'p_new_end_date doit rester null pour une ligne à date unique — transformer une ligne à date unique en ligne à plage (ou l''inverse) est hors périmètre',
   'cas 11 : p_new_end_date fourni sur une ligne à date unique → exception'
 );
+reset role;
 select is(
   (select jsonb_build_object('status', status, 'date', date, 'qty', qty)
      from order_lines where id = '88920000-0000-4000-8000-000000000051'),
   jsonb_build_object('status', 'reserved', 'date', '2028-09-01'::date, 'qty', 1),
   'cas 11 : ligne G toujours intacte après le refus'
 );
+set local role authenticated;
+select test_login('88920000-0000-4000-8000-000000000031');
 
 -- Cas 12 : p_new_end_date manquant sur une ligne à plage → exception. Aucune écriture avant ce
 -- garde — la ligne L1 est réutilisée juste après pour son vrai test.
@@ -492,6 +503,7 @@ select is(
   (select result->>'ok' from tmp_modify_l1), 'true',
   'L1 : appel réussi (nouvelles nuits + qty 1→2, alojamiento)'
 );
+reset role;
 select is(
   (select jsonb_build_object('date', date, 'end_date', end_date, 'qty', qty,
           'status', status, 'price_cop', price_cop, 'total_cop', total_cop)
@@ -528,6 +540,8 @@ select is(
 drop table tmp_modify_l1;
 
 -- ===== Refus tout-ou-rien : alojamiento, nuit fermée dans le nouvel intervalle (09/12) ===========
+set local role authenticated;
+select test_login('88920000-0000-4000-8000-000000000031');
 select throws_ok(
   $$ select modify_order_line(
        '88920000-0000-4000-8000-000000000085', '2028-12-08', 1, 'Motivo válido', '2028-12-10'
@@ -536,6 +550,7 @@ select throws_ok(
   'nuit 2028-12-09 fermée pour ce produit',
   'refus alojamiento : nuit 09/12 fermée dans le nouvel intervalle → exception'
 );
+reset role;
 select is(
   (select jsonb_build_object('status', status, 'date', date, 'end_date', end_date, 'qty', qty)
      from order_lines where id = '88920000-0000-4000-8000-000000000085'),
@@ -689,6 +704,7 @@ select throws_ok(
   'modify_order_line ne gère pas encore les réservations par créneau horaire — annuler puis recréer manuellement',
   'cas 14 : ligne à créneau horaire → exception (hors périmètre Tranche 1)'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88920000-0000-4000-8000-000000000054'),
   'reserved',
@@ -763,6 +779,7 @@ select is(
   (select result->>'ok' from tmp_modify_15), 'true',
   'cas 15 : operator de l''établissement propriétaire → succès'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88920000-0000-4000-8000-000000000094'),
   'superseded',
@@ -771,6 +788,7 @@ select is(
 drop table tmp_modify_15;
 
 -- Cas 16 : operator actif mais sur un AUTRE établissement (013 ≠ 011) → refusé, message mis à jour.
+set local role authenticated;
 select test_login('88920000-0000-4000-8000-000000000036'); -- operator_wrong, établissement 013
 select throws_ok(
   $$ select modify_order_line(
@@ -783,6 +801,7 @@ select throws_ok(
 -- order_lines_select_operator scope operator_wrong à SON établissement (013) : la ligne 095 lui est
 -- invisible — bascule admin pour vérifier l'état réel, même patron que set_order_line_status cas 8.
 select test_login('88920000-0000-4000-8000-000000000031'); -- admin
+reset role;
 select is(
   (select status from order_lines where id = '88920000-0000-4000-8000-000000000095'),
   'reserved',

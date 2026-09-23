@@ -3,7 +3,14 @@ import { notFound } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
 import { AvailabilityCalendar } from "@/components/availability-calendar";
-import { AvailabilityBlocksTable, type BlockQueryRow } from "./AvailabilityBlocksTable";
+import { AvailabilityBlocksTable } from "./AvailabilityBlocksTable";
+
+type BlockQueryRow = {
+  id: string;
+  start_date: string;
+  end_date: string;
+  source_order_line_id: string;
+};
 
 export default async function EstablishmentResourcePage({
   params,
@@ -33,14 +40,32 @@ export default async function EstablishmentResourcePage({
       .eq("establishment_id", id),
     supabase
       .from("availability_blocks")
-      .select(
-        `id, start_date, end_date,
-         order_line:order_lines(order:orders(holder_name), product:products(name))`
-      )
+      .select("id, start_date, end_date, source_order_line_id")
       .eq("establishment_id", id)
       .order("start_date", { ascending: false })
       .returns<BlockQueryRow[]>(),
   ]);
+
+  // Identité du produit/titulaire : jamais un embed PostgREST direct vers order_lines (fuite des
+  // colonnes de commission, docs/backlog.md) — même RPC admin que la page réconciliation
+  // (admin_order_line_summaries, 20260922140000).
+  const blockLineIds = [...new Set((blocks ?? []).map((block) => block.source_order_line_id))];
+  const { data: blockSummaries } = await supabase.rpc("admin_order_line_summaries", {
+    p_order_line_ids: blockLineIds,
+  });
+  const blockSummaryByLineId = new Map(
+    (blockSummaries ?? []).map((summary) => [summary.order_line_id, summary])
+  );
+  const blockRows = (blocks ?? []).map((block) => {
+    const summary = blockSummaryByLineId.get(block.source_order_line_id);
+    return {
+      id: block.id,
+      startDate: block.start_date,
+      endDate: block.end_date,
+      productName: resolveLocalizedField(asLocalizedField(summary?.product_name), "es") ?? "—",
+      holderName: summary?.holder_name ?? "—",
+    };
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,7 +95,7 @@ export default async function EstablishmentResourcePage({
 
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-medium">Causa de los bloqueos</h2>
-        <AvailabilityBlocksTable blocks={blocks ?? []} />
+        <AvailabilityBlocksTable blocks={blockRows} />
       </div>
     </div>
   );

@@ -137,6 +137,7 @@ select throws_ok(
   'set_order_line_status réservé au rôle admin (ou à l''operator du même établissement, pour no_show/cancelled_by_provider uniquement)',
   'appel non-admin → exception 42501'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88900000-0000-4000-8000-000000000051'),
   'reserved',
@@ -160,11 +161,14 @@ select throws_ok(
   'motif obligatoire pour une transition manuelle',
   'motif vide ('''') → exception'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88900000-0000-4000-8000-000000000051'),
   'reserved',
   'cas 2a : statut inchangé après le refus motif vide'
 );
+set local role authenticated;
+select test_login('88900000-0000-4000-8000-000000000031');
 select throws_ok(
   $$ select set_order_line_status(
        '88900000-0000-4000-8000-000000000051', 'fulfilled', null
@@ -173,11 +177,14 @@ select throws_ok(
   'motif obligatoire pour une transition manuelle',
   'motif null → exception'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88900000-0000-4000-8000-000000000051'),
   'reserved',
   'cas 2b : statut inchangé après le refus motif null'
 );
+set local role authenticated;
+select test_login('88900000-0000-4000-8000-000000000031');
 
 -- Cas 3 : statut cible hors des 5 valeurs autorisées (jamais un retour vers reserved, ni une
 -- valeur inconnue) → exception.
@@ -189,11 +196,14 @@ select throws_ok(
   'statut cible invalide : bogus',
   'statut hors des 5 valeurs autorisées → exception'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88900000-0000-4000-8000-000000000051'),
   'reserved',
   'cas 3 : statut inchangé après le refus statut invalide'
 );
+set local role authenticated;
+select test_login('88900000-0000-4000-8000-000000000031');
 
 -- Cas 4 : ligne de commande introuvable → exception.
 select throws_ok(
@@ -214,6 +224,7 @@ select is(
   jsonb_build_object('ok', true),
   'cas 5 : appel admin valide → succès'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88900000-0000-4000-8000-000000000051'),
   'fulfilled',
@@ -246,6 +257,7 @@ select throws_ok(
   'transition refusée : la ligne n''est plus reserved (statut actuel : fulfilled)',
   'cas 6 : ligne déjà terminale → transition refusée'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88900000-0000-4000-8000-000000000051'),
   'fulfilled',
@@ -255,6 +267,7 @@ select is(
 -- Cas 7 : operator actif sur SON établissement (011) → peut marquer no_show. La part référent
 -- (estimée) est annulée et redirigée vers l'établissement (compensation due), jamais un split en
 -- temps réel — cf. spec 19 §0 invariants.
+set local role authenticated;
 select test_login('88900000-0000-4000-8000-000000000033'); -- operator_ok, établissement 011
 select is(
   (select set_order_line_status(
@@ -263,6 +276,7 @@ select is(
   jsonb_build_object('ok', true),
   'cas 7 : operator de l''établissement propriétaire → no_show accepté'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88900000-0000-4000-8000-000000000052'),
   'no_show',
@@ -292,6 +306,7 @@ select is(
 
 -- Cas 8 : operator actif mais sur un AUTRE établissement (012 ≠ 011, propriétaire réel de la
 -- ligne) → refusé, même transition no_show.
+set local role authenticated;
 select test_login('88900000-0000-4000-8000-000000000034'); -- operator_wrong, établissement 012
 select throws_ok(
   $$ select set_order_line_status(
@@ -305,6 +320,7 @@ select throws_ok(
 -- (établissement 011) lui est invisible, pas seulement en écriture — bascule admin pour vérifier
 -- l'état réel plutôt qu'une lecture bloquée par RLS (NULL ≠ preuve d'un statut inchangé).
 select test_login('88900000-0000-4000-8000-000000000031'); -- admin
+reset role;
 select is(
   (select status from order_lines where id = '88900000-0000-4000-8000-000000000053'),
   'reserved',
@@ -314,6 +330,7 @@ select is(
 -- Cas 9 : operator de l'établissement propriétaire, mais transition hors du jeu autorisé
 -- (fulfilled) → toujours refusé — l'élargissement d'autorisation ne couvre QUE no_show/
 -- cancelled_by_provider (spec 20 §0), jamais fulfilled/cancelled_by_client/expired.
+set local role authenticated;
 select test_login('88900000-0000-4000-8000-000000000033'); -- operator_ok, établissement 011
 select throws_ok(
   $$ select set_order_line_status(
@@ -323,6 +340,7 @@ select throws_ok(
   'set_order_line_status réservé au rôle admin (ou à l''operator du même établissement, pour no_show/cancelled_by_provider uniquement)',
   'cas 9 : operator tentant une transition autre que no_show → refusé'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88900000-0000-4000-8000-000000000054'),
   'reserved',
@@ -330,6 +348,7 @@ select is(
 );
 
 -- Cas 10 : admin, fulfilled → la créance référent (estimated) devient exigible (due).
+set local role authenticated;
 select test_login('88900000-0000-4000-8000-000000000031'); -- admin
 select is(
   (select set_order_line_status(
@@ -384,11 +403,13 @@ select is(
   jsonb_build_object('ok', true),
   'cas 13 : operator de l''établissement propriétaire → cancelled_by_provider accepté'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88900000-0000-4000-8000-000000000054'),
   'cancelled_by_provider',
   'cas 13 : statut mis à jour à cancelled_by_provider'
 );
+set local role authenticated;
 select test_login('88900000-0000-4000-8000-000000000031'); -- admin, ledger_entries sans policy select operator
 select is(
   (select status from ledger_entries
@@ -399,6 +420,7 @@ select is(
 
 -- Cas 14 (spec 20 §0) : operator actif mais sur un AUTRE établissement (012 ≠ 011) → refusé, même
 -- chose pour cancelled_by_provider (pas seulement no_show, cf. cas 8).
+set local role authenticated;
 select test_login('88900000-0000-4000-8000-000000000034'); -- operator_wrong, établissement 012
 select throws_ok(
   $$ select set_order_line_status(
@@ -409,6 +431,7 @@ select throws_ok(
   'cas 14 : operator d''un autre établissement → refusé (cancelled_by_provider)'
 );
 select test_login('88900000-0000-4000-8000-000000000031'); -- admin
+reset role;
 select is(
   (select status from order_lines where id = '88900000-0000-4000-8000-000000000053'),
   'reserved',

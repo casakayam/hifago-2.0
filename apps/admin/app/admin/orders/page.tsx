@@ -4,23 +4,6 @@ import { OrdersTable, type OrderLineRow } from "./OrdersTable";
 import { ORDERS_FILTER_DEFINITIONS } from "@/lib/lists/filters";
 import { ORDERS_DEFAULT_SORT, ORDERS_SORT_WHITELIST } from "@/lib/lists/sortable-columns";
 
-type OrderLineQueryRow = {
-  id: string;
-  order_id: string;
-  date: string;
-  end_date: string | null;
-  qty: number;
-  status: string;
-  total_cop: number;
-  created_at: string;
-  product: { name: unknown; establishment: { name: unknown } | null } | null;
-  order: {
-    holder_name: string;
-    holder_phone: string | null;
-    referrer: { display_name: string } | null;
-  } | null;
-};
-
 export default async function AdminOrdersPage({
   searchParams,
 }: PageProps<"/admin/orders">) {
@@ -41,41 +24,22 @@ export default async function AdminOrdersPage({
   // (feature 7) affiché pour la première fois ici, jusqu'ici prouvé seulement par pgTAP.
   //
   // docs/specs/10-listes-standardisees-admin-socio.md — pagination ET tri désormais tous les deux
-  // côté serveur (manualSorting sur DataList, plus de repli client), écran pilote de la spec.
-  // `order:orders!inner(...)` (pas un simple `orders(...)`) : nécessaire pour que le filtre `q`
-  // sur `order.holder_name` fonctionne (PostgREST exige `!inner` pour filtrer une ressource
-  // embarquée) — sans incidence sur les lignes retournées hors filtre `q`, order_id est NOT NULL.
-  let query = supabase
-    .from("order_lines")
-    .select(
-      `id, order_id, date, end_date, qty, status, total_cop, created_at,
-       product:products(name, establishment:establishments(name)),
-       order:orders!inner(holder_name, holder_phone, referrer:partners(display_name))`,
-      { count: "exact" }
-    )
-    .order(sort.column, { ascending: sort.direction === "asc" })
-    .range(from, to);
-
-  if (filters.status) {
-    query = query.eq("status", filters.status);
-  }
-  if (filters.date_from) {
-    query = query.gte("date", filters.date_from);
-  }
-  if (filters.date_to) {
-    query = query.lte("date", filters.date_to);
-  }
-  if (filters.q) {
-    query = query.ilike("order.holder_name", `%${filters.q}%`);
-  }
-  // Spec 17 §0 Tranche 1 — posé par le lien "voir les réservations de ce jour" du calendrier
-  // produit, jamais saisi par l'admin : sans lui, un date_from/date_to seuls montreraient TOUTES
-  // les réservations de ce jour, tous produits confondus, pas seulement celles du produit consulté.
-  if (filters.product_id) {
-    query = query.eq("product_id", filters.product_id);
-  }
-
-  const { data: lines, count } = await query.returns<OrderLineQueryRow[]>();
+  // côté serveur, écran pilote de la spec. `filters.product_id` : posé par le lien "voir les
+  // réservations de ce jour" du calendrier produit, jamais saisi par l'admin — sans lui, un
+  // date_from/date_to seuls montreraient TOUTES les réservations de ce jour, tous produits
+  // confondus, pas seulement celles du produit consulté.
+  const { data: lines, error: linesError } = await supabase.rpc("admin_orders_list", {
+    p_status: filters.status ?? null,
+    p_date_from: filters.date_from ?? null,
+    p_date_to: filters.date_to ?? null,
+    p_q: filters.q ?? null,
+    p_product_id: filters.product_id ?? null,
+    p_sort_key: sort.column,
+    p_sort_desc: sort.direction === "desc",
+    p_limit: to - from + 1,
+    p_offset: from,
+  });
+  const count = linesError || !lines || lines.length === 0 ? 0 : lines[0].total_count;
 
   const rows: OrderLineRow[] = (lines ?? []).map((line) => ({
     id: line.id,
@@ -84,14 +48,13 @@ export default async function AdminOrdersPage({
     endDate: line.end_date,
     qty: line.qty,
     status: line.status,
-    productName: resolveLocalizedField(asLocalizedField(line.product?.name), "es") ?? "—",
-    establishmentName:
-      resolveLocalizedField(asLocalizedField(line.product?.establishment?.name), "es") ?? "—",
-    holderName: line.order?.holder_name ?? "—",
-    holderPhone: line.order?.holder_phone ?? null,
+    productName: resolveLocalizedField(asLocalizedField(line.product_name), "es") ?? "—",
+    establishmentName: resolveLocalizedField(asLocalizedField(line.establishment_name), "es") ?? "—",
+    holderName: line.holder_name ?? "—",
+    holderPhone: line.holder_phone,
     // Première fois que referrer_partner_id (feature 7) est réellement affiché — "Directo" quand
     // aucun référent n'a été résolu à la création de la commande, jamais une valeur devinée ici.
-    referrerName: line.order?.referrer?.display_name ?? "Directo",
+    referrerName: line.referrer_display_name ?? "Directo",
     // total_cop : le snapshot de commission (feature 11), pas un recalcul via products.price_cop —
     // celui-ci dérive silencieusement si le prix du produit est modifié après coup (cf.
     // /admin/orders/[id] qui utilise déjà ce même snapshot).

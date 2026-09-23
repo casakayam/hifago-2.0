@@ -47,17 +47,6 @@ type ProductRow = {
   duration_days: number | null;
 };
 
-type OrderLineRow = {
-  id: string;
-  date: string;
-  end_date: string | null;
-  slot_start_time: string | null;
-  qty: number;
-  status: string;
-  holder_name: string;
-  product: { id: string; name: unknown; type: string; duration_days: number | null } | null;
-};
-
 // Fenêtre de lecture initiale de l'agenda — pas de refetch au changement de vue/date côté client
 // en V1 (gap documenté, spec 20 §10 : lazy loading par plage visible renvoyé à une itération
 // future). ±183 jours couvre largement l'usage réel (aujourd'hui, cette semaine, ce mois).
@@ -130,6 +119,10 @@ export default async function PartnerHomePage() {
   if (establishmentIds.length > 0) {
     const { from, to } = agendaWindow();
 
+    // Spec 20 §10 point 9 : "superseded/expired masqués" — étendu à cancelled_by_client/
+    // cancelled_by_provider (une réservation annulée n'a plus sa place sur l'agenda, contrairement
+    // à la liste "Mis reservas" qui garde tout avec un filtre statut explicite). no_show reste
+    // visible (le créneau a réellement eu lieu) — statuts bakés dans la RPC, jamais un paramètre.
     const [{ data: products }, { data: lines }] = await Promise.all([
       supabase
         .from("products")
@@ -137,21 +130,7 @@ export default async function PartnerHomePage() {
         .in("establishment_id", establishmentIds)
         .eq("sellable", true)
         .returns<ProductRow[]>(),
-      supabase
-        .from("order_lines")
-        .select(
-          `id, date, end_date, slot_start_time, qty, status, holder_name,
-           product:products!inner(id, name, type, duration_days, establishment_id)`
-        )
-        .in("product.establishment_id", establishmentIds)
-        .gte("date", from)
-        .lte("date", to)
-        // Spec 20 §10 point 9 : "superseded/expired masqués" — étendu à cancelled_by_client/
-        // cancelled_by_provider (une réservation annulée n'a plus sa place sur l'agenda, contrairement
-        // à la liste "Mis reservas" qui garde tout avec un filtre statut explicite). no_show reste
-        // visible (le créneau a réellement eu lieu).
-        .in("status", ["reserved", "fulfilled", "no_show"])
-        .returns<OrderLineRow[]>(),
+      supabase.rpc("partner_agenda_order_lines", { p_date_from: from, p_date_to: to }),
     ]);
 
     const productRows = products ?? [];
@@ -162,7 +141,7 @@ export default async function PartnerHomePage() {
     const slotProductIds = productRows.map((p) => p.id);
     const linesWithSlot = lineRows.filter((l) => l.slot_start_time !== null);
     const slotAvailabilityProductIds = Array.from(
-      new Set(linesWithSlot.map((l) => l.product?.id).filter((id): id is string => Boolean(id)))
+      new Set(linesWithSlot.map((l) => l.product_id).filter((id): id is string => Boolean(id)))
     );
 
     const [{ data: slotRules }, { data: slotDurationRows }] = await Promise.all([
@@ -182,10 +161,10 @@ export default async function PartnerHomePage() {
 
     const orderLinesForAgenda: OrderLineForAgenda[] = lineRows.map((line) => ({
       id: line.id,
-      productId: line.product?.id ?? "",
-      productName: resolveLocalizedField(asLocalizedField(line.product?.name), "es") ?? "—",
-      productType: line.product?.type ?? "",
-      productDurationDays: line.product?.duration_days ?? null,
+      productId: line.product_id ?? "",
+      productName: resolveLocalizedField(asLocalizedField(line.product_name), "es") ?? "—",
+      productType: line.product_type ?? "",
+      productDurationDays: line.product_duration_days ?? null,
       holderName: line.holder_name,
       qty: line.qty,
       status: line.status,

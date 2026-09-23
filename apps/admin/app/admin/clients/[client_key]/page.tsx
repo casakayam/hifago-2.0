@@ -5,17 +5,6 @@ import { asLocalizedField, formatDateInBogota, resolveLocalizedField } from "@hi
 import { ContactClientButton } from "@/components/ContactClientButton";
 import { ClientOrderCard, type ClientOrderLineRow } from "./ClientOrderCard";
 
-type OrderLineQueryRow = {
-  id: string;
-  order_id: string;
-  date: string;
-  end_date: string | null;
-  qty: number;
-  status: string;
-  total_cop: number;
-  product: { name: unknown; establishment: { name: unknown } | null } | null;
-};
-
 type PaymentQueryRow = {
   id: string;
   order_id: string;
@@ -59,15 +48,7 @@ export default async function AdminClientDetailPage({
   const identity = orders[0];
 
   const [{ data: lines }, { data: payments }] = await Promise.all([
-    supabase
-      .from("order_lines")
-      .select(
-        `id, order_id, date, end_date, qty, status, total_cop,
-         product:products(name, establishment:establishments(name))`
-      )
-      .in("order_id", orderIds)
-      .order("date", { ascending: false })
-      .returns<OrderLineQueryRow[]>(),
+    supabase.rpc("admin_client_order_lines", { p_order_ids: orderIds }),
     supabase
       .from("payments")
       .select("id, order_id, status, amount_cop, payer_email, created_at")
@@ -81,9 +62,8 @@ export default async function AdminClientDetailPage({
     const existing = linesByOrder.get(line.order_id) ?? [];
     existing.push({
       id: line.id,
-      establishmentName:
-        resolveLocalizedField(asLocalizedField(line.product?.establishment?.name), "es") ?? "—",
-      productName: resolveLocalizedField(asLocalizedField(line.product?.name), "es") ?? "—",
+      establishmentName: resolveLocalizedField(asLocalizedField(line.establishment_name), "es") ?? "—",
+      productName: resolveLocalizedField(asLocalizedField(line.product_name), "es") ?? "—",
       date: line.date,
       endDate: line.end_date,
       qty: line.qty,

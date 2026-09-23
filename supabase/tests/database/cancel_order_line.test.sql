@@ -122,6 +122,7 @@ select is(
   'anonymous_session',
   'une session anonyme est refusée (décision ⑨), même sur SA PROPRE prestation'
 );
+reset role;
 select is(
   (select status from order_lines where id = '88892000-0000-4000-8000-000000000055'),
   'reserved',
@@ -131,6 +132,7 @@ select is(
 -- ---------------------------------------------------------------------------------------------
 -- Cas 3-4 : non-divulgation — la ligne d'autrui et la ligne inexistante sont indiscernables
 -- ---------------------------------------------------------------------------------------------
+set local role authenticated;
 select test_login('88892000-0000-4000-8000-000000000031');
 select is(
   (select public.cancel_order_line('88892000-0000-4000-8000-000000000054')->>'reason'),

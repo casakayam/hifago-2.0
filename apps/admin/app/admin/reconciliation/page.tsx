@@ -2,20 +2,12 @@ import { createClient } from "@hifago/supabase/server";
 import { asLocalizedField, resolveLocalizedField } from "@hifago/domain";
 import { ReconciliationList, type ReconciliationEntryRow } from "./ReconciliationList";
 
-// Chemin de jointure observé dans lib/database.types.ts (cf. résumé de l'agent backend, feature
-// 22) : pms_reconciliation_entries.order_line_id → order_lines.id, order_lines.order_id →
-// orders.id, order_lines.product_id → products.id → products.establishment_id → establishments.id.
-// Pas de raccourci direct order_lines → establishments, on transite par products à chaque fois.
 type ReconciliationEntryQueryRow = {
   id: string;
   status: string;
   attempts: number;
   detail: string | null;
-  order_line: {
-    order_id: string;
-    order: { holder_name: string } | null;
-    product: { name: unknown; establishment: { name: unknown } | null } | null;
-  } | null;
+  order_line_id: string;
 };
 
 export default async function AdminReconciliationPage() {
@@ -25,30 +17,31 @@ export default async function AdminReconciliationPage() {
   // réservée admin — la garde de AdminLayout (feature 1) suffit ici, aucun filtre supplémentaire.
   const { data: entries } = await supabase
     .from("pms_reconciliation_entries")
-    .select(
-      `id, status, attempts, detail,
-       order_line:order_lines(
-         order_id,
-         order:orders(holder_name),
-         product:products(name, establishment:establishments(name))
-       )`
-    )
+    .select("id, status, attempts, detail, order_line_id")
     .order("created_at", { ascending: true })
     .returns<ReconciliationEntryQueryRow[]>();
 
-  const rows: ReconciliationEntryRow[] = (entries ?? []).map((entry) => ({
-    id: entry.id,
-    detail: entry.detail,
-    status: entry.status,
-    attempts: entry.attempts,
-    orderId: entry.order_line?.order_id ?? "",
-    holderName: entry.order_line?.order?.holder_name ?? "—",
-    establishmentName:
-      resolveLocalizedField(
-        asLocalizedField(entry.order_line?.product?.establishment?.name),
-        "es"
-      ) ?? "—",
-  }));
+  // Identité de la commande/produit : jamais un embed PostgREST direct vers order_lines (fuite des
+  // colonnes de commission, docs/backlog.md) — une RPC admin étroite, partagée avec la page
+  // ressource d'établissement (admin_order_line_summaries, 20260922140000).
+  const orderLineIds = [...new Set((entries ?? []).map((entry) => entry.order_line_id))];
+  const { data: summaries } = await supabase.rpc("admin_order_line_summaries", {
+    p_order_line_ids: orderLineIds,
+  });
+  const summaryByLineId = new Map((summaries ?? []).map((summary) => [summary.order_line_id, summary]));
+
+  const rows: ReconciliationEntryRow[] = (entries ?? []).map((entry) => {
+    const summary = summaryByLineId.get(entry.order_line_id);
+    return {
+      id: entry.id,
+      detail: entry.detail,
+      status: entry.status,
+      attempts: entry.attempts,
+      orderId: summary?.order_id ?? "",
+      holderName: summary?.holder_name ?? "—",
+      establishmentName: resolveLocalizedField(asLocalizedField(summary?.establishment_name), "es") ?? "—",
+    };
+  });
 
   return (
     <div className="flex flex-col gap-6">

@@ -16,8 +16,6 @@ import { computeDateWindow } from "./dateWindow";
 // principe seul était acté). Commissions toujours qualifiées « generadas », jamais « a pagar » —
 // aucun ledger dû/payé n'existe encore côté hifago (spec §1, constat 1).
 
-const TERMINAL_NON_CANCELLED = ["confirmed", "fulfilled", "no_show"];
-
 export default async function AdminHomePage({
   searchParams,
 }: PageProps<"/admin">) {
@@ -43,25 +41,11 @@ export default async function AdminHomePage({
     catalogProposalPendingRes,
     catalogProposalRejectedRes,
   ] = await Promise.all([
-    supabase
-      .from("order_lines")
-      .select("total_cop")
-      .in("status", TERMINAL_NON_CANCELLED),
-    supabase
-      .from("order_lines")
-      .select("referrer_commission_cop, app_commission_cop, referrer_partner_id")
-      .eq("status", "fulfilled"),
+    supabase.rpc("admin_order_lines_revenue_rows"),
+    supabase.rpc("admin_order_lines_commission_rows"),
     supabase.from("establishments").select("id", { count: "exact", head: true }).eq("status", "active"),
-    supabase
-      .from("order_lines")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "confirmed")
-      .lt("date", todayIso),
-    supabase
-      .from("order_lines")
-      .select("date, status, total_cop, referrer_commission_cop, app_commission_cop")
-      .gte("date", since)
-      .in("status", TERMINAL_NON_CANCELLED),
+    supabase.rpc("admin_order_lines_pending_action_count", { p_today: todayIso }),
+    supabase.rpc("admin_order_lines_daily_series", { p_since: since }),
     supabase.from("product_proposals").select("id", { count: "exact", head: true }).eq("status", "pending"),
     supabase
       .from("pms_reconciliation_entries")
@@ -84,19 +68,14 @@ export default async function AdminHomePage({
   // un aperçu top-5. Volume = ventes des établissements du partenaire (le vendeur), pas le
   // référent qui a apporté la commande — c'est la lecture « qui a généré le plus » du cahier des
   // charges §2, la même que la table « Détail par Hostel » du legacy.
-  const { data: volumeByPartnerRows } = await supabase
-    .from("order_lines")
-    .select("total_cop, status, products(establishment_id, establishments(partner_id, partners(display_name)))")
-    .in("status", TERMINAL_NON_CANCELLED);
+  const { data: volumeByPartnerRows } = await supabase.rpc("admin_order_lines_volume_by_partner_rows");
 
   const volumeByPartner = new Map<string, { name: string; total: number }>();
   for (const row of volumeByPartnerRows ?? []) {
-    const partner = row.products?.establishments?.partners;
-    const partnerId = row.products?.establishments?.partner_id;
-    if (!partnerId || !partner) continue;
-    const entry = volumeByPartner.get(partnerId) ?? { name: partner.display_name, total: 0 };
+    if (!row.partner_id) continue;
+    const entry = volumeByPartner.get(row.partner_id) ?? { name: row.partner_display_name, total: 0 };
     entry.total += row.total_cop ?? 0;
-    volumeByPartner.set(partnerId, entry);
+    volumeByPartner.set(row.partner_id, entry);
   }
   const topPartners = Array.from(volumeByPartner.values())
     .sort((a, b) => b.total - a.total)
@@ -185,7 +164,7 @@ export default async function AdminHomePage({
         <KpiCard
           testId="kpi-pending-orders"
           label="Pedidos pendientes de acción"
-          value={String(pendingActionRes.count ?? 0)}
+          value={String(pendingActionRes.data?.[0]?.pending_count ?? 0)}
           sublabel="Fecha de servicio ya pasada, aún sin resolver"
         />
       </div>

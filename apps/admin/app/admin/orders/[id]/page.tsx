@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@hifago/supabase/server";
-import { LedgerLinesTable, type OrderLineQueryRow } from "./LedgerLinesTable";
+import { LedgerLinesTable } from "./LedgerLinesTable";
 import { formatDateInBogota } from "@hifago/domain";
 
 export default async function AdminOrderDetailPage({
@@ -21,16 +21,7 @@ export default async function AdminOrderDetailPage({
       )
       .eq("id", id)
       .maybeSingle(),
-    supabase
-      .from("order_lines")
-      .select(
-        `id, date, qty, status,
-       total_cop, acompte_cop, referrer_commission_cop, app_commission_cop, commission_case,
-       product:products(name)`
-      )
-      .eq("order_id", id)
-      .order("date", { ascending: true })
-      .returns<OrderLineQueryRow[]>(),
+    supabase.rpc("admin_order_line_ledger", { p_order_id: id }),
   ]);
 
   if (!order) {

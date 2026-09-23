@@ -37,7 +37,7 @@ export type OrderLineQueryRow = {
   referrer_commission_cop: number;
   app_commission_cop: number;
   commission_case: string;
-  product: { name: unknown } | null;
+  product_name: unknown;
 };
 
 export function LedgerLinesTable({ lines }: { lines: OrderLineQueryRow[] }) {
@@ -69,7 +69,7 @@ export function LedgerLinesTable({ lines }: { lines: OrderLineQueryRow[] }) {
             return (
               <SimpleTableRow key={line.id} id={line.id} data-testid={`ledger-line-${line.id}`}>
                 <SimpleTableCell data-label="Producto">
-                  {resolveLocalizedField(asLocalizedField(line.product?.name), "es") ?? "—"}
+                  {resolveLocalizedField(asLocalizedField(line.product_name), "es") ?? "—"}
                 </SimpleTableCell>
                 <SimpleTableCell data-label="Fecha">{line.date}</SimpleTableCell>
                 <SimpleTableCell data-label="Cantidad">{line.qty}</SimpleTableCell>

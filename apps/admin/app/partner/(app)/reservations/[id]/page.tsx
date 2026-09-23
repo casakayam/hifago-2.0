@@ -7,48 +7,26 @@ import { isRealClientEmail } from "@/lib/whatsapp";
 import { STATUS_LABELS, STATUS_CHIP_COLOR } from "@/app/admin/orders/statusLabels";
 import { ReservationActions } from "./ReservationActions";
 
-type OrderLineDetailRow = {
-  id: string;
-  date: string;
-  end_date: string | null;
-  slot_start_time: string | null;
-  qty: number;
-  status: string;
-  holder_name: string;
-  holder_phone: string | null;
-  holder_email: string | null;
-  total_cop: number;
-  created_at: string;
-  product: {
-    name: unknown;
-    type: string;
-    establishment: { name: unknown } | null;
-  } | null;
-};
-
 // Spec 20 §0/§5 — fiche de réservation individuelle, jamais construite avant côté socio (seul
 // /admin/orders/[id] existait, au niveau `orders`, admin-only). id = order_lines.id, pas orders.id.
-// RLS order_lines_select_operator (migration 20260817170000) fait déjà foi : aucune nouvelle
-// policy. Téléphone/email désormais affichés (refonte vue prestataire, 2026-08-19, migration
+// Téléphone/email désormais affichés (refonte vue prestataire, 2026-08-19, migration
 // 20260819180000) — lève la restriction "PII minimale" documentée jusqu'ici ; les colonnes de
 // commission internes (referrer_commission_cop, app_commission_cop, commission_case) restent, elles,
 // hors périmètre socio.
+//
+// ⚠️ partner_reservation_detail (20260922200000) : le scope has_capability(auth.uid(),'operator',
+// establishment_id) qu'elle applique EST le rempart — cette page n'a aucun autre filtre, jamais un
+// establishment_id à comparer ici. Ne jamais revenir à un `.from("order_lines")` direct.
 export default async function PartnerReservationDetailPage({
   params,
 }: PageProps<"/partner/reservations/[id]">) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: line } = await supabase
-    .from("order_lines")
-    .select(
-      `id, date, end_date, slot_start_time, qty, status, holder_name, holder_phone, holder_email,
-       total_cop, created_at,
-       product:products(name, type, establishment:establishments(name))`
-    )
-    .eq("id", id)
-    .maybeSingle()
-    .returns<OrderLineDetailRow>();
+  const { data: lines } = await supabase.rpc("partner_reservation_detail", {
+    p_order_line_id: id,
+  });
+  const line = lines?.[0];
 
   if (!line) {
     notFound();
@@ -65,9 +43,8 @@ export default async function PartnerReservationDetailPage({
     slotDurationMinutes = slot?.slot_duration_minutes ?? null;
   }
 
-  const productName = resolveLocalizedField(asLocalizedField(line.product?.name), "es") ?? "—";
-  const establishmentName =
-    resolveLocalizedField(asLocalizedField(line.product?.establishment?.name), "es") ?? "—";
+  const productName = resolveLocalizedField(asLocalizedField(line.product_name), "es") ?? "—";
+  const establishmentName = resolveLocalizedField(asLocalizedField(line.establishment_name), "es") ?? "—";
 
   return (
     <div className="flex flex-col gap-6">
@@ -122,7 +99,7 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
-function formatDate(line: OrderLineDetailRow): string {
+function formatDate(line: { date: string; end_date: string | null }): string {
   if (line.end_date) {
     return `${line.date} → ${line.end_date}`;
   }

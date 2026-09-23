@@ -2352,6 +2352,113 @@ export type Database = {
         }
         Returns: string
       }
+      admin_client_order_lines: {
+        Args: { p_order_ids: string[] }
+        Returns: {
+          date: string
+          end_date: string
+          establishment_name: Json
+          id: string
+          order_id: string
+          product_name: Json
+          qty: number
+          status: string
+          total_cop: number
+        }[]
+      }
+      admin_order_line_ledger: {
+        Args: { p_order_id: string }
+        Returns: {
+          acompte_cop: number
+          app_commission_cop: number
+          commission_case: string
+          date: string
+          id: string
+          product_name: Json
+          qty: number
+          referrer_commission_cop: number
+          status: string
+          total_cop: number
+        }[]
+      }
+      admin_order_line_summaries: {
+        Args: { p_order_line_ids: string[] }
+        Returns: {
+          establishment_name: Json
+          holder_name: string
+          order_id: string
+          order_line_id: string
+          product_name: Json
+        }[]
+      }
+      admin_order_lines_commission_rows: {
+        Args: never
+        Returns: {
+          app_commission_cop: number
+          referrer_commission_cop: number
+          referrer_partner_id: string
+        }[]
+      }
+      admin_order_lines_daily_series: {
+        Args: { p_since: string }
+        Returns: {
+          app_commission_cop: number
+          date: string
+          referrer_commission_cop: number
+          status: string
+          total_cop: number
+        }[]
+      }
+      admin_order_lines_pending_action_count: {
+        Args: { p_today: string }
+        Returns: {
+          pending_count: number
+        }[]
+      }
+      admin_order_lines_revenue_rows: {
+        Args: never
+        Returns: {
+          total_cop: number
+        }[]
+      }
+      admin_order_lines_volume_by_partner_rows: {
+        Args: never
+        Returns: {
+          establishment_id: string
+          partner_display_name: string
+          partner_id: string
+          total_cop: number
+        }[]
+      }
+      admin_orders_list: {
+        Args: {
+          p_date_from?: string
+          p_date_to?: string
+          p_limit?: number
+          p_offset?: number
+          p_product_id?: string
+          p_q?: string
+          p_sort_desc?: boolean
+          p_sort_key?: string
+          p_status?: string
+        }
+        Returns: {
+          created_at: string
+          date: string
+          end_date: string
+          establishment_name: Json
+          holder_name: string
+          holder_phone: string
+          id: string
+          order_id: string
+          product_name: Json
+          qty: number
+          referrer_display_name: string
+          status: string
+          total_cop: number
+          total_count: number
+        }[]
+      }
       apply_order_line_ledger_transition: {
         Args: { p_new_status: string; p_order_line_ids: string[] }
         Returns: undefined
@@ -2706,6 +2813,15 @@ export type Database = {
           total_count: number
         }[]
       }
+      list_pending_orders_for_viewer: {
+        Args: never
+        Returns: {
+          access_token: string
+          id: string
+          line_statuses: string[]
+          reference: string
+        }[]
+      }
       log_admin_action: {
         Args: {
           p_action: string
@@ -2813,7 +2929,68 @@ export type Database = {
         Args: { p_order: Database["public"]["Tables"]["orders"]["Row"] }
         Returns: Json
       }
+      partner_agenda_order_lines: {
+        Args: { p_date_from: string; p_date_to: string }
+        Returns: {
+          date: string
+          end_date: string
+          holder_name: string
+          id: string
+          product_duration_days: number
+          product_id: string
+          product_name: Json
+          product_type: string
+          qty: number
+          slot_start_time: string
+          status: string
+        }[]
+      }
       partner_id_for_account: { Args: { uid: string }; Returns: string }
+      partner_reservation_detail: {
+        Args: { p_order_line_id: string }
+        Returns: {
+          created_at: string
+          date: string
+          end_date: string
+          establishment_name: Json
+          holder_email: string
+          holder_name: string
+          holder_phone: string
+          id: string
+          product_name: Json
+          product_type: string
+          qty: number
+          slot_start_time: string
+          status: string
+          total_cop: number
+        }[]
+      }
+      partner_reservations_list: {
+        Args: {
+          p_date_from?: string
+          p_date_to?: string
+          p_holder_q?: string
+          p_limit?: number
+          p_offset?: number
+          p_product_id?: string
+          p_sort_desc?: boolean
+          p_sort_key?: string
+          p_status?: string
+        }
+        Returns: {
+          date: string
+          establishment_name: Json
+          holder_email: string
+          holder_name: string
+          holder_phone: string
+          id: string
+          product_name: Json
+          qty: number
+          status: string
+          total_cop: number
+          total_count: number
+        }[]
+      }
       process_campaign_batch: {
         Args: { p_batch_size?: number; p_campaign_id: string }
         Returns: Json

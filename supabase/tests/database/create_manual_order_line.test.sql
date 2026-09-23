@@ -223,11 +223,14 @@ select is(
   (select result->>'ok' from tmp_manual_null_tiers), 'true',
   'cas 11b : price_tiers = null littéral → succès, jamais un crash jsonb_to_recordset'
 );
+reset role;
 select is(
   (select price_cop from order_lines where id = (select (result->>'order_line_id')::uuid from tmp_manual_null_tiers)),
   15000::bigint,
   'cas 11b : prix résolu depuis price_cop (aucun palier à appliquer)'
 );
+set local role authenticated;
+select test_login('88950000-0000-4000-8000-000000000021'); -- operator_own
 drop table tmp_manual_null_tiers;
 
 -- ===== Succès — branche date unique =============================================================
@@ -240,6 +243,7 @@ select is(
   (select result->>'ok' from tmp_manual_act), 'true',
   'succès date unique : appel réussi'
 );
+reset role;
 select is(
   (select jsonb_build_object(
      'account_id', account_id, 'slot_start_time', slot_start_time, 'qty', qty,
@@ -256,6 +260,7 @@ select is(
   -- plus jamais null (orders.account_id/order_lines.account_id sont NOT NULL).
   'succès date unique : order_line correcte (account_id = compte technique, commission_case operator_manual, zéro commission)'
 );
+set local role authenticated;
 -- orders/audit_log n'ont aucune policy select operator (seulement account_id=acheteur/admin pour
 -- orders, admin seul pour audit_log) : bascule admin pour ces deux lectures, même patron que
 -- set_order_line_status.test.sql cas 7 (ledger_entries, même raison).
@@ -296,12 +301,15 @@ select is(
   (select result->>'ok' from tmp_manual_slot), 'true',
   'succès créneau : appel réussi'
 );
+reset role;
 select is(
   (select jsonb_build_object('slot_start_time', slot_start_time, 'qty', qty, 'price_cop', price_cop, 'total_cop', total_cop)
      from order_lines where id = (select (result->>'order_line_id')::uuid from tmp_manual_slot)),
   jsonb_build_object('slot_start_time', '09:00:00'::time, 'qty', 1, 'price_cop', 20000, 'total_cop', 20000),
   'succès créneau : order_line correcte (slot_start_time/prix)'
 );
+set local role authenticated;
+select test_login('88950000-0000-4000-8000-000000000021'); -- operator_own
 select is(
   (select booked from product_slot_availability
     where product_id = '88950000-0000-4000-8000-000000000034' and slot_date = '2029-05-01'

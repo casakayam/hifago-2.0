@@ -11,18 +11,6 @@ import { RESERVATIONS_FILTER_DEFINITIONS } from "@/lib/lists/filters";
 import { RESERVATIONS_DEFAULT_SORT, RESERVATIONS_SORT_WHITELIST } from "@/lib/lists/sortable-columns";
 import { ReservationsTable, type ReservationRow } from "./ReservationsTable";
 
-type OrderLineQueryRow = {
-  id: string;
-  date: string;
-  qty: number;
-  status: string;
-  total_cop: number;
-  holder_name: string;
-  holder_phone: string | null;
-  holder_email: string | null;
-  product: { name: unknown; establishment: { name: unknown } | null } | null;
-};
-
 // Lot fuseau (2026-08-28) : ces deux helpers étaient une copie locale de plus. La fenêtre par
 // défaut de « Mis Reservas » (aujourd'hui → +6 j) partait de la date UTC, donc du LENDEMAIN passé
 // 19 h à Guatapé — le socio qui ouvrait son écran le soir ne voyait plus les réservations du jour
@@ -75,39 +63,20 @@ export default async function PartnerReservationsPage({
 
   const establishmentIds = await getActiveOperatorEstablishmentIds(supabase, partnerId);
 
-  // product:products!inner(...) : inner join nécessaire pour que le filtre sur la colonne embarquée
-  // establishment_id (scope de visibilité, pas un filtre choisi par l'utilisateur) fonctionne
-  // (PostgREST), même exigence que order:orders!inner(...) dans admin/orders/page.tsx — et pour
-  // afficher product.name/establishment.name dans chaque ligne. product_id (filtre activité) est
-  // lui une colonne de base d'order_lines, filtré directement, indépendamment de cette relation.
-  let query =
-    establishmentIds.length > 0
-      ? supabase
-          .from("order_lines")
-          .select(
-            `id, date, qty, status, total_cop, holder_name, holder_phone, holder_email,
-             product:products!inner(name, establishment_id, establishment:establishments(name))`,
-            { count: "exact" }
-          )
-          .in("product.establishment_id", establishmentIds)
-          .order(sort.column, { ascending: sort.direction === "asc" })
-          .range(from, to)
-      : null;
-
-  if (query && dateFrom) query = query.gte("date", dateFrom);
-  if (query && dateTo) query = query.lte("date", dateTo);
-  if (query && filters.product_id) query = query.eq("product_id", filters.product_id);
-  // holder_q : un seul champ pour nom OU email (retour Jérôme, 2026-08-20) — colonnes de base sur
-  // order_lines, jamais de relation embarquée impliquée ici, donc .or() fonctionne sans le piège
-  // PostgREST déjà rencontré ailleurs (établissements/partenaires, colonne de base + relation).
-  if (query && filters.holder_q) {
-    query = query.or(`holder_name.ilike.%${filters.holder_q}%,holder_email.ilike.%${filters.holder_q}%`);
-  }
-  if (query && filters.status) query = query.eq("status", filters.status);
-
-  const { data: lines, count } = query
-    ? await query.returns<OrderLineQueryRow[]>()
-    : { data: [] as OrderLineQueryRow[], count: 0 };
+  // Scope établissement recalculé côté SQL (has_capability), jamais par establishmentIds ci-dessus
+  // — cette liste ne sert plus qu'au combobox de filtre (productOptions) un peu plus bas.
+  const { data: lines, error: linesError } = await supabase.rpc("partner_reservations_list", {
+    p_date_from: dateFrom ?? null,
+    p_date_to: dateTo ?? null,
+    p_product_id: filters.product_id ?? null,
+    p_holder_q: filters.holder_q ?? null,
+    p_status: filters.status ?? null,
+    p_sort_key: sort.column,
+    p_sort_desc: sort.direction === "desc",
+    p_limit: to - from + 1,
+    p_offset: from,
+  });
+  const count = linesError || !lines || lines.length === 0 ? 0 : lines[0].total_count;
 
   // Activités du prestataire pour le combobox de filtre (retour Jérôme, 2026-08-20) — même
   // établissements que la requête principale, jamais reposé sur products.sellable (une réservation
@@ -128,9 +97,8 @@ export default async function PartnerReservationsPage({
   const rows: ReservationRow[] = (lines ?? []).map((line) => ({
     id: line.id,
     date: line.date,
-    productName: resolveLocalizedField(asLocalizedField(line.product?.name), "es") ?? "—",
-    establishmentName:
-      resolveLocalizedField(asLocalizedField(line.product?.establishment?.name), "es") ?? "—",
+    productName: resolveLocalizedField(asLocalizedField(line.product_name), "es") ?? "—",
+    establishmentName: resolveLocalizedField(asLocalizedField(line.establishment_name), "es") ?? "—",
     holderName: line.holder_name,
     holderPhone: line.holder_phone,
     holderEmail: line.holder_email,
