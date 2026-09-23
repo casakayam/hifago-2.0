@@ -1,12 +1,17 @@
 -- Tranche 3 (disponibilité + anti-survente) — RLS : écriture directe refusée sur
--- product_availability/orders/order_lines (RPC-only), lecture publique de la disponibilité,
--- lecture des commandes limitée au propriétaire + admin.
+-- product_availability/orders/order_lines (RPC-only), lecture publique de la disponibilité.
 --
--- Spec 17 §0 Tranche 1 (20260817170000_order_lines_operator_visibility.sql) : policy additive
--- order_lines_select_operator — un prestataire avec une capacité operator ACTIVE scopée à
--- l'établissement du produit voit la ligne, même s'il n'est ni l'acheteur ni le référent.
+-- RÉVISÉ 2026-09-22 (fermeture de la fuite des colonnes de commission, docs/backlog.md) : ce
+-- fichier vérifiait aussi la portée de lecture sur orders/order_lines (propriétaire vs miroir
+-- admin, visibilité operator par établissement, spec 17 §0 Tranche 1) via order_lines_select/
+-- order_lines_select_operator. Ces policies sont supprimées (20260922210000, order_lines n'a plus
+-- aucun accès SELECT direct pour authenticated/anon) — la portée équivalente est désormais prouvée
+-- au niveau RPC (has_capability recalculé en SQL dans chaque fonction), voir
+-- partner_reservation_detail.test.sql/partner_agenda_order_lines.test.sql/
+-- partner_reservations_list.test.sql. Seules les preuves encore vraies (écriture directe refusée,
+-- lecture publique de la disponibilité) survivent ci-dessous.
 begin;
-select plan(13);
+select plan(4);
 
 create function test_login(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -22,12 +27,7 @@ insert into establishments (id, partner_id, name) values
    jsonb_build_object('es', 'Availability Test Establishment'));
 
 insert into auth.users (id, email) values
-  ('11110000-0000-4000-8000-000000000001', 'avail-admin@test.local'),
-  ('11110000-0000-4000-8000-000000000002', 'avail-buyer-a@test.local'),
-  ('11110000-0000-4000-8000-000000000003', 'avail-buyer-b@test.local');
-
-insert into partner_capabilities (account_id, role, source, status)
-  values ('11110000-0000-4000-8000-000000000001', 'admin', 'migration', 'active');
+  ('11110000-0000-4000-8000-000000000002', 'avail-buyer-a@test.local');
 
 insert into products (id, partner_id, establishment_id, type, name, price_cop, sellable, slug) values
   ('11110000-0000-4000-8000-000000000009', '66666666-6666-6666-6666-666666666666',
@@ -41,7 +41,7 @@ insert into orders (id, account_id, holder_name, holder_email) values
   ('11110000-0000-4000-8000-000000000010', '11110000-0000-4000-8000-000000000002', 'Buyer A',
    'buyer-a@test.local');
 -- Feature 11 (snapshot prix+commission) : colonnes not null ajoutées à order_lines, sans rapport
--- avec ce qui est testé ici (RLS, inchangée) — valeurs de fixture neutres, produit à 50000/qty=1.
+-- avec ce qui est testé ici (écriture directe refusée) — valeurs de fixture neutres.
 insert into order_lines (
   order_id, account_id, product_id, date, qty, holder_name,
   price_cop, total_cop, commission_case, acompte_pct, referrer_pct, app_pct,
@@ -81,98 +81,6 @@ select throws_ok(
      values ('11110000-0000-4000-8000-000000000010', '11110000-0000-4000-8000-000000000002',
              '11110000-0000-4000-8000-000000000009', '2026-12-24', 1) $$,
   '42501'::char(5), null, 'un compte authentifié ne peut pas créer une ligne de commande en direct (contournerait le verrou FOR UPDATE de la RPC)'
-);
-
--- portée de lecture : propriétaire vs miroir admin -----------------------------
-select is(
-  (select count(*) from orders where id = '11110000-0000-4000-8000-000000000010')::int, 1,
-  'l''acheteur A voit sa propre commande'
-);
-select is(
-  (select count(*) from order_lines where order_id = '11110000-0000-4000-8000-000000000010')::int, 1,
-  'l''acheteur A voit sa propre ligne de commande'
-);
-
-select test_login('11110000-0000-4000-8000-000000000003');
-select is(
-  (select count(*) from orders where id = '11110000-0000-4000-8000-000000000010')::int, 0,
-  'l''acheteur B ne voit pas la commande de l''acheteur A'
-);
-select is(
-  (select count(*) from order_lines where order_id = '11110000-0000-4000-8000-000000000010')::int, 0,
-  'l''acheteur B ne voit pas la ligne de commande de l''acheteur A'
-);
-
-select test_login('11110000-0000-4000-8000-000000000001');
-select is(
-  (select count(*) from orders where id = '11110000-0000-4000-8000-000000000010')::int, 1,
-  'l''admin voit la commande de l''acheteur A (miroir)'
-);
-select is(
-  (select count(*) from order_lines where order_id = '11110000-0000-4000-8000-000000000010')::int, 1,
-  'l''admin voit la ligne de commande de l''acheteur A (miroir)'
-);
-
--- Spec 17 §0 Tranche 1 : visibilité operator (« Mis Reservas »), 3 partenaires distincts pour
--- éviter tout conflit avec partner_capabilities_operator_establishment_idx (unique par
--- partner_id+establishment_id) — actif sur l'établissement du produit, suspendu sur ce même
--- établissement, actif mais sur un AUTRE établissement. reset role : le rôle actif est
--- authenticated depuis le test_login admin ci-dessus, insuffisant pour ces inserts RLS admin-only.
-reset role;
-insert into partners (id, display_name) values
-  ('66666666-6666-6666-6666-666666666667', 'Availability Test Operator Active'),
-  ('66666666-6666-6666-6666-666666666668', 'Availability Test Operator Suspended'),
-  ('66666666-6666-6666-6666-666666666669', 'Availability Test Operator Other Establishment');
-
-insert into establishments (id, partner_id, name) values
-  ('66660000-0000-4000-8000-000000000002', '66666666-6666-6666-6666-666666666669',
-   jsonb_build_object('es', 'Availability Test Other Establishment'));
-
-insert into auth.users (id, email) values
-  ('11110000-0000-4000-8000-000000000004', 'avail-operator-active@test.local'),
-  ('11110000-0000-4000-8000-000000000005', 'avail-operator-suspended@test.local'),
-  ('11110000-0000-4000-8000-000000000006', 'avail-operator-other-establishment@test.local');
-
-update partner_accounts set partner_id = '66666666-6666-6666-6666-666666666667'
- where id = '11110000-0000-4000-8000-000000000004';
-update partner_accounts set partner_id = '66666666-6666-6666-6666-666666666668'
- where id = '11110000-0000-4000-8000-000000000005';
-update partner_accounts set partner_id = '66666666-6666-6666-6666-666666666669'
- where id = '11110000-0000-4000-8000-000000000006';
-
--- enforce_operator_implies_referrer : une capacité operator exige une capacité referrer
--- préexistante pour le même partner_id (même patron de fixture que
--- set_product_availability_socio.test.sql).
-insert into partner_capabilities (partner_id, role, source, status) values
-  ('66666666-6666-6666-6666-666666666667', 'referrer', 'migration', 'active'),
-  ('66666666-6666-6666-6666-666666666668', 'referrer', 'migration', 'active'),
-  ('66666666-6666-6666-6666-666666666669', 'referrer', 'migration', 'active');
-
-insert into partner_capabilities (partner_id, role, source, status, establishment_id) values
-  ('66666666-6666-6666-6666-666666666667', 'operator', 'migration', 'active',
-   '66660000-0000-4000-8000-000000000001'),
-  ('66666666-6666-6666-6666-666666666668', 'operator', 'migration', 'suspended',
-   '66660000-0000-4000-8000-000000000001'),
-  ('66666666-6666-6666-6666-666666666669', 'operator', 'migration', 'active',
-   '66660000-0000-4000-8000-000000000002');
-
-set local role authenticated;
-select test_login('11110000-0000-4000-8000-000000000004');
-select is(
-  (select count(*) from order_lines where order_id = '11110000-0000-4000-8000-000000000010')::int, 1,
-  'operator ACTIF sur l''établissement du produit voit la ligne (Mis Reservas)'
-);
-
-select test_login('11110000-0000-4000-8000-000000000005');
-select is(
-  (select count(*) from order_lines where order_id = '11110000-0000-4000-8000-000000000010')::int, 0,
-  'operator SUSPENDU sur le même établissement ne voit pas la ligne'
-);
-
-select test_login('11110000-0000-4000-8000-000000000006');
-select is(
-  (select count(*) from order_lines where order_id = '11110000-0000-4000-8000-000000000010')::int, 0,
-  'operator actif mais sur un AUTRE établissement ne voit pas la ligne'
 );
 
 select * from finish();

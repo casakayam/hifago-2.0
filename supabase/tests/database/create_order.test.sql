@@ -456,11 +456,13 @@ select is(
   0,
   'tout-ou-rien : aucune commande créée malgré la ligne 1 valide isolément'
 );
+reset role;
 select is(
   (select count(*) from order_lines where product_id = '88880000-0000-4000-8000-000000000034')::int,
   0,
   'tout-ou-rien : aucune order_line créée, ni pour la ligne 1 ni pour la ligne 2'
 );
+set local role authenticated;
 select is(
   (select booked from product_availability
     where product_id = '88880000-0000-4000-8000-000000000034' and date = '2028-04-01'),
@@ -493,11 +495,13 @@ select is(
   0,
   'somme inter-lignes : aucune commande créée'
 );
+reset role;
 select is(
   (select count(*) from order_lines where product_id = '88880000-0000-4000-8000-000000000035')::int,
   0,
   'somme inter-lignes : aucune order_line créée'
 );
+set local role authenticated;
 select is(
   (select booked from product_availability
     where product_id = '88880000-0000-4000-8000-000000000035' and date = '2028-05-01'),
@@ -573,12 +577,14 @@ select is(
   1,
   'une seule ligne dans orders pour cette commande'
 );
+reset role;
 select is(
   (select count(*) from order_lines
     where order_id = (select (result->>'order_id')::uuid from tmp_multi))::int,
   2,
   'exactement 2 lignes dans order_lines'
 );
+set local role authenticated;
 select is(
   (select booked from product_availability
     where product_id = '88880000-0000-4000-8000-000000000037' and date = '2028-07-01'),
@@ -1611,6 +1617,7 @@ select is(
   (select result->>'ok' from tmp_camp_discount_below), 'true',
   'cas 22a : remplissage avant (10) + qty (3) = 13 < seuil (16) → succès'
 );
+reset role;
 select is(
   (select jsonb_build_object('price_cop', price_cop, 'total_cop', total_cop) from order_lines
     where product_id = '88880000-0000-4000-8000-000000000050' and date = '2028-12-25'),
@@ -1638,6 +1645,7 @@ select is(
   (select result->>'ok' from tmp_camp_discount_at), 'true',
   'cas 22b : remplissage avant (13) + qty (3) = 16, exactement le seuil → succès'
 );
+reset role;
 select is(
   (select jsonb_build_object('price_cop', price_cop, 'total_cop', total_cop) from order_lines
     where product_id = '88880000-0000-4000-8000-000000000050' and date = '2028-12-26'),
@@ -1674,6 +1682,7 @@ select is(
   (select result->>'ok' from tmp_camp_no_discount), 'true',
   'cas 22c : camp sans group_discount configuré → succès normal'
 );
+reset role;
 select is(
   (select total_cop::int from order_lines
     where product_id = '88880000-0000-4000-8000-000000000044' and date = '2028-12-30'),
@@ -1846,6 +1855,7 @@ select is(
   (select result->>'ok' from tmp_two_camps_two_lodgings), 'true',
   'cas 23e : deux camps, chacun sa propre lodging compatible → succès'
 );
+reset role;
 select is(
   (select count(*)::int from order_lines
     where product_id in (

@@ -128,6 +128,7 @@ select is(
 -- 01/12 = vendredi, 02/12 = samedi : la majoration week-end de stay_rates s'applique à la SECONDE
 -- nuit seulement, ce qui vérifie au passage que le total est bien calculé nuit par nuit et non par
 -- une multiplication du prix de base par le nombre de nuits.
+reset role;
 select is(
   (select total_cop from order_lines where holder_name = 'Holder Lodging Range Success'),
   (200000 + round(200000 * 1.20))::bigint,
@@ -178,11 +179,14 @@ select ok(
   (select (result->>'ok')::boolean from tmp_lodging_qty),
   'create_order alojamiento par plage, qty=2 : réservation de 2 nuits acceptée'
 );
+reset role;
 select is(
   (select total_cop from order_lines where holder_name = 'Holder Lodging Range Qty'),
   (2 * 90000 * 2)::bigint,
   'create_order alojamiento par plage, qty=2 : total_cop = nuits × tarif du palier (qty=2) × qty, jamais sans le facteur qty'
 );
+set local role authenticated;
+select test_login('88930000-0000-4000-8000-000000000034');
 
 -- === create_order — alojamiento par plage : refus (date fermée) tout-ou-rien =====================
 -- Plage 03→05 (nuits 03 ouverte, 04 fermée) : la nuit 03, ouverte et validée en premier, ne doit
@@ -213,11 +217,21 @@ select is(
 -- modify_order_line.test.sql, pas ici. Seule reste ici la preuve que la garde de cohérence
 -- p_new_end_date/forme de la ligne s'applique toujours à un appel à 4 arguments positionnels
 -- (p_new_end_date par défaut null) sur une ligne à plage.
+-- Lu en rôle privilégié puis passé par un GUC de session (comme test_login lui-même) : order_lines
+-- n'a plus aucun accès SELECT direct pour authenticated depuis 20260922210000, et cet id doit
+-- pourtant être interpolé dans le format() ci-dessous, évalué sous l'identité admin.
+reset role;
+select set_config(
+  'test.lodging_range_line_id',
+  (select id::text from order_lines where holder_name = 'Holder Lodging Range Success' limit 1),
+  true
+);
+set local role authenticated;
 select test_login('88930000-0000-4000-8000-000000000031'); -- admin
 select throws_like(
   format(
     'select modify_order_line(%L, %L, %s, %L)',
-    (select id from order_lines where holder_name = 'Holder Lodging Range Success' limit 1),
+    current_setting('test.lodging_range_line_id')::uuid,
     '2028-12-10', 1, 'test'
   ),
   '%p_new_end_date%',

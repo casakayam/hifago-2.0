@@ -1,16 +1,22 @@
 -- Refonte vue prestataire (2026-08-19) — migration 20260819180000. Lève la restriction "PII
--- minimale" documentée en 20260817180000 : le prestataire voit désormais holder_phone/holder_email
--- sur ses propres réservations, pas seulement holder_name. Ne re-teste jamais la logique métier
--- déjà couverte ailleurs (plafonds, verrouillage, calcul de commission — create_order.test.sql/
--- modify_order_line.test.sql/create_manual_order_line.test.sql) : uniquement les 3 sites touchés
--- par cette migration (create_order, modify_order_line, create_manual_order_line) et la lecture
--- operator via order_lines_select_operator (20260817170000, inchangée, mais jamais vérifiée pour
--- ces deux colonnes jusqu'ici).
+-- minimale" documentée en 20260817180000 : create_order/create_manual_order_line/modify_order_line
+-- propagent désormais holder_phone/holder_email sur order_lines (pas seulement holder_name). Ne
+-- re-teste jamais la logique métier déjà couverte ailleurs (plafonds, verrouillage, calcul de
+-- commission — create_order.test.sql/modify_order_line.test.sql/create_manual_order_line.test.sql)
+-- : uniquement la propagation elle-même, sur les 3 sites touchés par cette migration.
 --
 -- RÉVISÉ 2026-09-10 (spec 31, Tranche 1) : create_order exige désormais auth.uid() non nul
 -- (docs/journal/2026-09.md). Le bloc « achat client » ci-dessous simule donc une identité anonyme
 -- réelle (test_login_anonymous), même patron que create_order.test.sql — pas un simple retrait du
 -- rôle anon, qui échouerait maintenant en not_authenticated.
+--
+-- RÉVISÉ 2026-09-22 (fermeture de la fuite des colonnes de commission, docs/backlog.md) : ce
+-- fichier lisait order_lines VIA l'operator (order_lines_select_operator) pour prouver, au passage,
+-- que cette lecture RLS fonctionnait sur holder_phone/holder_email. Cette policy est supprimée
+-- (20260922210000) — cet invariant est désormais couvert côté RPC par
+-- partner_reservation_detail.test.sql (qui vérifie holder_phone pour l'operator propriétaire).
+-- Les lectures-preuve ci-dessous passent donc en rôle privilégié (reset role) : ce fichier ne
+-- prouve plus que la PROPAGATION elle-même, plus la lecture operator qui n'a plus lieu d'être ici.
 begin;
 select plan(8);
 
@@ -31,7 +37,8 @@ $$;
 
 -- Fixtures : 1 partenaire/établissement, 1 compte operator actif sur cet établissement, 1 produit
 -- activité simple. anon crée la réservation "achat client" (create_order) ; op1 crée la réservation
--- manuelle et modifie une ligne existante, et relit tout via order_lines_select_operator.
+-- manuelle et modifie une ligne existante — l'operator n'est plus utilisé que pour APPELER les RPC
+-- (autorisation), plus pour relire leur résultat (cf. entête).
 insert into partners (id, display_name) values
   ('88960000-0000-4000-8000-000000000001', 'Holder Contact Test Partner');
 insert into establishments (id, partner_id, name) values
@@ -109,34 +116,31 @@ select create_order(
 );
 reset role;
 
--- Lu via l'operator (RLS order_lines_select_operator), pas via l'identité qui a écrit la ligne : ça
--- prouve la lecture operator elle-même, le vrai objet de ce test — indépendamment de savoir si
--- cette identité pourrait aussi se relire elle-même (elle le pourrait, account_id = auth.uid()
--- valant désormais vrai pour une session anonyme authentifiée, cf. spec 31 ; ce n'est simplement
--- pas ce que ce bloc vérifie).
-set local role authenticated;
-select test_login('88960000-0000-4000-8000-000000000021'); -- operator
-
+-- Lu en rôle privilégié — order_lines n'a plus aucun accès SELECT direct pour authenticated/anon
+-- depuis 20260922210000 ; ce bloc ne prouve plus que la PROPAGATION elle-même (la lecture operator
+-- via has_capability est couverte par partner_reservation_detail.test.sql).
 select is(
   (select holder_phone from order_lines where product_id = '88960000-0000-4000-8000-000000000031'
     and date = '2029-06-01'),
   '+57 300 111 2222',
-  'create_order : holder_phone propagé sur order_lines, lisible par l''operator du même établissement'
+  'create_order : holder_phone propagé sur order_lines'
 );
 select is(
   (select holder_email from order_lines where product_id = '88960000-0000-4000-8000-000000000031'
     and date = '2029-06-01'),
   'holder-contact-buyer@hifago.test',
-  'create_order : holder_email propagé sur order_lines, lisible par l''operator du même établissement'
+  'create_order : holder_email propagé sur order_lines'
 );
 
 -- ===== create_manual_order_line : p_holder_phone propagé, holder_email = sentinelle ===============
--- Déjà connecté comme operator ci-dessus.
+set local role authenticated;
+select test_login('88960000-0000-4000-8000-000000000021'); -- operator, pour l'autorisation de l'appel
 create temp table tmp_manual_contact as
   select create_manual_order_line(
     '88960000-0000-4000-8000-000000000031', '2029-06-05', 1, 'Holder Contact Manual', null,
     '+57 300 333 4444'
   ) as result;
+reset role;
 
 select is(
   (select holder_phone from order_lines
@@ -153,13 +157,14 @@ select is(
 drop table tmp_manual_contact;
 
 -- ===== modify_order_line : holder_phone/holder_email survivent au remplacement de ligne ===========
--- Fixture posée plus haut (avant le switch de rôle). Toujours connecté comme operator ci-dessus
--- (has_capability sur l'établissement 011 suffit — modify_order_line autorise admin OU operator du
--- même établissement).
+-- Fixture posée plus haut (avant le switch de rôle).
+set local role authenticated;
+select test_login('88960000-0000-4000-8000-000000000021'); -- operator, pour l'autorisation de l'appel
 create temp table tmp_modify_contact as
   select modify_order_line(
     '88960000-0000-4000-8000-000000000042', '2029-06-11', 1, 'test PII holder_phone/holder_email'
   ) as result;
+reset role;
 
 select is(
   (select status from order_lines where id = '88960000-0000-4000-8000-000000000042'),

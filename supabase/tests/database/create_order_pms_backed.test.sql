@@ -75,6 +75,7 @@ select is(
 -- Cas 4 : la ligne order_lines a bien été écrite, avec un prix cohérent (2 nuits à 100000 = 200000
 -- par unité, MULTIPLIÉ par qty=2 unités facturables — migration 20260916120000, qty désigne des
 -- lits/chambres, jamais des occupants → total_cop = 400000, price_cop reste le prix par unité).
+reset role;
 select is(
   (select jsonb_build_object('price_cop', price_cop, 'total_cop', total_cop, 'pms_booking_id', pms_booking_id)
      from order_lines where product_id = '88930000-0000-4000-8000-000000000031'),
