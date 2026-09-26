@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { Button, Checkbox, Input, Label, TextArea, TextField, toast } from "@hifago/ui";
 import { formatDateTimeInBogota } from "@hifago/domain";
+import { ActionConfirmation } from "@/components/action-confirmation";
 
 // Spec 21 §5 — bloc "Connecteur PMS" de la fiche établissement. Le jeton LobbyPMS n'est jamais
 // relu depuis la base (illisible même pour l'admin via PostgREST, cf. migration
@@ -31,6 +32,10 @@ export function EstablishmentPmsBlock({
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  // Confirmation contenue dans cette carte (docs/specs/40 §4) — jamais plein écran, jamais
+  // déclenchée par « Probar conexión » (diagnostic, pas une sauvegarde). Toujours « admin/succès »
+  // (bloc jamais atteint par un partenaire).
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   async function handleTestConnection() {
     if (!token.trim()) {
@@ -83,10 +88,10 @@ export function EstablishmentPmsBlock({
       return;
     }
 
-    toast.success("Conector PMS actualizado.");
     setToken("");
     setReason("");
     router.refresh();
+    setShowConfirmation(true);
   }
 
   return (
@@ -103,6 +108,17 @@ export function EstablishmentPmsBlock({
         </p>
       </div>
 
+      {showConfirmation ? (
+        <ActionConfirmation
+          contained
+          status="success"
+          title="Cambios guardados"
+          body="Los cambios ya están visibles públicamente — no necesitan revisión adicional."
+          actionLabel="Editar de nuevo"
+          onAction={() => setShowConfirmation(false)}
+          testId="establishment-pms-confirmation"
+        />
+      ) : (
       <form onSubmit={handleSubmit} noValidate className="flex max-w-2xl flex-col gap-4">
         <Checkbox
           data-testid="pms-connector-active-checkbox"
@@ -149,6 +165,7 @@ export function EstablishmentPmsBlock({
           {isSubmitting ? "Guardando…" : "Guardar"}
         </Button>
       </form>
+      )}
     </div>
   );
 }

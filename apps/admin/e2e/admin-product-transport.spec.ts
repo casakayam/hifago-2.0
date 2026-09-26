@@ -1,7 +1,7 @@
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { createSignedInClient, webProductUrl } from "@hifago/e2e-support";
+import { confirmAndContinue, createSignedInClient, goToNextWizardStep, webProductUrl } from "@hifago/e2e-support";
 import { slugify } from "../lib/utils";
 
 // Spec 14 — active type='transport' dans le même ProductForm que l'activité/l'alojamiento/l'hôtel
@@ -28,12 +28,16 @@ test("admin crée un transport (prix par tramos de capacidad de vehículo), l'é
 
   const establishmentName = `Establecimiento E2E Transporte ${Date.now()}`;
   await page.goto("/admin/establishments/new");
-  await page.locator('input[name="nombre"]').fill(establishmentName);
+  // Assistant par étapes (docs/specs/40) — étape 1 "Propietario y gestión" (partner), étape 2
+  // "Detalles" (nombre).
   const partnerSearch = page.getByTestId("partner-search");
   await partnerSearch.click();
   await partnerSearch.fill("Opérateur Actif");
   await page.getByRole("option", { name: /Opérateur Actif/ }).click();
+  await goToNextWizardStep(page);
+  await page.locator('input[name="nombre"]').fill(establishmentName);
   await page.getByTestId("create-establishment-button").click();
+  await confirmAndContinue(page, "establishment-form-confirmation");
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
   const row = page.locator("tr", { hasText: establishmentName });
@@ -49,6 +53,10 @@ test("admin crée un transport (prix par tramos de capacidad de vehículo), l'é
   const suffix = Date.now();
   const nameEs = `Privado aeropuerto Guatapé ES ${suffix}`;
   await page.locator('input[name="nombre"]').fill(nameEs);
+
+  // Assistant par étapes (docs/specs/40) — étape 1 validée, avance vers l'étape 2 "Detalles"
+  // (rutas, contacto, horarios informativos, foto).
+  await goToNextWizardStep(page);
 
   // Les DEUX lieux du trajet, dans leurs colonnes dédiées — le trio générique `address`/`lat`/`lon`
   // n'existe plus pour ce type (assertion plus bas).
@@ -77,6 +85,20 @@ test("admin crée un transport (prix par tramos de capacidad de vehículo), l'é
   await page.getByTestId("image-crop-confirm").click();
   await expect(gallery.getByTestId("media-gallery-item")).toHaveCount(1, { timeout: 10000 });
 
+  // Pas de check-in/check-out ni de capacité produit pour un transport (schedule='date' en V1, le
+  // transporteur dispatche son propre parc — même absence que pour une activité, spec 14 §gating).
+  // Vérifié sur cette étape ("Detalles") : c'est là que ces champs apparaîtraient pour un
+  // alojamiento/une actividad si le gating par type ne les excluait pas.
+  await expect(page.getByTestId("check-in-input")).toHaveCount(0);
+  await expect(page.getByTestId("capacity-input")).toHaveCount(0);
+  // Le trio générique a quitté ce type le 2026-09-16 : deux champs d'adresse sur le même écran
+  // auraient été deux sources de vérité pour un seul lieu.
+  await expect(page.getByTestId("address-input")).toHaveCount(0);
+  await expect(page.getByTestId("lat-input")).toHaveCount(0);
+
+  // Étape 2 validée, avance vers l'étape 3 "Comercialización".
+  await goToNextWizardStep(page);
+
   // Precio por tramos de capacidad de vehículo (spec 14 §3 — un producto con tramos en lugar de las
   // fichas separadas "hasta 4 pers."/"hasta 7 pers." de la V1) + bornes de cantidad.
   await page.getByTestId("price-mode-toggle").click();
@@ -90,19 +112,14 @@ test("admin crée un transport (prix par tramos de capacidad de vehículo), l'é
   await page.getByTestId("min-qty-input").fill("1");
   await page.getByTestId("max-qty-input").fill("7");
 
-  // Pas de check-in/check-out ni de capacité produit pour un transport (schedule='date' en V1, le
-  // transporteur dispatche son propre parc — même absence que pour une activité, spec 14 §gating).
-  await expect(page.getByTestId("check-in-input")).toHaveCount(0);
-  await expect(page.getByTestId("capacity-input")).toHaveCount(0);
-  // Le trio générique a quitté ce type le 2026-09-16 : deux champs d'adresse sur le même écran
-  // auraient été deux sources de vérité pour un seul lieu.
-  await expect(page.getByTestId("address-input")).toHaveCount(0);
-  await expect(page.getByTestId("lat-input")).toHaveCount(0);
   // Le cupo a quitté ce type le 2026-09-17 : sans calendrier, il ne serait jamais lu, et afficher
-  // « 40 » ferait croire à un plafond réel (docs/specs/14 §0 le disait depuis le début).
+  // « 40 » ferait croire à un plafond réel (docs/specs/14 §0 le disait depuis le début). Vérifié
+  // sur cette étape ("Comercialización") : c'est là que le champ apparaîtrait pour une
+  // actividad/un camp/un alojamiento si le gating par type ne l'excluait pas.
   await expect(page.getByTestId("default-capacity-input")).toHaveCount(0);
 
   await page.getByTestId("create-product-button").click();
+  await confirmAndContinue(page, "product-form-confirmation");
   await expect(page).toHaveURL(/\/admin\/establishments$/);
   await expect(row).toContainText("1 actividades");
 
@@ -177,6 +194,7 @@ test("admin crée un transport (prix par tramos de capacidad de vehículo), l'é
   // l'accepter sans message d'erreur.
   await page.getByTestId("transport-last-departure-input").fill("07:00");
   await page.getByTestId("save-product-button").click();
+  await confirmAndContinue(page, "product-form-confirmation");
   await expect(page).toHaveURL(/\/admin\/establishments\/[0-9a-f-]{36}$/);
 
   await page.goto(`/admin/products/${productId}/edit`);

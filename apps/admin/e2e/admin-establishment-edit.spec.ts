@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { toggleCheckbox } from "@hifago/e2e-support";
+import { confirmAndContinue, toggleCheckbox } from "@hifago/e2e-support";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 
 // docs/specs/06-gestion-etablissement.md §5.1 — comble le gap cahier admin §3c (« toute la
@@ -32,13 +32,16 @@ test("un admin édite un établissement existant (nom, descripción, dirección,
 
   await page.getByTestId("save-establishment-button").click();
 
-  // Le succès n'est plus un texte inline dans la page mais un toast (docs/specs/16-notifications-
-  // toast.md) — HeroUI rend chaque toast avec role="alertdialog", le message passé à
-  // toast.success(...) devient son titre visible.
-  await expect(
-    page.getByRole("alertdialog").filter({ hasText: "Establecimiento actualizado." }),
-  ).toBeVisible();
+  // Assistant par étapes / écran de confirmation (docs/specs/40 §4) — plus de toast : la
+  // confirmation remplace le formulaire À L'INTÉRIEUR de cette carte (jamais plein écran, les
+  // autres blocs de la page restent visibles). "Editar de nuevo" la referme sans perdre l'état.
+  const editConfirmation = page.getByTestId("establishment-edit-confirmation");
+  await expect(editConfirmation).toBeVisible();
+  await expect(editConfirmation).toContainText("Cambios guardados");
   await expect(page.getByRole("heading", { name: updatedName })).toBeVisible();
+
+  await confirmAndContinue(page, "establishment-edit-confirmation");
+  await expect(page.locator("#edit-nombre")).toBeVisible();
 
   // Reload : les valeurs persistées viennent bien de la base, pas seulement de l'état local du
   // formulaire juste après soumission.

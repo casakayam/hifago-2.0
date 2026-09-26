@@ -56,6 +56,28 @@ silence.
   qui a réussi, et le `catch` englobant fait que la base garde TOUS ses résidus. Corrigé le
   2026-09-17 ; au run suivant il a purgé 14 produits accumulés. Liste revérifiée dans
   `pg_constraint` : **cinq** FK en NO ACTION, pas quatre.
+- **Trouvé le 2026-09-26** (en vérifiant en réel les specs touchées par le chantier assistant par
+  étapes produit/établissement, spec 40 — sans rapport avec ce chantier-là, découvert seulement
+  parce que la suite a enfin été relancée) :
+  - `admin-camp-booking.spec.ts` — même cause racine que `p_lines` ci-dessus (panier en base, spec
+    32), côté `apps/web` cette fois : le testid `added-to-cart` n'existe plus nulle part dans le
+    code source (grep exhaustif sur `apps/web`), seulement dans ce test.
+  - `apps/admin/app/partner/(app)/page.tsx` — `allActive` (ligne ~91) est vérifié AVANT
+    `needsFirstEstablishment` (ligne ~111) dans le JSX (ligne 196 vs 205) : un Prestador tout juste
+    onboardé (referrer+operator, tous deux `active` par défaut depuis le 2026-08-20) ne voit donc
+    jamais le CTA « Añadir establecimiento », seulement la barre compacte « Prestador activo ».
+    Possible vrai défaut produit (priorité d'affichage), pas seulement un test cassé.
+  - `ModerateProposalForm.tsx` — `toast.success(...)` suivi immédiatement de `router.push` (aucun
+    await entre les deux) : la navigation semble emporter le toast avant qu'il soit observable.
+    Reproduit sur `partner-propose-product-creation.spec.ts`, pas revérifié sur les autres specs qui
+    font la même assertion — possiblement une vraie course, pas juste un test fragile.
+  - `admin-product-publish.spec.ts` — `getByText(productName)` en violation de mode strict : le fil
+    d'Ariane (lien "current page") et le `<h1>` portent désormais tous les deux exactement ce texte
+    en même temps. Dépendant du timing (passait seul plus tôt dans la même session).
+  - `admin-partner-registry.spec.ts` — le switch `code-active-switch-SEED-REFACTIVE` ne bascule pas
+    après clic, reproduit même en `--workers=1`. Zone (codes d'attribution partenaire) non creusée.
+  - Détail complet, dont ce qui a été revérifié en base pour écarter une cause côté wizard :
+    `docs/journal/2026-09.md`, entrée du 2026-09-26 « Specs Playwright mises à jour… ».
 
 ## 3. Ce qui est RÉGLÉ — ne pas re-diagnostiquer
 

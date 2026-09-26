@@ -51,9 +51,10 @@
 - [Compte client : profil, édition, déconnexion, suppression](specs/35-compte-profil.md) — **Implémenté** · maj 2026-09-12
 - [Remise par seuil de remplissage cumulé (camps)](specs/36-remise-remplissage-camp.md) — **Implémenté** · maj 2026-09-14
 - [Programme jour par jour d'un camp](specs/37-programme-camp.md) — **Implémenté** · maj 2026-09-17
-- [Remise en route de la suite E2E Playwright](specs/38-remise-en-route-suite-e2e.md) — **Brouillon** · maj 2026-09-18
+- [Remise en route de la suite E2E Playwright](specs/38-remise-en-route-suite-e2e.md) — **Brouillon** · maj 2026-09-26
 - [Garantir la confirmation d'un paiement quand le client ne revient pas](specs/39-garantie-confirmation-paiement.md) — **Partiel** (reste : Lot A + B1 + B2 livrés et vérifiés en local le 2026-09-22 (§C). Restent : validation par…) · maj 2026-09-20
-- [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-20
+- [Assistant par étapes — création/édition produit et établissement, écran de confirmation](specs/40-admin-produit-etablissement-assistant-par-etapes.md) — **Implémenté** · maj 2026-09-26
+- [Specs — fonctionnalités prêtes à coder, une par une](specs/README.md) — **actif** · maj 2026-09-26
 - [Gabarit de spec de feature (à copier, ne décrit aucune feature réelle)](specs/_modele.md) — **modele** · maj 2026-08-16
 - [Avant d'écrire une spec — poser les bonnes questions](specs/avant-la-spec.md) — **modele** · maj 2026-08-16
 
@@ -61,5 +62,5 @@
 - [Backlog hifago — points ouverts et arbitrages en attente](backlog.md) · maj 2026-09-22
 - [Dette technique et QA/UI connue — hifago](dette-technique.md) · maj 2026-09-21
 - [Journal hifago — août 2026](journal/2026-08.md) · maj 2026-09-01
-- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-22
+- [Journal hifago — septembre 2026](journal/2026-09.md) · maj 2026-09-26
 - [Pièges empiriques hifago — index numéroté](pieges-empiriques.md) · maj 2026-09-20

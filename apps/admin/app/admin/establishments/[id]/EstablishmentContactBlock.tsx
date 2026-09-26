@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { Button, Input, Label, TextField, toast } from "@hifago/ui";
+import { ActionConfirmation } from "@/components/action-confirmation";
 
 // Spec 30 (Tranche 2) — le contact WhatsApp PUBLIC du lieu, affiché sur la fiche établissement.
 //
@@ -37,6 +38,9 @@ export function EstablishmentContactBlock({
   const router = useRouter();
   const [phone, setPhone] = useState(initialContactPhone ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Confirmation contenue dans cette carte (docs/specs/40 §4) — jamais plein écran, toujours
+  // « admin/succès » (bloc jamais atteint par un partenaire).
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   const saisi = phone.trim();
   // Le champ VIDE est valide : c'est ainsi qu'on retire le bouton de la fiche publique.
@@ -63,8 +67,8 @@ export function EstablishmentContactBlock({
       );
       return;
     }
-    toast.success(saisi ? "Contacto actualizado." : "Contacto eliminado.");
     router.refresh();
+    setShowConfirmation(true);
   }
 
   return (
@@ -74,6 +78,18 @@ export function EstablishmentContactBlock({
     >
       <h2 className="text-lg font-medium">Contacto público</h2>
 
+      {showConfirmation ? (
+        <ActionConfirmation
+          contained
+          status="success"
+          title="Cambios guardados"
+          body="Los cambios ya están visibles públicamente — no necesitan revisión adicional."
+          actionLabel="Editar de nuevo"
+          onAction={() => setShowConfirmation(false)}
+          testId="establishment-contact-confirmation"
+        />
+      ) : (
+      <>
       <p className="text-sm text-muted">
         Se muestra en la ficha pública del establecimiento como botón de WhatsApp. Déjalo vacío para
         no mostrar ningún contacto.
@@ -105,6 +121,8 @@ export function EstablishmentContactBlock({
           Guardar
         </Button>
       </div>
+      </>
+      )}
     </section>
   );
 }

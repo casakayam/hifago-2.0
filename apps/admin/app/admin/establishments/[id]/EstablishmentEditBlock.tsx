@@ -8,6 +8,7 @@ import { Button, Checkbox, Input, Label, TextArea, TextField, cn, toast } from "
 import { useAddressAutocomplete } from "@/components/use-address-autocomplete";
 import { useEstablishmentFieldsState } from "@/lib/establishments/useEstablishmentFieldsState";
 import { buildEstablishmentRpcParams } from "@/lib/establishments/establishmentPayload";
+import { ActionConfirmation } from "@/components/action-confirmation";
 
 // docs/specs/06-gestion-etablissement.md §5.1 — comble le gap cahier admin §3c ("toute la
 // présentation d'un établissement s'édite depuis l'admin") : jusqu'ici seules les photos étaient
@@ -52,6 +53,11 @@ export function EstablishmentEditBlock({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Confirmation contenue dans cette carte (docs/specs/40 §4) — jamais plein écran : les 8 autres
+  // blocs de cet écran restent visibles. Toujours « admin/succès » ici (ce bloc n'est jamais
+  // atteint par un partenaire), donc pas besoin d'un statut variable comme côté produit.
+  const [showConfirmation, setShowConfirmation] = useState(false);
+
   const addressSearchRef = useAddressAutocomplete((place) => {
     fields.setAddress(place.address);
     if (place.lat !== null && place.lon !== null) {
@@ -86,8 +92,8 @@ export function EstablishmentEditBlock({
       return;
     }
 
-    toast.success("Establecimiento actualizado.");
     router.refresh();
+    setShowConfirmation(true);
   }
 
   return (
@@ -110,6 +116,17 @@ export function EstablishmentEditBlock({
         </p>
       ) : null}
 
+      {showConfirmation ? (
+        <ActionConfirmation
+          contained
+          status="success"
+          title="Cambios guardados"
+          body="Los cambios ya están visibles públicamente — no necesitan revisión adicional."
+          actionLabel="Editar de nuevo"
+          onAction={() => setShowConfirmation(false)}
+          testId="establishment-edit-confirmation"
+        />
+      ) : (
       <form onSubmit={handleSubmit} noValidate className="flex max-w-2xl flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="edit-nombre">Nombre</Label>
@@ -206,6 +223,7 @@ export function EstablishmentEditBlock({
           {isSubmitting ? "Guardando…" : "Guardar cambios"}
         </Button>
       </form>
+      )}
     </div>
   );
 }

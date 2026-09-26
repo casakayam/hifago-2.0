@@ -27,9 +27,16 @@ function occurrenceWeekdayHint(occurrenceDate: string, recurrenceFrequencyDays: 
 // aucune logique déplacée : miroir exact du bloc `isEvento` d'origine, même conditions, même ordre.
 export function EventoFields({
   state,
+  section,
   allowOnlineBookableConfig = false,
 }: {
   state: ProductTypeFieldsState;
+  // Assistant par étapes (docs/specs/40) — le bloc réservation/tarification (switch, capacité,
+  // precio, modo de pago, precio-texto-libre) EST la « pricing » d'evento (son seul équivalent à
+  // VitrineFields, absente pour ce type) ; ocurrencia/horario restent « details » (des faits
+  // descriptifs — quand est-ce que ça a lieu). Les deux étaient rendus l'un après l'autre sans
+  // condition, jamais séparés avant ce chantier.
+  section?: "details" | "pricing";
   // Evento réservable en ligne (2026-09-15) — décision produit « admin uniquement » : un socio ne
   // doit jamais pouvoir rendre un evento réservable-payant via le circuit de proposition. Le
   // blocage réel vit côté RPC (whitelist de submit_product_creation_proposal/
@@ -42,10 +49,12 @@ export function EventoFields({
   // vitrine, où la négation d'une conjonction recopiée est la façon la plus discrète de faire
   // apparaître les deux blocs à la fois.
   const eventoReservableEnLinea = allowOnlineBookableConfig && state.onlineBookable;
+  const showDetails = !section || section === "details";
+  const showPricing = !section || section === "pricing";
 
   return (
     <>
-      {allowOnlineBookableConfig ? (
+      {showPricing && allowOnlineBookableConfig ? (
         <Switch
           isSelected={state.onlineBookable}
           onChange={state.setOnlineBookable}
@@ -60,7 +69,7 @@ export function EventoFields({
         </Switch>
       ) : null}
 
-      {eventoReservableEnLinea ? (
+      {showPricing && eventoReservableEnLinea ? (
         <>
           <Select
             fullWidth
@@ -177,7 +186,7 @@ export function EventoFields({
         </>
       ) : null}
 
-      {!eventoReservableEnLinea ? (
+      {showPricing && !eventoReservableEnLinea ? (
         <TextField
           fullWidth
           name="price-label"
@@ -193,140 +202,144 @@ export function EventoFields({
         </TextField>
       ) : null}
 
-      <Select
-        fullWidth
-        value={state.occurrenceType}
-        onChange={(value) => value && state.setOccurrenceType(value as "once" | "recurring")}
-      >
-        <Label>Ocurrencia</Label>
-        <Select.Trigger data-testid="occurrence-type-select">
-          <Select.Value />
-          <Select.Indicator />
-        </Select.Trigger>
-        <Select.Popover>
-          <ListBox>
-            <ListBox.Item id="once" textValue="Puntual">
-              Puntual
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
-            <ListBox.Item id="recurring" textValue="Recurrente">
-              Recurrente
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
-          </ListBox>
-        </Select.Popover>
-      </Select>
-
-      {state.occurrenceType === "once" ? (
-        <TextField
-          fullWidth
-          name="occurrence-date"
-          value={state.occurrenceDate}
-          onChange={state.setOccurrenceDate}
-          isRequired
-        >
-          <Label>Fecha</Label>
-          <Input type="date" data-testid="occurrence-date-input" />
-        </TextField>
-      ) : (
+      {showDetails ? (
         <>
-          {/* Fecha de la primera ocurrencia — ancre nécessaire pour savoir sur quel jour de la
-              semaine tombe la récurrence (ex. "cada 14 días" à partir d'un martes = un evento
-              tous les 2 mardis) : sans cette date, ce jour n'est mathématiquement pas
-              déterminable. Gap réel signalé par Jérôme (2026-08-18) : occurrence_date n'était
-              jusqu'ici collectée que pour occurrenceType="once". */}
-          <TextField
-            fullWidth
-            name="occurrence-date"
-            value={state.occurrenceDate}
-            onChange={state.setOccurrenceDate}
-            isRequired
-          >
-            <Label>Fecha de la primera ocurrencia</Label>
-            <Input type="date" data-testid="occurrence-date-input" />
-          </TextField>
-          {state.occurrenceDate ? (
-            <p className="text-xs text-muted" data-testid="occurrence-weekday-hint">
-              {occurrenceWeekdayHint(state.occurrenceDate, state.recurrenceFrequencyDays)}
-            </p>
-          ) : null}
-          <TextField
-            fullWidth
-            name="recurrence-frequency"
-            value={state.recurrenceFrequencyDays}
-            onChange={state.setRecurrenceFrequencyDays}
-            isRequired
-          >
-            <Label>Frecuencia (días)</Label>
-            <Input type="number" min={1} data-testid="recurrence-frequency-input" />
-          </TextField>
           <Select
             fullWidth
-            value={state.recurrenceEndKind}
-            onChange={(value) => value && state.setRecurrenceEndKind(value as "date" | "count" | "none")}
+            value={state.occurrenceType}
+            onChange={(value) => value && state.setOccurrenceType(value as "once" | "recurring")}
           >
-            <Label>Fin de la recurrencia</Label>
-            <Select.Trigger data-testid="recurrence-end-select">
+            <Label>Ocurrencia</Label>
+            <Select.Trigger data-testid="occurrence-type-select">
               <Select.Value />
               <Select.Indicator />
             </Select.Trigger>
             <Select.Popover>
               <ListBox>
-                <ListBox.Item id="none" textValue="Indefinida">
-                  Indefinida
+                <ListBox.Item id="once" textValue="Puntual">
+                  Puntual
                   <ListBox.ItemIndicator />
                 </ListBox.Item>
-                <ListBox.Item id="date" textValue="Hasta una fecha">
-                  Hasta una fecha
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-                <ListBox.Item id="count" textValue="Número de repeticiones">
-                  Número de repeticiones
+                <ListBox.Item id="recurring" textValue="Recurrente">
+                  Recurrente
                   <ListBox.ItemIndicator />
                 </ListBox.Item>
               </ListBox>
             </Select.Popover>
           </Select>
-          {state.recurrenceEndKind === "date" ? (
-            <TextField
-              fullWidth
-              name="recurrence-end-date"
-              value={state.recurrenceEndDate}
-              onChange={state.setRecurrenceEndDate}
-              isRequired
-            >
-              <Label>Fecha de fin</Label>
-              <Input type="date" data-testid="recurrence-end-date-input" />
-            </TextField>
-          ) : null}
-          {state.recurrenceEndKind === "count" ? (
-            <TextField
-              fullWidth
-              name="recurrence-end-count"
-              value={state.recurrenceEndCount}
-              onChange={state.setRecurrenceEndCount}
-              isRequired
-            >
-              <Label>Número de repeticiones</Label>
-              <Input type="number" min={1} data-testid="recurrence-end-count-input" />
-            </TextField>
-          ) : null}
-        </>
-      )}
 
-      <TextField fullWidth name="start-time" value={state.startTime} onChange={state.setStartTime}>
-        <Label>Hora de inicio — opcional</Label>
-        <Input type="time" />
-      </TextField>
-      <TextField
-        fullWidth
-        name="duration"
-        value={state.durationMinutes}
-        onChange={state.setDurationMinutes}
-      >
-        <Label>Duración (minutos) — opcional</Label>
-        <Input type="number" min={1} />
-      </TextField>
+          {state.occurrenceType === "once" ? (
+            <TextField
+              fullWidth
+              name="occurrence-date"
+              value={state.occurrenceDate}
+              onChange={state.setOccurrenceDate}
+              isRequired
+            >
+              <Label>Fecha</Label>
+              <Input type="date" data-testid="occurrence-date-input" />
+            </TextField>
+          ) : (
+            <>
+              {/* Fecha de la primera ocurrencia — ancre nécessaire pour savoir sur quel jour de la
+                  semaine tombe la récurrence (ex. "cada 14 días" à partir d'un martes = un evento
+                  tous les 2 mardis) : sans cette date, ce jour n'est mathématiquement pas
+                  déterminable. Gap réel signalé par Jérôme (2026-08-18) : occurrence_date n'était
+                  jusqu'ici collectée que pour occurrenceType="once". */}
+              <TextField
+                fullWidth
+                name="occurrence-date"
+                value={state.occurrenceDate}
+                onChange={state.setOccurrenceDate}
+                isRequired
+              >
+                <Label>Fecha de la primera ocurrencia</Label>
+                <Input type="date" data-testid="occurrence-date-input" />
+              </TextField>
+              {state.occurrenceDate ? (
+                <p className="text-xs text-muted" data-testid="occurrence-weekday-hint">
+                  {occurrenceWeekdayHint(state.occurrenceDate, state.recurrenceFrequencyDays)}
+                </p>
+              ) : null}
+              <TextField
+                fullWidth
+                name="recurrence-frequency"
+                value={state.recurrenceFrequencyDays}
+                onChange={state.setRecurrenceFrequencyDays}
+                isRequired
+              >
+                <Label>Frecuencia (días)</Label>
+                <Input type="number" min={1} data-testid="recurrence-frequency-input" />
+              </TextField>
+              <Select
+                fullWidth
+                value={state.recurrenceEndKind}
+                onChange={(value) => value && state.setRecurrenceEndKind(value as "date" | "count" | "none")}
+              >
+                <Label>Fin de la recurrencia</Label>
+                <Select.Trigger data-testid="recurrence-end-select">
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    <ListBox.Item id="none" textValue="Indefinida">
+                      Indefinida
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                    <ListBox.Item id="date" textValue="Hasta una fecha">
+                      Hasta una fecha
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                    <ListBox.Item id="count" textValue="Número de repeticiones">
+                      Número de repeticiones
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+              {state.recurrenceEndKind === "date" ? (
+                <TextField
+                  fullWidth
+                  name="recurrence-end-date"
+                  value={state.recurrenceEndDate}
+                  onChange={state.setRecurrenceEndDate}
+                  isRequired
+                >
+                  <Label>Fecha de fin</Label>
+                  <Input type="date" data-testid="recurrence-end-date-input" />
+                </TextField>
+              ) : null}
+              {state.recurrenceEndKind === "count" ? (
+                <TextField
+                  fullWidth
+                  name="recurrence-end-count"
+                  value={state.recurrenceEndCount}
+                  onChange={state.setRecurrenceEndCount}
+                  isRequired
+                >
+                  <Label>Número de repeticiones</Label>
+                  <Input type="number" min={1} data-testid="recurrence-end-count-input" />
+                </TextField>
+              ) : null}
+            </>
+          )}
+
+          <TextField fullWidth name="start-time" value={state.startTime} onChange={state.setStartTime}>
+            <Label>Hora de inicio — opcional</Label>
+            <Input type="time" />
+          </TextField>
+          <TextField
+            fullWidth
+            name="duration"
+            value={state.durationMinutes}
+            onChange={state.setDurationMinutes}
+          >
+            <Label>Duración (minutos) — opcional</Label>
+            <Input type="number" min={1} />
+          </TextField>
+        </>
+      ) : null}
     </>
   );
 }

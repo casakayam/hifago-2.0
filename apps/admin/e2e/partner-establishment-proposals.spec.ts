@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { createSignedInClient, createActiveOperatorEstablishment } from "@hifago/e2e-support";
+import {
+  confirmAndContinue,
+  createSignedInClient,
+  createActiveOperatorEstablishment,
+} from "@hifago/e2e-support";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 
 // docs/specs/06-gestion-etablissement.md — un partenaire ne crée/n'édite jamais directement sa
@@ -26,6 +30,10 @@ test("un socio propone la creación de un establecimiento, publicado solo tras a
   await page.locator("#proposal-nombre").fill(proposedName);
   await page.getByTestId("proposal-address-input").fill("Vereda El Roble, Guatapé");
   await page.getByTestId("submit-establishment-proposal-button").click();
+
+  // Écran de confirmation plein écran (docs/specs/40 §4) — remplace le formulaire, son bouton
+  // d'action déclenche la redirection auparavant immédiate.
+  await confirmAndContinue(page, "establishment-proposal-confirmation");
 
   await expect(page).toHaveURL(/\/partner\/establishment$/);
   await expect(page.getByTestId("pending-creation-banner")).toBeVisible();
@@ -99,8 +107,16 @@ test("un socio propone une edición de su establecimiento ya rattaché, publicad
   await page.getByTestId("edit-proposal-address-input").fill("Calle Propuesta 456");
   await page.getByTestId("submit-edit-proposal-button").click();
 
-  await expect(page.getByTestId("pending-edit-proposal")).toBeVisible();
-  await expect(page.getByTestId("pending-edit-proposal")).toContainText(proposedName);
+  // Écran de confirmation contenu dans la carte (docs/specs/40 §4) — remplace l'ancienne bannière
+  // au-dessus du formulaire toujours éditable. Contenu générique, PAS nominatif (contrairement à
+  // l'ancienne bannière) : la preuve que la proposition a bien retenu `proposedName` est que
+  // "Editar de nuevo" restaure le formulaire avec cette valeur, pas un texte affiché sur l'écran.
+  const pendingEditConfirmation = page.getByTestId("pending-edit-proposal");
+  await expect(pendingEditConfirmation).toBeVisible();
+  await expect(pendingEditConfirmation).toContainText("Cambios enviados para revisión");
+
+  await confirmAndContinue(page, "pending-edit-proposal");
+  await expect(page.locator("#edit-proposal-nombre")).toHaveValue(proposedName);
 
   // --- Admin : la fiche affiche encore le nom ACTUEL (seed) en valeur de la ligne, marquée
   // "Edición" — la liste affiche toujours le nom actuel de l'entité, jamais le nom proposé, cf.
@@ -142,6 +158,7 @@ test("un socio retira su propuesta de creación pendiente", async ({ page, conte
 
   await page.locator("#proposal-nombre").fill(proposedName);
   await page.getByTestId("submit-establishment-proposal-button").click();
+  await confirmAndContinue(page, "establishment-proposal-confirmation");
 
   await expect(page).toHaveURL(/\/partner\/establishment$/);
   await expect(page.getByTestId("pending-creation-banner")).toContainText(proposedName);
@@ -154,6 +171,7 @@ test("un socio retira su propuesta de creación pendiente", async ({ page, conte
   await page.goto("/partner/establishment/new");
   await page.locator("#proposal-nombre").fill(`${proposedName} bis`);
   await page.getByTestId("submit-establishment-proposal-button").click();
+  await confirmAndContinue(page, "establishment-proposal-confirmation");
   await expect(page).toHaveURL(/\/partner\/establishment$/);
   await expect(page.getByTestId("pending-creation-banner")).toContainText(`${proposedName} bis`);
 

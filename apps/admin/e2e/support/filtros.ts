@@ -18,8 +18,18 @@ import type { Page } from "@playwright/test";
  * C'est le piège nommé dans `.claude/rules/tests.md` — « écran client-heavy après une navigation » —
  * appliqué à un rechargement complet. Le helper existe pour qu'on ne le réapprenne pas écran par
  * écran : `abrirFiltros(page)` remplace `page.getByTestId("filters-toggle").click()`.
+ *
+ * Idempotent depuis le correctif responsive du 2026-09-26 (`packages/ui/DataList`) : les filtres
+ * s'ouvrent désormais par défaut à partir de `md` (768px), or `devices["Desktop Chrome"]`
+ * (`playwright.config.ts`) rend à une largeur ≥ 768px — un simple `.click()` inconditionnel
+ * REFERMERAIT le panneau au lieu de l'ouvrir. On vérifie `aria-expanded` avant de cliquer, pour
+ * rester correct des deux côtés du seuil (test un jour lancé à une largeur mobile).
  */
 export async function abrirFiltros(page: Page) {
   await page.waitForLoadState("networkidle");
-  await page.getByTestId("filters-toggle").click();
+  const toggle = page.getByTestId("filters-toggle");
+  const alreadyExpanded = (await toggle.getAttribute("aria-expanded")) === "true";
+  if (!alreadyExpanded) {
+    await toggle.click();
+  }
 }

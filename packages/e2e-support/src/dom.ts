@@ -1,4 +1,4 @@
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 /**
  * Helpers pour les particularités DOM de HeroUI v3 (react-aria-components), différentes de
@@ -38,4 +38,19 @@ export function checkboxInput(scope: Locator) {
 
 export async function toggleCheckbox(scope: Locator) {
   await scope.locator("input").click({ force: true });
+}
+
+// Assistant par étapes (docs/specs/40) — `ProductForm`/`NewEstablishmentForm` affichent un vrai
+// wizard en création : avancer d'étape n'existait pas avant ce chantier, centralisé ici plutôt que
+// répété dans chaque spec produit/établissement.
+export async function goToNextWizardStep(page: Page) {
+  await page.getByTestId("wizard-next-button").click();
+}
+
+// Écran de confirmation (docs/specs/40 §4) — remplace l'ancien `toast.success` + redirect
+// immédiat : le clic sur son action déclenche maintenant le `router.push` différé. `testId` est
+// celui passé à `<ActionConfirmation testId="…">` par l'appelant (ex. "product-form-confirmation",
+// "establishment-form-confirmation").
+export async function confirmAndContinue(page: Page, testId: string) {
+  await page.getByTestId(`${testId}-action`).click();
 }

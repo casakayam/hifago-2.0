@@ -12,12 +12,18 @@ import type { ProductTypeFieldsState } from "@/lib/products/useProductTypeFields
 // que ce composant change).
 export function CampFields({
   state,
+  section,
   hasGroupDiscount,
   isCamp,
   hasProgram,
   campDurationDays = null,
 }: {
   state: ProductTypeFieldsState;
+  // Assistant par étapes (docs/specs/40) — descuento por grupo vit dans « pricing » (c'est un
+  // ajustement de prix), durée+programme dans « details » (ce sont des faits descriptifs du
+  // séjour) : les deux étaient rendus l'un après l'autre dans ce même fichier, jamais séparés par
+  // section avant ce chantier.
+  section?: "details" | "pricing";
   hasGroupDiscount: boolean;
   isCamp: boolean;
   hasProgram: boolean;
@@ -29,9 +35,12 @@ export function CampFields({
   // n'écrit pas.
   campDurationDays?: number | null;
 }) {
+  const showDetails = !section || section === "details";
+  const showPricing = !section || section === "pricing";
+
   return (
     <>
-      {hasGroupDiscount ? (
+      {showPricing && hasGroupDiscount ? (
         <div className="flex flex-col gap-1.5">
           <div className="grid grid-cols-2 gap-4">
             <TextField
@@ -62,7 +71,7 @@ export function CampFields({
         </div>
       ) : null}
 
-      {isCamp ? (
+      {showDetails && isCamp ? (
         <TextField
           fullWidth
           name="duration-days"
@@ -75,7 +84,7 @@ export function CampFields({
         </TextField>
       ) : null}
 
-      {hasProgram ? (
+      {showDetails && hasProgram ? (
         <ProgramEditor
           value={state.program}
           onChange={state.setProgram}

@@ -6,18 +6,20 @@ import { createClient } from "@hifago/supabase/client";
 import { slugify } from "@/lib/utils";
 import { asLocalizedField } from "@hifago/domain";
 import type { Json, TablesInsert, TablesUpdate } from "@hifago/supabase/database.types";
-import { Button, Label, ListBox, Select, toast } from "@hifago/ui";
+import { Button, Card, Label, ListBox, Select, toast } from "@hifago/ui";
 import { type TagOption } from "@/components/tags-multiselect";
 import { LocalizedTextField, type LocalizedValue } from "@/components/localized-text-field";
 import { ProductTypeFields } from "@/components/product-type-fields";
 import type { LobbyRoomOption } from "@/components/lobby-option-picker";
 import { StagedProductPhotos, type StagedPhoto } from "@/components/product-photos-staged";
-import { validatePriceTiers } from "@/lib/products/priceTiers";
-import { validateGroupDiscount } from "@/lib/products/groupDiscount";
-import { validateSlotRules, toSlotRuleRows } from "@/lib/products/slotRules";
-import { validateTransportInfo } from "@/lib/products/transportInfo";
-import { validateStayRates } from "@/lib/products/stayRates";
-import { validateProgram } from "@/lib/products/program";
+import { ActionConfirmation } from "@/components/action-confirmation";
+import { WizardStepper } from "@/components/wizard-stepper";
+import {
+  requiredContextStepError,
+  requiredDetailsStepError,
+  requiredPricingStepError,
+} from "@/lib/products/productFormRequiredFields";
+import { toSlotRuleRows } from "@/lib/products/slotRules";
 import { buildProductCreationPayload } from "@/lib/products/productCreationPayload";
 import { buildProductEditPayload } from "@/lib/products/productEditPayload";
 import { mergeLobbyRoom } from "@/lib/products/lobbyRoomImport";
@@ -108,6 +110,22 @@ const SUBMIT_ERRORS: Record<string, string> = {
   // product_creation_review_ux.sql — cette raison n'est plus jamais renvoyée par la RPC.
   pending_cap_exceeded: "Tienes demasiadas propuestas pendientes de revisión.",
 };
+
+// Un seul endroit pour le nom du type en espagnol (genre inclus) — le bouton de soumission, le
+// toast de création et l'écran de confirmation en dérivent tous, plutôt que 3 ternaires
+// indépendantes. Corrige au passage un bug préexistant : aucune des 3 ternaires d'origine n'avait
+// de branche « camp », qui retombait silencieusement sur « actividad ».
+const PRODUCT_TYPE_NOUN: Record<ProductType, { label: string; withArticle: string; feminine: boolean }> = {
+  activity: { label: "actividad", withArticle: "la actividad", feminine: true },
+  evento: { label: "evento", withArticle: "el evento", feminine: false },
+  camp: { label: "campamento", withArticle: "el campamento", feminine: false },
+  lodging: { label: "alojamiento", withArticle: "el alojamiento", feminine: false },
+  transport: { label: "transporte", withArticle: "el transporte", feminine: false },
+};
+
+function entityNoun(type: ProductType): string {
+  return PRODUCT_TYPE_NOUN[type].withArticle;
+}
 
 // Spec 11 — un seul composant pour la création ET l'édition d'un produit (fusionne
 // NewProductForm.tsx/EditProductForm.tsx, supprimés) : `product` absent = création, présent =
@@ -202,9 +220,100 @@ export function ProductForm({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Assistant par étapes (docs/specs/40) — création seulement (`stepIndex` reste à 0, jamais
+  // affiché, en édition). 3 étapes toujours : "Comercialización" existe même pour evento (son
+  // propre bloc réservation/tarification dans EventoFields), ce n'est jamais une étape en moins.
+  const [stepIndex, setStepIndex] = useState(0);
+  const STEP_TITLES = ["Establecimiento y tipo", "Detalles", "Comercialización"];
+
+  // Écran de fin de parcours (§4 du plan) — remplace le wizard/les cartes le temps que
+  // l'utilisateur choisit son prochain geste ; `null` = formulaire affiché normalement.
+  const [confirmation, setConfirmation] = useState<{
+    status: "success" | "pending";
+    title: string;
+    body: string;
+    actionLabel: string;
+    onAction: () => void;
+  } | null>(null);
+
   const {
     isEvento, isCamp, isActivity, isLodging, isTransport, hasPriceQtyFields,
   } = productTypeGating(type);
+
+  // Valeurs partagées entre la validation par étape (goNext) et la soumission finale
+  // (handleSubmit) — calculées une seule fois, jamais dupliquées entre les deux.
+  const nombreEs = name.es?.trim() ?? "";
+  const price = Number(fields.priceCop);
+  const usesTiers = hasPriceQtyFields && fields.priceMode === "tiers";
+  // MIROIR EXACT de la contrainte `products_price_cop_required_unless_vitrine` (2026-09-08) : un
+  // evento OU une offre en vitrine (URL externe posée) est dispensé de prix chiffré.
+  const enVitrina = Boolean(fields.externalBookingUrl.trim());
+  const eventoOnlinePaid = isEvento && fields.onlineBookable && !fields.isFree;
+  const needsOwnPrice = (!isEvento && !enVitrina) || eventoOnlinePaid;
+
+  function validateStep(index: number): string | null {
+    if (index === 0) {
+      return requiredContextStepError({
+        isEditing,
+        hasEstablishment: Boolean(establishments.find((item) => item.id === establishmentId)),
+        nombreEs,
+      });
+    }
+    if (index === 1) {
+      return requiredDetailsStepError({
+        isEditing,
+        isCamp,
+        isTransport,
+        isEvento,
+        isLodging,
+        program: fields.program,
+        durationDaysInput: fields.durationDays,
+        persistedDurationDays: product?.duration_days ?? null,
+        transportInfo: fields.transportInfo,
+        occurrenceType: fields.occurrenceType,
+        occurrenceDate: fields.occurrenceDate,
+        recurrenceFrequencyDays: fields.recurrenceFrequencyDays,
+        capacity: fields.capacity,
+        unitCount: fields.unitCount,
+      });
+    }
+    return requiredPricingStepError({
+      isEditing,
+      isEvento,
+      isCamp,
+      isActivity,
+      isLodging,
+      hasPriceQtyFields,
+      needsOwnPrice,
+      usesTiers,
+      price,
+      priceLabel: fields.priceLabel,
+      onlineBookable: fields.onlineBookable,
+      eventoCapacityMode: fields.eventoCapacityMode,
+      defaultCapacity: fields.defaultCapacity,
+      isFree: fields.isFree,
+      eventoPaymentMode: fields.eventoPaymentMode,
+      groupDiscount: fields.groupDiscount,
+      slotRules: fields.slotRules,
+      priceTiers: fields.priceTiers,
+      minQty: fields.minQty,
+      maxQty: fields.maxQty,
+      stayRates: fields.stayRates,
+    });
+  }
+
+  function goNext() {
+    const error = validateStep(stepIndex);
+    if (error) {
+      toast.danger(error);
+      return;
+    }
+    setStepIndex((current) => Math.min(current + 1, STEP_TITLES.length - 1));
+  }
+
+  function goPrev() {
+    setStepIndex((current) => Math.max(current - 1, 0));
+  }
 
   // Refonte parcours partenaire ↔ LobbyPMS (2026-08-25) — en édition, le statut vient directement
   // du produit (join établissement fait par la page appelante) ; en création, de l'établissement
@@ -287,155 +396,14 @@ export function ProductForm({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
-    const nombreEs = name.es?.trim() ?? "";
-    const price = Number(fields.priceCop);
-    const usesTiers = hasPriceQtyFields && fields.priceMode === "tiers";
-    // MIROIR EXACT de la contrainte `products_price_cop_required_unless_vitrine` (2026-09-08) :
-    // un evento OU une offre en vitrine (URL externe posée) est dispensé de prix chiffré. Avant,
-    // seul l'evento l'était — et la vitrine d'un transport était donc impossible à saisir, alors
-    // que le cahier §2e la prévoit explicitement. L'hôtel était exempté lui aussi, son prix vivant
-    // sur ses chambres ; T3 (2026-08-27) a supprimé le type, et son exemption avec.
-    //
-    // ⚠️ Si cette expression et la contrainte SQL divergent, l'écart est SILENCIEUX dans un sens
-    // (le formulaire refuse ce que la base accepterait) et un 400 illisible dans l'autre.
-    const enVitrina = Boolean(fields.externalBookingUrl.trim());
-    // Evento réservable en ligne, payant (2026-09-15) : rejoint les types qui exigent un prix
-    // chiffré propre — miroir du bypass price_missing de create_order (is_free dispense, comme un
-    // evento vitrine/gratuit ; on_site reste payant et exige donc bien price_cop).
-    const eventoOnlinePaid = isEvento && fields.onlineBookable && !fields.isFree;
-    const needsOwnPrice = (!isEvento && !enVitrina) || eventoOnlinePaid;
-
-    // Transport informatif (2026-09-16) — miroir des CHECK de la migration 20260916150000.
-    // ⚠️ VOLONTAIREMENT hors du `if (!isEditing)` ci-dessous, contrairement à
-    // validateGroupDiscount/validateSlotRules : ces deux-là ne tournent QU'À LA CRÉATION (gap
-    // préexistant, pas corrigé ici pour ne pas élargir ce lot). Laisser le transport dans le même
-    // cas aurait laissé un admin poser en édition une dernière salida antérieure à la première, et
-    // récolter un 400 illisible de `products_transport_departure_order` au lieu d'un message.
-    // Programme d'un camp (spec 37) — comme le transport juste en dessous, VOLONTAIREMENT hors du
-    // `if (!isEditing)` : le programme est éditable dans les deux modes (c'est tout l'intérêt), donc
-    // le valider seulement à la création laisserait passer en édition un jour au-delà de la durée
-    // ou une ligne sans espagnol, et le rejet arriverait en 400 illisible côté base.
-    if (isCamp) {
-      const programError = validateProgram(
-        fields.program,
-        fields.durationDays.trim() !== "" && Number(fields.durationDays) >= 1
-          ? Number(fields.durationDays)
-          : (product?.duration_days ?? null),
-      );
-      if (programError) {
-        toast.danger(programError);
-        return;
-      }
-    }
-
-    if (isTransport) {
-      const transportError = validateTransportInfo(fields.transportInfo);
-      if (transportError) {
-        toast.danger(transportError);
-        return;
-      }
-    }
-
-    if (!isEditing) {
-      // partner_id n'est jamais saisi indépendamment — dérivé de l'établissement choisi.
-      const establishment = establishments.find((item) => item.id === establishmentId);
-      if (!establishment || !nombreEs) {
-        toast.danger("El nombre (es) y el establecimiento son obligatorios.");
-        return;
-      }
-      if (needsOwnPrice && !usesTiers && (!Number.isFinite(price) || price <= 0)) {
-        toast.danger("El precio es obligatorio para este tipo de producto.");
-        return;
-      }
-      if (isEvento && !fields.onlineBookable && !fields.priceLabel.trim()) {
-        toast.danger("El precio en texto libre es obligatorio para un evento.");
-        return;
-      }
-      if (isEvento && !fields.occurrenceDate) {
-        toast.danger(
-          fields.occurrenceType === "once"
-            ? "La fecha es obligatoria para un evento puntual."
-            : "La fecha de la primera ocurrencia es obligatoria para un evento recurrente.",
-        );
-        return;
-      }
-      if (isEvento && fields.occurrenceType === "recurring" && !fields.recurrenceFrequencyDays) {
-        toast.danger("La frecuencia es obligatoria para un evento recurrente.");
-        return;
-      }
-      if (isCamp && (!fields.durationDays || Number(fields.durationDays) < 1)) {
-        toast.danger("La duración (días) es obligatoria para un campamento.");
-        return;
-      }
-      if (isCamp) {
-        const groupDiscountError = validateGroupDiscount(fields.groupDiscount);
-        if (groupDiscountError) {
-          toast.danger(groupDiscountError);
-          return;
-        }
-      }
-      if (isActivity) {
-        const slotRulesError = validateSlotRules(fields.slotRules);
-        if (slotRulesError) {
-          toast.danger(slotRulesError);
-          return;
-        }
-      }
-    } else if (!nombreEs) {
-      toast.danger("El nombre (es) es obligatorio.");
-      return;
-    } else if (needsOwnPrice && !usesTiers && (!Number.isFinite(price) || price <= 0)) {
-      toast.danger("El precio es obligatorio para este tipo de producto.");
-      return;
-    }
-
-    // Evento réservable en ligne (2026-09-15) — contrairement aux validations evento ci-dessus,
-    // gardées création-only (`!isEditing`) pour rester exactement le comportement préexistant,
-    // celles-ci courent dans LES DEUX modes : ces 5 champs sont réellement réécrits par l'update()
-    // ci-dessous, pas seulement à la création (cf. EditableProduct).
-    if (isEvento && fields.onlineBookable) {
-      if (!fields.eventoCapacityMode) {
-        toast.danger("El modo de capacidad es obligatorio para un evento reservable en línea.");
-        return;
-      }
-      if (
-        (fields.eventoCapacityMode === "metered" || fields.eventoCapacityMode === "rsvp") &&
-        !fields.defaultCapacity.trim()
-      ) {
-        toast.danger("El aforo es obligatorio para este modo de capacidad.");
-        return;
-      }
-      if (!fields.isFree && !fields.eventoPaymentMode) {
-        toast.danger("El modo de pago es obligatorio para un evento reservable de pago.");
-        return;
-      }
-    }
-
-    if (usesTiers) {
-      const tiersError = validatePriceTiers(fields.priceTiers);
-      if (tiersError) {
-        toast.danger(tiersError);
-        return;
-      }
-    }
-    if (hasPriceQtyFields && fields.minQty.trim() && fields.maxQty.trim() && Number(fields.minQty) > Number(fields.maxQty)) {
-      toast.danger("La cantidad mínima no puede ser mayor a la máxima.");
-      return;
-    }
-    if (isLodging) {
-      if (fields.capacity.trim() && (!Number.isInteger(Number(fields.capacity)) || Number(fields.capacity) <= 0)) {
-        toast.danger("La capacidad (número de couchage) debe ser un número entero mayor a 0.");
-        return;
-      }
-      // Même garde que la capacité — products_unit_count_positive refuserait de toute façon la
-      // valeur côté base, mais un message clair vaut mieux qu'une erreur SQL remontée brute.
-      if (fields.unitCount.trim() && (!Number.isInteger(Number(fields.unitCount)) || Number(fields.unitCount) <= 0)) {
-        toast.danger("La cantidad (habitaciones o camas) debe ser un número entero mayor a 0.");
-        return;
-      }
-      const stayRatesError = validateStayRates(fields.stayRates);
-      if (stayRatesError) {
-        toast.danger(stayRatesError);
+    // Les 3 étapes sont revalidées ici dans l'ordre (pas seulement au moment de « Siguiente ») :
+    // même garantie qu'avant l'assistant, zéro règle dupliquée entre navigation par étape et
+    // soumission finale (cf. productFormRequiredFields.ts).
+    for (let index = 0; index < STEP_TITLES.length; index += 1) {
+      const error = validateStep(index);
+      if (error) {
+        toast.danger(error);
+        if (!isEditing) setStepIndex(index);
         return;
       }
     }
@@ -474,9 +442,16 @@ export function ProductForm({
         }
       }
 
-      toast.success("Cambios guardados.");
-      router.push(`/admin/establishments/${product.establishment_id}`);
-      router.refresh();
+      setConfirmation({
+        status: "success",
+        title: "Cambios guardados",
+        body: "Los cambios ya están visibles públicamente — no necesitan revisión adicional.",
+        actionLabel: "Volver al establecimiento",
+        onAction: () => {
+          router.push(`/admin/establishments/${product.establishment_id}`);
+          router.refresh();
+        },
+      });
       return;
     }
 
@@ -500,12 +475,19 @@ export function ProductForm({
         return;
       }
 
-      toast.success("Propuesta enviada.");
-      // Refonte vue prestataire (2026-08-19) : "Mis actividades" fusionnée dans
-      // "/partner/establishment" — cible directe plutôt que "/partner/products" (qui redirige
-      // désormais ici, un hop de moins).
-      router.push("/partner/establishment");
-      router.refresh();
+      setConfirmation({
+        status: "pending",
+        title: "Propuesta enviada",
+        body: `Un administrador de Hifago revisará tu propuesta antes de publicar ${entityNoun(type)}. Te avisaremos cuando esté disponible.`,
+        actionLabel: "Ir a mis establecimientos",
+        // Refonte vue prestataire (2026-08-19) : "Mis actividades" fusionnée dans
+        // "/partner/establishment" — cible directe plutôt que "/partner/products" (qui redirige
+        // désormais ici, un hop de moins).
+        onAction: () => {
+          router.push("/partner/establishment");
+          router.refresh();
+        },
+      });
       return;
     }
 
@@ -628,32 +610,114 @@ export function ProductForm({
       })(),
     ]);
 
-    toast.success(
-      isEvento
-        ? "Evento creado."
-        : isLodging
-          ? "Alojamiento creado."
-            : isTransport
-              ? "Transporte creado."
-              : "Actividad creada.",
-    );
-    router.push("/admin/establishments");
-    router.refresh();
+    const { label, feminine } = PRODUCT_TYPE_NOUN[type];
+    setConfirmation({
+      status: "success",
+      title: `¡${label.charAt(0).toUpperCase()}${label.slice(1)} cread${feminine ? "a" : "o"}!`,
+      body: "Ya está publicado y visible en el catálogo — no necesita revisión adicional.",
+      actionLabel: "Volver al catálogo",
+      onAction: () => {
+        router.push("/admin/establishments");
+        router.refresh();
+      },
+    });
   }
 
-  return (
-    <form onSubmit={handleSubmit} noValidate className="flex max-w-md flex-col gap-4">
-      <LocalizedTextField
-        label="Nombre"
-        value={name}
-        onChange={setName}
-        isRequired
-        inputName="nombre"
-        testIdPrefix="name"
+  if (confirmation) {
+    return (
+      <ActionConfirmation
+        status={confirmation.status}
+        title={confirmation.title}
+        body={confirmation.body}
+        actionLabel={confirmation.actionLabel}
+        onAction={confirmation.onAction}
+        testId="product-form-confirmation"
       />
+    );
+  }
 
-      {!isEditing ? (
-        <>
+  // Props identiques quelle que soit la section demandée — factorisées pour ne pas les répéter
+  // aux 2 (édition) ou 3 (création) appels de `ProductTypeFields`.
+  const productTypeFieldsCommonProps = {
+    type,
+    state: fields,
+    showTags: !isEditing,
+    showSlotRulesEditor: !isEditing,
+    allowCreateTags: variant === "admin",
+    establishmentId: activeEstablishmentId,
+    establishmentLobbyConnected,
+    allowManualLobbyEntry: variant === "admin",
+    allowOnlineBookableConfig: variant === "admin",
+    campDurationDays: product?.duration_days ?? null,
+    onApplyLobbyRoomData: applyLobbyRoomData,
+    availableTags: allTags,
+    showAmenities: !isEditing && variant === "admin",
+    availableAmenities: allAmenities,
+  };
+
+  if (isEditing) {
+    return (
+      <form onSubmit={handleSubmit} noValidate className="flex w-full max-w-3xl flex-col gap-6 self-center">
+        <Card>
+          <Card.Header>
+            <Card.Title>Detalles</Card.Title>
+          </Card.Header>
+          <Card.Content className="flex flex-col gap-4">
+            <LocalizedTextField
+              label="Nombre"
+              value={name}
+              onChange={setName}
+              isRequired
+              inputName="nombre"
+              testIdPrefix="name"
+            />
+            {/* Démasqué le 2026-08-26 (arbitrage Jérôme « import à la liaison »). Ce champ avait
+                été masqué pour une chambre liée à Lobby, au motif que descriptions[] faisait
+                doublon — mais rien ne lisait jamais ce champ chez Lobby : il était donc masqué ET
+                vide, et la fiche publique d'une chambre PMS-backed apparaissait dans le catalogue
+                comme un nom nu, sans photo ni description. Il est désormais PRÉREMPLI depuis
+                Lobby via « Usar estos datos », puis éditable. */}
+            <LocalizedTextField
+              label="Descripción — opcional"
+              value={description}
+              onChange={setDescription}
+              multiline
+              testIdPrefix="description"
+              fieldTestId="description-textarea"
+            />
+            <ProductTypeFields {...productTypeFieldsCommonProps} section="details" />
+          </Card.Content>
+        </Card>
+        <Card>
+          <Card.Header>
+            <Card.Title>Comercialización</Card.Title>
+          </Card.Header>
+          <Card.Content className="flex flex-col gap-4">
+            <ProductTypeFields {...productTypeFieldsCommonProps} section="pricing" />
+          </Card.Content>
+        </Card>
+        <Button type="submit" isDisabled={isSubmitting} data-testid="save-product-button">
+          {isSubmitting ? "Guardando…" : "Guardar cambios"}
+        </Button>
+      </form>
+    );
+  }
+
+  const submitLabel =
+    variant === "socio-proposal"
+      ? isSubmitting
+        ? "Enviando…"
+        : "Enviar propuesta"
+      : isSubmitting
+        ? "Creando…"
+        : `Crear ${PRODUCT_TYPE_NOUN[type].label}`;
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="flex w-full max-w-3xl flex-col gap-6 self-center">
+      <WizardStepper titles={STEP_TITLES} currentIndex={stepIndex} onStepClick={setStepIndex} />
+
+      {stepIndex === 0 ? (
+        <div className="flex flex-col gap-4">
           <Select
             fullWidth
             placeholder="Selecciona un establecimiento"
@@ -726,86 +790,64 @@ export function ProductForm({
               </ListBox>
             </Select.Popover>
           </Select>
-        </>
-      ) : null}
-
-      {/* Démasqué le 2026-08-26 (arbitrage Jérôme « import à la liaison »). Ce champ avait été
-          masqué pour une chambre liée à Lobby, au motif que descriptions[] faisait doublon — mais
-          rien ne lisait jamais ce champ chez Lobby : il était donc masqué ET vide, et la fiche
-          publique d'une chambre PMS-backed apparaissait dans le catalogue comme un nom nu, sans
-          photo ni description (apps/web/app/[locale]/page.tsx tire son extrait de
-          products.description et son image de product_media). Il est désormais PRÉREMPLI depuis
-          Lobby via « Usar estos datos », puis éditable. */}
-      <LocalizedTextField
-        label="Descripción — opcional"
-        value={description}
-        onChange={setDescription}
-        multiline
-        testIdPrefix="description"
-        fieldTestId="description-textarea"
-      />
-
-      <ProductTypeFields
-        type={type}
-        state={fields}
-        showTags={!isEditing}
-        showSlotRulesEditor={!isEditing}
-        allowCreateTags={variant === "admin"}
-        establishmentId={activeEstablishmentId}
-        establishmentLobbyConnected={establishmentLobbyConnected}
-        allowManualLobbyEntry={variant === "admin"}
-        allowOnlineBookableConfig={variant === "admin"}
-        campDurationDays={product?.duration_days ?? null}
-        onApplyLobbyRoomData={applyLobbyRoomData}
-        // Retour Jérôme (2026-08-18) : les chambres/dortoires doivent pouvoir avoir des photos
-        // aussi côté socio — les masquer ici était la seule raison pour laquelle elles ne
-        // pouvaient jamais en avoir (buildProductCreationPayload transporte désormais ces photos,
-        // moderate_product_proposal/create_product_from_proposal les persistent à l'approbation).
-        availableTags={allTags}
-        // Équipements structurés — admin-direct, création seulement (édition : ProductAmenitiesBlock).
-        showAmenities={!isEditing && variant === "admin"}
-        availableAmenities={allAmenities}
-      />
-
-      {/* Démasqué avec la description ci-dessus, même raison : une chambre liée à Lobby ne pouvait
-          structurellement avoir AUCUNE photo — ni locale (bloc masqué), ni importée (rien ne lisait
-          photos[]). Sa carte de catalogue s'affichait donc sans image. */}
-      {!isEditing ? (
-        <div className="flex flex-col gap-1.5">
-          <Label>Fotos — opcional</Label>
-          <StagedProductPhotos photos={stagedPhotos} onChange={setStagedPhotos} />
+          <LocalizedTextField
+            label="Nombre"
+            value={name}
+            onChange={setName}
+            isRequired
+            inputName="nombre"
+            testIdPrefix="name"
+          />
+          <LocalizedTextField
+            label="Descripción — opcional"
+            value={description}
+            onChange={setDescription}
+            multiline
+            testIdPrefix="description"
+            fieldTestId="description-textarea"
+          />
         </div>
       ) : null}
 
-      <Button
-        type="submit"
-        isDisabled={isSubmitting}
-        data-testid={
-          isEditing
-            ? "save-product-button"
-            : variant === "socio-proposal"
-              ? "submit-product-proposal-button"
-              : "create-product-button"
-        }
-      >
-        {isEditing
-          ? isSubmitting
-            ? "Guardando…"
-            : "Guardar cambios"
-          : variant === "socio-proposal"
-            ? isSubmitting
-              ? "Enviando…"
-              : "Enviar propuesta"
-            : isSubmitting
-              ? "Creando…"
-              : isEvento
-                ? "Crear evento"
-                : isLodging
-                  ? "Crear alojamiento"
-                    : isTransport
-                      ? "Crear transporte"
-                      : "Crear actividad"}
-      </Button>
+      {stepIndex === 1 ? (
+        <div className="flex flex-col gap-4">
+          <ProductTypeFields {...productTypeFieldsCommonProps} section="details" />
+          {/* Démasqué avec la description ci-dessus, même raison : une chambre liée à Lobby ne
+              pouvait structurellement avoir AUCUNE photo — ni locale (bloc masqué), ni importée
+              (rien ne lisait photos[]). Sa carte de catalogue s'affichait donc sans image. */}
+          <div className="flex flex-col gap-1.5">
+            <Label>Fotos — opcional</Label>
+            <StagedProductPhotos photos={stagedPhotos} onChange={setStagedPhotos} />
+          </div>
+        </div>
+      ) : null}
+
+      {stepIndex === 2 ? (
+        <div className="flex flex-col gap-4">
+          <ProductTypeFields {...productTypeFieldsCommonProps} section="pricing" />
+        </div>
+      ) : null}
+
+      <div className="flex items-center justify-between gap-3 pt-2">
+        <Button type="button" variant="outline" onPress={goPrev} isDisabled={stepIndex === 0}>
+          Anterior
+        </Button>
+        {stepIndex < STEP_TITLES.length - 1 ? (
+          <Button type="button" onPress={goNext} data-testid="wizard-next-button">
+            Siguiente
+          </Button>
+        ) : (
+          <Button
+            type="submit"
+            isDisabled={isSubmitting}
+            data-testid={
+              variant === "socio-proposal" ? "submit-product-proposal-button" : "create-product-button"
+            }
+          >
+            {submitLabel}
+          </Button>
+        )}
+      </div>
     </form>
   );
 }

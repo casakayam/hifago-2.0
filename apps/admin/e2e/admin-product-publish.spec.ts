@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { webProductUrl } from "@hifago/e2e-support";
+import { confirmAndContinue, goToNextWizardStep, webProductUrl } from "@hifago/e2e-support";
 import { slugify } from "../lib/utils";
 
 test("admin dépublie puis republie une activité, invisible/visible côté public en conséquence", async ({
@@ -13,12 +13,16 @@ test("admin dépublie puis republie une activité, invisible/visible côté publ
   // 2026-08-20 : product-form.tsx n'écrase plus le défaut colonne).
   const establishmentName = `Establecimiento E2E Publish ${Date.now()}`;
   await page.goto("/admin/establishments/new");
-  await page.locator('input[name="nombre"]').fill(establishmentName);
+  // Assistant par étapes (docs/specs/40) — étape 1 "Propietario y gestión" (partner), étape 2
+  // "Detalles" (nombre).
   const partnerSearchPublish = page.getByTestId("partner-search");
   await partnerSearchPublish.click();
   await partnerSearchPublish.fill("Opérateur Actif");
   await page.getByRole("option", { name: /Opérateur Actif/ }).click();
+  await goToNextWizardStep(page);
+  await page.locator('input[name="nombre"]').fill(establishmentName);
   await page.getByTestId("create-establishment-button").click();
+  await confirmAndContinue(page, "establishment-form-confirmation");
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
   const row = page.locator("tr", { hasText: establishmentName });
@@ -32,8 +36,14 @@ test("admin dépublie puis republie une activité, invisible/visible côté publ
 
   const productName = `Actividad E2E Publish ${Date.now()}`;
   await page.locator('input[name="nombre"]').fill(productName);
+
+  // Assistant par étapes (docs/specs/40) — étape 1 validée, traverse l'étape 2 "Detalles" sans
+  // rien y saisir (tout y est optionnel pour une actividad) jusqu'à l'étape 3 "Comercialización".
+  await goToNextWizardStep(page);
+  await goToNextWizardStep(page);
   await page.locator('input[name="price"]').fill("40000");
   await page.getByTestId("create-product-button").click();
+  await confirmAndContinue(page, "product-form-confirmation");
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
   await row.getByRole("link", { name: /actividades/ }).click();

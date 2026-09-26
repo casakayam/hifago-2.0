@@ -35,6 +35,7 @@ import { VitrineFields } from "./vitrine-fields";
 export function ProductTypeFields({
   type,
   state,
+  section,
   showTags,
   showSlotRulesEditor,
   allowCreateTags,
@@ -51,6 +52,10 @@ export function ProductTypeFields({
 }: {
   type: ProductType;
   state: ProductTypeFieldsState;
+  // Assistant par étapes (docs/specs/40) — absent = comportement identique à avant (les 3 autres
+  // consommateurs, `ModerateProductCreationProposalForm`/`ModerateProposalForm`/`EditProposalForm`,
+  // n'y touchent pas), sinon ne rend que le sous-ensemble de blocs de l'étape correspondante.
+  section?: "details" | "pricing";
   // showTags/showSlotRulesEditor : réplique exacte du gating "création
   // seulement" déjà en place dans ProductForm (spec 11 : "délégués en édition à des blocs
   // séparés") — décidé par l'appelant (ProductForm passe `!isEditing`), pas recalculé ici.
@@ -88,26 +93,31 @@ export function ProductTypeFields({
     hasProgram,
   } = productTypeGating(type);
 
+  const showDetails = !section || section === "details";
+  const showPricing = !section || section === "pricing";
+
   return (
     <>
-      <LobbyLinkFields
-        type={type}
-        state={state}
-        isLodging={isLodging}
-        isActivity={isActivity}
-        isTransport={isTransport}
-        establishmentId={establishmentId}
-        establishmentLobbyConnected={establishmentLobbyConnected}
-        allowManualLobbyEntry={allowManualLobbyEntry}
-        onApplyLobbyRoomData={onApplyLobbyRoomData}
-        lobbyLinkReadOnly={lobbyLinkReadOnly}
-      />
+      {showDetails ? (
+        <LobbyLinkFields
+          type={type}
+          state={state}
+          isLodging={isLodging}
+          isActivity={isActivity}
+          isTransport={isTransport}
+          establishmentId={establishmentId}
+          establishmentLobbyConnected={establishmentLobbyConnected}
+          allowManualLobbyEntry={allowManualLobbyEntry}
+          onApplyLobbyRoomData={onApplyLobbyRoomData}
+          lobbyLinkReadOnly={lobbyLinkReadOnly}
+        />
+      ) : null}
 
-      {hasLocationAndTags ? <LocationAndTagsFields state={state} /> : null}
+      {showDetails && hasLocationAndTags ? <LocationAndTagsFields state={state} /> : null}
 
-      {isTransport ? <TransportFields state={state} /> : null}
+      {showDetails && isTransport ? <TransportFields state={state} /> : null}
 
-      {showTags && hasTags ? (
+      {showDetails && showTags && hasTags ? (
         <TagsMultiSelect
           availableTags={availableTags ?? []}
           selectedTagIds={state.selectedTagIds}
@@ -117,7 +127,7 @@ export function ProductTypeFields({
         />
       ) : null}
 
-      {showAmenities && hasAmenities ? (
+      {showDetails && showAmenities && hasAmenities ? (
         <TagsMultiSelect
           availableTags={availableAmenities ?? []}
           selectedTagIds={state.selectedAmenityIds}
@@ -130,7 +140,7 @@ export function ProductTypeFields({
         />
       ) : null}
 
-      {!isEvento && !hasLocationAndTags ? (
+      {showPricing && !isEvento && !hasLocationAndTags ? (
         // `isRequired` suit EXACTEMENT la contrainte SQL `products_price_cop_required_unless_vitrine` :
         // un evento OU une URL externe dispensent du prix chiffré. Sans ça, le champ resterait
         // obligatoire à l'écran alors que la base l'accepte vide — l'admin ne pourrait pas créer la
@@ -147,7 +157,7 @@ export function ProductTypeFields({
         </TextField>
       ) : null}
 
-      {hasPriceQtyFields ? (
+      {showPricing && hasPriceQtyFields ? (
         <div className="flex flex-col gap-2">
           <PriceTiersEditor
             priceMode={state.priceMode}
@@ -190,7 +200,7 @@ export function ProductTypeFields({
         </div>
       ) : null}
 
-      {hasDefaultCapacity ? (
+      {showPricing && hasDefaultCapacity ? (
         <div className="flex flex-col gap-1.5">
           <TextField fullWidth name="default-capacity" value={state.defaultCapacity} onChange={state.setDefaultCapacity}>
             <Label>Cupo diario por defecto — opcional</Label>
@@ -206,6 +216,7 @@ export function ProductTypeFields({
 
       <CampFields
         state={state}
+        section={section}
         hasGroupDiscount={hasGroupDiscount}
         isCamp={isCamp}
         hasProgram={hasProgram}
@@ -213,14 +224,21 @@ export function ProductTypeFields({
       />
 
       {isLodging ? (
-        <LodgingFields state={state} hasCheckInOut={hasCheckInOut} establishmentLobbyConnected={establishmentLobbyConnected} />
+        <LodgingFields
+          state={state}
+          section={section}
+          hasCheckInOut={hasCheckInOut}
+          establishmentLobbyConnected={establishmentLobbyConnected}
+        />
       ) : null}
 
-      {isEvento ? <EventoFields state={state} allowOnlineBookableConfig={allowOnlineBookableConfig} /> : null}
+      {isEvento ? (
+        <EventoFields state={state} section={section} allowOnlineBookableConfig={allowOnlineBookableConfig} />
+      ) : null}
 
-      {!isEvento ? <VitrineFields state={state} /> : null}
+      {showPricing && !isEvento ? <VitrineFields state={state} /> : null}
 
-      {showSlotRulesEditor && isActivity ? (
+      {showPricing && showSlotRulesEditor && isActivity ? (
         <div className="flex flex-col gap-1.5">
           <Label>Horarios — opcional</Label>
           <SlotRulesEditor rules={state.slotRules} onChange={state.setSlotRules} />

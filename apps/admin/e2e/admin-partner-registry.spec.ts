@@ -1,8 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 import {
+  confirmAndContinue,
   createActiveOperatorEstablishment,
   createSignedInClient,
+  goToNextWizardStep,
   selectValue,
   switchInput,
   toggleSwitch,
@@ -20,10 +22,14 @@ test("admin gère le registre d'un partenaire : capacité, statut, transfert, co
   // plus bas.
   const establishmentName = `Establecimiento Transfer Test ${Date.now()}`;
   await page.goto("/admin/establishments/new");
-  await page.locator('input[name="nombre"]').fill(establishmentName);
+  // Assistant par étapes (docs/specs/40) — étape 1 "Propietario y gestión" (partner), étape 2
+  // "Detalles" (nombre).
   await page.getByTestId("partner-search").click();
   await page.getByRole("option", { name: /Opérateur Actif/ }).click();
+  await goToNextWizardStep(page);
+  await page.locator('input[name="nombre"]').fill(establishmentName);
   await page.getByTestId("create-establishment-button").click();
+  await confirmAndContinue(page, "establishment-form-confirmation");
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
   // Ouvre la fiche de "Référent Actif Org" — capacité referrer seule au départ (seedée). Filtré

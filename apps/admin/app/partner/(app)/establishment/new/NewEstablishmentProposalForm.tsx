@@ -6,6 +6,7 @@ import { createClient } from "@hifago/supabase/client";
 import { Button, Input, Label, TextArea, TextField, cn, toast } from "@hifago/ui";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
 import { StagedEstablishmentPhotos, type StagedPhoto } from "@/components/establishment-photos-staged";
+import { ActionConfirmation } from "@/components/action-confirmation";
 
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 type DescriptionLang = "es" | "en";
@@ -36,6 +37,9 @@ export function NewEstablishmentProposalForm() {
   const [stagedPhotos, setStagedPhotos] = useState<StagedPhoto[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Écran de confirmation plein écran (docs/specs/40 §4) — toujours « partenaire/en attente », ce
+  // formulaire n'est jamais atteint par un admin.
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   const addressSearchRef = useRef<HTMLDivElement | null>(null);
 
@@ -99,13 +103,27 @@ export function NewEstablishmentProposalForm() {
       return;
     }
 
-    toast.success("Propuesta enviada.");
-    router.push("/partner/establishment");
-    router.refresh();
+    setShowConfirmation(true);
+  }
+
+  if (showConfirmation) {
+    return (
+      <ActionConfirmation
+        status="pending"
+        title="Propuesta enviada"
+        body="Un administrador de Hifago revisará tu propuesta antes de publicar el establecimiento. Te avisaremos cuando esté disponible."
+        actionLabel="Ir a mis establecimientos"
+        onAction={() => {
+          router.push("/partner/establishment");
+          router.refresh();
+        }}
+        testId="establishment-proposal-confirmation"
+      />
+    );
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="flex max-w-2xl flex-col gap-4">
+    <form onSubmit={handleSubmit} noValidate className="flex w-full max-w-3xl flex-col gap-4 self-center">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="proposal-nombre">Nombre</Label>
         <Input

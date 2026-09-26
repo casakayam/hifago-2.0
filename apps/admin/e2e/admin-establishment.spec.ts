@@ -1,6 +1,6 @@
 import path from "node:path";
 import { test, expect } from "@playwright/test";
-import { toggleCheckbox } from "@hifago/e2e-support";
+import { confirmAndContinue, goToNextWizardStep, toggleCheckbox } from "@hifago/e2e-support";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 import { abrirFiltros } from "./support/filtros";
 
@@ -32,7 +32,8 @@ test("un compte admin crée un établissement (identité, partner, présentation
 
   await page.goto("/admin/establishments/new");
 
-  await page.locator('input[name="nombre"]').fill(establishmentName);
+  // Assistant par étapes (docs/specs/40) — étape 1 "Propietario y gestión" (partner + case
+  // "Operado directamente"), étape 2 "Detalles" (nombre, descripción, dirección, fotos).
   await toggleCheckbox(page.getByTestId("operated-directly-checkbox"));
 
   // SearchableCombobox : champ de recherche réel (pas un Select à bouton) — taper une requête
@@ -43,6 +44,9 @@ test("un compte admin crée un établissement (identité, partner, présentation
   await partnerSearch.fill("Opérateur Actif");
   await page.getByRole("option", { name: /Opérateur Actif/ }).click();
   await expect(partnerSearch).toHaveValue(/Opérateur Actif/);
+
+  await goToNextWizardStep(page);
+  await page.locator('input[name="nombre"]').fill(establishmentName);
 
   // Description bilingue — switcher ES/EN au-dessus d'un seul champ visible à la fois.
   await page.getByTestId("description-textarea").fill("Descripción en español.");
@@ -64,6 +68,7 @@ test("un compte admin crée un établissement (identité, partner, présentation
   await expect(page.getByTestId("photos-list").locator("li")).toHaveCount(1, { timeout: 10000 });
 
   await page.getByTestId("create-establishment-button").click();
+  await confirmAndContinue(page, "establishment-form-confirmation");
 
   await expect(page).toHaveURL(/\/admin\/establishments$/);
   await expect(page.getByText(establishmentName)).toBeVisible();

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { createSignedInClient } from "@hifago/e2e-support";
+import { confirmAndContinue, createSignedInClient, goToNextWizardStep } from "@hifago/e2e-support";
 
 // Même partenaire réutilisé par plusieurs specs produit (admin-product-photos.spec.ts,
 // admin-product-tags.spec.ts), mais un établissement CRÉÉ ICI et jamais partagé : le sélectionner
@@ -41,6 +41,11 @@ test("admin crée une actividad avec paliers de prix et bornes de quantité ; cr
   await page.getByRole("option", { name: establishmentName }).click();
   // type reste "activity" (valeur par défaut du Select).
 
+  // Assistant par étapes (docs/specs/40) — étape 1 validée, traverse l'étape 2 "Detalles" sans
+  // rien y saisir (tout y est optionnel pour une actividad) jusqu'à l'étape 3 "Comercialización".
+  await goToNextWizardStep(page);
+  await goToNextWizardStep(page);
+
   await page.getByTestId("price-mode-toggle").click(); // "Definir por tramos"
 
   // Tramo 1 : [2, 3] → 30000. Tramo 2 : [5, 6] → 25000 (trou volontaire à 4, cf. assertions RPC).
@@ -57,6 +62,7 @@ test("admin crée une actividad avec paliers de prix et bornes de quantité ; cr
   await page.getByTestId("max-qty-input").fill("6");
 
   await page.getByTestId("create-product-button").click();
+  await confirmAndContinue(page, "product-form-confirmation");
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
   const { data: product } = await adminClient

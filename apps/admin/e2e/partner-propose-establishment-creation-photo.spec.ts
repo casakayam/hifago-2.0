@@ -1,6 +1,6 @@
 import path from "node:path";
 import { test, expect } from "@playwright/test";
-import { createSignedInClient } from "@hifago/e2e-support";
+import { confirmAndContinue, createSignedInClient } from "@hifago/e2e-support";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 
 const FIXTURE_PHOTO = path.join(__dirname, "fixtures/test-photo.jpg");
@@ -60,6 +60,9 @@ test("un socio propone la creación de un establecimiento avec foto, rattachée 
   await expect(gallery.getByTestId("media-gallery-item")).toHaveCount(1, { timeout: 10000 });
 
   await page.getByTestId("submit-establishment-proposal-button").click();
+  // Écran de confirmation plein écran (docs/specs/40 §4) — remplace le formulaire, son bouton
+  // d'action déclenche la redirection auparavant immédiate.
+  await confirmAndContinue(page, "establishment-proposal-confirmation");
   await expect(page).toHaveURL(/\/partner\/establishment$/);
 
   const pendingCard = page.getByTestId("pending-creation-banner");

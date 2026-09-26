@@ -1,6 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { webProductUrl, mockMercadoPagoCheckout, nextMonthIsoDate } from "@hifago/e2e-support";
+import {
+  confirmAndContinue,
+  goToNextWizardStep,
+  webProductUrl,
+  mockMercadoPagoCheckout,
+  nextMonthIsoDate,
+} from "@hifago/e2e-support";
 import { slugify } from "../lib/utils";
 
 // Feature 20 (Admin : créer et réserver un camp multi-jours) — chemin admin-direct de bout en
@@ -44,12 +50,16 @@ test("admin crée un camp, configure la ressource partagée et la capacité prop
   // 1. Établissement dédié -------------------------------------------------------------------
   const establishmentName = `Establecimiento Camp E2E ${stamp}`;
   await page.goto("/admin/establishments/new");
-  await page.locator('input[name="nombre"]').fill(establishmentName);
+  // Assistant par étapes (docs/specs/40) — étape 1 "Propietario y gestión" (partner), étape 2
+  // "Detalles" (nombre).
   const partnerSearchCamp = page.getByTestId("partner-search");
   await partnerSearchCamp.click();
   await partnerSearchCamp.fill("Opérateur Actif");
   await page.getByRole("option", { name: /Opérateur Actif/ }).click();
+  await goToNextWizardStep(page);
+  await page.locator('input[name="nombre"]').fill(establishmentName);
   await page.getByTestId("create-establishment-button").click();
+  await confirmAndContinue(page, "establishment-form-confirmation");
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
   const establishmentRow = page.locator("tr", { hasText: establishmentName });
@@ -75,9 +85,18 @@ test("admin crée un camp, configure la ressource partagée et la capacité prop
   await page.locator('input[name="nombre"]').fill(campName);
   await page.getByTestId("type-select").click();
   await page.getByRole("option", { name: "Campamento" }).click();
-  await page.locator('input[name="price"]').fill("500000");
+
+  // Assistant par étapes (docs/specs/40) — étape 1 validée, avance vers l'étape 2 "Detalles"
+  // (duración + programa pour un campamento).
+  await goToNextWizardStep(page);
   await page.getByTestId("duration-days-input").fill("5");
+
+  // Étape 2 validée, avance vers l'étape 3 "Comercialización" (precio simple + cupo + descuento
+  // por grupo pour ce type).
+  await goToNextWizardStep(page);
+  await page.locator('input[name="price"]').fill("500000");
   await page.getByTestId("create-product-button").click();
+  await confirmAndContinue(page, "product-form-confirmation");
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
   await establishmentRow.getByRole("link", { name: /actividades/ }).click();

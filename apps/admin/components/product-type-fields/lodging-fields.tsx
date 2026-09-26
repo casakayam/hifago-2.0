@@ -19,19 +19,27 @@ const LODGING_KIND_NONE = "none";
 // gardé distinct pour ne pas figer une équivalence que le gating ne garantit pas dans le temps.
 export function LodgingFields({
   state,
+  section,
   hasCheckInOut,
   establishmentLobbyConnected,
 }: {
   state: ProductTypeFieldsState;
+  // Assistant par étapes (docs/specs/40) — la grille check-in/capacidad/tipo décrit le logement
+  // (« details »), `StayRatesEditor` en revanche ajuste le prix par saison/week-end (« pricing ») :
+  // les deux étaient rendus l'un après l'autre sans condition, jamais séparés avant ce chantier.
+  section?: "details" | "pricing";
   hasCheckInOut: boolean;
   establishmentLobbyConnected?: boolean;
 }) {
+  const showDetails = !section || section === "details";
+  const showPricing = !section || section === "pricing";
+
   return (
     <>
       {/* 2 colonnes dans tous les cas : un hôtel n'a que check-in/check-out, un alojamiento
           complète la 2e ligne avec capacité + cantidad (ajoutée le 2026-08-26). Une grille de 4
           colonnes serait illisible sur un écran étroit. */}
-      {hasCheckInOut ? (
+      {showDetails && hasCheckInOut ? (
         <div className="grid grid-cols-2 gap-4">
           <TextField fullWidth name="check-in" value={state.checkInTime} onChange={state.setCheckInTime}>
             <Label>Check-in — opcional</Label>
@@ -140,7 +148,7 @@ export function LodgingFields({
         </div>
       ) : null}
 
-      <StayRatesEditor value={state.stayRates} onChange={state.setStayRates} />
+      {showPricing ? <StayRatesEditor value={state.stayRates} onChange={state.setStayRates} /> : null}
     </>
   );
 }

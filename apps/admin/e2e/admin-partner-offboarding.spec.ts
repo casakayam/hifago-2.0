@@ -1,6 +1,11 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { webProductUrl, selectValue } from "@hifago/e2e-support";
+import {
+  confirmAndContinue,
+  goToNextWizardStep,
+  webProductUrl,
+  selectValue,
+} from "@hifago/e2e-support";
 import { slugify } from "../lib/utils";
 
 test("admin déroule les 4 étapes d'offboarding d'un partenaire, ses activités disparaissent du catalogue public après l'étape 1", async ({
@@ -49,12 +54,16 @@ test("admin déroule les 4 étapes d'offboarding d'un partenaire, ses activités
   // Établissement + activité rattachés à ce nouveau partenaire, publiés (sellable=true).
   const establishmentName = `Establecimiento Offboarding E2E ${stamp}`;
   await page.goto("/admin/establishments/new");
-  await page.locator('input[name="nombre"]').fill(establishmentName);
+  // Assistant par étapes (docs/specs/40) — étape 1 "Propietario y gestión" (partner), étape 2
+  // "Detalles" (nombre).
   const partnerSearchOffboarding = page.getByTestId("partner-search");
   await partnerSearchOffboarding.click();
   await partnerSearchOffboarding.fill(partnerName);
   await page.getByRole("option", { name: new RegExp(partnerName) }).click();
+  await goToNextWizardStep(page);
+  await page.locator('input[name="nombre"]').fill(establishmentName);
   await page.getByTestId("create-establishment-button").click();
+  await confirmAndContinue(page, "establishment-form-confirmation");
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
   const establishmentRow = page.locator("tr", { hasText: establishmentName });
@@ -68,8 +77,14 @@ test("admin déroule les 4 étapes d'offboarding d'un partenaire, ses activités
 
   const productName = `Actividad Offboarding E2E ${stamp}`;
   await page.locator('input[name="nombre"]').fill(productName);
+
+  // Assistant par étapes (docs/specs/40) — étape 1 validée, traverse l'étape 2 "Detalles" sans
+  // rien y saisir (tout y est optionnel pour une actividad) jusqu'à l'étape 3 "Comercialización".
+  await goToNextWizardStep(page);
+  await goToNextWizardStep(page);
   await page.locator('input[name="price"]').fill("35000");
   await page.getByTestId("create-product-button").click();
+  await confirmAndContinue(page, "product-form-confirmation");
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
   await establishmentRow.getByRole("link", { name: /actividades/ }).click();

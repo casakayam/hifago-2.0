@@ -1,6 +1,11 @@
 import path from "node:path";
 import { test, expect } from "@playwright/test";
-import { createSignedInClient, createActiveOperatorEstablishment } from "@hifago/e2e-support";
+import {
+  confirmAndContinue,
+  createSignedInClient,
+  createActiveOperatorEstablishment,
+  goToNextWizardStep,
+} from "@hifago/e2e-support";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
 
 const FIXTURE_PHOTO = path.join(__dirname, "fixtures/test-photo.jpg");
@@ -46,7 +51,10 @@ test("un socio propone la creación de una actividad con foto, publicada y vendi
   await page.getByRole("option", { name: establishmentName }).click();
 
   await page.locator('input[name="nombre"]').fill(proposedName);
-  await page.getByTestId("price-input").fill("50000");
+
+  // Assistant par étapes (docs/specs/40) — étape 1 validée, avance vers l'étape 2 "Detalles"
+  // (fotos pour una actividad).
+  await goToNextWizardStep(page);
 
   const gallery = page.getByTestId("media-gallery");
   await gallery.getByTestId("media-gallery-add").locator("input[type=file]").setInputFiles(FIXTURE_PHOTO);
@@ -54,7 +62,12 @@ test("un socio propone la creación de una actividad con foto, publicada y vendi
   await page.getByTestId("image-crop-confirm").click();
   await expect(gallery.getByTestId("media-gallery-item")).toHaveCount(1, { timeout: 10000 });
 
+  // Étape 2 validée, avance vers l'étape 3 "Comercialización" (precio).
+  await goToNextWizardStep(page);
+  await page.getByTestId("price-input").fill("50000");
+
   await page.getByTestId("submit-product-proposal-button").click();
+  await confirmAndContinue(page, "product-form-confirmation");
 
   // Refonte vue prestataire (2026-08-19) : "Mis actividades" fusionnée dans
   // "/partner/establishment" (product-form.tsx pousse désormais directement vers cette URL) ;

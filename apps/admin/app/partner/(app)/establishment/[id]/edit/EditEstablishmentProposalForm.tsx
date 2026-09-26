@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@hifago/supabase/client";
-import { asLocalizedField, nowIsoInstant, resolveLocalizedField } from "@hifago/domain";
+import { nowIsoInstant } from "@hifago/domain";
 import { Button, Input, Label, TextArea, TextField, cn, toast } from "@hifago/ui";
 import { mountAddressAutocomplete } from "@/components/address-autocomplete";
+import { ActionConfirmation } from "@/components/action-confirmation";
 
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 type DescriptionLang = "es" | "en";
@@ -61,6 +62,12 @@ export function EditEstablishmentProposalForm({
   const [proposal, setProposal] = useState(pendingProposal);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  // docs/specs/40 §4 — remplace l'ancien patron « bannière au-dessus du formulaire toujours
+  // éditable » (qui laissait créer une 2e proposition en silence) : une proposition en attente
+  // masque désormais le formulaire, « Editar de nuevo » le rouvre explicitement (pré-rempli),
+  // « Retirar propuesta » reste l'autre issue. Réinitialisé à `false` après un envoi réussi pour
+  // que la confirmation réapparaisse.
+  const [showFormAnyway, setShowFormAnyway] = useState(false);
 
   const addressSearchRef = useRef<HTMLDivElement | null>(null);
 
@@ -126,7 +133,7 @@ export function EditEstablishmentProposalForm({
       setProposal({ id: result.proposal_id, payload, created_at: nowIsoInstant() });
     }
     setLobbyApiToken("");
-    toast.success("Propuesta enviada.");
+    setShowFormAnyway(false);
   }
 
   async function handleWithdraw() {
@@ -152,32 +159,26 @@ export function EditEstablishmentProposalForm({
     toast.success("Propuesta retirada.");
   }
 
-  const proposedName = proposal
-    ? resolveLocalizedField(asLocalizedField((proposal.payload as { name?: unknown })?.name), "es")
-    : null;
+  if (proposal && !showFormAnyway) {
+    return (
+      <div className="w-full max-w-3xl self-center">
+        <ActionConfirmation
+          contained
+          status="pending"
+          title="Cambios enviados para revisión"
+          body="Un administrador de Hifago revisará estos cambios antes de aplicarlos en la ficha pública."
+          actionLabel="Editar de nuevo"
+          onAction={() => setShowFormAnyway(true)}
+          secondaryActionLabel={isWithdrawing ? "Retirando…" : "Retirar propuesta"}
+          onSecondaryAction={handleWithdraw}
+          testId="pending-edit-proposal"
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex max-w-2xl flex-col gap-6">
-      {proposal ? (
-        <div
-          className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4"
-          data-testid="pending-edit-proposal"
-        >
-          <p className="text-sm font-medium">Propuesta pendiente de revisión</p>
-          <p className="text-sm text-muted">{proposedName ?? proposal.id}</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            isDisabled={isWithdrawing}
-            onPress={handleWithdraw}
-            data-testid="withdraw-edit-proposal-button"
-          >
-            {isWithdrawing ? "Retirando…" : "Retirar"}
-          </Button>
-        </div>
-      ) : null}
-
+    <div className="flex w-full max-w-3xl flex-col gap-6 self-center">
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="edit-proposal-nombre">Nombre</Label>

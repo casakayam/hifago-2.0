@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { WEB_APP_URL, nextMonthIsoDate } from "@hifago/e2e-support";
+import { WEB_APP_URL, confirmAndContinue, goToNextWizardStep, nextMonthIsoDate } from "@hifago/e2e-support";
 
 // Feature 21 (Admin : créer une fiche evento, vitrine) — parcours complet : création (publiée
 // direct depuis le 2026-08-20, retour Jérôme — product-form.tsx n'écrase plus le défaut colonne
@@ -17,15 +17,21 @@ test("admin crée un evento récurrent vitrine, le publie, la fiche publique aff
   const productName = `Feria Nautica E2E ${Date.now()}`;
 
   await page.goto(`/admin/products/new?establishment=${ESTABLISHMENT_ID}`);
-  await page.waitForSelector('[data-testid="create-product-button"]');
+  // Assistant par étapes (docs/specs/40) — "create-product-button" n'existe que sur la dernière
+  // étape désormais ; on attend le champ nom, présent dès l'étape 1.
+  await page.waitForSelector('input[name="nombre"]');
 
-  await page.locator("#name-es").fill(productName);
+  // ⚠️ Corrigé en vérifiant ce test pour l'assistant (docs/specs/40) : `#name-es` n'existe plus
+  // depuis le passage de Nombre à `LocalizedTextField` (spec 11, 2026-08-16) — un seul champ
+  // `name="nombre"` avec bascule ES/EN, jamais deux id séparés. Ce test n'avait donc plus jamais
+  // pu passer depuis cette date, indépendamment de ce chantier.
+  await page.locator('input[name="nombre"]').fill(productName);
   await page.getByTestId("type-select").click();
   await page.getByRole("option", { name: "Evento (vitrina)" }).click();
 
-  // price_cop masqué pour ce type, price_label le remplace.
-  await expect(page.locator("#price")).toHaveCount(0);
-  await page.getByTestId("price-label-input").fill("Entrada gratuita");
+  // Étape 1 validée, avance vers l'étape 2 "Detalles" (ocurrencia/horario — pas de commercial pour
+  // evento à cette étape, cf. tableau docs/specs/40 §0).
+  await goToNextWizardStep(page);
 
   // Récurrence structurée : tous les 7 jours à partir d'un mardi (2026-09-22), fin laissée
   // "Indefinida" (valeur par défaut du sélecteur) — la 3e condition de fin, aucune des deux posée.
@@ -36,8 +42,25 @@ test("admin crée un evento récurrent vitrine, le publie, la fiche publique aff
   await page.getByTestId("occurrence-date-input").fill(nextMonthIsoDate(22))   // date SAISIE par l'admin, pas seedée : elle doit seulement être future;
   await page.getByTestId("recurrence-frequency-input").fill("7");
 
+  // Étape 2 validée, avance vers l'étape 3 "Comercialización" (bloc réservation/tarification
+  // propre à evento — pas de générique Precio/Vitrina pour ce type).
+  await goToNextWizardStep(page);
+
+  // price_cop masqué pour ce type, price_label le remplace. Vérifié sur cette étape
+  // ("Comercialización") : c'est là que le champ générique apparaîtrait pour un autre type.
+  await expect(page.locator("#price")).toHaveCount(0);
+  await page.getByTestId("price-label-input").fill("Entrada gratuita");
+
+  // ⚠️ TROUVÉ EN METTANT À JOUR CETTE SPEC POUR L'ASSISTANT, PAS INTRODUIT PAR LUI : ce champ ne
+  // s'affiche JAMAIS pour `type=evento` — `VitrineFields` est monté sur `!isEvento`
+  // (`product-type-fields/index.tsx`), et evento n'a aucun équivalent pour `external_booking_url`
+  // (seulement pour `price_label`, via son propre bloc réservation). Cette ligne échoue donc déjà
+  // indépendamment de ce chantier — signalé, pas corrigé en silence (CLAUDE.md §11.20). Laissé tel
+  // quel : lui donner un correctif demanderait un vrai arbitrage produit (evento doit-il pouvoir
+  // porter un lien de réservation externe distinct de son mode « vitrina » actuel ?).
   await page.getByTestId("external-booking-url-input").fill("https://example.com/reservar");
   await page.getByTestId("create-product-button").click();
+  await confirmAndContinue(page, "product-form-confirmation");
   await page.waitForURL(/\/admin\/establishments$/);
 
   // Déjà publié à la création (sellable=true par défaut) — set_product_sellable reste le levier de

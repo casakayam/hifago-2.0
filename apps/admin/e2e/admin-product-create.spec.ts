@@ -1,7 +1,14 @@
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 import { loginAs, SEEDED_ACCOUNTS, SEEDED_PASSWORD } from "./support/login";
-import { checkboxInput, createSignedInClient, toggleCheckbox, webProductUrl } from "@hifago/e2e-support";
+import {
+  checkboxInput,
+  confirmAndContinue,
+  createSignedInClient,
+  goToNextWizardStep,
+  toggleCheckbox,
+  webProductUrl,
+} from "@hifago/e2e-support";
 import { slugify } from "../lib/utils";
 
 // Spec 11 — fusionne l'ancien admin-product-create.spec.ts (chemin heureux de création) et
@@ -20,12 +27,16 @@ test("admin crée une actividad avec tous les champs (i18n, lieu, foto, tramos, 
   // avec un autre test pourrait déjà en avoir. Réutilise le flux feature 1, déjà prouvé.
   const establishmentName = `Establecimiento E2E Producto ${Date.now()}`;
   await page.goto("/admin/establishments/new");
-  await page.locator('input[name="nombre"]').fill(establishmentName);
+  // Assistant par étapes (docs/specs/40) — étape 1 "Propietario y gestión" (partner), étape 2
+  // "Detalles" (nombre) : l'ordre s'inverse par rapport à l'ancien formulaire plat.
   const partnerSearch = page.getByTestId("partner-search");
   await partnerSearch.click();
   await partnerSearch.fill("Opérateur Actif");
   await page.getByRole("option", { name: /Opérateur Actif/ }).click();
+  await goToNextWizardStep(page);
+  await page.locator('input[name="nombre"]').fill(establishmentName);
   await page.getByTestId("create-establishment-button").click();
+  await confirmAndContinue(page, "establishment-form-confirmation");
   await expect(page).toHaveURL(/\/admin\/establishments$/);
 
   const row = page.locator("tr", { hasText: establishmentName });
@@ -65,6 +76,10 @@ test("admin crée une actividad avec tous les champs (i18n, lieu, foto, tramos, 
   await descriptionTextarea.fill("English description.");
   await expect(descriptionTextarea).toHaveValue("English description.");
 
+  // Assistant par étapes (docs/specs/40) — étape 1 "Establecimiento y tipo" validée, avance vers
+  // l'étape 2 "Detalles".
+  await goToNextWizardStep(page);
+
   // Lieu (spec 11) — opcional, saisie manuelle (pas de clé Google Maps en environnement de test).
   await page.getByTestId("address-input").fill("Muelle Turístico, Guatapé");
   await page.getByTestId("lat-input").fill("6.2318");
@@ -77,6 +92,9 @@ test("admin crée une actividad avec tous les champs (i18n, lieu, foto, tramos, 
   await expect(page.getByTestId("image-crop-stage")).toBeVisible();
   await page.getByTestId("image-crop-confirm").click();
   await expect(gallery.getByTestId("media-gallery-item")).toHaveCount(1, { timeout: 10000 });
+
+  // Étape 2 validée, avance vers l'étape 3 "Comercialización".
+  await goToNextWizardStep(page);
 
   // Precio por tramos + bornes de cantidad (flujo existente, spec 08 — non modifié par spec 11).
   await page.getByTestId("price-mode-toggle").click();
@@ -98,6 +116,7 @@ test("admin crée une actividad avec tous les champs (i18n, lieu, foto, tramos, 
   await expect(page.getByTestId("slot-rule-preview-0")).toContainText("10:00–11:00");
 
   await page.getByTestId("create-product-button").click();
+  await confirmAndContinue(page, "product-form-confirmation");
   await expect(page).toHaveURL(/\/admin\/establishments$/);
   await expect(row).toContainText("1 actividades");
 
@@ -149,6 +168,7 @@ test("admin crée une actividad avec tous les champs (i18n, lieu, foto, tramos, 
   const newPrice = 90000 + (Date.now() % 1000);
   await page.locator('input[name="price"]').fill(String(newPrice));
   await page.getByTestId("save-product-button").click();
+  await confirmAndContinue(page, "product-form-confirmation");
   await expect(page).toHaveURL(/\/admin\/establishments\/[0-9a-f-]{36}$/);
 
   const formattedPrice = new Intl.NumberFormat("es", {

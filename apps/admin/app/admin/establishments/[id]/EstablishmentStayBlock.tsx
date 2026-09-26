@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@hifago/supabase/client";
 import { Button, Input, Label, ListBox, Select, TextField, toast } from "@hifago/ui";
+import { ActionConfirmation } from "@/components/action-confirmation";
 
 // T1 du modèle hébergement (spec 24 §4) — les champs que la page publique établissement affiche.
 // Bloc séparé à sauvegarde immédiate, comme EstablishmentPhotosBlock et EstablishmentPmsBlock : il
@@ -41,6 +42,9 @@ export function EstablishmentStayBlock({
   const [checkOut, setCheckOut] = useState(initialCheckOutTime ? initialCheckOutTime.slice(0, 5) : "");
   const [mode, setMode] = useState(initialMode ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Confirmation contenue dans cette carte (docs/specs/40 §4) — jamais plein écran, toujours
+  // « admin/succès » (bloc jamais atteint par un partenaire).
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   async function handleSave() {
     setIsSubmitting(true);
@@ -63,14 +67,26 @@ export function EstablishmentStayBlock({
       toast.danger("No se pudo guardar la información de alojamiento.");
       return;
     }
-    toast.success("Información de alojamiento actualizada.");
     router.refresh();
+    setShowConfirmation(true);
   }
 
   return (
     <section className="flex flex-col gap-4 rounded-lg border bg-surface p-4" data-testid="establishment-stay-block">
       <h2 className="text-lg font-medium">Alojamiento</h2>
 
+      {showConfirmation ? (
+        <ActionConfirmation
+          contained
+          status="success"
+          title="Cambios guardados"
+          body="Los cambios ya están visibles públicamente — no necesitan revisión adicional."
+          actionLabel="Editar de nuevo"
+          onAction={() => setShowConfirmation(false)}
+          testId="establishment-stay-confirmation"
+        />
+      ) : (
+      <>
       <div className="grid gap-4 sm:grid-cols-2">
         <TextField fullWidth name="establishment-check-in" value={checkIn} onChange={setCheckIn}>
           <Label>Check-in — opcional</Label>
@@ -120,6 +136,8 @@ export function EstablishmentStayBlock({
           Guardar
         </Button>
       </div>
+      </>
+      )}
     </section>
   );
 }

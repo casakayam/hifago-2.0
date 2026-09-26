@@ -126,6 +126,24 @@ type OpaqueRow = Record<string, unknown>;
 
 const columnHelper = createColumnHelper<typeof dataListFeatures, OpaqueRow>();
 
+// Icône entonnoir minimale — aucune n'existe dans le jeu d'icônes HeroUI (`components/icons.js`),
+// pas la peine d'une dépendance pour un seul glyphe.
+function FilterIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M3 5h14M6 10h8M8.5 15h3" />
+    </svg>
+  );
+}
+
 function buildSortHref(
   basePath: string,
   extraParams: Record<string, string>,
@@ -264,40 +282,75 @@ export function DataList<Row>(props: DataListProps<Row>): React.ReactElement {
   });
 
   const hasFilters = Boolean(toolbar) || Boolean(filters && filters.length > 0);
+  // Nombre de filtres DÉCLARATIFS (`DataListFilter[]`) réellement posés — n'inclut pas les
+  // paramètres propres à un `toolbar` custom (ex. PartnersFilterBar `location_q`/`radius_km`),
+  // qui n'existent pas dans `filterValues`. Juste un indicateur visuel, pas un contrat.
+  const activeFilterCount = (filters ?? []).filter((f) => Boolean(filterValues?.[f.name])).length;
+
+  // Repliés par défaut sur mobile (Jérôme, 2026-08-20 : un formulaire de filtres complet prenait
+  // toute la hauteur visible avant d'atteindre la liste) — mais ce même repli s'appliquait AUSSI
+  // au desktop, jamais voulu (aucune contrainte de hauteur là-bas), simplement pas distingué à
+  // l'origine. Correction 2026-09-26 (retour Jérôme) : ouverts par défaut à partir de `md` (768px).
+  // Pas de CSS pur possible ici (contrairement à `app-nav-shell.tsx`, qui affiche deux arbres DOM
+  // distincts sélectionnés par `hidden md:flex`) — un seul jeu de champs, contrôlé par l'état
+  // `Disclosure` sous-jacent (attribut `hidden` + hauteur posés impérativement par React Aria).
+  // Même patron déjà accepté dans ce repo pour un problème identique (mode d'un composant tiers
+  // sans équivalent CSS) : `PartnerAgenda.tsx`, `matchMedia` direct dans un effet, jamais un hook
+  // `useMediaQuery` générique. `isExpanded`/`onExpandedChange` (contrôlé) remplace `defaultExpanded`
+  // — rendu serveur toujours replié (aucun accès à `window`), corrigé après montage si desktop.
+  const [isFiltersExpanded, setIsFiltersExpanded] = React.useState(false);
+  React.useEffect(() => {
+    const mql = window.matchMedia("(min-width: 768px)");
+    const applyFromViewport = () => setIsFiltersExpanded(mql.matches);
+    applyFromViewport();
+    mql.addEventListener("change", applyFromViewport);
+    return () => mql.removeEventListener("change", applyFromViewport);
+  }, []);
 
   return (
     <div className="flex w-full flex-col gap-4">
       {hasFilters ? (
-        // Repliés par défaut (Jérôme, 2026-08-20) — un formulaire de filtres complet prenait toute
-        // la hauteur visible sur mobile avant même d'atteindre la liste. `Disclosure` (HeroUI v3,
-        // déjà dans le barrel) plutôt qu'un état local réinventé : chevron + rotation + transition
-        // hauteur/opacité déjà fournis par packages/ui/../disclosure.css, jamais utilisé ailleurs
-        // dans ce repo jusqu'ici.
-        <Disclosure defaultExpanded={false}>
-          <Disclosure.Trigger
-            data-testid="filters-toggle"
-            className="flex items-center gap-2 text-sm font-medium text-muted transition-colors hover:text-foreground"
-          >
-            Filtros
-            <Disclosure.Indicator />
-          </Disclosure.Trigger>
-          <Disclosure.Content>
-            <Disclosure.Body className="flex flex-col gap-4 p-0 pt-3">
-              {toolbar}
-              {filters && filters.length > 0 ? (
-                <ServerFilters
-                  basePath={basePath}
-                  filters={filters}
-                  values={filterValues}
-                  // Préserve le tri actif à la soumission du formulaire de filtres — jamais "page"
-                  // (tout changement de filtre revient implicitement à la page 1, en l'omettant,
-                  // même règle que buildSortHref ci-dessus).
-                  hiddenParams={{ sort: sort.key, dir: sort.direction }}
-                />
+        <div className="flex flex-col gap-3 border-b border-border pb-4">
+          <Disclosure isExpanded={isFiltersExpanded} onExpandedChange={setIsFiltersExpanded}>
+            <Disclosure.Trigger
+              data-testid="filters-toggle"
+              className={cn(
+                "flex w-full items-center gap-2 border border-default bg-overlay px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors",
+                // Desktop : plus besoin d'un vrai bouton, les champs sont déjà visibles — juste un
+                // petit lien discret pour qui veut regagner la hauteur.
+                "md:w-auto md:border-0 md:bg-transparent md:p-0 md:text-xs md:font-normal md:text-muted md:underline md:underline-offset-2 md:hover:text-foreground"
+              )}
+            >
+              <FilterIcon className="size-4 shrink-0 text-muted md:hidden" aria-hidden="true" />
+              {isFiltersExpanded ? "Ocultar filtros" : "Filtros"}
+              {!isFiltersExpanded && activeFilterCount > 0 ? (
+                <span
+                  className="inline-flex h-[18px] min-w-[18px] items-center justify-center bg-accent px-1 text-[11px] font-semibold text-accent-foreground md:hidden"
+                  data-testid="filters-active-count"
+                >
+                  {activeFilterCount}
+                </span>
               ) : null}
-            </Disclosure.Body>
-          </Disclosure.Content>
-        </Disclosure>
+              <Disclosure.Indicator className="md:hidden" />
+            </Disclosure.Trigger>
+            <Disclosure.Content>
+              <Disclosure.Body className="flex flex-col gap-4 p-0 pt-3">
+                {toolbar}
+                {filters && filters.length > 0 ? (
+                  <ServerFilters
+                    basePath={basePath}
+                    filters={filters}
+                    values={filterValues}
+                    // Préserve le tri actif à la soumission du formulaire de filtres — jamais "page"
+                    // (tout changement de filtre revient implicitement à la page 1, en l'omettant,
+                    // même règle que buildSortHref ci-dessus).
+                    hiddenParams={{ sort: sort.key, dir: sort.direction }}
+                  />
+                ) : null}
+              </Disclosure.Body>
+            </Disclosure.Content>
+          </Disclosure>
+        </div>
       ) : null}
 
       <SimpleTable aria-label={ariaLabel}>
